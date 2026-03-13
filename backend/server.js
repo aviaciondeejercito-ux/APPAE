@@ -6,13 +6,12 @@ const path = require('path');
 const conectarDB = require('./config/db');
 
 // --- CONFIGURACIÓN DE ENTORNO ---
-// Cargamos variables de entorno (Asegura compatibilidad con seed.js y Render)
 dotenv.config();
 
 // --- IMPORTACIÓN DE RUTAS ---
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
-const adminRoutes = require('./routes/admin'); // Ruta para gestión de permisos del Admin
+const adminRoutes = require('./routes/admin'); // <--- CRÍTICO: Debe existir el archivo en esa ruta
 
 // --- CONEXIÓN A BASE DE DATOS ---
 conectarDB();
@@ -20,24 +19,20 @@ conectarDB();
 const app = express();
 
 // --- MIDDLEWARES DE SEGURIDAD ---
-// Helmet ayuda a proteger la aplicación de vulnerabilidades web conocidas
 app.use(helmet({
-    contentSecurityPolicy: false, // Deshabilitado temporalmente si usas CDNs para el calendario
+    contentSecurityPolicy: false, 
 }));
 
-// CORS: Configuración seria para producción y desarrollo
 app.use(cors({
-    origin: process.env.FRONTEND_URL || '*', // En producción, limita esto a tu URL de Render
+    origin: process.env.FRONTEND_URL || '*', 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Seguridad: Limitamos el tamaño del JSON para evitar ataques DoS (Denegación de Servicio)
 app.use(express.json({ limit: '10kb' })); 
 
 // --- DEFINICIÓN DE RUTAS ---
 
-// Ruta raíz para verificación de salud del sistema
 app.get('/', (req, res) => {
     res.status(200).json({ 
         status: 'online',
@@ -46,16 +41,10 @@ app.get('/', (req, res) => {
     });
 });
 
-// Rutas de Autenticación (Login/Registro)
+// Registro de rutas en el middleware de Express
 app.use('/api/auth', authRoutes);
-
-// Rutas de Eventos del Calendario (Protegidas internamente por roles)
-// Permite: User (Crea/Ve), Admin (Todo), Boss (Solo Ve)
 app.use('/api/events', eventRoutes); 
-
-// Rutas de Administración (Gestión de usuarios y permisos)
-// Solo accesibles por el rol 'admin'
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminRoutes); // <--- ESTO ES LO QUE BUSCA EL FRONTEND
 
 // --- MANEJO DE RUTAS NO ENCONTRADAS ---
 app.use((req, res) => {
@@ -83,10 +72,8 @@ const server = app.listen(PORT, () => {
     console.log(`📡 Modo: ${process.env.NODE_ENV || 'producción'}`);
 });
 
-// --- PROTECCIÓN CONTRA CAÍDAS CRÍTICAS ---
 process.on('unhandledRejection', (err) => {
-    console.error(`❌ Error crítico no manejado (Unhandled Rejection): ${err.message}`);
-    // Cerramos el servidor con elegancia antes de salir
+    console.error(`❌ Error crítico no manejado: ${err.message}`);
     server.close(() => process.exit(1));
 });
 
