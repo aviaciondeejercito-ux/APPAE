@@ -50,14 +50,19 @@ exports.register = async (req, res) => {
 // @route   POST /api/auth/login
 exports.login = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        // SEGURIDAD Y CRÍTICA: Extraemos 'username' porque es lo que envía el Login.jsx
+        // Pero permitimos que 'username' contenga también el email para mayor flexibilidad.
+        const { username, password } = req.body;
 
         // Validación de entrada
-        if (!email || !password) {
-            return res.status(400).json({ message: 'Por favor, ingrese email y contraseña' });
+        if (!username || !password) {
+            return res.status(400).json({ message: 'Por favor, ingrese sus credenciales' });
         }
 
-        const user = await User.findOne({ email });
+        // Búsqueda Híbrida: Buscamos al usuario por su username O por su email
+        const user = await User.findOne({ 
+            $or: [{ username: username }, { email: username }] 
+        });
 
         // Verificamos usuario y comparamos password usando el método del modelo
         if (user && (await user.comparePassword(password))) {
@@ -68,6 +73,7 @@ exports.login = async (req, res) => {
                 token: generateToken(user._id)
             });
         } else {
+            // Seguridad: No especificamos si falló el usuario o la clave para evitar enumeración
             res.status(401).json({ message: 'Credenciales inválidas' });
         }
     } catch (error) {
