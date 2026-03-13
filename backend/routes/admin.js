@@ -1,17 +1,19 @@
 const express = require('express');
 const router = express.Router();
+// Verificación de ruta según estructura de carpetas detectada
 const adminController = require('../controllers/adminController');
 const { protect } = require('../middleware/authMiddleware');
 
 /**
  * MIDDLEWARE DE AUTORIZACIÓN DE ROL
  * Seguridad Crítica: Solo permite el paso si el usuario tiene rol 'admin'.
+ * Si el usuario es 'user' o 'boss', será rechazado con 403.
  */
 const isAdmin = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
         next();
     } else {
-        console.warn(`[SEGURIDAD] Intento de acceso denegado a Admin: ${req.user ? req.user.username : 'Anónimo'}`);
+        console.warn(`[SEGURIDAD] Acceso denegado: Usuario ${req.user ? req.user.username : 'Anónimo'} intentó entrar a Admin.`);
         res.status(403).json({ 
             success: false, 
             message: 'Acceso denegado: Se requieren privilegios de Administrador' 
@@ -21,27 +23,37 @@ const isAdmin = (req, res, next) => {
 
 /**
  * CAPA DE PROTECCIÓN GLOBAL
- * Todas las rutas definidas a continuación requieren Token válido y Rol Admin.
+ * Aplicamos los middlewares en orden: 
+ * 1. Token válido (protect) 
+ * 2. Jerarquía Admin (isAdmin)
  */
 router.use(protect);
 router.use(isAdmin);
 
 // --- ENDPOINTS DE GESTIÓN DE PERSONAL ---
 
-// Ruta: GET /api/admin/users
-// Acción: Lista todo el personal registrado
+/**
+ * @route   GET /api/admin/users
+ * @desc    Lista todo el personal para la tabla de gestión
+ */
 router.get('/users', adminController.getAllUsers);
 
-// Ruta: PUT /api/admin/users/:id/role
-// Acción: Ascenso o cambio de permisos de usuario
+/**
+ * @route   PUT /api/admin/users/:id/role
+ * @desc    Cambio de rango (user/admin/boss)
+ */
 router.put('/users/:id/role', adminController.updateRole);
 
-// Ruta: PUT /api/admin/users/:id/password
-// Acción: Reseteo de credenciales por el administrador
+/**
+ * @route   PUT /api/admin/users/:id/password
+ * @desc    Reseteo forzado de contraseña por mando
+ */
 router.put('/users/:id/password', adminController.resetPassword);
 
-// Ruta: DELETE /api/admin/users/:id
-// Acción: Baja definitiva del sistema
+/**
+ * @route   DELETE /api/admin/users/:id
+ * @desc    Baja definitiva del sistema
+ */
 router.delete('/users/:id', adminController.deleteUser);
 
 module.exports = router;

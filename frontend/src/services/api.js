@@ -5,7 +5,8 @@ import axios from 'axios';
  * Estándar de Seguridad AE: Manejo dinámico de URL y Token JWT.
  */
 const API = axios.create({
-    // Prioriza la URL de Render configurada en el entorno o usa localhost
+    // Prioriza la URL de Render configurada en el entorno. 
+    // Asegúrate de que en Render VITE_API_URL sea https://appae.onrender.com/api
     baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
     headers: {
         'Content-Type': 'application/json'
@@ -45,7 +46,7 @@ export const deleteEvent = (id) => API.delete(`/events/${id}`);
 
 /**
  * SERVICIOS DE ADMINISTRACIÓN (GESTIÓN DE PERSONAL)
- * Solo accesibles por personal con rango de Administrador.
+ * Estas rutas deben coincidir exactamente con backend/routes/admin.js
  */
 
 // Obtener lista de personal (Para la tabla del Panel de Admin)
