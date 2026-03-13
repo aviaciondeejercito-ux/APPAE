@@ -1,25 +1,38 @@
 import React from 'react';
 import CalendarPage from './pages/CalendarPage';
-import './App.css'; // Si no tienes este archivo, puedes crearlo vacío o ignorar la línea
 
 function App() {
-  return (
-    <div className="App" style={{ minHeight: '100vh', backgroundColor: '#f4f7f6' }}>
-      <header style={{ 
-        backgroundColor: '#1b3a57', 
-        padding: '20px', 
-        color: 'white', 
-        textAlign: 'center',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-      }}>
-        <h1 style={{ margin: 0 }}>Sistema de Gestión - Aviación de Ejército</h1>
-      </header>
-      
-      <main style={{ padding: '40px 20px', maxWidth: '1200px', margin: '0 auto' }}>
-        <CalendarPage />
-      </main>
-    </div>
-  );
+    return (
+        <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'Arial, sans-serif' }}>
+            {/* Header Institucional */}
+            <nav style={{ 
+                backgroundColor: '#1b3a57', 
+                color: 'white', 
+                padding: '15px 30px', 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+            }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                    SISTEMA GESTIÓN AE
+                </div>
+                <div>
+                    {/* Aquí irán los botones de Login más adelante */}
+                    <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Modo Visualización</span>
+                </div>
+            </nav>
+
+            {/* Contenido Principal */}
+            <main style={{ maxWidth: '1200px', margin: '30px auto', padding: '0 15px' }}>
+                <CalendarPage />
+            </main>
+
+            <footer style={{ textAlign: 'center', padding: '20px', color: '#666', fontSize: '0.8rem' }}>
+                © 2026 Aviación de Ejército - Sistema de Control de Actividades
+            </footer>
+        </div>
+    );
 }
 
 export default App;
