@@ -3,49 +3,55 @@ const User = require('../models/User');
 
 /**
  * MIDDLEWARE DE PROTECCIÓN - SISTEMA GESTIÓN AE
- * Bloquea el acceso a cualquier ruta si el JWT no es válido.
+ * Bloquea el acceso si el JWT es inválido o si el usuario no tiene permisos.
  * Inyecta el usuario autenticado en 'req.user' para control de roles (Admin/Boss/User).
  */
 const protect = async (req, res, next) => {
     let token;
 
-    // 1. Verificación de seguridad: Existencia del encabezado 'Bearer'
+    // 1. Verificación de seguridad: Existencia del encabezado 'Authorization Bearer'
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         try {
-            // Obtenemos el token (Bearer [TOKEN])
+            // Extracción del token del encabezado
             token = req.headers.authorization.split(' ')[1];
 
-            // 2. Verificación del secreto de entorno
+            // 2. Verificación del secreto de entorno (Failsafe)
             if (!process.env.JWT_SECRET) {
-                console.error('❌ ERROR CRÍTICO: JWT_SECRET no configurado en el servidor.');
+                console.error('❌ ERROR CRÍTICO: JWT_SECRET no detectado en las variables de entorno.');
                 return res.status(500).json({ message: 'Error interno de configuración de seguridad' });
             }
 
-            // 3. Decodificación y Verificación del Token
+            // 3. Decodificación y Verificación de Integridad del Token
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-            // 4. Inyección del Usuario (Excluyendo el hash de la contraseña por seguridad)
+            // 4. Inyección del Usuario en la Petición
+            // Seleccionamos todo excepto el hash de la contraseña por seguridad crítica
             req.user = await User.findById(decoded.id).select('-password');
 
+            // 5. Validación de existencia del usuario (Seguridad ante bajas recientes)
             if (!req.user) {
-                return res.status(401).json({ message: 'Acceso denegado: El usuario ya no existe' });
+                return res.status(401).json({ message: 'Acceso denegado: Usuario inexistente o dado de baja' });
             }
 
-            // 5. Autorización exitosa: Continuar al siguiente controlador o middleware
+            // 6. Autorización exitosa: El flujo continúa al siguiente middleware o controlador
             return next(); 
 
         } catch (error) {
-            console.error('❌ Error de validación JWT:', error.message);
+            console.error(`❌ Fallo de seguridad JWT: ${error.message}`);
             
-            // Diferenciamos si el token expiró o es inválido para el debug
-            const msg = error.name === 'TokenExpiredError' ? 'Sesión expirada' : 'Token inválido';
-            return res.status(401).json({ message: `No autorizado: ${msg}` });
+            // Gestión específica de errores de sesión
+            let mensaje = 'No autorizado: Token inválido';
+            if (error.name === 'TokenExpiredError') {
+                mensaje = 'Sesión expirada. Por favor, ingrese nuevamente.';
+            }
+
+            return res.status(401).json({ message: mensaje });
         }
     }
 
-    // 6. Si no hay token en absoluto
+    // 7. Bloqueo por falta de credenciales
     if (!token) {
-        return res.status(401).json({ message: 'No autorizado: Se requiere una sesión activa' });
+        return res.status(401).json({ message: 'No autorizado: Falta token de acceso' });
     }
 };
 

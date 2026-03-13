@@ -2,18 +2,19 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 /**
- * Modelo de Usuario - Estándar de Seguridad AE
- * Incluye validaciones estrictas y jerarquía de roles:
- * - admin: Control total y gestión de permisos.
- * - boss: Modo visualización (lectura de calendario).
- * - user: Carga de actividades.
+ * Modelo de Usuario - Estándar de Seguridad Aviación de Ejército
+ * Jerarquía de roles establecida para el control de actividades:
+ * - admin: Gestión de personal, permisos y control total del sistema.
+ * - boss: Supervisión y lectura de cronogramas (Solo Lectura).
+ * - user: Carga y modificación de eventos operativos.
  */
 const userSchema = new mongoose.Schema({
     username: { 
         type: String, 
         required: [true, 'El nombre de usuario es obligatorio'], 
         unique: true, 
-        trim: true 
+        trim: true,
+        lowercase: true 
     },
     email: { 
         type: String, 
@@ -21,7 +22,7 @@ const userSchema = new mongoose.Schema({
         unique: true, 
         lowercase: true,
         trim: true,
-        match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Por favor, ingrese un email válido']
+        match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Ingrese un email institucional o válido']
     },
     password: { 
         type: String, 
@@ -30,22 +31,16 @@ const userSchema = new mongoose.Schema({
     },
     role: { 
         type: String, 
-        enum: ['user', 'admin', 'boss'], // Jerarquía actualizada según requerimiento
+        enum: ['user', 'admin', 'boss'], 
         default: 'user' 
-    },
-    // Saldo para la lógica de casino/negocio (Sincro Joker)
-    balance: { 
-        type: Number, 
-        default: 0, 
-        min: [0, 'El saldo no puede ser negativo'] 
     }
 }, { 
-    timestamps: true // Registra createdAt y updatedAt automáticamente
+    timestamps: true // Auditoría de creación y última modificación
 });
 
-// Encriptación antes de guardar
+// --- ENCRIPTACIÓN DE SEGURIDAD ---
 userSchema.pre('save', async function(next) {
-    // Si no se modificó la contraseña (ej. se actualizó el saldo), saltamos el proceso
+    // Solo hashear si la contraseña es nueva o fue modificada
     if (!this.isModified('password')) return next();
 
     try {
@@ -57,7 +52,7 @@ userSchema.pre('save', async function(next) {
     }
 });
 
-// Método para comparar contraseñas (Utilizado en authController)
+// --- VERIFICACIÓN DE CREDENCIALES ---
 userSchema.methods.comparePassword = async function(enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
