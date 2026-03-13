@@ -3,9 +3,10 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const conectarDB = require('./config/db');
 
-// Importación de Rutas
+// --- IMPORTACIÓN DE RUTAS ---
+// Normalizamos a minúsculas para evitar errores MODULE_NOT_FOUND en Render (Linux)
 const authRoutes = require('./routes/auth');
-const eventRoutes = require('./routes/events'); // <-- Agregado para el calendario
+const eventRoutes = require('./routes/events'); 
 
 // Inicialización de variables de entorno
 dotenv.config();
@@ -32,7 +33,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 // Rutas de Eventos del Calendario
-app.use('/api/events', eventRoutes); // <-- Conectamos la lógica del calendario
+app.use('/api/events', eventRoutes); 
 
 // --- MANEJO DE ERRORES DE RUTA ---
 app.use((req, res, next) => {
