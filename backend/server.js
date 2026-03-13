@@ -9,34 +9,31 @@ const conectarDB = require('./config/db');
 dotenv.config();
 
 // --- CONEXIÓN A BASE DE DATOS ---
-// Conectamos antes de cargar las rutas para asegurar integridad
 conectarDB();
 
 const app = express();
 
 // --- MIDDLEWARES DE SEGURIDAD ---
 app.use(helmet({
-    contentSecurityPolicy: false, // Permitir recursos externos para el calendario
+    contentSecurityPolicy: false, 
 }));
 
 app.use(cors({
-    origin: process.env.FRONTEND_URL || '*', 
+    origin: '*', // Permitimos temporalmente cualquier origen para asegurar conexión en Render
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Limitación de cuerpo para evitar ataques DoS
 app.use(express.json({ limit: '10kb' })); 
 
 // --- IMPORTACIÓN DE RUTAS ---
-// Usamos nombres explícitos y verificamos la carga
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
 const adminRoutes = require('./routes/admin'); 
 
 // --- DEFINICIÓN DE RUTAS API ---
 
-// Ruta de salud del sistema
+// Ruta de salud para verificar si el servidor responde
 app.get('/api/health', (req, res) => {
     res.status(200).json({ 
         status: 'online',
@@ -45,36 +42,40 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Registro de módulos operativos
+// Registro de módulos operativos (Asegúrate que los archivos en /routes existan)
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
-app.use('/api/admin', adminRoutes); // Ruta crítica para el Panel de Control
+app.use('/api/admin', adminRoutes); 
 
-// --- SERVIR FRONTEND (Opcional si es Monolito en Render) ---
+// --- SERVIR FRONTEND (Configuración para Producción en Render) ---
 if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.join(__dirname, '../frontend/dist')));
+    // Apuntamos a la carpeta dist del frontend
+    const buildPath = path.join(__dirname, '../frontend/dist');
+    app.use(express.static(buildPath));
+
     app.get('*', (req, res, next) => {
-        if (req.originalUrl.startsWith('/api')) return next();
-        res.sendFile(path.resolve(__dirname, '../frontend', 'dist', 'index.html'));
+        // Si la petición empieza con /api, no debe servir el index.html
+        if (req.url.startsWith('/api')) return next();
+        res.sendFile(path.join(buildPath, 'index.html'));
     });
 }
 
-// --- MANEJO DE RUTAS NO ENCONTRADAS (404) ---
+// --- MANEJO DE RUTAS NO ENCONTRADAS (El 404 que estamos viendo) ---
 app.use((req, res) => {
-    console.warn(`⚠️ 404 detectado en: ${req.method} ${req.originalUrl}`);
+    console.warn(`⚠️ Intento de acceso fallido: ${req.method} ${req.originalUrl}`);
     res.status(404).json({
         success: false,
-        message: `La ruta ${req.originalUrl} no existe en este servidor.`
+        message: `La ruta ${req.originalUrl} no existe en el servidor AE. Verifique el endpoint.`
     });
 });
 
 // --- MANEJO GLOBAL DE ERRORES ---
 app.use((err, req, res, next) => {
-    console.error(`❌ ERROR DEL SISTEMA: ${err.message}`);
+    console.error(`❌ ERROR CRÍTICO DEL SISTEMA: ${err.message}`);
     res.status(err.status || 500).json({
         success: false,
         message: 'Error interno del servidor',
-        error: process.env.NODE_ENV === 'development' ? err.stack : 'Consulte al administrador.'
+        error: process.env.NODE_ENV === 'development' ? err.stack : 'Error de procesamiento.'
     });
 });
 
@@ -82,11 +83,11 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
     console.log(`🚀 API Operativa en puerto ${PORT}`);
+    console.log(`📡 Ruta Admin activa en: /api/admin`);
 });
 
-// Gestión de cierres inesperados
 process.on('unhandledRejection', (err) => {
-    console.error(`❌ Error Crítico: ${err.message}`);
+    console.error(`❌ Rejection no manejada: ${err.message}`);
     server.close(() => process.exit(1));
 });
 
