@@ -5,33 +5,43 @@ const { protect } = require('../middleware/authMiddleware');
 
 /**
  * MIDDLEWARE DE AUTORIZACIÓN DE ROL
- * Verifica que el usuario autenticado tenga el rol de 'admin'.
+ * Seguridad Crítica: Solo permite el paso si el usuario tiene rol 'admin'.
  */
 const isAdmin = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
         next();
     } else {
-        console.warn(`⚠️ Intento de acceso no autorizado: Usuario ${req.user ? req.user.username : 'Desconocido'} intentó acceder a rutas de Admin.`);
-        res.status(403).json({ message: 'Acceso denegado: Se requieren permisos de Administrador' });
+        console.warn(`[SEGURIDAD] Intento de acceso denegado a Admin: ${req.user ? req.user.username : 'Anónimo'}`);
+        res.status(403).json({ 
+            success: false, 
+            message: 'Acceso denegado: Se requieren privilegios de Administrador' 
+        });
     }
 };
 
-// Aplicar protección y verificación de rol a todas las rutas de este archivo
+/**
+ * CAPA DE PROTECCIÓN GLOBAL
+ * Todas las rutas definidas a continuación requieren Token válido y Rol Admin.
+ */
 router.use(protect);
 router.use(isAdmin);
 
-// --- DEFINICIÓN DE ENDPOINTS ---
+// --- ENDPOINTS DE GESTIÓN DE PERSONAL ---
 
-// Obtener lista completa de personal
+// Ruta: GET /api/admin/users
+// Acción: Lista todo el personal registrado
 router.get('/users', adminController.getAllUsers);
 
-// Modificar permisos/rol de un usuario específico
+// Ruta: PUT /api/admin/users/:id/role
+// Acción: Ascenso o cambio de permisos de usuario
 router.put('/users/:id/role', adminController.updateRole);
 
-// Resetear contraseña de un usuario (Gestión de mandos)
+// Ruta: PUT /api/admin/users/:id/password
+// Acción: Reseteo de credenciales por el administrador
 router.put('/users/:id/password', adminController.resetPassword);
 
-// Baja definitiva de usuario del sistema
+// Ruta: DELETE /api/admin/users/:id
+// Acción: Baja definitiva del sistema
 router.delete('/users/:id', adminController.deleteUser);
 
 module.exports = router;

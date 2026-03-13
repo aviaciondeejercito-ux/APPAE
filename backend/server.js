@@ -1,26 +1,22 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
-const helmet = require('helmet'); // Seguridad extra para cabeceras HTTP
+const helmet = require('helmet');
 const path = require('path');
 const conectarDB = require('./config/db');
 
 // --- CONFIGURACIÓN DE ENTORNO ---
 dotenv.config();
 
-// --- IMPORTACIÓN DE RUTAS ---
-const authRoutes = require('./routes/auth');
-const eventRoutes = require('./routes/events'); 
-const adminRoutes = require('./routes/admin'); // <--- CRÍTICO: Debe existir el archivo en esa ruta
-
 // --- CONEXIÓN A BASE DE DATOS ---
+// Conectamos antes de cargar las rutas para asegurar integridad
 conectarDB();
 
 const app = express();
 
 // --- MIDDLEWARES DE SEGURIDAD ---
 app.use(helmet({
-    contentSecurityPolicy: false, 
+    contentSecurityPolicy: false, // Permitir recursos externos para el calendario
 }));
 
 app.use(cors({
@@ -29,51 +25,68 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// Limitación de cuerpo para evitar ataques DoS
 app.use(express.json({ limit: '10kb' })); 
 
-// --- DEFINICIÓN DE RUTAS ---
+// --- IMPORTACIÓN DE RUTAS ---
+// Usamos nombres explícitos y verificamos la carga
+const authRoutes = require('./routes/auth');
+const eventRoutes = require('./routes/events'); 
+const adminRoutes = require('./routes/admin'); 
 
-app.get('/', (req, res) => {
+// --- DEFINICIÓN DE RUTAS API ---
+
+// Ruta de salud del sistema
+app.get('/api/health', (req, res) => {
     res.status(200).json({ 
         status: 'online',
-        message: 'Sistema de Gestión AE - API Operativa ✅',
+        server: 'Aviación de Ejército',
         timestamp: new Date().toISOString()
     });
 });
 
-// Registro de rutas en el middleware de Express
+// Registro de módulos operativos
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
-app.use('/api/admin', adminRoutes); // <--- ESTO ES LO QUE BUSCA EL FRONTEND
+app.use('/api/admin', adminRoutes); // Ruta crítica para el Panel de Control
 
-// --- MANEJO DE RUTAS NO ENCONTRADAS ---
+// --- SERVIR FRONTEND (Opcional si es Monolito en Render) ---
+if (process.env.NODE_ENV === 'production') {
+    app.use(express.static(path.join(__dirname, '../frontend/dist')));
+    app.get('*', (req, res, next) => {
+        if (req.originalUrl.startsWith('/api')) return next();
+        res.sendFile(path.resolve(__dirname, '../frontend', 'dist', 'index.html'));
+    });
+}
+
+// --- MANEJO DE RUTAS NO ENCONTRADAS (404) ---
 app.use((req, res) => {
+    console.warn(`⚠️ 404 detectado en: ${req.method} ${req.originalUrl}`);
     res.status(404).json({
         success: false,
-        message: `Ruta no encontrada: ${req.originalUrl}. Acceso denegado o inexistente.`
+        message: `La ruta ${req.originalUrl} no existe en este servidor.`
     });
 });
 
 // --- MANEJO GLOBAL DE ERRORES ---
 app.use((err, req, res, next) => {
-    console.error(`❌ Error detectado: ${err.stack}`);
-    res.status(500).json({
+    console.error(`❌ ERROR DEL SISTEMA: ${err.message}`);
+    res.status(err.status || 500).json({
         success: false,
         message: 'Error interno del servidor',
-        error: process.env.NODE_ENV === 'development' ? err.message : 'Consulte al administrador.'
+        error: process.env.NODE_ENV === 'development' ? err.stack : 'Consulte al administrador.'
     });
 });
 
-// --- LANZAMIENTO DEL SERVIDOR ---
+// --- LANZAMIENTO ---
 const PORT = process.env.PORT || 5000;
-
 const server = app.listen(PORT, () => {
-    console.log(`🚀 Servidor AE corriendo en puerto ${PORT}`);
-    console.log(`📡 Modo: ${process.env.NODE_ENV || 'producción'}`);
+    console.log(`🚀 API Operativa en puerto ${PORT}`);
 });
 
+// Gestión de cierres inesperados
 process.on('unhandledRejection', (err) => {
-    console.error(`❌ Error crítico no manejado: ${err.message}`);
+    console.error(`❌ Error Crítico: ${err.message}`);
     server.close(() => process.exit(1));
 });
 
