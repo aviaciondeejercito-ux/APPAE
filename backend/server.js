@@ -21,9 +21,11 @@ const app = express();
 
 // --- MIDDLEWARES DE SEGURIDAD ---
 // Helmet ayuda a proteger la aplicación de vulnerabilidades web conocidas
-app.use(helmet());
+app.use(helmet({
+    contentSecurityPolicy: false, // Deshabilitado temporalmente si usas CDNs para el calendario
+}));
 
-// CORS: Configuración seria para producción
+// CORS: Configuración seria para producción y desarrollo
 app.use(cors({
     origin: process.env.FRONTEND_URL || '*', // En producción, limita esto a tu URL de Render
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -48,9 +50,11 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 // Rutas de Eventos del Calendario (Protegidas internamente por roles)
+// Permite: User (Crea/Ve), Admin (Todo), Boss (Solo Ve)
 app.use('/api/events', eventRoutes); 
 
 // Rutas de Administración (Gestión de usuarios y permisos)
+// Solo accesibles por el rol 'admin'
 app.use('/api/admin', adminRoutes);
 
 // --- MANEJO DE RUTAS NO ENCONTRADAS ---
@@ -86,4 +90,4 @@ process.on('unhandledRejection', (err) => {
     server.close(() => process.exit(1));
 });
 
-module.exports = app; // Exportamos para facilitar posibles testeos
+module.exports = app;
