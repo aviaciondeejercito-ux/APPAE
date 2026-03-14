@@ -9,169 +9,206 @@ import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/ap
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
     const [role] = useState(localStorage.getItem('role'));
-    const [selectedEvent, setSelectedEvent] = useState(null);
-    const [isCreating, setIsCreating] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [selectedId, setSelectedId] = useState(null);
 
     const [formData, setFormData] = useState({
         title: '', start: '', end: '', color: '#1b3a57', notes: ''
     });
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
     const fetchData = async () => {
         try {
             const { data } = await getEvents();
-            const formatted = data.map(ev => ({
-                id: ev._id,
-                title: ev.title,
-                start: ev.start,
-                end: ev.end,
-                backgroundColor: ev.color || '#1b3a57',
-                borderColor: ev.color || '#1b3a57',
-                extendedProps: { notes: ev.notes }
-            }));
-            setEvents(formatted);
-        } catch (error) {
-            console.error("Error en servidor AE");
-        }
+            setEvents(data);
+        } catch (error) { console.error("Error de conexión AE"); }
     };
 
-    // Al hacer clic en un evento, cargamos sus datos en el panel secundario
-    const handleEventClick = (info) => {
-        setIsCreating(false);
-        const ev = info.event;
-        setSelectedEvent(ev.id);
+    const handleEditClick = (ev) => {
+        if (role === 'boss') return;
+        setIsEditing(true);
+        setSelectedId(ev._id);
         setFormData({
             title: ev.title,
             start: new Date(ev.start).toISOString().slice(0, 16),
-            end: ev.end ? new Date(ev.end).toISOString().slice(0, 16) : new Date(ev.start).toISOString().slice(0, 16),
-            color: ev.backgroundColor,
-            notes: ev.extendedProps.notes || ''
+            end: new Date(ev.end).toISOString().slice(0, 16),
+            color: ev.color,
+            notes: ev.notes || ''
         });
-    };
-
-    // Tooltip al acercar el mouse (Miniventanita de información)
-    const handleMouseEnter = (info) => {
-        info.el.title = `📝 Notas: ${info.event.extendedProps.notes || 'Sin notas'}`;
-        info.el.style.cursor = 'pointer';
-    };
-
-    const handleNewEventBtn = () => {
-        setIsCreating(true);
-        setSelectedEvent(null);
-        setFormData({ title: '', start: '', end: '', color: '#1b3a57', notes: '' });
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (isCreating) {
-                await createEvent(formData);
+            if (isEditing) {
+                await updateEvent(selectedId, formData);
             } else {
-                await updateEvent(selectedEvent, formData);
+                await createEvent(formData);
             }
-            fetchData();
-            setSelectedEvent(null);
-            setIsCreating(false);
-        } catch (error) {
-            alert("Fallo en la operación de base de datos.");
-        }
+            setFormData({ title: '', start: '', end: '', color: '#1b3a57', notes: '' });
+            setIsEditing(false);
+            fetchData(); // Materialización instantánea
+        } catch (error) { alert("Error en base de datos. Verifique los rangos de fecha."); }
     };
 
-    const handleDelete = async () => {
-        if (window.confirm("¿Confirmar baja definitiva?")) {
-            await deleteEvent(selectedEvent);
-            setSelectedEvent(null);
+    const handleDelete = async (id) => {
+        if (window.confirm("¿Confirmar BAJA DEFINITIVA del evento?")) {
+            await deleteEvent(id);
             fetchData();
         }
     };
 
     return (
-        <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 400px', gap: '20px' }}>
+        <div style={{ padding: '20px', backgroundColor: '#f4f7f6', minHeight: '100vh' }}>
             
-            {/* 1. CALENDARIO (VISUALIZADOR PURO) */}
-            <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                    <h2 style={{ color: '#1b3a57', margin: 0 }}>🗓️ Calendario Operativo</h2>
-                    {role !== 'boss' && (
-                        <button onClick={handleNewEventBtn} style={styles.btnNew}>+ Cargar Nuevo Evento</button>
-                    )}
-                </div>
+            {/* 1. VISUALIZADOR (Imagen de Calendario Grande) */}
+            <div style={styles.mainCard}>
+                <h2 style={{ color: '#1b3a57', marginBottom: '20px' }}>🗓️ Monitor de Actividades Operativas</h2>
                 <FullCalendar
                     plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                     initialView="dayGridMonth"
                     locale={esLocale}
-                    events={events}
+                    events={events.map(ev => ({
+                        id: ev._id,
+                        title: ev.title,
+                        start: ev.start,
+                        end: ev.end,
+                        backgroundColor: ev.color,
+                        extendedProps: { notes: ev.notes }
+                    }))}
                     height="75vh"
-                    editable={false} 
-                    selectable={false} // BLOQUEADO: No se puede crear haciendo click en la fecha
-                    eventClick={handleEventClick}
-                    eventMouseEnter={handleMouseEnter} // Miniventanita de info al acercar mouse
-                    eventOverlap={true} // Permite superposición
-                    dayMaxEvents={true} // Resume eventos ("+2 más") para no romper la estética
+                    editable={false}
+                    selectable={false}
+                    eventMouseEnter={(info) => { 
+                        info.el.title = `Notas: ${info.event.extendedProps.notes || 'Sin observaciones'}`;
+                    }}
+                    dayMaxEvents={true}
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' }}
                 />
             </div>
 
-            {/* 2. PANEL SECUNDARIO (ÚNICO CENTRO DE MANDO) */}
-            <div style={styles.panelSecundario}>
-                {(selectedEvent || isCreating) ? (
-                    <>
-                        <h3 style={{ borderBottom: '2px solid #1b3a57', paddingBottom: '10px' }}>
-                            {isCreating ? "🆕 Cargar Evento" : "📝 Gestión de Evento"}
-                        </h3>
+            {/* PANEL SECUNDARIO DE GESTIÓN (Solo Admin/User) */}
+            {role !== 'boss' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '20px' }}>
+                    
+                    {/* FORMULARIO DE CARGA/EDICIÓN */}
+                    <div style={styles.actionCard}>
+                        <h3 style={styles.subTitle}>{isEditing ? "📝 Editar Evento" : "➕ Nueva Carga"}</h3>
                         <form onSubmit={handleSubmit} style={styles.form}>
-                            <label style={styles.label}>Nombre de la Misión</label>
-                            <input type="text" required disabled={role === 'boss'} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input}/>
+                            <label style={styles.label}>Misión/Evento</label>
+                            <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input}/>
                             
                             <div style={{ display: 'flex', gap: '10px' }}>
                                 <div style={{ flex: 1 }}>
-                                    <label style={styles.label}>Desde</label>
-                                    <input type="datetime-local" required disabled={role === 'boss'} value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/>
+                                    <label style={styles.label}>Inicio</label>
+                                    <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.inputSmall}/>
                                 </div>
                                 <div style={{ flex: 1 }}>
-                                    <label style={styles.label}>Hasta</label>
-                                    <input type="datetime-local" required disabled={role === 'boss'} value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/>
+                                    <label style={styles.label}>Fin</label>
+                                    <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.inputSmall}/>
                                 </div>
                             </div>
 
-                            <label style={styles.label}>Color Identificador</label>
-                            <input type="color" disabled={role === 'boss'} value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} style={{ width: '100%', height: '40px', cursor: 'pointer', border: 'none' }}/>
+                            <label style={styles.label}>Identificador Visual</label>
+                            <input type="color" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} style={styles.colorPicker}/>
 
                             <label style={styles.label}>Notas Técnicas</label>
-                            <textarea disabled={role === 'boss'} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={{ ...styles.input, height: '150px' }}/>
+                            <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}/>
 
-                            {role !== 'boss' && (
-                                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                    <button type="submit" style={styles.btnSave}>{isCreating ? "Materializar" : "Actualizar"}</button>
-                                    {!isCreating && <button type="button" onClick={handleDelete} style={styles.btnDelete}>Eliminar</button>}
-                                </div>
-                            )}
-                            <button type="button" onClick={() => {setSelectedEvent(null); setIsCreating(false);}} style={styles.btnCancel}>Cerrar Panel</button>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button type="submit" style={styles.btnSave}>{isEditing ? "Actualizar" : "Materializar"}</button>
+                                {isEditing && (
+                                    <button type="button" onClick={() => {setIsEditing(false); setFormData({title:'',start:'',end:'',color:'#1b3a57',notes:''})}} style={styles.btnCancel}>X</button>
+                                )}
+                            </div>
                         </form>
-                    </>
-                ) : (
-                    <div style={styles.emptyState}>
-                        <p>Pase el mouse por el calendario para información rápida o seleccione un evento para editarlo.</p>
                     </div>
-                )}
-            </div>
+
+                    {/* REGISTRO DE LOGS Y AUDITORÍA */}
+                    <div style={styles.actionCard}>
+                        <h3 style={styles.subTitle}>📜 Registro de Actividades (Logs)</h3>
+                        <div style={{ overflowY: 'auto', maxHeight: '400px' }}>
+                            <table style={styles.table}>
+                                <thead>
+                                    <tr style={styles.thRow}>
+                                        <th>Fecha</th>
+                                        <th>Evento</th>
+                                        <th>Operador</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {events.map(ev => (
+                                        <tr key={ev._id} style={styles.tr}>
+                                            <td style={styles.td}>{new Date(ev.start).toLocaleDateString()}</td>
+                                            <td style={styles.td}><strong>{ev.title}</strong></td>
+                                            <td style={styles.td}><span style={styles.badge}>{ev.userName || 'Sistema'}</span></td>
+                                            <td style={styles.td}>
+                                                <button onClick={() => handleEditClick(ev)} style={styles.btnEdit}>✏️</button>
+                                                <button onClick={() => handleDelete(ev._id)} style={styles.btnDeleteLog}>🗑️</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* VISTA BOSS: SOLO LOGS DE LECTURA */}
+            {role === 'boss' && (
+                <div style={styles.mainCard}>
+                    <h3 style={styles.subTitle}>📜 Resumen de Auditoría Operativa</h3>
+                    <table style={styles.table}>
+                        <thead>
+                            <tr style={styles.thRow}>
+                                <th>INICIO</th>
+                                <th>FIN</th>
+                                <th>EVENTO</th>
+                                <th>RESPONSABLE</th>
+                                <th>NOTAS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {events.map(ev => (
+                                <tr key={ev._id} style={styles.tr}>
+                                    <td style={styles.td}>{new Date(ev.start).toLocaleString()}</td>
+                                    <td style={styles.td}>{new Date(ev.end).toLocaleString()}</td>
+                                    <td style={styles.td}><strong>{ev.title}</strong></td>
+                                    <td style={styles.td}>{ev.userName || 'Admin'}</td>
+                                    <td style={{...styles.td, fontSize: '0.8rem', color: '#666'}}>{ev.notes}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 };
 
 const styles = {
-    panelSecundario: { background: '#f8f9fa', padding: '25px', borderRadius: '12px', border: '1px solid #dee2e6', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', height: 'fit-content', position: 'sticky', top: '20px' },
+    mainCard: { background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', marginBottom: '20px' },
+    actionCard: { background: '#fff', padding: '20px', borderRadius: '12px', borderTop: '4px solid #1b3a57', boxShadow: '0 2px 15px rgba(0,0,0,0.05)' },
+    subTitle: { color: '#1b3a57', borderBottom: '1px solid #eee', paddingBottom: '10px', marginTop: 0 },
     form: { display: 'flex', flexDirection: 'column', gap: '12px' },
-    label: { fontSize: '0.8rem', fontWeight: 'bold', color: '#555', marginBottom: '-8px' },
-    input: { padding: '10px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.9rem' },
-    btnNew: { background: '#1b3a57', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
-    btnSave: { background: '#28a745', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', flex: 2, fontWeight: 'bold' },
-    btnDelete: { background: '#dc3545', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', flex: 1 },
-    btnCancel: { background: '#6c757d', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', cursor: 'pointer', marginTop: '5px' },
-    emptyState: { textAlign: 'center', color: '#888', marginTop: '100px', fontStyle: 'italic', lineHeight: '1.5' }
+    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#666', marginBottom: '-8px' },
+    input: { padding: '10px', borderRadius: '6px', border: '1px solid #ddd' },
+    inputSmall: { padding: '8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '0.8rem', width: '100%' },
+    colorPicker: { width: '100%', height: '35px', border: 'none', cursor: 'pointer' },
+    textarea: { padding: '10px', borderRadius: '6px', border: '1px solid #ddd', height: '80px', resize: 'none' },
+    btnSave: { flex: 1, background: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' },
+    btnCancel: { background: '#6c757d', color: 'white', border: 'none', padding: '0 15px', borderRadius: '6px', cursor: 'pointer' },
+    table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px' },
+    thRow: { textAlign: 'left', borderBottom: '2px solid #1b3a57', fontSize: '0.85rem', color: '#1b3a57' },
+    tr: { borderBottom: '1px solid #f0f0f0' },
+    td: { padding: '10px 5px', fontSize: '0.9rem' },
+    badge: { background: '#e9ecef', padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem' },
+    btnEdit: { background: '#ffc107', border: 'none', padding: '5px 8px', borderRadius: '4px', cursor: 'pointer', marginRight: '5px' },
+    btnDeleteLog: { background: '#f8d7da', color: '#721c24', border: 'none', padding: '5px 8px', borderRadius: '4px', cursor: 'pointer' }
 };
 
 export default CalendarPage;

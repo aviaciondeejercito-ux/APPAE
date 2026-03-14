@@ -7,29 +7,24 @@ const {
     deleteEvent 
 } = require('../controllers/eventController');
 
-// Importamos los middlewares de seguridad (Asegúrate de que los nombres coincidan con tus archivos)
+// Middleware de seguridad - Verifica que el usuario esté logueado
 const authMiddleware = require('../middleware/authMiddleware');
 
 /**
- * RUTAS DE EVENTOS - SISTEMA GESTIÓN AE
- * Todas las rutas están protegidas por authMiddleware.
- * La lógica de restricción para el 'Boss' se maneja internamente en el controlador.
+ * SISTEMA GESTIÓN AE - RUTAS PROTEGIDAS
+ * El acceso está blindado. Solo usuarios autenticados pueden ver o gestionar.
  */
 
-// @route   GET /api/events
-// @desc    Obtener todos los eventos (Admin, Boss, User)
+// Obtener eventos: Acceso total para visualización (Admin, User, Boss)
 router.get('/', authMiddleware, getEvents);
 
-// @route   POST /api/events
-// @desc    Crear un nuevo evento (Admin, User)
+// Crear evento: La validación de que el 'Boss' NO pueda crear se hace en el controlador
 router.post('/', authMiddleware, createEvent);
 
-// @route   PUT /api/events/:id
-// @desc    Editar un evento existente (Admin, User)
+// Editar evento: Solo permitida para Admin y User
 router.put('/:id', authMiddleware, updateEvent);
 
-// @route   DELETE /api/events/:id
-// @desc    Eliminar un evento (Admin, User)
+// Eliminar evento: Baja definitiva del sistema
 router.delete('/:id', authMiddleware, deleteEvent);
 
 module.exports = router;

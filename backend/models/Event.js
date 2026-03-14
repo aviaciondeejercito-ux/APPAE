@@ -2,8 +2,8 @@ const mongoose = require('mongoose');
 
 /**
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
- * Maneja la lógica de fechas, colores y notas para el calendario interactivo.
- * Optimizado para superposición de eventos y auditoría de rangos.
+ * Seguridad: Trazabilidad completa con logs de usuario integrados.
+ * Optimizado para visualización de imagen pura y superposición.
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -14,7 +14,7 @@ const eventSchema = new mongoose.Schema({
     notes: { 
         type: String, 
         trim: true,
-        default: '' // Espacio dedicado para las notas detalladas
+        default: '' // Espacio para las notas detalladas que verá el Boss al pasar el mouse
     },
     start: { 
         type: Date, 
@@ -26,7 +26,7 @@ const eventSchema = new mongoose.Schema({
     },
     color: { 
         type: String, 
-        default: '#3788d8' // Color por defecto (Azul AE) si el usuario no elige uno
+        default: '#1b3a57' // Azul AE por defecto
     },
     type: { 
         type: String, 
@@ -38,19 +38,23 @@ const eventSchema = new mongoose.Schema({
         enum: ['programado', 'en_curso', 'finalizado', 'cancelado'], 
         default: 'programado' 
     },
-    // Referencia al creador: Crucial para que el Boss sepa quién cargó el evento
+    // AUDITORÍA Y LOGS:
     createdBy: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'User', 
         required: true 
+    },
+    userName: { 
+        type: String, 
+        required: true // Almacena el nombre del operador para el panel de logs
     }
 }, { 
-    timestamps: true // Trazabilidad completa de creación y modificación
+    timestamps: true // Registra exactamente cuándo se creó/editó la actividad
 });
 
 /**
  * VALIDACIÓN DE SEGURIDAD ATÓMICA:
- * Previene errores de carga donde la fecha de fin sea anterior o igual a la de inicio.
+ * Previene errores de carga de datos corruptos (Fecha fin < Fecha inicio).
  */
 eventSchema.pre('validate', function(next) {
     if (this.start && this.end) {
@@ -61,7 +65,7 @@ eventSchema.pre('validate', function(next) {
     next();
 });
 
-// Índice para optimizar el rendimiento del calendario al cargar muchos eventos
+// Índice para carga ultra-rápida del calendario
 eventSchema.index({ start: 1, end: 1 });
 
 module.exports = mongoose.model('Event', eventSchema);
