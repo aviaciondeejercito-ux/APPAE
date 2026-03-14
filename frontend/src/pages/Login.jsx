@@ -6,7 +6,6 @@ import { login } from '../services/api';
  * Maneja el ingreso para Admin, Boss y Users.
  */
 const Login = ({ setAuth }) => {
-  // El estado 'form' usa 'username', compatible con el modo híbrido del backend
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,18 +19,31 @@ const Login = ({ setAuth }) => {
       // Enviamos el formulario al servicio API
       const { data } = await login(form);
       
-      // ESTÁNDAR DE SEGURIDAD: Almacenamiento de sesión
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('role', data.role);
-      localStorage.setItem('username', data.username); // Guardamos el nombre para el encabezado
+      /**
+       * ESTÁNDAR DE SEGURIDAD Y PERSISTENCIA
+       * Verificamos la estructura de 'data' para asegurar que el rol se guarde correctamente.
+       * El Calendario depende de que 'role' no sea undefined.
+       */
+      const token = data.token;
+      const userRole = data.role || (data.user && data.user.role);
+      const userName = data.username || (data.user && data.user.username);
 
+      if (!token || !userRole) {
+        throw new Error('Respuesta del servidor incompleta (Falta Token o Rol)');
+      }
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('role', userRole);
+      localStorage.setItem('username', userName || 'Usuario'); 
+
+      // Cambiamos el estado de autenticación en App.jsx
       setAuth(true);
-      // En lugar de window.location.href, dejamos que el estado de App.jsx
-      // renderice el componente correspondiente inmediatamente.
+      
     } catch (err) {
-      // Capturamos el mensaje específico del backend (401, 400, etc.)
-      const message = err.response?.data?.message || 'Error de conexión con el servidor';
+      // Capturamos el mensaje específico del backend o del error de validación manual
+      const message = err.response?.data?.message || err.message || 'Error de conexión con el servidor';
       setError(message);
+      console.error("Fallo en inicio de sesión:", err);
     } finally {
       setLoading(false);
     }
@@ -43,86 +55,105 @@ const Login = ({ setAuth }) => {
       flexDirection: 'column',
       justifyContent: 'center', 
       alignItems: 'center',
-      height: '80vh' 
+      height: '100vh',
+      backgroundColor: '#f4f7f6'
     }}>
       <div style={{ 
         width: '350px',
-        padding: '30px', 
-        borderRadius: '12px',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+        padding: '35px', 
+        borderRadius: '15px',
+        boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
         backgroundColor: '#fff',
         textAlign: 'center'
       }}>
-        <h2 style={{ marginBottom: '20px', color: '#333' }}>Sistema AE - Ingreso</h2>
+        {/* Identidad del Sistema */}
+        <div style={{ marginBottom: '25px' }}>
+            <h2 style={{ margin: '0', color: '#1b3a57', fontSize: '1.8rem' }}>Sistema AE</h2>
+            <p style={{ color: '#666', fontSize: '0.9rem', marginTop: '5px' }}>Gestión Operativa de Actividades</p>
+        </div>
         
         {error && (
           <div style={{ 
             color: '#721c24', 
             backgroundColor: '#f8d7da', 
-            padding: '10px', 
-            borderRadius: '5px',
-            marginBottom: '15px',
-            fontSize: '14px'
+            padding: '12px', 
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '13px',
+            border: '1px solid #f5c6cb'
           }}>
-            {error}
+            ⚠️ {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          <input 
-            type="text" 
-            placeholder="Usuario o Email" 
-            required
-            onChange={(e) => setForm({ ...form, username: e.target.value })} 
-            style={{ 
-              display: 'block', 
-              marginBottom: '15px', 
-              width: '100%', 
-              padding: '12px',
-              boxSizing: 'border-box',
-              borderRadius: '5px',
-              border: '1px solid #ddd'
-            }}
-          />
-          <input 
-            type="password" 
-            placeholder="Contraseña" 
-            required
-            onChange={(e) => setForm({ ...form, password: e.target.value })} 
-            style={{ 
-              display: 'block', 
-              marginBottom: '20px', 
-              width: '100%', 
-              padding: '12px',
-              boxSizing: 'border-box',
-              borderRadius: '5px',
-              border: '1px solid #ddd'
-            }}
-          />
+          <div style={{ textAlign: 'left', marginBottom: '15px' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#555' }}>Identificación</label>
+            <input 
+                type="text" 
+                placeholder="Usuario o Email" 
+                required
+                onChange={(e) => setForm({ ...form, username: e.target.value })} 
+                style={styles.input}
+            />
+          </div>
+
+          <div style={{ textAlign: 'left', marginBottom: '25px' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#555' }}>Contraseña</label>
+            <input 
+                type="password" 
+                placeholder="••••••••" 
+                required
+                onChange={(e) => setForm({ ...form, password: e.target.value })} 
+                style={styles.input}
+            />
+          </div>
+
           <button 
             type="submit" 
             disabled={loading}
             style={{ 
-              width: '100%', 
-              padding: '12px', 
-              backgroundColor: loading ? '#6c757d' : '#007bff', 
-              color: 'white', 
-              border: 'none',
-              borderRadius: '5px',
+              ...styles.button,
+              backgroundColor: loading ? '#6c757d' : '#1b3a57', 
               cursor: loading ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              transition: 'background-color 0.3s'
             }}
           >
-            {loading ? 'Validando...' : 'Entrar'}
+            {loading ? 'Verificando Credenciales...' : 'Ingresar al Sistema'}
           </button>
         </form>
       </div>
-      <p style={{ marginTop: '20px', color: '#666', fontSize: '12px' }}>
-        © 2026 Aviación de Ejército - Sistema de Control de Actividades
+      <p style={{ marginTop: '30px', color: '#888', fontSize: '11px', textAlign: 'center', lineHeight: '1.5' }}>
+        © 2026 Aviación de Ejército<br/>
+        Acceso restringido - Uso Profesional
       </p>
     </div>
   );
+};
+
+const styles = {
+    input: {
+        display: 'block', 
+        marginTop: '5px',
+        width: '100%', 
+        padding: '12px',
+        boxSizing: 'border-box',
+        borderRadius: '8px',
+        border: '1px solid #ccc',
+        fontSize: '1rem',
+        outline: 'none',
+        transition: 'border-color 0.3s'
+    },
+    button: {
+        width: '100%', 
+        padding: '14px', 
+        color: 'white', 
+        border: 'none',
+        borderRadius: '8px',
+        fontWeight: 'bold',
+        fontSize: '1rem',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+        transition: 'all 0.3s'
+    }
 };
 
 export default Login;

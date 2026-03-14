@@ -6,7 +6,7 @@ const User = require('../models/User');
  * Bloquea el acceso si el JWT es inválido o si el usuario no tiene permisos.
  * Inyecta el usuario autenticado en 'req.user' para control de roles (Admin/Boss/User).
  */
-const protect = async (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
     let token;
 
     // 1. Verificación de seguridad: Existencia del encabezado 'Authorization Bearer'
@@ -55,4 +55,5 @@ const protect = async (req, res, next) => {
     }
 };
 
-module.exports = { protect };
+// EXPORTACIÓN DIRECTA: Esto soluciona el error de Render
+module.exports = authMiddleware;

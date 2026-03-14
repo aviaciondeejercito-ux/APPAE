@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+
+// 1. Importamos las funciones del controlador
 const { 
     getEvents, 
     createEvent, 
@@ -7,24 +9,25 @@ const {
     deleteEvent 
 } = require('../controllers/eventController');
 
-// Middleware de seguridad - Verifica que el usuario esté logueado
+// 2. Importamos el middleware de seguridad
+// ASEGURATE: authMiddleware debe exportarse como una función (module.exports = function...)
 const authMiddleware = require('../middleware/authMiddleware');
 
 /**
  * SISTEMA GESTIÓN AE - RUTAS PROTEGIDAS
- * El acceso está blindado. Solo usuarios autenticados pueden ver o gestionar.
+ * Blindaje: El middleware verifica el token antes de entregar el control al controlador.
  */
 
-// Obtener eventos: Acceso total para visualización (Admin, User, Boss)
+// @route   GET /api/events
 router.get('/', authMiddleware, getEvents);
 
-// Crear evento: La validación de que el 'Boss' NO pueda crear se hace en el controlador
+// @route   POST /api/events
 router.post('/', authMiddleware, createEvent);
 
-// Editar evento: Solo permitida para Admin y User
+// @route   PUT /api/events/:id
 router.put('/:id', authMiddleware, updateEvent);
 
-// Eliminar evento: Baja definitiva del sistema
+// @route   DELETE /api/events/:id
 router.delete('/:id', authMiddleware, deleteEvent);
 
 module.exports = router;
