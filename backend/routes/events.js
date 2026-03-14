@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
 
-// 1. Importamos las funciones del controlador
+/**
+ * IMPORTACIÓN DE CONTROLADORES
+ * Funciones encargadas de la lógica de negocio del calendario AE.
+ */
 const { 
     getEvents, 
     createEvent, 
@@ -9,25 +12,37 @@ const {
     deleteEvent 
 } = require('../controllers/eventController');
 
-// 2. Importamos el middleware de seguridad
-// ASEGURATE: authMiddleware debe exportarse como una función (module.exports = function...)
+/**
+ * IMPORTACIÓN DE SEGURIDAD
+ * Usamos un fallback dinámico para asegurar que 'protect' siempre sea una función válida,
+ * evitando el error de 'middleware function' en el despliegue de Render.
+ */
 const authMiddleware = require('../middleware/authMiddleware');
+const protect = typeof authMiddleware === 'function' ? authMiddleware : authMiddleware.protect;
 
 /**
- * SISTEMA GESTIÓN AE - RUTAS PROTEGIDAS
- * Blindaje: El middleware verifica el token antes de entregar el control al controlador.
+ * SISTEMA GESTIÓN AE - CAPA DE RUTAS OPERATIVAS
+ * Todas las rutas están blindadas. El operador debe estar autenticado para:
+ * Visualizar (GET), Agendar (POST), Modificar (PUT) o Dar de baja (DELETE).
  */
 
+// Aplicar protección global a todas las rutas de este módulo
+router.use(protect);
+
 // @route   GET /api/events
-router.get('/', authMiddleware, getEvents);
+// @desc    Obtener lista de eventos (Vuelos, Guardias, Mantenimiento)
+router.get('/', getEvents);
 
 // @route   POST /api/events
-router.post('/', authMiddleware, createEvent);
+// @desc    Registrar nueva actividad en el calendario
+router.post('/', createEvent);
 
 // @route   PUT /api/events/:id
-router.put('/:id', authMiddleware, updateEvent);
+// @desc    Actualizar detalles de una actividad existente
+router.put('/:id', updateEvent);
 
 // @route   DELETE /api/events/:id
-router.delete('/:id', authMiddleware, deleteEvent);
+// @desc    Eliminación/Baja de actividad del registro
+router.delete('/:id', deleteEvent);
 
 module.exports = router;

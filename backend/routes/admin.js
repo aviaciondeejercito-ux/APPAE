@@ -1,20 +1,21 @@
 const express = require('express');
 const router = express.Router();
-// Verificación de ruta según estructura de carpetas detectada
 const adminController = require('../controllers/adminController');
-const { protect } = require('../middleware/authMiddleware');
+const authMiddleware = require('../middleware/authMiddleware');
 
 /**
- * MIDDLEWARE DE AUTORIZACIÓN DE ROL
- * Seguridad Crítica: Solo permite el paso si el usuario tiene rol 'admin'.
- * Si el usuario es 'user' o 'boss', será rechazado con 403.
+ * CONFIGURACIÓN DE MIDDLEWARES
+ * Buscamos 'protect' o 'verifyToken' para asegurar compatibilidad.
  */
+const protect = authMiddleware.protect || authMiddleware.verifyToken;
+
+// Middleware interno para validar Rango Mando (Admin)
 const isAdmin = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
         next();
     } else {
-        console.warn(`[SEGURIDAD] Acceso denegado: Usuario ${req.user ? req.user.username : 'Anónimo'} intentó entrar a Admin.`);
-        res.status(403).json({ 
+        console.warn(`[SEGURIDAD] Intento de acceso no autorizado: ${req.user ? req.user.username : 'Desconocido'}`);
+        return res.status(403).json({ 
             success: false, 
             message: 'Acceso denegado: Se requieren privilegios de Administrador' 
         });
@@ -22,38 +23,31 @@ const isAdmin = (req, res, next) => {
 };
 
 /**
- * CAPA DE PROTECCIÓN GLOBAL
- * Aplicamos los middlewares en orden: 
- * 1. Token válido (protect) 
- * 2. Jerarquía Admin (isAdmin)
+ * CAPA DE SEGURIDAD GLOBAL
+ * El orden es vital: Primero autentica el Token, luego verifica el Rol.
  */
-router.use(protect);
+if (typeof protect === 'function') {
+    router.use(protect);
+} else {
+    // Si llegamos aquí, hay un problema grave en authMiddleware.js
+    console.error("❌ CRÍTICO: No se encontró la función de protección de rutas.");
+}
+
 router.use(isAdmin);
 
-// --- ENDPOINTS DE GESTIÓN DE PERSONAL ---
+// --- ENDPOINTS DE GESTIÓN DE PERSONAL (100% Sincronizados con Controlador) ---
 
-/**
- * @route   GET /api/admin/users
- * @desc    Lista todo el personal para la tabla de gestión
- */
+// Obtener el escalafón completo
 router.get('/users', adminController.getAllUsers);
 
-/**
- * @route   PUT /api/admin/users/:id/role
- * @desc    Cambio de rango (user/admin/boss)
- */
+// Actualizar jerarquía/permisos (user, boss, admin)
 router.put('/users/:id/role', adminController.updateRole);
 
-/**
- * @route   PUT /api/admin/users/:id/password
- * @desc    Reseteo forzado de contraseña por mando
- */
+// Reseteo de contraseña (GDE)
+// NOTA: Coincide con adminController.resetPassword y la ruta /password
 router.put('/users/:id/password', adminController.resetPassword);
 
-/**
- * @route   DELETE /api/admin/users/:id
- * @desc    Baja definitiva del sistema
- */
+// Baja definitiva del sistema
 router.delete('/users/:id', adminController.deleteUser);
 
 module.exports = router;

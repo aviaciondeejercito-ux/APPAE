@@ -2,7 +2,6 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
-const path = require('path');
 const conectarDB = require('./config/db');
 
 /**
@@ -21,20 +20,21 @@ const app = express();
 
 // --- MIDDLEWARES DE SEGURIDAD ---
 app.use(helmet({
-    contentSecurityPolicy: false, 
+    contentSecurityPolicy: false, // Permitido para facilitar el despliegue dinámico
 }));
 
-// CORS: Permitir comunicación desde cualquier origen para evitar bloqueos en despliegue dinámico
+// CORS: Configuración robusta para producción en Render
 app.use(cors({
-    origin: '*', 
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: '*', // En producción, podrías cambiar '*' por la URL de tu frontend en Render
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Límite de carga para prevenir ataques DoS básicos
-app.use(express.json({ limit: '10kb' })); 
+// Límite de carga para prevenir ataques DoS básicos (10kb es suficiente para JSON de eventos)
+app.use(express.json({ limit: '15kb' })); 
 
 // --- IMPORTACIÓN DE RUTAS ---
+// Nota: Los archivos deben existir en backend/routes/ con estos nombres exactos
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
 const adminRoutes = require('./routes/admin'); 
@@ -43,7 +43,7 @@ const adminRoutes = require('./routes/admin');
 
 /**
  * @route GET /api/health
- * @desc Verificación de estado operativa para Render.
+ * @desc Verificación de estado operativa para monitoreo de Render.
  */
 app.get('/api/health', (req, res) => {
     res.status(200).json({ 
@@ -53,7 +53,7 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Registro de módulos operativos
+// Registro de módulos operativos (Mantenemos el estándar de rutas pedido)
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
 app.use('/api/admin', adminRoutes); 
@@ -64,7 +64,7 @@ app.use('/api/admin', adminRoutes);
  * Esta API solo procesa datos (Estándar de Seguridad AE).
  */
 
-// --- MANEJO DE RUTAS NO ENCONTRADAS (Captura el 404 de la API) ---
+// --- MANEJO DE RUTAS NO ENCONTRADAS ---
 app.use((req, res) => {
     console.warn(`⚠️ Intento de acceso a ruta no mapeada: ${req.method} ${req.originalUrl}`);
     res.status(404).json({
@@ -75,25 +75,32 @@ app.use((req, res) => {
 
 // --- MANEJO GLOBAL DE ERRORES ---
 app.use((err, req, res, next) => {
-    console.error(`❌ ERROR CRÍTICO: ${err.message}`);
+    // Si el error ocurre durante el parseo de JSON
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        return res.status(400).json({ success: false, message: 'Carga de datos JSON malformada.' });
+    }
+
+    console.error(`❌ ERROR DE SISTEMA: ${err.message}`);
     res.status(err.status || 500).json({
         success: false,
         message: 'Error interno de procesamiento en el servidor AE.',
-        error: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        // Solo enviamos el stack en desarrollo para no exponer la estructura interna en producción
+        error: process.env.NODE_ENV === 'development' ? err.stack : 'Información reservada'
     });
 });
 
 // --- LANZAMIENTO ---
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
-    console.log(`🚀 Servidor AE en puerto ${PORT}`);
-    console.log(`📡 Rutas API activas: /api/auth, /api/events, /api/admin`);
+    console.log(`🚀 Servidor AE operativo en puerto ${PORT}`);
+    console.log(`📡 Módulos activos: /api/auth, /api/events, /api/admin`);
 });
 
-// Manejo de cierres inesperados (Graceful Shutdown)
+// Manejo de cierres inesperados para evitar corrupción de memoria (Graceful Shutdown)
 process.on('unhandledRejection', (err) => {
-    console.error(`❌ Fallo de sistema no manejado: ${err.message}`);
-    server.close(() => process.exit(1));
+    console.error(`❌ Fallo crítico de promesa no manejada: ${err.message}`);
+    // No cerramos el servidor inmediatamente para permitir que Render intente recuperar la instancia
+    // server.close(() => process.exit(1)); 
 });
 
 module.exports = app;

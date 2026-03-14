@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 /**
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
  * Seguridad: Trazabilidad completa con logs de usuario integrados.
- * Optimizado para visualización de imagen pura y superposición.
+ * Optimizado para visualización de imagen pura y superposición en calendario.
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -14,7 +14,7 @@ const eventSchema = new mongoose.Schema({
     notes: { 
         type: String, 
         trim: true,
-        default: '' // Espacio para las notas detalladas que verá el Boss al pasar el mouse
+        default: '' // Notas detalladas visibles al pasar el mouse (Tooltip)
     },
     start: { 
         type: Date, 
@@ -24,13 +24,17 @@ const eventSchema = new mongoose.Schema({
         type: Date, 
         required: [true, 'La fecha de fin es obligatoria'] 
     },
+    allDay: {
+        type: Boolean,
+        default: false // Útil para eventos de 24hs o Guardias
+    },
     color: { 
         type: String, 
         default: '#1b3a57' // Azul AE por defecto
     },
     type: { 
         type: String, 
-        enum: ['operativo', 'mantenimiento', 'vuelo', 'guardia', 'instruccion', 'especial'], 
+        enum: ['operativo', 'mantenimiento', 'vuelo', 'guardia', 'instruccion', 'especial', 'comision'], 
         default: 'especial' 
     },
     status: { 
@@ -38,7 +42,7 @@ const eventSchema = new mongoose.Schema({
         enum: ['programado', 'en_curso', 'finalizado', 'cancelado'], 
         default: 'programado' 
     },
-    // AUDITORÍA Y LOGS:
+    // --- SECCIÓN DE AUDITORÍA Y SEGURIDAD ---
     createdBy: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'User', 
@@ -46,26 +50,28 @@ const eventSchema = new mongoose.Schema({
     },
     userName: { 
         type: String, 
-        required: true // Almacena el nombre del operador para el panel de logs
+        required: true // Nombre del operador GDE para el panel de logs rápido
     }
 }, { 
-    timestamps: true // Registra exactamente cuándo se creó/editó la actividad
+    timestamps: true // Genera automáticamente createdAt y updatedAt
 });
 
 /**
  * VALIDACIÓN DE SEGURIDAD ATÓMICA:
- * Previene errores de carga de datos corruptos (Fecha fin < Fecha inicio).
+ * Middleware de Mongoose que previene errores lógicos de fechas antes de guardar.
  */
 eventSchema.pre('validate', function(next) {
     if (this.start && this.end) {
-        if (this.end <= this.start) {
-            this.invalidate('end', 'La fecha de finalización debe ser posterior a la de inicio');
+        if (this.end < this.start) {
+            this.invalidate('end', 'La fecha de finalización debe ser igual o posterior a la de inicio');
         }
     }
     next();
 });
 
-// Índice para carga ultra-rápida del calendario
+// ÍNDICES PARA ALTA DISPONIBILIDAD
+// Optimizamos la búsqueda por rango de fechas para que el calendario no se ralentice
 eventSchema.index({ start: 1, end: 1 });
+eventSchema.index({ createdBy: 1 });
 
 module.exports = mongoose.model('Event', eventSchema);

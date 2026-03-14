@@ -55,5 +55,10 @@ const authMiddleware = async (req, res, next) => {
     }
 };
 
-// EXPORTACIÓN DIRECTA: Esto soluciona el error de Render
-module.exports = authMiddleware;
+/**
+ * EXPORTACIÓN COMPUESTA (Solución definitiva para Render)
+ * Exportamos la función directamente Y también como objeto para evitar errores de importación.
+ */
+module.exports = authMiddleware; // Permite: const protect = require('../middleware/authMiddleware');
+module.exports.protect = authMiddleware; // Permite: const { protect } = require('../middleware/authMiddleware');
+module.exports.verifyToken = authMiddleware; // Permite compatibilidad con versiones anteriores
