@@ -2,43 +2,49 @@ const Event = require('../models/Event');
 
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
- * Seguridad: Validación de roles y trazabilidad de autoría.
+ * Seguridad: Validación de roles, trazabilidad y permisos diferenciados.
+ * Boss: Solo Lectura | User/Admin: Control Total
  */
 
-// @desc    Obtener todos los eventos
+// @desc    Obtener todos los eventos para el calendario
 // @route   GET /api/events
 // @access  Privado (Admin, Boss, User)
 const getEvents = async (req, res) => {
     try {
-        // Ordenamos por fecha de inicio y traemos info del creador
-        const events = await Event.find().sort({ start: 1 }).populate('createdBy', 'username');
+        // Obtenemos eventos y traemos el nombre del creador para el Panel Secundario
+        const events = await Event.find()
+            .sort({ start: 1 })
+            .populate('createdBy', 'username');
         res.status(200).json(events);
     } catch (error) {
+        console.error(`❌ Error en getEvents: ${error.message}`);
         res.status(500).json({ message: 'Error al obtener eventos', error: error.message });
     }
 };
 
 // @desc    Crear un nuevo evento
 // @route   POST /api/events
-// @access  Privado (Admin, User) - BOSS PROHIBIDO
+// @access  Privado (Admin, User)
 const createEvent = async (req, res) => {
     try {
-        // SEGURIDAD: El rol 'boss' solo puede ver, no crear.
+        // SEGURIDAD: El rol 'boss' tiene prohibida la creación
         if (req.user.role === 'boss') {
-            return res.status(403).json({ message: 'Acceso denegado: El Jefe (Boss) solo tiene permisos de lectura.' });
+            return res.status(403).json({ 
+                message: 'Acceso denegado: El perfil Jefe (Boss) solo tiene permisos de visualización.' 
+            });
         }
 
-        const { title, start, end, description, type, status } = req.body;
+        const { title, start, end, notes, color, type, status } = req.body;
 
-        // Creamos el evento vinculándolo al ID del usuario que tiene la sesión iniciada
         const newEvent = new Event({ 
             title, 
             start, 
             end, 
-            description, 
+            notes, // Espacio para las notas detalladas
+            color, // Color para materialización en calendario
             type, 
             status,
-            createdBy: req.user._id // Viene del authMiddleware
+            createdBy: req.user._id 
         });
 
         await newEvent.save();
@@ -48,32 +54,53 @@ const createEvent = async (req, res) => {
     }
 };
 
-/**
- * SEGURIDAD ADICIONAL: Solo el Admin debería poder borrar o editar.
- * Agregamos estas funciones para completar la lógica de gestión.
- */
+// @desc    Actualizar/Editar un evento (Desde el Panel Secundario)
+// @route   PUT /api/events/:id
+// @access  Privado (Admin, User)
+const updateEvent = async (req, res) => {
+    try {
+        // SEGURIDAD: El Boss no puede editar
+        if (req.user.role === 'boss') {
+            return res.status(403).json({ message: 'Acceso denegado: No posee permisos de edición.' });
+        }
 
-// @desc    Eliminar un evento
+        const updatedEvent = await Event.findByIdAndUpdate(
+            req.params.id,
+            { ...req.body },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedEvent) return res.status(404).json({ message: 'Evento no encontrado' });
+
+        res.status(200).json(updatedEvent);
+    } catch (error) {
+        res.status(400).json({ message: 'Error al actualizar evento', error: error.message });
+    }
+};
+
+// @desc    Eliminar un evento (Desde el Panel Secundario)
 // @route   DELETE /api/events/:id
-// @access  Privado (Solo Admin)
+// @access  Privado (Admin, User)
 const deleteEvent = async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ message: 'Solo el Administrador puede eliminar actividades.' });
+        // SEGURIDAD: El Boss no puede eliminar
+        if (req.user.role === 'boss') {
+            return res.status(403).json({ message: 'Acceso denegado: No posee permisos de eliminación.' });
         }
 
         const event = await Event.findByIdAndDelete(req.params.id);
         if (!event) return res.status(404).json({ message: 'Evento no encontrado' });
 
-        res.json({ message: 'Evento eliminado correctamente' });
+        res.status(200).json({ message: 'Evento eliminado correctamente' });
     } catch (error) {
-        res.status(500).json({ message: 'Error al eliminar evento' });
+        res.status(500).json({ message: 'Error al eliminar evento', error: error.message });
     }
 };
 
-// EXPORTACIÓN COMPLETA
+// EXPORTACIÓN DE MÓDULOS OPERATIVOS
 module.exports = {
     getEvents,
     createEvent,
+    updateEvent,
     deleteEvent
 };

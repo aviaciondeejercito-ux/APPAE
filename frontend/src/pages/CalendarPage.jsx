@@ -2,23 +2,18 @@ import React, { useEffect, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import timeGridPlugin from '@fullcalendar/timegrid'; // Para mejor superposición
+import timeGridPlugin from '@fullcalendar/timegrid';
 import esLocale from '@fullcalendar/core/locales/es';
-import { getEvents, createEvent, deleteEvent } from '../services/api'; // Usamos tu api.js centralizada
+import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/api';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
     const [role] = useState(localStorage.getItem('role'));
-    const [showModal, setShowModal] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
-    
-    // Estado para el nuevo evento
-    const [newEvent, setNewEvent] = useState({
-        title: '',
-        start: '',
-        end: '',
-        color: '#1b3a57',
-        description: ''
+    const [isCreating, setIsCreating] = useState(false);
+
+    const [formData, setFormData] = useState({
+        title: '', start: '', end: '', color: '#1b3a57', notes: ''
     });
 
     useEffect(() => {
@@ -34,127 +29,149 @@ const CalendarPage = () => {
                 start: ev.start,
                 end: ev.end,
                 backgroundColor: ev.color || '#1b3a57',
-                extendedProps: { notes: ev.description }
+                borderColor: ev.color || '#1b3a57',
+                extendedProps: { notes: ev.notes }
             }));
             setEvents(formatted);
         } catch (error) {
-            console.error("Error cargando eventos");
+            console.error("Error en servidor AE");
         }
     };
 
-    const handleDateClick = (arg) => {
-        if (role === 'boss') return; // El Boss no puede crear
-        setNewEvent({ ...newEvent, start: arg.dateStr, end: arg.dateStr });
-        setShowModal(true);
-        setSelectedEvent(null);
+    // Al hacer clic en un evento, cargamos sus datos en el panel secundario
+    const handleEventClick = (info) => {
+        setIsCreating(false);
+        const ev = info.event;
+        setSelectedEvent(ev.id);
+        setFormData({
+            title: ev.title,
+            start: new Date(ev.start).toISOString().slice(0, 16),
+            end: ev.end ? new Date(ev.end).toISOString().slice(0, 16) : new Date(ev.start).toISOString().slice(0, 16),
+            color: ev.backgroundColor,
+            notes: ev.extendedProps.notes || ''
+        });
     };
 
-    const handleEventClick = (info) => {
-        setSelectedEvent({
-            id: info.event.id,
-            title: info.event.title,
-            notes: info.event.extendedProps.notes,
-            start: info.event.start.toLocaleString(),
-            end: info.event.end ? info.event.end.toLocaleString() : 'N/A'
-        });
+    // Tooltip al acercar el mouse (Miniventanita de información)
+    const handleMouseEnter = (info) => {
+        info.el.title = `📝 Notas: ${info.event.extendedProps.notes || 'Sin notas'}`;
+        info.el.style.cursor = 'pointer';
+    };
+
+    const handleNewEventBtn = () => {
+        setIsCreating(true);
+        setSelectedEvent(null);
+        setFormData({ title: '', start: '', end: '', color: '#1b3a57', notes: '' });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await createEvent(newEvent);
-            setShowModal(false);
-            setNewEvent({ title: '', start: '', end: '', color: '#1b3a57', description: '' });
-            fetchData(); // Materialización inmediata
+            if (isCreating) {
+                await createEvent(formData);
+            } else {
+                await updateEvent(selectedEvent, formData);
+            }
+            fetchData();
+            setSelectedEvent(null);
+            setIsCreating(false);
         } catch (error) {
-            alert("Error al crear el evento");
+            alert("Fallo en la operación de base de datos.");
         }
     };
 
-    const handleDelete = async (id) => {
-        if (role !== 'admin') return; // Solo admin borra
-        if (window.confirm("¿Eliminar este evento?")) {
-            await deleteEvent(id);
+    const handleDelete = async () => {
+        if (window.confirm("¿Confirmar baja definitiva?")) {
+            await deleteEvent(selectedEvent);
             setSelectedEvent(null);
-            fetchData(); // Actualización inmediata
+            fetchData();
         }
     };
 
     return (
-        <div style={{ display: 'flex', gap: '20px', flexDirection: 'column' }}>
+        <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 400px', gap: '20px' }}>
             
-            {/* PANEL DE CREACIÓN (Solo para Admin y User) */}
-            {role !== 'boss' && showModal && (
-                <div style={styles.modalOverlay}>
-                    <div style={styles.modal}>
-                        <h3>Nuevo Evento Operativo</h3>
-                        <form onSubmit={handleSubmit} style={styles.form}>
-                            <input type="text" placeholder="Título del evento" required value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} style={styles.input}/>
-                            <div style={{display: 'flex', gap: '10px'}}>
-                                <input type="datetime-local" required value={newEvent.start} onChange={e => setNewEvent({...newEvent, start: e.target.value})} style={styles.input}/>
-                                <input type="datetime-local" required value={newEvent.end} onChange={e => setNewEvent({...newEvent, end: e.target.value})} style={styles.input}/>
-                            </div>
-                            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                                <label>Color:</label>
-                                <input type="color" value={newEvent.color} onChange={e => setNewEvent({...newEvent, color: e.target.value})} style={{height: '40px', cursor: 'pointer'}}/>
-                            </div>
-                            <textarea placeholder="Notas adicionales..." value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} style={{...styles.input, height: '80px'}}/>
-                            <div style={{display: 'flex', gap: '10px'}}>
-                                <button type="submit" style={styles.btnSave}>Guardar Evento</button>
-                                <button type="button" onClick={() => setShowModal(false)} style={styles.btnCancel}>Cancelar</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* DETALLES DEL EVENTO (Para todos, incluyendo Boss) */}
-            {selectedEvent && (
-                <div style={styles.detailCard}>
-                    <h4>📋 Detalle: {selectedEvent.title}</h4>
-                    <p><strong>Inicio:</strong> {selectedEvent.start}</p>
-                    <p><strong>Fin:</strong> {selectedEvent.end}</p>
-                    <p><strong>Notas:</strong> {selectedEvent.notes || 'Sin notas'}</p>
-                    <div style={{display: 'flex', gap: '10px'}}>
-                        {role === 'admin' && <button onClick={() => handleDelete(selectedEvent.id)} style={styles.btnDelete}>Eliminar</button>}
-                        <button onClick={() => setSelectedEvent(null)} style={styles.btnClose}>Cerrar</button>
-                    </div>
-                </div>
-            )}
-
+            {/* 1. CALENDARIO (VISUALIZADOR PURO) */}
             <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h2 style={{ color: '#1b3a57', margin: 0 }}>🗓️ Calendario Operativo</h2>
+                    {role !== 'boss' && (
+                        <button onClick={handleNewEventBtn} style={styles.btnNew}>+ Cargar Nuevo Evento</button>
+                    )}
+                </div>
                 <FullCalendar
                     plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                     initialView="dayGridMonth"
                     locale={esLocale}
                     events={events}
                     height="75vh"
-                    editable={role === 'admin'}
-                    selectable={role !== 'boss'}
-                    dayMaxEvents={true} // Superpone y resume eventos con "+ más"
+                    editable={false} 
+                    selectable={false} // BLOQUEADO: No se puede crear haciendo click en la fecha
                     eventClick={handleEventClick}
-                    dateClick={handleDateClick}
-                    headerToolbar={{
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                    }}
+                    eventMouseEnter={handleMouseEnter} // Miniventanita de info al acercar mouse
+                    eventOverlap={true} // Permite superposición
+                    dayMaxEvents={true} // Resume eventos ("+2 más") para no romper la estética
+                    headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' }}
                 />
+            </div>
+
+            {/* 2. PANEL SECUNDARIO (ÚNICO CENTRO DE MANDO) */}
+            <div style={styles.panelSecundario}>
+                {(selectedEvent || isCreating) ? (
+                    <>
+                        <h3 style={{ borderBottom: '2px solid #1b3a57', paddingBottom: '10px' }}>
+                            {isCreating ? "🆕 Cargar Evento" : "📝 Gestión de Evento"}
+                        </h3>
+                        <form onSubmit={handleSubmit} style={styles.form}>
+                            <label style={styles.label}>Nombre de la Misión</label>
+                            <input type="text" required disabled={role === 'boss'} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input}/>
+                            
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={styles.label}>Desde</label>
+                                    <input type="datetime-local" required disabled={role === 'boss'} value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={styles.label}>Hasta</label>
+                                    <input type="datetime-local" required disabled={role === 'boss'} value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/>
+                                </div>
+                            </div>
+
+                            <label style={styles.label}>Color Identificador</label>
+                            <input type="color" disabled={role === 'boss'} value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} style={{ width: '100%', height: '40px', cursor: 'pointer', border: 'none' }}/>
+
+                            <label style={styles.label}>Notas Técnicas</label>
+                            <textarea disabled={role === 'boss'} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={{ ...styles.input, height: '150px' }}/>
+
+                            {role !== 'boss' && (
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                    <button type="submit" style={styles.btnSave}>{isCreating ? "Materializar" : "Actualizar"}</button>
+                                    {!isCreating && <button type="button" onClick={handleDelete} style={styles.btnDelete}>Eliminar</button>}
+                                </div>
+                            )}
+                            <button type="button" onClick={() => {setSelectedEvent(null); setIsCreating(false);}} style={styles.btnCancel}>Cerrar Panel</button>
+                        </form>
+                    </>
+                ) : (
+                    <div style={styles.emptyState}>
+                        <p>Pase el mouse por el calendario para información rápida o seleccione un evento para editarlo.</p>
+                    </div>
+                )}
             </div>
         </div>
     );
 };
 
 const styles = {
-    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-    modal: { background: 'white', padding: '25px', borderRadius: '8px', width: '400px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
-    form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    input: { padding: '10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '1rem' },
-    detailCard: { background: '#e9ecef', padding: '15px', borderRadius: '8px', borderLeft: '5px solid #1b3a57' },
-    btnSave: { background: '#28a745', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' },
-    btnCancel: { background: '#6c757d', color: 'white', border: 'none', padding: '10px', borderRadius: '4px', cursor: 'pointer' },
-    btnDelete: { background: '#dc3545', color: 'white', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer' },
-    btnClose: { background: '#1b3a57', color: 'white', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer' }
+    panelSecundario: { background: '#f8f9fa', padding: '25px', borderRadius: '12px', border: '1px solid #dee2e6', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', height: 'fit-content', position: 'sticky', top: '20px' },
+    form: { display: 'flex', flexDirection: 'column', gap: '12px' },
+    label: { fontSize: '0.8rem', fontWeight: 'bold', color: '#555', marginBottom: '-8px' },
+    input: { padding: '10px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.9rem' },
+    btnNew: { background: '#1b3a57', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
+    btnSave: { background: '#28a745', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', flex: 2, fontWeight: 'bold' },
+    btnDelete: { background: '#dc3545', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', flex: 1 },
+    btnCancel: { background: '#6c757d', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', cursor: 'pointer', marginTop: '5px' },
+    emptyState: { textAlign: 'center', color: '#888', marginTop: '100px', fontStyle: 'italic', lineHeight: '1.5' }
 };
 
 export default CalendarPage;
