@@ -51,7 +51,7 @@ const CalendarPage = () => {
             }
             setFormData({ title: '', start: '', end: '', color: '#1b3a57', notes: '' });
             setIsEditing(false);
-            fetchData(); // Materialización inmediata (Crear/Eliminar/Editar)
+            fetchData(); 
         } catch (error) { 
             alert("Error en base de datos. Verifique que la fecha de fin sea posterior a la de inicio."); 
         }
@@ -67,7 +67,7 @@ const CalendarPage = () => {
     return (
         <div style={{ padding: '20px', backgroundColor: '#f4f7f6', minHeight: '100vh', fontFamily: 'sans-serif' }}>
             
-            {/* 1. VISUALIZADOR TÁCTICO (Estilo Imagen) */}
+            {/* 1. VISUALIZADOR TÁCTICO */}
             <div style={styles.mainCard}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                     <h2 style={{ color: '#1b3a57', margin: 0 }}>🗓️ Monitor de Actividades Operativas</h2>
@@ -89,12 +89,11 @@ const CalendarPage = () => {
                     }))}
                     height="70vh"
                     editable={false}
-                    selectable={false} // Calendario solo para VER
+                    selectable={false}
                     eventDisplay="block"
-                    eventOverlap={true} // Permite superposición (resumido)
-                    dayMaxEvents={3} // Resume a "+X más" si hay muchos
+                    eventOverlap={true}
+                    dayMaxEvents={3}
                     eventDidMount={(info) => {
-                        // Miniventanita de información al acercar el mouse
                         const { notes, user } = info.event.extendedProps;
                         info.el.title = `Operador: ${user || 'Sistema'}\nNotas: ${notes || 'Sin observaciones'}`;
                     }}
@@ -106,19 +105,20 @@ const CalendarPage = () => {
             {role !== 'boss' ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '20px' }}>
                     
-                    {/* FORMULARIO DE CARGA */}
+                    {/* FORMULARIO DE CARGA MODIFICADO: INICIO Y FIN VERTICALES */}
                     <div style={styles.actionCard}>
                         <h3 style={styles.subTitle}>{isEditing ? "📝 Editar Evento" : "➕ Nueva Carga"}</h3>
                         <form onSubmit={handleSubmit} style={styles.form}>
                             <label style={styles.label}>Nombre de la Misión</label>
                             <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input}/>
                             
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <div style={{ flex: 1 }}>
+                            {/* Cambio a disposición Vertical */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div style={{ width: '100%' }}>
                                     <label style={styles.label}>Inicio</label>
                                     <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.inputSmall}/>
                                 </div>
-                                <div style={{ flex: 1 }}>
+                                <div style={{ width: '100%' }}>
                                     <label style={styles.label}>Fin</label>
                                     <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.inputSmall}/>
                                 </div>
@@ -139,10 +139,10 @@ const CalendarPage = () => {
                         </form>
                     </div>
 
-                    {/* REGISTRO DE LOGS (Auditoría) */}
+                    {/* REGISTRO DE LOGS */}
                     <div style={styles.actionCard}>
                         <h3 style={styles.subTitle}>📜 Registro de Actividades (Logs)</h3>
-                        <div style={{ overflowY: 'auto', maxHeight: '450px' }}>
+                        <div style={{ overflowY: 'auto', maxHeight: '550px' }}>
                             <table style={styles.table}>
                                 <thead style={styles.thead}>
                                     <tr>
@@ -170,7 +170,7 @@ const CalendarPage = () => {
                     </div>
                 </div>
             ) : (
-                /* VISTA BOSS: PANEL DE SOLO LECTURA */
+                /* VISTA BOSS */
                 <div style={styles.actionCard}>
                     <h3 style={styles.subTitle}>📜 Auditoría Técnica (Solo Lectura)</h3>
                     <table style={styles.table}>
@@ -204,9 +204,9 @@ const styles = {
     actionCard: { background: '#fff', padding: '25px', borderRadius: '12px', borderTop: '5px solid #1b3a57', boxShadow: '0 2px 15px rgba(0,0,0,0.05)' },
     subTitle: { color: '#1b3a57', borderBottom: '1px solid #eee', paddingBottom: '10px', marginTop: 0 },
     form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#555', marginBottom: '-10px' },
+    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#555', marginBottom: '-5px' },
     input: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '1rem' },
-    inputSmall: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem', width: '100%' },
+    inputSmall: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' },
     colorPicker: { width: '100%', height: '40px', border: 'none', cursor: 'pointer', borderRadius: '8px' },
     textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', height: '100px', resize: 'none', fontSize: '0.9rem' },
     btnSave: { flex: 1, background: '#1b3a57', color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' },
