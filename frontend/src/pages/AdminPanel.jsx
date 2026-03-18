@@ -3,7 +3,7 @@ import { getUsers, deleteUser, updateUserRole, resetPassword, register } from '.
 
 /**
  * PANEL DE ADMINISTRACIÓN CENTRALIZADO - SISTEMA AE
- * Maneja: Alta/Baja, Roles (Jerarquía) y Reset de Claves GDE.
+ * Columnas Actualizadas: Usuario, GDE, Elemento, Nivel de Acceso, Acciones.
  */
 const AdminPanel = () => {
     const [users, setUsers] = useState([]);
@@ -11,7 +11,9 @@ const AdminPanel = () => {
     const [error, setError] = useState('');
     
     const [newUser, setNewUser] = useState({
-        username: '', // Este será el Usuario GDE
+        username: '', // GDE
+        nombreReal: '', // Nombre del Usuario
+        elemento: '',   // Unidad/Elemento
         password: '',
         role: 'user'
     });
@@ -25,7 +27,6 @@ const AdminPanel = () => {
             setLoading(true);
             const response = await getUsers();
             
-            // Estándar de seguridad: validación de respuesta envuelta
             if (response.data && response.data.data) {
                 setUsers(response.data.data);
             } else {
@@ -43,21 +44,21 @@ const AdminPanel = () => {
     const handleCreateUser = async (e) => {
         e.preventDefault();
         try {
-            // Adaptamos para enviar 'email' como el mismo username para no romper el backend
-            // o simplemente enviamos la estructura que el backend espera.
             const payload = { 
                 username: newUser.username, 
-                email: `${newUser.username}@ae.mil.ar`, // Email técnico generado internamente
+                nombreReal: newUser.nombreReal,
+                elemento: newUser.elemento,
+                email: `${newUser.username}@ae.mil.ar`, 
                 password: newUser.password, 
                 role: newUser.role 
             };
             
             await register(payload);
             alert(`Personal GDE: ${newUser.username} incorporado correctamente.`);
-            setNewUser({ username: '', password: '', role: 'user' });
+            setNewUser({ username: '', nombreReal: '', elemento: '', password: '', role: 'user' });
             fetchUsers(); 
         } catch (err) {
-            alert('Error al registrar: El usuario GDE ya existe en la base de datos.');
+            alert('Error al registrar: El usuario GDE ya existe o faltan datos.');
         }
     };
 
@@ -67,7 +68,7 @@ const AdminPanel = () => {
                 await deleteUser(id);
                 fetchUsers();
             } catch (err) {
-                alert('No se pudo procesar la baja. Verifique privilegios de administrador.');
+                alert('No se pudo procesar la baja.');
             }
         }
     };
@@ -100,45 +101,63 @@ const AdminPanel = () => {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
             
-            {/* PANEL DE ALTA DE PERSONAL GDE */}
+            {/* FORMULARIO DE ALTA ADAPTADO */}
             <div style={styles.card}>
-                <h3 style={styles.cardTitle}>➕ Incorporación de Personal (Alta GDE)</h3>
+                <h3 style={styles.cardTitle}>➕ Incorporación de Personal (Alta de Usuario)</h3>
                 <form onSubmit={handleCreateUser} style={styles.formInline}>
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}>Nombre y Apellido</label>
+                        <input 
+                            type="text" placeholder="Ej: Juan Pérez" required 
+                            value={newUser.nombreReal} 
+                            onChange={e => setNewUser({...newUser, nombreReal: e.target.value})}
+                            style={styles.input}
+                        />
+                    </div>
                     <div style={styles.inputGroup}>
                         <label style={styles.label}>Usuario GDE</label>
                         <input 
-                            type="text" placeholder="Ej: JPEREZ_AE" required 
+                            type="text" placeholder="JPEREZ_AE" required 
                             value={newUser.username} 
                             onChange={e => setNewUser({...newUser, username: e.target.value})}
                             style={styles.input}
                         />
                     </div>
                     <div style={styles.inputGroup}>
-                        <label style={styles.label}>Clave Inicial</label>
+                        <label style={styles.label}>Elemento</label>
                         <input 
-                            type="password" placeholder="Min. 6 caracteres" required 
+                            type="text" placeholder="Ej: Av Ej 601" required 
+                            value={newUser.elemento} 
+                            onChange={e => setNewUser({...newUser, elemento: e.target.value})}
+                            style={styles.input}
+                        />
+                    </div>
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}>Clave</label>
+                        <input 
+                            type="password" placeholder="Min. 6" required 
                             value={newUser.password} 
                             onChange={e => setNewUser({...newUser, password: e.target.value})}
                             style={styles.input}
                         />
                     </div>
                     <div style={styles.inputGroup}>
-                        <label style={styles.label}>Permisos</label>
+                        <label style={styles.label}>Rol</label>
                         <select 
                             value={newUser.role} 
                             onChange={e => setNewUser({...newUser, role: e.target.value})}
                             style={styles.select}
                         >
-                            <option value="user">Usuario (Operador - Crea/Edita)</option>
-                            <option value="boss">Boss (Supervisor - Solo Ver)</option>
-                            <option value="admin">Admin (Mando - Control Total)</option>
+                            <option value="user">Usuario</option>
+                            <option value="boss">Boss</option>
+                            <option value="admin">Admin</option>
                         </select>
                     </div>
                     <button type="submit" style={styles.btnRegister}>Dar de Alta</button>
                 </form>
             </div>
 
-            {/* LISTADO Y GESTIÓN DE PERMISOS */}
+            {/* TABLA CON LAS 5 COLUMNAS SOLICITADAS */}
             <div style={styles.card}>
                 <h3 style={styles.cardTitle}>👥 Escalafón de Usuarios y Control de Acceso</h3>
                 {error && <p style={styles.errorText}>{error}</p>}
@@ -147,7 +166,9 @@ const AdminPanel = () => {
                     <table style={styles.table}>
                         <thead>
                             <tr style={styles.theadRow}>
-                                <th style={styles.th}>Identificador GDE</th>
+                                <th style={styles.th}>Usuario</th>
+                                <th style={styles.th}>GDE</th>
+                                <th style={styles.th}>Elemento</th>
                                 <th style={styles.th}>Nivel de Acceso</th>
                                 <th style={styles.th}>Acciones de Seguridad</th>
                             </tr>
@@ -156,9 +177,11 @@ const AdminPanel = () => {
                             {users.length > 0 ? (
                                 users.map((user) => (
                                     <tr key={user._id} style={styles.tbodyRow}>
+                                        <td style={{...styles.td, fontWeight: '500'}}>{user.nombreReal || 'No asignado'}</td>
                                         <td style={styles.td}>
                                             <span style={styles.gdeBadge}>{user.username}</span>
                                         </td>
+                                        <td style={styles.td}>{user.elemento || 'S/D'}</td>
                                         <td style={styles.td}>
                                             <select 
                                                 value={user.role} 
@@ -190,7 +213,7 @@ const AdminPanel = () => {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="3" style={styles.emptyTable}>No hay personal registrado en el sistema.</td>
+                                    <td colSpan="5" style={styles.emptyTable}>No hay personal registrado.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -203,44 +226,22 @@ const AdminPanel = () => {
 
 const styles = {
     loader: { textAlign: 'center', marginTop: '50px', fontWeight: 'bold', color: '#1b3a57' },
-    card: {
-        backgroundColor: '#ffffff',
-        padding: '25px',
-        borderRadius: '10px',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
-    },
-    cardTitle: {
-        color: '#1b3a57',
-        marginTop: 0,
-        marginBottom: '20px',
-        borderLeft: '5px solid #1b3a57',
-        paddingLeft: '15px',
-        fontSize: '1.1rem',
-        fontWeight: 'bold'
-    },
-    formInline: { display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-end' },
-    inputGroup: { display: 'flex', flexDirection: 'column', gap: '5px', flex: '1', minWidth: '150px' },
-    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' },
-    input: { padding: '10px', borderRadius: '5px', border: '1px solid #ccc', fontSize: '0.9rem' },
+    card: { backgroundColor: '#ffffff', padding: '25px', borderRadius: '10px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' },
+    cardTitle: { color: '#1b3a57', marginTop: 0, marginBottom: '20px', borderLeft: '5px solid #1b3a57', paddingLeft: '15px', fontSize: '1.1rem', fontWeight: 'bold' },
+    formInline: { display: 'flex', flexWrap: 'wrap', gap: '15px', alignItems: 'flex-end' },
+    inputGroup: { display: 'flex', flexDirection: 'column', gap: '5px', flex: '1', minWidth: '140px' },
+    label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' },
+    input: { padding: '10px', borderRadius: '5px', border: '1px solid #ccc', fontSize: '0.85rem' },
     select: { padding: '10px', borderRadius: '5px', border: '1px solid #ccc', backgroundColor: '#fff', cursor: 'pointer' },
-    btnRegister: {
-        backgroundColor: '#1b3a57',
-        color: 'white',
-        border: 'none',
-        padding: '11px 25px',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontWeight: 'bold',
-        fontSize: '0.9rem'
-    },
+    btnRegister: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '11px 20px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
     table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px' },
     theadRow: { backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' },
-    th: { padding: '12px', textAlign: 'left', color: '#444', fontSize: '0.8rem', fontWeight: 'bold' },
-    tbodyRow: { borderBottom: '1px solid #eee', transition: 'background 0.2s' },
-    td: { padding: '12px', fontSize: '0.9rem' },
-    gdeBadge: { backgroundColor: '#e9ecef', padding: '4px 8px', borderRadius: '4px', fontWeight: '600', color: '#1b3a57' },
-    roleSelect: { padding: '5px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '0.85rem', fontWeight: 'bold' },
-    actionBtn: { color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', marginRight: '8px', fontSize: '0.75rem', fontWeight: 'bold' },
+    th: { padding: '12px', textAlign: 'left', color: '#444', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase' },
+    tbodyRow: { borderBottom: '1px solid #eee' },
+    td: { padding: '12px', fontSize: '0.85rem', color: '#333' },
+    gdeBadge: { backgroundColor: '#e9ecef', padding: '4px 8px', borderRadius: '4px', fontWeight: '600', color: '#1b3a57', fontFamily: 'monospace' },
+    roleSelect: { padding: '5px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '0.8rem', fontWeight: 'bold' },
+    actionBtn: { color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', marginRight: '8px', fontSize: '0.7rem', fontWeight: 'bold' },
     errorText: { color: '#d9534f', fontWeight: 'bold', backgroundColor: '#f8d7da', padding: '10px', borderRadius: '5px' },
     emptyTable: { textAlign: 'center', padding: '30px', color: '#999', fontStyle: 'italic' }
 };
