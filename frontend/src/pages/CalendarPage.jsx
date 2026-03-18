@@ -12,7 +12,6 @@ const CalendarPage = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
 
-    // Listado de Sistemas de Armas AE
     const sdaList = [
         "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
         "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
@@ -34,10 +33,9 @@ const CalendarPage = () => {
         }
     };
 
-    // Lógica para asignar color automáticamente según Tipo de Apoyo
     const handleTipoApoyoChange = (e) => {
         const tipo = e.target.value;
-        let autoColor = '#1b3a57'; // Default
+        let autoColor = '#1b3a57';
         if (tipo === "Sostenimiento") autoColor = "#0056b3";
         if (tipo === "Fuerza Operativa") autoColor = "#28a745";
         if (tipo === "Educacion") autoColor = "#800000";
@@ -45,7 +43,6 @@ const CalendarPage = () => {
         setFormData({ ...formData, tipoApoyo: tipo, color: autoColor });
     };
 
-    // Agregar SdA al listado temporal
     const addSda = () => {
         if (!formData.sdaSelected) return;
         const nuevoSda = `${formData.sdaCantidad}x ${formData.sdaSelected}`;
@@ -57,17 +54,29 @@ const CalendarPage = () => {
         });
     };
 
+    // Nueva función para eliminar un SdA de la lista temporal
+    const removeSda = (index) => {
+        const newList = [...formData.sdaListado];
+        newList.splice(index, 1);
+        setFormData({ ...formData, sdaListado: newList });
+    };
+
     const handleEditClick = (ev) => {
         if (role === 'boss') return;
         setIsEditing(true);
         setSelectedId(ev._id);
+        
+        // Extraer listado de SdA si viene formateado en notes
+        const sdaPart = ev.notes?.split(' | Obs: ')[0]?.replace('SdA: ', '') || '';
+        const obsPart = ev.notes?.split(' | Obs: ')[1] || ev.notes || '';
+
         setFormData({
             title: ev.title,
             start: new Date(ev.start).toISOString().slice(0, 16),
             end: new Date(ev.end).toISOString().slice(0, 16),
             color: ev.color,
-            notes: ev.notes || '',
-            sdaListado: ev.sdaListado || [],
+            notes: obsPart,
+            sdaListado: sdaPart ? sdaPart.split(', ') : [],
             tipoApoyo: ev.tipoApoyo || ''
         });
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
@@ -75,7 +84,6 @@ const CalendarPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        // Combinamos el listado de SdA en las notas para que se vea en el calendario si es necesario
         const finalData = {
             ...formData,
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${formData.notes}`
@@ -96,6 +104,7 @@ const CalendarPage = () => {
     };
 
     const handleDelete = async (id) => {
+        if (role === 'boss') return;
         if (window.confirm("¿Confirmar BAJA DEFINITIVA del evento?")) {
             await deleteEvent(id);
             fetchData();
@@ -105,7 +114,6 @@ const CalendarPage = () => {
     return (
         <div style={{ padding: '20px', backgroundColor: '#f4f7f6', minHeight: '100vh', fontFamily: 'sans-serif' }}>
             
-            {/* 1. VISUALIZADOR TÁCTICO */}
             <div style={styles.mainCard}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                     <h2 style={{ color: '#1b3a57', margin: 0 }}>🗓️ Monitor de Actividades Operativas</h2>
@@ -139,7 +147,6 @@ const CalendarPage = () => {
                 />
             </div>
 
-            {/* 2. PANEL SECUNDARIO DE GESTIÓN */}
             {role !== 'boss' ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '450px 1fr', gap: '20px' }}>
                     
@@ -160,7 +167,6 @@ const CalendarPage = () => {
                                 </div>
                             </div>
 
-                            {/* SELECTOR TIPO DE APOYO */}
                             <label style={styles.label}>Tipo de Apoyo (Define Color)</label>
                             <select value={formData.tipoApoyo} onChange={handleTipoApoyoChange} style={styles.input} required>
                                 <option value="">Seleccione Tipo...</option>
@@ -169,21 +175,22 @@ const CalendarPage = () => {
                                 <option value="Educacion">Educación (Bordo)</option>
                             </select>
 
-                            {/* SELECTOR SISTEMA DE ARMAS */}
                             <label style={styles.label}>Sistemas de Armas (SdA)</label>
-                            <div style={{ display: 'flex', gap: '5px' }}>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                 <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 2}}>
                                     <option value="">Seleccione SdA...</option>
                                     {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
-                                <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, flex: 0.5}}/>
+                                <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, flex: 0.3, textAlign: 'center'}}/>
                                 <button type="button" onClick={addSda} style={styles.btnAddSda}>+</button>
                             </div>
                             
-                            {/* LISTADO TEMPORAL DE SDA */}
                             <div style={styles.sdaTagContainer}>
                                 {formData.sdaListado.map((s, i) => (
-                                    <span key={i} style={styles.sdaTag}>{s}</span>
+                                    <span key={i} style={styles.sdaTag}>
+                                        {s}
+                                        <button type="button" onClick={() => removeSda(i)} style={styles.btnRemoveTag}>×</button>
+                                    </span>
                                 ))}
                             </div>
 
@@ -199,7 +206,6 @@ const CalendarPage = () => {
                         </form>
                     </div>
 
-                    {/* REGISTRO DE LOGS */}
                     <div style={styles.actionCard}>
                         <h3 style={styles.subTitle}>📜 Registro de Actividades (Logs)</h3>
                         <div style={{ overflowY: 'auto', maxHeight: '550px' }}>
@@ -230,7 +236,6 @@ const CalendarPage = () => {
                     </div>
                 </div>
             ) : (
-                /* VISTA BOSS */
                 <div style={styles.actionCard}>
                     <h3 style={styles.subTitle}>📜 Auditoría Técnica (Solo Lectura)</h3>
                     <table style={styles.table}>
@@ -270,9 +275,10 @@ const styles = {
     textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', height: '80px', resize: 'none', fontSize: '0.9rem' },
     btnSave: { flex: 1, background: '#1b3a57', color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' },
     btnCancel: { background: '#6c757d', color: 'white', border: 'none', padding: '0 20px', borderRadius: '8px', cursor: 'pointer' },
-    btnAddSda: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', padding: '0 15px', cursor: 'pointer', fontSize: '1.2rem' },
+    btnAddSda: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', width: '45px', height: '45px', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     sdaTagContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' },
-    sdaTag: { background: '#e9ecef', color: '#1b3a57', padding: '5px 10px', borderRadius: '15px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid #ced4da' },
+    sdaTag: { background: '#e9ecef', color: '#1b3a57', padding: '5px 12px', borderRadius: '15px', fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid #ced4da', display: 'flex', alignItems: 'center', gap: '8px' },
+    btnRemoveTag: { background: 'transparent', border: 'none', color: '#dc3545', fontWeight: 'bold', cursor: 'pointer', fontSize: '1.1rem', padding: 0, lineHeight: 1 },
     table: { width: '100%', borderCollapse: 'collapse' },
     thead: { textAlign: 'left', borderBottom: '2px solid #1b3a57', fontSize: '0.85rem', color: '#1b3a57' },
     tr: { borderBottom: '1px solid #f0f0f0', transition: '0.2s' },
