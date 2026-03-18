@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import CalendarPage from './pages/CalendarPage';
 import Login from './pages/Login';
 import AdminPanel from './pages/AdminPanel';
+import Estadisticas from './pages/Estadisticas'; // Importamos la nueva página
 
 function App() {
     // 1. Estados de Autenticación y Navegación
@@ -17,7 +18,7 @@ function App() {
             setAuth(true);
             setRole(savedRole);
         }
-    }, [auth]); // Se dispara cuando el Login cambia el estado de auth
+    }, [auth]);
 
     // 3. Gestión de Cierre de Sesión Seguro
     const handleLogout = () => {
@@ -27,7 +28,6 @@ function App() {
         setAuth(false);
         setRole(null);
         setView('calendar');
-        // No usamos window.location.href para evitar recargas bruscas, React maneja el cambio
     };
 
     return (
@@ -46,16 +46,28 @@ function App() {
                 <div style={styles.navActions}>
                     {auth ? (
                         <>
+                            {/* BOTÓN ESTADÍSTICAS: Accesible para todos los usuarios logueados */}
+                            <button 
+                                onClick={() => setView('stats')}
+                                style={{
+                                    ...styles.btnNav,
+                                    backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd',
+                                    border: view === 'stats' ? '2px solid white' : 'none'
+                                }}
+                            >
+                                📊 Estadísticas
+                            </button>
+
                             {/* ACCESO A PANEL ADMIN: Solo si el rol es estrictamente 'admin' */}
                             {role === 'admin' && (
                                 <button 
-                                    onClick={() => setView(view === 'calendar' ? 'admin' : 'calendar')}
+                                    onClick={() => setView(view === 'admin' ? 'calendar' : 'admin')}
                                     style={{
                                         ...styles.btnNav,
-                                        backgroundColor: view === 'calendar' ? '#f0ad4e' : '#5cb85c'
+                                        backgroundColor: view === 'admin' ? '#5cb85c' : '#f0ad4e'
                                     }}
                                 >
-                                    {view === 'calendar' ? '⚙️ Gestión de Usuarios' : '📅 Volver al Monitor'}
+                                    {view === 'admin' ? '📅 Volver al Monitor' : '⚙️ Gestión de Usuarios'}
                                 </button>
                             )}
 
@@ -75,22 +87,16 @@ function App() {
             </nav>
 
             {/* ÁREA DE OPERACIONES (Contenido Principal) */}
-            <main style={styles.container}>
+            <main style={view === 'stats' ? styles.containerStats : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
-                    // Lógica de ruteo interno
-                    view === 'admin' && role === 'admin' ? (
-                        <AdminPanel />
-                    ) : (
-                        /* CalendarPage ya gestiona internamente:
-                           - Visualización de "imagen" (FullCalendar)
-                           - Tooltips al pasar el mouse
-                           - Panel de carga/edición solo para Admin/User
-                           - Vista de solo lectura para Boss
-                        */
-                        <CalendarPage />
-                    )
+                    // Lógica de ruteo interno dinámico
+                    (() => {
+                        if (view === 'admin' && role === 'admin') return <AdminPanel />;
+                        if (view === 'stats') return <Estadisticas />;
+                        return <CalendarPage />;
+                    })()
                 )}
             </main>
 
@@ -116,7 +122,7 @@ const styles = {
         zIndex: 1000
     },
     logo: { fontSize: '1.3rem', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '1px' },
-    navActions: { display: 'flex', alignItems: 'center', gap: '20px' },
+    navActions: { display: 'flex', alignItems: 'center', gap: '15px' },
     userInfo: { display: 'flex', alignItems: 'center', gap: '15px', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '20px' },
     roleBadge: { 
         fontSize: '0.7rem', 
@@ -151,6 +157,13 @@ const styles = {
         margin: '20px auto', 
         padding: '0 20px',
         minHeight: 'calc(100vh - 160px)' 
+    },
+    // Contenedor especial para estadísticas (ocupa todo el ancho para el Looker)
+    containerStats: {
+        width: '100%',
+        margin: '0',
+        padding: '0',
+        minHeight: 'calc(100vh - 160px)'
     },
     footer: { 
         textAlign: 'center', 
