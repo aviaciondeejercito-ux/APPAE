@@ -16,30 +16,34 @@ const Login = ({ setAuth }) => {
     setLoading(true);
 
     try {
-      // Enviamos el formulario al servicio API
-      // 'username' aquí transporta el Nombre Real ingresado por el usuario
-      const { data } = await login(form);
+      // 'username' aquí transporta el Nombre Real o Email ingresado
+      const response = await login(form);
       
+      // Axios guarda la respuesta del servidor en .data
+      const userData = response.data;
+
       /**
        * ESTÁNDAR DE SEGURIDAD Y PERSISTENCIA
-       * Priorizamos 'nombreReal' para la persistencia del saludo en la UI.
+       * Extraemos los datos según la respuesta del authController (id, nombreReal, role, token)
        */
-      const token = data.token;
-      const userRole = data.role || (data.user && data.user.role);
-      const displayName = data.nombreReal || data.username || (data.user && data.user.nombreReal);
+      const token = userData.token;
+      const userRole = userData.role;
+      const displayName = userData.nombreReal || userData.username;
 
       if (!token || !userRole) {
         throw new Error('Respuesta del servidor incompleta (Falta Token o Rol)');
       }
 
+      // Guardamos en el almacenamiento local para persistir la sesión
       localStorage.setItem('token', token);
       localStorage.setItem('role', userRole);
-      localStorage.setItem('username', displayName || 'Usuario'); 
+      localStorage.setItem('username', displayName); 
 
-      // Cambiamos el estado de autenticación en App.jsx
+      // Notificamos a App.jsx que el usuario está autenticado
       setAuth(true);
       
     } catch (err) {
+      // Capturamos el mensaje de error del backend (401, 400, 500)
       const message = err.response?.data?.message || err.message || 'Error de conexión con el servidor';
       setError(message);
       console.error("Fallo en inicio de sesión:", err);
@@ -59,16 +63,16 @@ const Login = ({ setAuth }) => {
     }}>
       <div style={{ 
         width: '350px',
-        padding: '35px', 
+        padding: '40px', 
         borderRadius: '15px',
-        boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+        boxShadow: '0 10px 35px rgba(0,0,0,0.12)',
         backgroundColor: '#fff',
         textAlign: 'center'
       }}>
         {/* Identidad del Sistema */}
-        <div style={{ marginBottom: '25px' }}>
-            <h2 style={{ margin: '0', color: '#1b3a57', fontSize: '1.8rem' }}>Sistema AE</h2>
-            <p style={{ color: '#666', fontSize: '0.9rem', marginTop: '5px' }}>Gestión Operativa de Actividades</p>
+        <div style={{ marginBottom: '30px' }}>
+            <h2 style={{ margin: '0', color: '#1b3a57', fontSize: '1.8rem', letterSpacing: '1px' }}>Sistema AE</h2>
+            <p style={{ color: '#6c757d', fontSize: '0.9rem', marginTop: '8px' }}>Gestión Operativa de Actividades</p>
         </div>
         
         {error && (
@@ -79,15 +83,16 @@ const Login = ({ setAuth }) => {
             borderRadius: '8px',
             marginBottom: '20px',
             fontSize: '13px',
-            border: '1px solid #f5c6cb'
+            border: '1px solid #f5c6cb',
+            textAlign: 'left'
           }}>
             ⚠️ {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div style={{ textAlign: 'left', marginBottom: '15px' }}>
-            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#555' }}>Usuario</label>
+          <div style={{ textAlign: 'left', marginBottom: '18px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#495057', marginLeft: '5px' }}>Usuario</label>
             <input 
                 type="text" 
                 placeholder="Nombre y Apellido" 
@@ -98,8 +103,8 @@ const Login = ({ setAuth }) => {
             />
           </div>
 
-          <div style={{ textAlign: 'left', marginBottom: '25px' }}>
-            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#555' }}>Contraseña</label>
+          <div style={{ textAlign: 'left', marginBottom: '28px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#495057', marginLeft: '5px' }}>Contraseña</label>
             <input 
                 type="password" 
                 placeholder="••••••••" 
@@ -115,17 +120,18 @@ const Login = ({ setAuth }) => {
             disabled={loading}
             style={{ 
               ...styles.button,
-              backgroundColor: loading ? '#6c757d' : '#1b3a57', 
-              cursor: loading ? 'not-allowed' : 'pointer',
+              backgroundColor: loading ? '#adb5bd' : '#1b3a57', 
+              cursor: loading ? 'wait' : 'pointer',
             }}
           >
             {loading ? 'Verificando Credenciales...' : 'Ingresar al Sistema'}
           </button>
         </form>
       </div>
-      <p style={{ marginTop: '30px', color: '#888', fontSize: '11px', textAlign: 'center', lineHeight: '1.5' }}>
+      
+      <p style={{ marginTop: '30px', color: '#adb5bd', fontSize: '12px', textAlign: 'center', lineHeight: '1.6' }}>
         © 2026 Aviación de Ejército<br/>
-        Acceso restringido - Uso Profesional
+        <span style={{ fontWeight: '600' }}>Acceso restringido - Uso Profesional</span>
       </p>
     </div>
   );
@@ -134,26 +140,27 @@ const Login = ({ setAuth }) => {
 const styles = {
     input: {
         display: 'block', 
-        marginTop: '5px',
+        marginTop: '6px',
         width: '100%', 
-        padding: '12px',
+        padding: '14px',
         boxSizing: 'border-box',
-        borderRadius: '8px',
-        border: '1px solid #ccc',
+        borderRadius: '10px',
+        border: '1px solid #dee2e6',
         fontSize: '1rem',
         outline: 'none',
-        transition: 'border-color 0.3s'
+        backgroundColor: '#fcfcfc',
+        transition: 'all 0.2s ease-in-out'
     },
     button: {
         width: '100%', 
-        padding: '14px', 
+        padding: '16px', 
         color: 'white', 
         border: 'none',
-        borderRadius: '8px',
+        borderRadius: '10px',
         fontWeight: 'bold',
         fontSize: '1rem',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-        transition: 'all 0.3s'
+        boxShadow: '0 4px 12px rgba(27, 58, 87, 0.2)',
+        transition: 'background-color 0.3s'
     }
 };
 
