@@ -54,7 +54,6 @@ const CalendarPage = () => {
         });
     };
 
-    // Nueva función para eliminar un SdA de la lista temporal
     const removeSda = (index) => {
         const newList = [...formData.sdaListado];
         newList.splice(index, 1);
@@ -66,7 +65,6 @@ const CalendarPage = () => {
         setIsEditing(true);
         setSelectedId(ev._id);
         
-        // Extraer listado de SdA si viene formateado en notes
         const sdaPart = ev.notes?.split(' | Obs: ')[0]?.replace('SdA: ', '') || '';
         const obsPart = ev.notes?.split(' | Obs: ')[1] || ev.notes || '';
 
@@ -153,36 +151,43 @@ const CalendarPage = () => {
                     <div style={styles.actionCard}>
                         <h3 style={styles.subTitle}>{isEditing ? "📝 Editar Evento" : "➕ Nueva Carga"}</h3>
                         <form onSubmit={handleSubmit} style={styles.form}>
-                            <label style={styles.label}>Nombre de la Misión</label>
-                            <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} placeholder="Ej: Vuelo de Reconocimiento"/>
                             
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                                <div style={{ width: '100%' }}>
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.label}>Nombre de la Misión</label>
+                                <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} placeholder="Ej: Vuelo de Reconocimiento"/>
+                            </div>
+                            
+                            <div style={{ display: 'flex', gap: '15px' }}>
+                                <div style={{ flex: 1 }}>
                                     <label style={styles.label}>Inicio</label>
                                     <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.inputSmall}/>
                                 </div>
-                                <div style={{ width: '100%' }}>
+                                <div style={{ flex: 1 }}>
                                     <label style={styles.label}>Fin</label>
                                     <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.inputSmall}/>
                                 </div>
                             </div>
 
-                            <label style={styles.label}>Tipo de Apoyo (Define Color)</label>
-                            <select value={formData.tipoApoyo} onChange={handleTipoApoyoChange} style={styles.input} required>
-                                <option value="">Seleccione Tipo...</option>
-                                <option value="Sostenimiento">Sostenimiento (Azul)</option>
-                                <option value="Fuerza Operativa">Fuerza Operativa (Verde)</option>
-                                <option value="Educacion">Educación (Bordo)</option>
-                            </select>
-
-                            <label style={styles.label}>Sistemas de Armas (SdA)</label>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 2}}>
-                                    <option value="">Seleccione SdA...</option>
-                                    {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.label}>Tipo de Apoyo (Define Color)</label>
+                                <select value={formData.tipoApoyo} onChange={handleTipoApoyoChange} style={styles.input} required>
+                                    <option value="">Seleccione Tipo...</option>
+                                    <option value="Sostenimiento">Sostenimiento (Azul)</option>
+                                    <option value="Fuerza Operativa">Fuerza Operativa (Verde)</option>
+                                    <option value="Educacion">Educación (Bordo)</option>
                                 </select>
-                                <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, flex: 0.3, textAlign: 'center'}}/>
-                                <button type="button" onClick={addSda} style={styles.btnAddSda}>+</button>
+                            </div>
+
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.label}>Sistemas de Armas (SdA)</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
+                                        <option value="">Seleccione SdA...</option>
+                                        {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                    <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px', textAlign: 'center'}}/>
+                                    <button type="button" onClick={addSda} style={styles.btnAddSda}>+</button>
+                                </div>
                             </div>
                             
                             <div style={styles.sdaTagContainer}>
@@ -194,10 +199,12 @@ const CalendarPage = () => {
                                 ))}
                             </div>
 
-                            <label style={styles.label}>Notas Adicionales</label>
-                            <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea} placeholder="Detalles de la misión..."/>
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.label}>Notas Adicionales</label>
+                                <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea} placeholder="Detalles de la misión..."/>
+                            </div>
 
-                            <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                                 <button type="submit" style={styles.btnSave}>{isEditing ? "Actualizar" : "Materializar en Calendario"}</button>
                                 {isEditing && (
                                     <button type="button" onClick={() => {setIsEditing(false); setFormData({title:'',start:'',end:'',color:'#1b3a57',notes:'', sdaListado: [], tipoApoyo: ''})}} style={styles.btnCancel}>X</button>
@@ -224,7 +231,7 @@ const CalendarPage = () => {
                                             <td style={styles.td}>{new Date(ev.start).toLocaleDateString()}</td>
                                             <td style={styles.td}><strong>{ev.title}</strong></td>
                                             <td style={styles.td}><span style={styles.badge}>{ev.userName || 'Admin'}</span></td>
-                                            <td style={{ ...styles.td, textAlign: 'center' }}>
+                                            <td style={{ ...styles.td, textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                 <button onClick={() => handleEditClick(ev)} style={styles.btnEdit} title="Editar">✏️</button>
                                                 <button onClick={() => handleDelete(ev._id)} style={styles.btnDeleteLog} title="Eliminar">🗑️</button>
                                             </td>
@@ -267,25 +274,26 @@ const CalendarPage = () => {
 const styles = {
     mainCard: { background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', marginBottom: '25px' },
     actionCard: { background: '#fff', padding: '25px', borderRadius: '12px', borderTop: '5px solid #1b3a57', boxShadow: '0 2px 15px rgba(0,0,0,0.05)' },
-    subTitle: { color: '#1b3a57', borderBottom: '1px solid #eee', paddingBottom: '10px', marginTop: 0 },
-    form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#555', marginBottom: '-5px' },
-    input: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '1rem' },
-    inputSmall: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' },
-    textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', height: '80px', resize: 'none', fontSize: '0.9rem' },
-    btnSave: { flex: 1, background: '#1b3a57', color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' },
+    subTitle: { color: '#1b3a57', borderBottom: '1px solid #eee', paddingBottom: '10px', marginTop: 0, marginBottom: '20px' },
+    form: { display: 'flex', flexDirection: 'column', gap: '20px' },
+    fieldGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    label: { fontSize: '0.85rem', fontWeight: 'bold', color: '#444' },
+    input: { padding: '10px 12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '0.95rem', width: '100%', boxSizing: 'border-box' },
+    inputSmall: { padding: '10px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' },
+    textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ccc', height: '90px', resize: 'none', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' },
+    btnSave: { flex: 1, background: '#1b3a57', color: 'white', border: 'none', padding: '14px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' },
     btnCancel: { background: '#6c757d', color: 'white', border: 'none', padding: '0 20px', borderRadius: '8px', cursor: 'pointer' },
-    btnAddSda: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', width: '45px', height: '45px', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    sdaTagContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' },
-    sdaTag: { background: '#e9ecef', color: '#1b3a57', padding: '5px 12px', borderRadius: '15px', fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid #ced4da', display: 'flex', alignItems: 'center', gap: '8px' },
-    btnRemoveTag: { background: 'transparent', border: 'none', color: '#dc3545', fontWeight: 'bold', cursor: 'pointer', fontSize: '1.1rem', padding: 0, lineHeight: 1 },
+    btnAddSda: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', width: '42px', height: '42px', cursor: 'pointer', fontSize: '1.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    sdaTagContainer: { display: 'flex', flexWrap: 'wrap', gap: '8px', minHeight: '30px' },
+    sdaTag: { background: '#f0f2f5', color: '#1b3a57', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', border: '1px solid #d1d5db', display: 'flex', alignItems: 'center', gap: '8px' },
+    btnRemoveTag: { background: 'transparent', border: 'none', color: '#dc3545', fontWeight: 'bold', cursor: 'pointer', fontSize: '1.2rem', padding: 0, lineHeight: 1, marginLeft: '4px' },
     table: { width: '100%', borderCollapse: 'collapse' },
     thead: { textAlign: 'left', borderBottom: '2px solid #1b3a57', fontSize: '0.85rem', color: '#1b3a57' },
     tr: { borderBottom: '1px solid #f0f0f0', transition: '0.2s' },
-    td: { padding: '12px 8px', fontSize: '0.9rem' },
-    badge: { background: '#e9ecef', padding: '3px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold' },
-    btnEdit: { background: '#ffc107', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer', marginRight: '8px' },
-    btnDeleteLog: { background: '#f8d7da', color: '#721c24', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }
+    td: { padding: '14px 8px', fontSize: '0.9rem' },
+    badge: { background: '#e9ecef', padding: '4px 12px', borderRadius: '15px', fontSize: '0.75rem', fontWeight: 'bold' },
+    btnEdit: { background: '#ffc107', border: 'none', padding: '8px 10px', borderRadius: '6px', cursor: 'pointer', marginRight: '8px' },
+    btnDeleteLog: { background: '#f8d7da', color: '#721c24', border: 'none', padding: '8px 10px', borderRadius: '6px', cursor: 'pointer' }
 };
 
 export default CalendarPage;
