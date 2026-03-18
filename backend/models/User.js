@@ -3,18 +3,27 @@ const bcrypt = require('bcryptjs');
 
 /**
  * Modelo de Usuario - Estándar de Seguridad Aviación de Ejército
- * Jerarquía de roles establecida para el control de actividades:
- * - admin: Gestión de personal, permisos y control total del sistema.
- * - boss: Supervisión y lectura de cronogramas (Solo Lectura).
- * - user: Carga y modificación de eventos operativos.
+ * Actualización: El acceso se realiza mediante 'nombreReal' (Usuario).
+ * El 'username' se mantiene como identificador GDE secundario.
  */
 const userSchema = new mongoose.Schema({
+    nombreReal: { 
+        type: String, 
+        required: [true, 'El nombre de usuario (Nombre y Apellido) es obligatorio'], 
+        unique: true, // Credencial principal de acceso
+        trim: true
+    },
     username: { 
         type: String, 
-        required: [true, 'El nombre de usuario es obligatorio'], 
-        unique: true, 
+        required: [true, 'El identificador GDE es obligatorio'], 
+        unique: true, // Evita duplicidad de legajos GDE
         trim: true,
         lowercase: true 
+    },
+    elemento: { 
+        type: String, 
+        required: [true, 'El elemento/unidad es obligatorio'],
+        trim: true
     },
     email: { 
         type: String, 
@@ -35,10 +44,10 @@ const userSchema = new mongoose.Schema({
         default: 'user' 
     }
 }, { 
-    timestamps: true // Auditoría de creación y última modificación
+    timestamps: true // Auditoría de seguridad: creación y última modificación
 });
 
-// --- ENCRIPTACIÓN DE SEGURIDAD ---
+// --- ENCRIPTACIÓN DE SEGURIDAD (BCRYPT) ---
 userSchema.pre('save', async function(next) {
     // Solo hashear si la contraseña es nueva o fue modificada
     if (!this.isModified('password')) return next();

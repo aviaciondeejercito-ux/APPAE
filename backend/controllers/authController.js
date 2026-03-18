@@ -6,7 +6,6 @@ const jwt = require('jsonwebtoken');
  * @param {string} id - ID del usuario
  */
 const generateToken = (id) => {
-    // Verificación de seguridad: Si no hay secreto, el servidor debe avisar
     if (!process.env.JWT_SECRET) {
         console.error("❌ ERROR: JWT_SECRET no definido en el archivo .env");
         return null;
@@ -14,30 +13,46 @@ const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 };
 
-// @desc    Registrar un nuevo usuario
+// @desc    Registrar un nuevo usuario (Alta de Personal)
 // @route   POST /api/auth/register
 exports.register = async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        // SEGURIDAD: Extraemos los campos según el nuevo estándar del modelo
+        const { nombreReal, username, elemento, email, password, role } = req.body;
         
-        // Validación de campos básicos
-        if (!username || !email || !password) {
-            return res.status(400).json({ message: 'Por favor, complete todos los campos' });
+        // Validación de campos obligatorios
+        if (!nombreReal || !username || !elemento || !email || !password) {
+            return res.status(400).json({ message: 'Por favor, complete todos los campos obligatorios' });
         }
 
-        const userExists = await User.findOne({ email });
+        // Verificación de duplicidad: Nombre de Usuario (Credencial)
+        const userExists = await User.findOne({ nombreReal });
         if (userExists) {
-            return res.status(400).json({ message: 'El correo electrónico ya está registrado' });
+            return res.status(400).json({ message: 'El Nombre de Usuario ya está registrado' });
         }
 
-        // Crear usuario (La encriptación ocurre en el Modelo User.js)
-        const user = await User.create({ username, email, password });
+        // Verificación de duplicidad: Identificador GDE
+        const gdeExists = await User.findOne({ username });
+        if (gdeExists) {
+            return res.status(400).json({ message: 'El Identificador GDE ya existe' });
+        }
+
+        // Creación atómica del usuario
+        const user = await User.create({ 
+            nombreReal, 
+            username, // GDE
+            elemento, 
+            email, 
+            password,
+            role: role || 'user'
+        });
         
         if (user) {
             res.status(201).json({
                 _id: user._id,
+                nombreReal: user.nombreReal,
                 username: user.username,
-                email: user.email,
+                role: user.role,
                 token: generateToken(user._id)
             });
         }
@@ -46,37 +61,35 @@ exports.register = async (req, res) => {
     }
 };
 
-// @desc    Autenticar usuario y obtener token
+// @desc    Autenticar usuario (Login por Nombre de Usuario)
 // @route   POST /api/auth/login
 exports.login = async (req, res) => {
     try {
-        // SEGURIDAD Y CRÍTICA: Extraemos 'username' porque es lo que envía el Login.jsx
-        // Pero permitimos que 'username' contenga también el email para mayor flexibilidad.
+        // El frontend enviará el "Usuario" en el campo 'username'
         const { username, password } = req.body;
 
-        // Validación de entrada
         if (!username || !password) {
-            return res.status(400).json({ message: 'Por favor, ingrese sus credenciales' });
+            return res.status(400).json({ message: 'Ingrese sus credenciales' });
         }
 
-        // Búsqueda Híbrida: Buscamos al usuario por su username O por su email
+        // Búsqueda por NombreReal (Credencial principal) o Email
         const user = await User.findOne({ 
-            $or: [{ username: username }, { email: username }] 
+            $or: [{ nombreReal: username }, { email: username }] 
         });
 
-        // Verificamos usuario y comparamos password usando el método del modelo
+        // Verificación de seguridad
         if (user && (await user.comparePassword(password))) {
             res.json({
                 _id: user._id,
-                username: user.username,
+                nombreReal: user.nombreReal,
+                username: user.username, // GDE
                 role: user.role,
                 token: generateToken(user._id)
             });
         } else {
-            // Seguridad: No especificamos si falló el usuario o la clave para evitar enumeración
             res.status(401).json({ message: 'Credenciales inválidas' });
         }
     } catch (error) {
-        res.status(500).json({ message: 'Error en el servidor al iniciar sesión', error: error.message });
+        res.status(500).json({ message: 'Error en el inicio de sesión', error: error.message });
     }
 };
