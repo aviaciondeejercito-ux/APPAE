@@ -3,6 +3,7 @@ import CalendarPage from './pages/CalendarPage';
 import Login from './pages/Login';
 import AdminPanel from './pages/AdminPanel';
 import Estadisticas from './pages/Estadisticas';
+import Operaciones from './pages/Operaciones'; // <--- IMPORTADO
 
 function App() {
     // 1. Estados de Autenticación y Navegación
@@ -64,7 +65,7 @@ function App() {
                 }}>
                     {auth ? (
                         <>
-                            {/* BOTÓN MONITOR: Para volver siempre al calendario */}
+                            {/* BOTÓN MONITOR */}
                             <button 
                                 onClick={() => setView('calendar')}
                                 style={{
@@ -76,7 +77,7 @@ function App() {
                                 📅 Monitor
                             </button>
 
-                            {/* BOTÓN ESTADÍSTICAS: Accesible para todos */}
+                            {/* BOTÓN ESTADÍSTICAS */}
                             <button 
                                 onClick={() => setView('stats')}
                                 style={{
@@ -88,7 +89,7 @@ function App() {
                                 📊 Stats
                             </button>
 
-                            {/* BOTÓN OPERACIONES: Solo para Admin y User (donde moveremos la carga) */}
+                            {/* BOTÓN OPERACIONES: Ahora redirige al componente Operaciones */}
                             {(role === 'admin' || role === 'user') && (
                                 <button 
                                     onClick={() => setView('operaciones')}
@@ -102,7 +103,7 @@ function App() {
                                 </button>
                             )}
 
-                            {/* ACCESO A PANEL ADMIN: Gestión de usuarios */}
+                            {/* ACCESO A PANEL ADMIN */}
                             {role === 'admin' && (
                                 <button 
                                     onClick={() => setView('admin')}
@@ -131,16 +132,16 @@ function App() {
                 </div>
             </nav>
 
-            {/* ÁREA DE OPERACIONES (Contenido Principal) */}
+            {/* ÁREA DE CONTENIDO (Ruteo Dinámico) */}
             <main style={view === 'stats' ? styles.containerStats : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
-                    // Lógica de ruteo interno dinámico
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats') return <Estadisticas />;
-                        if (view === 'operaciones') return <div style={{padding: '20px', textAlign: 'center'}}><h2>Pestaña de Carga (Próximo paso)</h2><p>Aquí moveremos los formularios del Calendario.</p></div>;
+                        // Ruteo a la nueva página de Operaciones
+                        if (view === 'operaciones') return <Operaciones />; 
                         return <CalendarPage />;
                     })()
                 )}
