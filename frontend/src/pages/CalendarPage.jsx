@@ -157,15 +157,15 @@ const CalendarPage = () => {
                                 <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} placeholder="Ej: Vuelo de Reconocimiento"/>
                             </div>
                             
-                            <div style={{ display: 'flex', gap: '15px' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={styles.label}>Inicio</label>
-                                    <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.inputSmall}/>
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <label style={styles.label}>Fin</label>
-                                    <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.inputSmall}/>
-                                </div>
+                            {/* Corregido: Inicio y Fin en bloques separados para alineación perfecta */}
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.label}>Inicio</label>
+                                <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/>
+                            </div>
+
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.label}>Fin</label>
+                                <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/>
                             </div>
 
                             <div style={styles.fieldGroup}>
@@ -279,7 +279,6 @@ const styles = {
     fieldGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
     label: { fontSize: '0.85rem', fontWeight: 'bold', color: '#444' },
     input: { padding: '10px 12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '0.95rem', width: '100%', boxSizing: 'border-box' },
-    inputSmall: { padding: '10px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' },
     textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ccc', height: '90px', resize: 'none', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' },
     btnSave: { flex: 1, background: '#1b3a57', color: 'white', border: 'none', padding: '14px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' },
     btnCancel: { background: '#6c757d', color: 'white', border: 'none', padding: '0 20px', borderRadius: '8px', cursor: 'pointer' },
