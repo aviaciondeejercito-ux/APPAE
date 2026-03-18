@@ -2,13 +2,21 @@ import React, { useState, useEffect } from 'react';
 import CalendarPage from './pages/CalendarPage';
 import Login from './pages/Login';
 import AdminPanel from './pages/AdminPanel';
-import Estadisticas from './pages/Estadisticas'; // Importamos la nueva página
+import Estadisticas from './pages/Estadisticas';
 
 function App() {
     // 1. Estados de Autenticación y Navegación
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
     const [role, setRole] = useState(localStorage.getItem('role'));
     const [view, setView] = useState('calendar'); 
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    // Escucha cambios de tamaño de pantalla para ajuste dinámico
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // 2. Efecto de sincronización de seguridad
     useEffect(() => {
@@ -34,19 +42,41 @@ function App() {
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif' }}>
             
             {/* HEADER INSTITUCIONAL - BARRA DE MANDO */}
-            <nav style={styles.navbar}>
+            <nav style={{
+                ...styles.navbar,
+                flexDirection: isMobile ? 'column' : 'row',
+                padding: isMobile ? '10px' : '12px 40px',
+                height: isMobile ? 'auto' : '60px'
+            }}>
                 <div 
                     style={styles.logo} 
                     onClick={() => setView('calendar')}
                     title="Volver al Monitor Principal"
                 >
-                    🦅 SISTEMA GESTIÓN AE
+                    {isMobile ? '🦅 GESTIÓN AE' : '🦅 SISTEMA GESTIÓN AE'}
                 </div>
                 
-                <div style={styles.navActions}>
+                <div style={{
+                    ...styles.navActions,
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                    marginTop: isMobile ? '10px' : '0'
+                }}>
                     {auth ? (
                         <>
-                            {/* BOTÓN ESTADÍSTICAS: Accesible para todos los usuarios logueados */}
+                            {/* BOTÓN MONITOR: Para volver siempre al calendario */}
+                            <button 
+                                onClick={() => setView('calendar')}
+                                style={{
+                                    ...styles.btnNav,
+                                    backgroundColor: view === 'calendar' ? '#1e3799' : '#4a69bd',
+                                    border: view === 'calendar' ? '2px solid white' : 'none'
+                                }}
+                            >
+                                📅 Monitor
+                            </button>
+
+                            {/* BOTÓN ESTADÍSTICAS: Accesible para todos */}
                             <button 
                                 onClick={() => setView('stats')}
                                 style={{
@@ -55,28 +85,43 @@ function App() {
                                     border: view === 'stats' ? '2px solid white' : 'none'
                                 }}
                             >
-                                📊 Estadísticas
+                                📊 Stats
                             </button>
 
-                            {/* ACCESO A PANEL ADMIN: Solo si el rol es estrictamente 'admin' */}
+                            {/* BOTÓN OPERACIONES: Solo para Admin y User (donde moveremos la carga) */}
+                            {(role === 'admin' || role === 'user') && (
+                                <button 
+                                    onClick={() => setView('operaciones')}
+                                    style={{
+                                        ...styles.btnNav,
+                                        backgroundColor: view === 'operaciones' ? '#60a3bc' : '#4a69bd',
+                                        border: view === 'operaciones' ? '2px solid white' : 'none'
+                                    }}
+                                >
+                                    📝 Cargar
+                                </button>
+                            )}
+
+                            {/* ACCESO A PANEL ADMIN: Gestión de usuarios */}
                             {role === 'admin' && (
                                 <button 
-                                    onClick={() => setView(view === 'admin' ? 'calendar' : 'admin')}
+                                    onClick={() => setView('admin')}
                                     style={{
                                         ...styles.btnNav,
                                         backgroundColor: view === 'admin' ? '#5cb85c' : '#f0ad4e'
                                     }}
                                 >
-                                    {view === 'admin' ? '📅 Volver al Monitor' : '⚙️ Gestión de Usuarios'}
+                                    ⚙️ Usuarios
                                 </button>
                             )}
 
-                            <div style={styles.userInfo}>
-                                <span style={styles.roleBadge}>
-                                    {role ? role.toUpperCase() : 'USUARIO'}
-                                </span>
+                            <div style={{
+                                ...styles.userInfo,
+                                borderLeft: isMobile ? 'none' : '1px solid rgba(255,255,255,0.2)',
+                                paddingLeft: isMobile ? '0' : '20px'
+                            }}>
                                 <button onClick={handleLogout} style={styles.btnLogout}>
-                                    Cerrar Sesión
+                                    Salir
                                 </button>
                             </div>
                         </>
@@ -95,70 +140,61 @@ function App() {
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats') return <Estadisticas />;
+                        if (view === 'operaciones') return <div style={{padding: '20px', textAlign: 'center'}}><h2>Pestaña de Carga (Próximo paso)</h2><p>Aquí moveremos los formularios del Calendario.</p></div>;
                         return <CalendarPage />;
                     })()
                 )}
             </main>
 
             <footer style={styles.footer}>
-                © 2026 Aviación de Ejército - Sistema de Control de Actividades Operativas
+                © 2026 Aviación de Ejército - Sistema Operativo
             </footer>
         </div>
     );
 }
 
-// ESTILOS DEL CONTENEDOR RAÍZ
 const styles = {
     navbar: {
         backgroundColor: '#1b3a57',
         color: 'white',
-        padding: '12px 40px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         position: 'sticky',
         top: 0,
-        zIndex: 1000
+        zIndex: 1000,
+        transition: 'all 0.3s ease'
     },
-    logo: { fontSize: '1.3rem', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '1px' },
-    navActions: { display: 'flex', alignItems: 'center', gap: '15px' },
-    userInfo: { display: 'flex', alignItems: 'center', gap: '15px', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '20px' },
-    roleBadge: { 
-        fontSize: '0.7rem', 
-        backgroundColor: 'rgba(255,255,255,0.15)', 
-        padding: '4px 10px', 
-        borderRadius: '4px',
-        fontWeight: 'bold'
-    },
+    logo: { fontSize: '1.2rem', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '1px' },
+    navActions: { display: 'flex', alignItems: 'center', gap: '8px' },
+    userInfo: { display: 'flex', alignItems: 'center', gap: '10px' },
     btnNav: {
         color: 'white',
         border: 'none',
-        padding: '8px 16px',
+        padding: '6px 12px',
         borderRadius: '6px',
         cursor: 'pointer',
         fontWeight: 'bold',
-        fontSize: '0.85rem',
+        fontSize: '0.8rem',
         transition: '0.3s'
     },
     btnLogout: {
         backgroundColor: 'transparent',
         color: '#ff9999',
         border: '1px solid #ff9999',
-        padding: '6px 12px',
+        padding: '4px 10px',
         borderRadius: '6px',
         cursor: 'pointer',
-        fontSize: '0.85rem',
-        fontWeight: 'bold',
-        transition: '0.3s'
+        fontSize: '0.75rem',
+        fontWeight: 'bold'
     },
     container: { 
         maxWidth: '1400px', 
-        margin: '20px auto', 
-        padding: '0 20px',
+        margin: '10px auto', 
+        padding: '0 10px',
         minHeight: 'calc(100vh - 160px)' 
     },
-    // Contenedor especial para estadísticas (ocupa todo el ancho para el Looker)
     containerStats: {
         width: '100%',
         margin: '0',
@@ -167,11 +203,11 @@ const styles = {
     },
     footer: { 
         textAlign: 'center', 
-        padding: '25px', 
+        padding: '15px', 
         color: '#888', 
-        fontSize: '0.75rem',
+        fontSize: '0.7rem',
         borderTop: '1px solid #ddd',
-        marginTop: '40px'
+        marginTop: '20px'
     }
 };
 
