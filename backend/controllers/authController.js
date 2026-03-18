@@ -3,44 +3,33 @@ const jwt = require('jsonwebtoken');
 
 /**
  * Genera un token JWT seguro
- * @param {string} id - ID del usuario
  */
 const generateToken = (id) => {
     if (!process.env.JWT_SECRET) {
-        console.error("❌ ERROR: JWT_SECRET no definido en el archivo .env");
+        console.error("❌ ERROR CRÍTICO: JWT_SECRET no definido en el servidor.");
         return null;
     }
     return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 };
 
 // @desc    Registrar un nuevo usuario (Alta de Personal)
-// @route   POST /api/auth/register
 exports.register = async (req, res) => {
     try {
-        // SEGURIDAD: Extraemos los campos según el nuevo estándar del modelo
         const { nombreReal, username, elemento, email, password, role } = req.body;
         
-        // Validación de campos obligatorios
         if (!nombreReal || !username || !elemento || !email || !password) {
             return res.status(400).json({ message: 'Por favor, complete todos los campos obligatorios' });
         }
 
-        // Verificación de duplicidad: Nombre de Usuario (Credencial)
         const userExists = await User.findOne({ nombreReal });
-        if (userExists) {
-            return res.status(400).json({ message: 'El Nombre de Usuario ya está registrado' });
-        }
+        if (userExists) return res.status(400).json({ message: 'El Nombre de Usuario ya está registrado' });
 
-        // Verificación de duplicidad: Identificador GDE
         const gdeExists = await User.findOne({ username });
-        if (gdeExists) {
-            return res.status(400).json({ message: 'El Identificador GDE ya existe' });
-        }
+        if (gdeExists) return res.status(400).json({ message: 'El Identificador GDE ya existe' });
 
-        // Creación atómica del usuario
         const user = await User.create({ 
             nombreReal, 
-            username, // GDE
+            username, 
             elemento, 
             email, 
             password,
@@ -61,35 +50,50 @@ exports.register = async (req, res) => {
     }
 };
 
-// @desc    Autenticar usuario (Login por Nombre de Usuario)
-// @route   POST /api/auth/login
+// @desc    Autenticar usuario (Login)
 exports.login = async (req, res) => {
     try {
-        // El frontend enviará el "Usuario" en el campo 'username'
         const { username, password } = req.body;
+        
+        // --- LOG DE RASTREO ---
+        console.log("--- INTENTO DE ACCESO ---");
+        console.log("👤 Input Usuario:", username);
 
         if (!username || !password) {
             return res.status(400).json({ message: 'Ingrese sus credenciales' });
         }
 
-        // Búsqueda por NombreReal (Credencial principal) o Email
+        // Buscamos al usuario
         const user = await User.findOne({ 
             $or: [{ nombreReal: username }, { email: username }] 
         });
 
-        // Verificación de seguridad
-        if (user && (await user.comparePassword(password))) {
+        if (!user) {
+            console.log("❌ RESULTADO: Usuario no encontrado en la Base de Datos.");
+            return res.status(401).json({ message: 'Credenciales inválidas' });
+        }
+
+        console.log("✅ RESULTADO: Usuario hallado ->", user.nombreReal);
+        console.log("🔑 Verificando hash de contraseña...");
+
+        // Verificación de contraseña usando el método del modelo
+        const isMatch = await user.comparePassword(password);
+        
+        if (isMatch) {
+            console.log("🔓 ACCESO CONCEDIDO para:", user.nombreReal);
             res.json({
                 _id: user._id,
                 nombreReal: user.nombreReal,
-                username: user.username, // GDE
+                username: user.username,
                 role: user.role,
                 token: generateToken(user._id)
             });
         } else {
+            console.log("🚫 ERROR: La contraseña no coincide con el Hash de la DB.");
             res.status(401).json({ message: 'Credenciales inválidas' });
         }
     } catch (error) {
+        console.error("🔥 ERROR INTERNO EN LOGIN:", error.message);
         res.status(500).json({ message: 'Error en el inicio de sesión', error: error.message });
     }
 };
