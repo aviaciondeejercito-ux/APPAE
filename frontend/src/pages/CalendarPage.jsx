@@ -137,11 +137,16 @@ const CalendarPage = () => {
                     eventDisplay="block"
                     eventOverlap={true}
                     dayMaxEvents={3}
+                    nowIndicator={true} // Muestra línea de hora actual
                     eventDidMount={(info) => {
                         const { notes, user } = info.event.extendedProps;
                         info.el.title = `Operador: ${user || 'Sistema'}\nDetalle: ${notes || 'Sin observaciones'}`;
                     }}
-                    headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' }}
+                    headerToolbar={{ 
+                        left: 'prev,next today', 
+                        center: 'title', 
+                        right: 'dayGridMonth,timeGridWeek,timeGridDay' // Agregada vista diaria
+                    }}
                 />
             </div>
 
@@ -157,7 +162,6 @@ const CalendarPage = () => {
                                 <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} placeholder="Ej: Vuelo de Reconocimiento"/>
                             </div>
                             
-                            {/* Corregido: Inicio y Fin en bloques separados para alineación perfecta */}
                             <div style={styles.fieldGroup}>
                                 <label style={styles.label}>Inicio</label>
                                 <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/>
