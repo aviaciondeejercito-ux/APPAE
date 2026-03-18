@@ -50,7 +50,9 @@ const userSchema = new mongoose.Schema({
 // --- ENCRIPTACIÓN DE SEGURIDAD (BCRYPT) ---
 userSchema.pre('save', async function(next) {
     // Solo hashear si la contraseña es nueva o fue modificada
-    if (!this.isModified('password')) return next();
+    if (!this.isModified('password')) {
+        return next();
+    }
 
     try {
         const salt = await bcrypt.genSalt(10);
@@ -62,8 +64,13 @@ userSchema.pre('save', async function(next) {
 });
 
 // --- VERIFICACIÓN DE CREDENCIALES ---
+// Usamos una función tradicional para asegurar que 'this' apunte al documento
 userSchema.methods.comparePassword = async function(enteredPassword) {
-    return await bcrypt.compare(enteredPassword, this.password);
+    try {
+        return await bcrypt.compare(enteredPassword, this.password);
+    } catch (error) {
+        return false;
+    }
 };
 
 module.exports = mongoose.model('User', userSchema);

@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const User = require('./models/User'); // Asegúrate que la ruta sea correcta
+const User = require('./models/User'); // Verifica que la ruta sea correcta
 const path = require('path');
 
 // Carga las variables de entorno para conectar a MongoDB (Local o Render)
@@ -16,22 +15,23 @@ const resetAdmin = async () => {
         console.log('⏳ Conectando a la base de datos...');
         await mongoose.connect(mongoUri);
 
-        // 1. Eliminamos cualquier rastro del admin previo para evitar conflictos
+        // 1. Eliminamos cualquier rastro del admin previo para evitar conflictos e inconsistencias
         await User.deleteOne({ username: 'admin' });
         console.log('🧹 Limpieza de registros previos completada.');
 
-        // 2. Encriptamos la contraseña manualmente para asegurar compatibilidad
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash('admin123', salt);
-
-        // 3. Creamos el nuevo perfil con el estándar AE (incluye nombreReal)
+        /**
+         * 2. CREACIÓN DEL PERFIL
+         * IMPORTANTE: Pasamos la contraseña en texto plano ('admin123').
+         * El middleware pre('save') en models/User.js se encargará de encriptarla
+         * una sola vez, asegurando que el login funcione.
+         */
         const admin = new User({
-            nombreReal: 'admin',      // CRÍTICO: Valor para el login y la tabla
+            nombreReal: 'admin',      // Credencial de acceso (Usuario)
             username: 'admin',        // Identificador GDE
-            elemento: 'COMANDO',
-            email: 'admin@ae.mil.ar',
-            password: hashedPassword, // Guardamos la versión encriptada
-            role: 'admin'             // Nivel de acceso máximo
+            elemento: 'COMANDO',      // Unidad/Destino
+            email: 'admin@ae.mil.ar', // Email institucional
+            password: 'admin123',     // Se encriptará automáticamente en el modelo
+            role: 'admin'             // Rango de privilegios
         });
 
         await admin.save();
@@ -40,7 +40,7 @@ const resetAdmin = async () => {
         console.log('🚀 ADMINISTRADOR RESETEADO CON ÉXITO');
         console.log('👤 Usuario para entrar: admin');
         console.log('🔑 Contraseña: admin123');
-        console.log('📊 Estado: 100% Funcional con el nuevo Panel');
+        console.log('📊 Estado: 100% Funcional con estándar de seguridad AE');
         console.log('--------------------------------------------------');
 
         process.exit(0);
