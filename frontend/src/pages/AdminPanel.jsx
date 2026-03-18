@@ -3,7 +3,8 @@ import { getUsers, deleteUser, updateUserRole, resetPassword, register } from '.
 
 /**
  * PANEL DE ADMINISTRACIÓN CENTRALIZADO - SISTEMA AE
- * Columnas Actualizadas: Usuario, GDE, Elemento, Nivel de Acceso, Acciones.
+ * Configuración: Usuario (Nombre y Apellido) es la credencial principal.
+ * Columnas: Usuario, GDE, Elemento, Nivel de Acceso, Acciones.
  */
 const AdminPanel = () => {
     const [users, setUsers] = useState([]);
@@ -11,9 +12,9 @@ const AdminPanel = () => {
     const [error, setError] = useState('');
     
     const [newUser, setNewUser] = useState({
-        username: '', // GDE
-        nombreReal: '', // Nombre del Usuario
-        elemento: '',   // Unidad/Elemento
+        username: '',    // GDE (Identificador)
+        nombreReal: '',  // Usuario (Credencial de acceso)
+        elemento: '',    // Unidad/Elemento
         password: '',
         role: 'user'
     });
@@ -27,6 +28,7 @@ const AdminPanel = () => {
             setLoading(true);
             const response = await getUsers();
             
+            // Verificación de la estructura de respuesta del backend
             if (response.data && response.data.data) {
                 setUsers(response.data.data);
             } else {
@@ -44,26 +46,29 @@ const AdminPanel = () => {
     const handleCreateUser = async (e) => {
         e.preventDefault();
         try {
+            // Construcción del payload según el nuevo modelo del Backend
             const payload = { 
-                username: newUser.username, 
-                nombreReal: newUser.nombreReal,
+                nombreReal: newUser.nombreReal, // Prioridad: Credencial de entrada
+                username: newUser.username,     // GDE
                 elemento: newUser.elemento,
-                email: `${newUser.username}@ae.mil.ar`, 
+                email: `${newUser.username.toLowerCase()}@ae.mil.ar`, 
                 password: newUser.password, 
                 role: newUser.role 
             };
             
             await register(payload);
-            alert(`Personal GDE: ${newUser.username} incorporado correctamente.`);
+            alert(`Personal: ${newUser.nombreReal} (GDE: ${newUser.username}) incorporado correctamente.`);
+            
+            // Reset del formulario
             setNewUser({ username: '', nombreReal: '', elemento: '', password: '', role: 'user' });
             fetchUsers(); 
         } catch (err) {
-            alert('Error al registrar: El usuario GDE ya existe o faltan datos.');
+            alert(err.response?.data?.message || 'Error al registrar: Verifique si el nombre o GDE ya existen.');
         }
     };
 
-    const handleDelete = async (id, username) => {
-        if (window.confirm(`⚠️ ADVERTENCIA DE SEGURIDAD: ¿Confirma la BAJA definitiva del usuario GDE: ${username}?`)) {
+    const handleDelete = async (id, nombre) => {
+        if (window.confirm(`⚠️ ADVERTENCIA DE SEGURIDAD: ¿Confirma la BAJA definitiva del usuario: ${nombre}?`)) {
             try {
                 await deleteUser(id);
                 fetchUsers();
@@ -82,8 +87,8 @@ const AdminPanel = () => {
         }
     };
 
-    const handleResetPass = async (id, username) => {
-        const newPass = prompt(`Establecer nueva clave para GDE: ${username}:`);
+    const handleResetPass = async (id, nombre) => {
+        const newPass = prompt(`Establecer nueva clave para: ${nombre}:`);
         if (newPass && newPass.length >= 6) {
             try {
                 await resetPassword(id, newPass);
@@ -106,7 +111,7 @@ const AdminPanel = () => {
                 <h3 style={styles.cardTitle}>➕ Incorporación de Personal (Alta de Usuario)</h3>
                 <form onSubmit={handleCreateUser} style={styles.formInline}>
                     <div style={styles.inputGroup}>
-                        <label style={styles.label}>Nombre y Apellido</label>
+                        <label style={styles.label}>Nombre y Apellido (Usuario)</label>
                         <input 
                             type="text" placeholder="Ej: Juan Pérez" required 
                             value={newUser.nombreReal} 
@@ -115,7 +120,7 @@ const AdminPanel = () => {
                         />
                     </div>
                     <div style={styles.inputGroup}>
-                        <label style={styles.label}>Usuario GDE</label>
+                        <label style={styles.label}>Identificador GDE</label>
                         <input 
                             type="text" placeholder="JPEREZ_AE" required 
                             value={newUser.username} 
@@ -157,7 +162,7 @@ const AdminPanel = () => {
                 </form>
             </div>
 
-            {/* TABLA CON LAS 5 COLUMNAS SOLICITADAS */}
+            {/* TABLA DE ESCALAFÓN */}
             <div style={styles.card}>
                 <h3 style={styles.cardTitle}>👥 Escalafón de Usuarios y Control de Acceso</h3>
                 {error && <p style={styles.errorText}>{error}</p>}
@@ -166,7 +171,7 @@ const AdminPanel = () => {
                     <table style={styles.table}>
                         <thead>
                             <tr style={styles.theadRow}>
-                                <th style={styles.th}>Usuario</th>
+                                <th style={styles.th}>Usuario (Nombre)</th>
                                 <th style={styles.th}>GDE</th>
                                 <th style={styles.th}>Elemento</th>
                                 <th style={styles.th}>Nivel de Acceso</th>
@@ -195,14 +200,14 @@ const AdminPanel = () => {
                                         </td>
                                         <td style={styles.td}>
                                             <button 
-                                                onClick={() => handleResetPass(user._id, user.username)}
+                                                onClick={() => handleResetPass(user._id, user.nombreReal)}
                                                 style={{ ...styles.actionBtn, backgroundColor: '#f0ad4e' }}
                                                 title="Resetear Clave"
                                             >
                                                 🔑 Reset
                                             </button>
                                             <button 
-                                                onClick={() => handleDelete(user._id, user.username)}
+                                                onClick={() => handleDelete(user._id, user.nombreReal)}
                                                 style={{ ...styles.actionBtn, backgroundColor: '#d9534f' }}
                                                 title="Eliminar Usuario"
                                             >

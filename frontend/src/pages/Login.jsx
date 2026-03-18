@@ -3,7 +3,7 @@ import { login } from '../services/api';
 
 /**
  * COMPONENTE DE LOGIN - SISTEMA GESTIÓN AE
- * Maneja el ingreso para Admin, Boss y Users.
+ * Actualizado: Acceso mediante Usuario (Nombre y Apellido) y Contraseña.
  */
 const Login = ({ setAuth }) => {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -17,16 +17,16 @@ const Login = ({ setAuth }) => {
 
     try {
       // Enviamos el formulario al servicio API
+      // 'username' aquí transporta el Nombre Real ingresado por el usuario
       const { data } = await login(form);
       
       /**
        * ESTÁNDAR DE SEGURIDAD Y PERSISTENCIA
-       * Verificamos la estructura de 'data' para asegurar que el rol se guarde correctamente.
-       * El Calendario depende de que 'role' no sea undefined.
+       * Priorizamos 'nombreReal' para la persistencia del saludo en la UI.
        */
       const token = data.token;
       const userRole = data.role || (data.user && data.user.role);
-      const userName = data.username || (data.user && data.user.username);
+      const displayName = data.nombreReal || data.username || (data.user && data.user.nombreReal);
 
       if (!token || !userRole) {
         throw new Error('Respuesta del servidor incompleta (Falta Token o Rol)');
@@ -34,13 +34,12 @@ const Login = ({ setAuth }) => {
 
       localStorage.setItem('token', token);
       localStorage.setItem('role', userRole);
-      localStorage.setItem('username', userName || 'Usuario'); 
+      localStorage.setItem('username', displayName || 'Usuario'); 
 
       // Cambiamos el estado de autenticación en App.jsx
       setAuth(true);
       
     } catch (err) {
-      // Capturamos el mensaje específico del backend o del error de validación manual
       const message = err.response?.data?.message || err.message || 'Error de conexión con el servidor';
       setError(message);
       console.error("Fallo en inicio de sesión:", err);
@@ -88,11 +87,12 @@ const Login = ({ setAuth }) => {
 
         <form onSubmit={handleSubmit}>
           <div style={{ textAlign: 'left', marginBottom: '15px' }}>
-            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#555' }}>Identificación</label>
+            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#555' }}>Usuario</label>
             <input 
                 type="text" 
-                placeholder="Usuario o Email" 
+                placeholder="Nombre y Apellido" 
                 required
+                value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })} 
                 style={styles.input}
             />
@@ -104,6 +104,7 @@ const Login = ({ setAuth }) => {
                 type="password" 
                 placeholder="••••••••" 
                 required
+                value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })} 
                 style={styles.input}
             />
