@@ -12,8 +12,15 @@ const CalendarPage = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
 
+    // Listado de Sistemas de Armas AE
+    const sdaList = [
+        "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
+        "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
+    ];
+
     const [formData, setFormData] = useState({
-        title: '', start: '', end: '', color: '#1b3a57', notes: ''
+        title: '', start: '', end: '', color: '#1b3a57', notes: '',
+        tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: []
     });
 
     useEffect(() => { fetchData(); }, []);
@@ -27,6 +34,29 @@ const CalendarPage = () => {
         }
     };
 
+    // Lógica para asignar color automáticamente según Tipo de Apoyo
+    const handleTipoApoyoChange = (e) => {
+        const tipo = e.target.value;
+        let autoColor = '#1b3a57'; // Default
+        if (tipo === "Sostenimiento") autoColor = "#0056b3";
+        if (tipo === "Fuerza Operativa") autoColor = "#28a745";
+        if (tipo === "Educacion") autoColor = "#800000";
+        
+        setFormData({ ...formData, tipoApoyo: tipo, color: autoColor });
+    };
+
+    // Agregar SdA al listado temporal
+    const addSda = () => {
+        if (!formData.sdaSelected) return;
+        const nuevoSda = `${formData.sdaCantidad}x ${formData.sdaSelected}`;
+        setFormData({
+            ...formData,
+            sdaListado: [...formData.sdaListado, nuevoSda],
+            sdaSelected: '',
+            sdaCantidad: 1
+        });
+    };
+
     const handleEditClick = (ev) => {
         if (role === 'boss') return;
         setIsEditing(true);
@@ -36,24 +66,32 @@ const CalendarPage = () => {
             start: new Date(ev.start).toISOString().slice(0, 16),
             end: new Date(ev.end).toISOString().slice(0, 16),
             color: ev.color,
-            notes: ev.notes || ''
+            notes: ev.notes || '',
+            sdaListado: ev.sdaListado || [],
+            tipoApoyo: ev.tipoApoyo || ''
         });
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        // Combinamos el listado de SdA en las notas para que se vea en el calendario si es necesario
+        const finalData = {
+            ...formData,
+            notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${formData.notes}`
+        };
+
         try {
             if (isEditing) {
-                await updateEvent(selectedId, formData);
+                await updateEvent(selectedId, finalData);
             } else {
-                await createEvent(formData);
+                await createEvent(finalData);
             }
-            setFormData({ title: '', start: '', end: '', color: '#1b3a57', notes: '' });
+            setFormData({ title: '', start: '', end: '', color: '#1b3a57', notes: '', tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [] });
             setIsEditing(false);
             fetchData(); 
         } catch (error) { 
-            alert("Error en base de datos. Verifique que la fecha de fin sea posterior a la de inicio."); 
+            alert("Error en base de datos. Verifique los campos."); 
         }
     };
 
@@ -95,24 +133,22 @@ const CalendarPage = () => {
                     dayMaxEvents={3}
                     eventDidMount={(info) => {
                         const { notes, user } = info.event.extendedProps;
-                        info.el.title = `Operador: ${user || 'Sistema'}\nNotas: ${notes || 'Sin observaciones'}`;
+                        info.el.title = `Operador: ${user || 'Sistema'}\nDetalle: ${notes || 'Sin observaciones'}`;
                     }}
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' }}
                 />
             </div>
 
-            {/* 2. PANEL SECUNDARIO DE GESTIÓN Y LOGS */}
+            {/* 2. PANEL SECUNDARIO DE GESTIÓN */}
             {role !== 'boss' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '450px 1fr', gap: '20px' }}>
                     
-                    {/* FORMULARIO DE CARGA MODIFICADO: INICIO Y FIN VERTICALES */}
                     <div style={styles.actionCard}>
                         <h3 style={styles.subTitle}>{isEditing ? "📝 Editar Evento" : "➕ Nueva Carga"}</h3>
                         <form onSubmit={handleSubmit} style={styles.form}>
                             <label style={styles.label}>Nombre de la Misión</label>
-                            <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input}/>
+                            <input type="text" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} placeholder="Ej: Vuelo de Reconocimiento"/>
                             
-                            {/* Cambio a disposición Vertical */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 <div style={{ width: '100%' }}>
                                     <label style={styles.label}>Inicio</label>
@@ -124,16 +160,40 @@ const CalendarPage = () => {
                                 </div>
                             </div>
 
-                            <label style={styles.label}>Color de Identificación</label>
-                            <input type="color" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} style={styles.colorPicker}/>
+                            {/* SELECTOR TIPO DE APOYO */}
+                            <label style={styles.label}>Tipo de Apoyo (Define Color)</label>
+                            <select value={formData.tipoApoyo} onChange={handleTipoApoyoChange} style={styles.input} required>
+                                <option value="">Seleccione Tipo...</option>
+                                <option value="Sostenimiento">Sostenimiento (Azul)</option>
+                                <option value="Fuerza Operativa">Fuerza Operativa (Verde)</option>
+                                <option value="Educacion">Educación (Bordo)</option>
+                            </select>
 
-                            <label style={styles.label}>Notas y Observaciones</label>
-                            <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}/>
+                            {/* SELECTOR SISTEMA DE ARMAS */}
+                            <label style={styles.label}>Sistemas de Armas (SdA)</label>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                                <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 2}}>
+                                    <option value="">Seleccione SdA...</option>
+                                    {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, flex: 0.5}}/>
+                                <button type="button" onClick={addSda} style={styles.btnAddSda}>+</button>
+                            </div>
+                            
+                            {/* LISTADO TEMPORAL DE SDA */}
+                            <div style={styles.sdaTagContainer}>
+                                {formData.sdaListado.map((s, i) => (
+                                    <span key={i} style={styles.sdaTag}>{s}</span>
+                                ))}
+                            </div>
+
+                            <label style={styles.label}>Notas Adicionales</label>
+                            <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea} placeholder="Detalles de la misión..."/>
 
                             <div style={{ display: 'flex', gap: '10px' }}>
                                 <button type="submit" style={styles.btnSave}>{isEditing ? "Actualizar" : "Materializar en Calendario"}</button>
                                 {isEditing && (
-                                    <button type="button" onClick={() => {setIsEditing(false); setFormData({title:'',start:'',end:'',color:'#1b3a57',notes:''})}} style={styles.btnCancel}>X</button>
+                                    <button type="button" onClick={() => {setIsEditing(false); setFormData({title:'',start:'',end:'',color:'#1b3a57',notes:'', sdaListado: [], tipoApoyo: ''})}} style={styles.btnCancel}>X</button>
                                 )}
                             </div>
                         </form>
@@ -179,7 +239,7 @@ const CalendarPage = () => {
                                 <th>Rango Horario</th>
                                 <th>Actividad</th>
                                 <th>Cargado por</th>
-                                <th>Observaciones</th>
+                                <th>Detalle Operativo</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -207,10 +267,12 @@ const styles = {
     label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#555', marginBottom: '-5px' },
     input: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '1rem' },
     inputSmall: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' },
-    colorPicker: { width: '100%', height: '40px', border: 'none', cursor: 'pointer', borderRadius: '8px' },
-    textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', height: '100px', resize: 'none', fontSize: '0.9rem' },
+    textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', height: '80px', resize: 'none', fontSize: '0.9rem' },
     btnSave: { flex: 1, background: '#1b3a57', color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' },
     btnCancel: { background: '#6c757d', color: 'white', border: 'none', padding: '0 20px', borderRadius: '8px', cursor: 'pointer' },
+    btnAddSda: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', padding: '0 15px', cursor: 'pointer', fontSize: '1.2rem' },
+    sdaTagContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' },
+    sdaTag: { background: '#e9ecef', color: '#1b3a57', padding: '5px 10px', borderRadius: '15px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid #ced4da' },
     table: { width: '100%', borderCollapse: 'collapse' },
     thead: { textAlign: 'left', borderBottom: '2px solid #1b3a57', fontSize: '0.85rem', color: '#1b3a57' },
     tr: { borderBottom: '1px solid #f0f0f0', transition: '0.2s' },
