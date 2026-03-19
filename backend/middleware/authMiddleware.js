@@ -4,7 +4,7 @@ const User = require('../models/User');
 /**
  * MIDDLEWARE DE PROTECCIÓN - SISTEMA GESTIÓN AE
  * Bloquea el acceso si el JWT es inválido o si el usuario no tiene permisos.
- * Inyecta el usuario autenticado en 'req.user' para control de roles (Admin/Boss/User).
+ * Inyecta el usuario autenticado en 'req.user' con su Rol y Elemento.
  */
 const authMiddleware = async (req, res, next) => {
     let token;
@@ -25,7 +25,7 @@ const authMiddleware = async (req, res, next) => {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
             // 4. Inyección del Usuario en la Petición
-            // Seleccionamos todo excepto el hash de la contraseña por seguridad crítica
+            // IMPORTANTE: Traemos 'role' y 'elemento' explícitamente para validaciones de S4
             req.user = await User.findById(decoded.id).select('-password');
 
             // 5. Validación de existencia del usuario (Seguridad ante bajas recientes)
@@ -56,9 +56,8 @@ const authMiddleware = async (req, res, next) => {
 };
 
 /**
- * EXPORTACIÓN COMPUESTA (Solución definitiva para Render)
- * Exportamos la función directamente Y también como objeto para evitar errores de importación.
+ * EXPORTACIÓN COMPUESTA (Solución definitiva para Render/Vercel)
  */
-module.exports = authMiddleware; // Permite: const protect = require('../middleware/authMiddleware');
-module.exports.protect = authMiddleware; // Permite: const { protect } = require('../middleware/authMiddleware');
-module.exports.verifyToken = authMiddleware; // Permite compatibilidad con versiones anteriores
+module.exports = authMiddleware;
+module.exports.protect = authMiddleware;
+module.exports.verifyToken = authMiddleware;

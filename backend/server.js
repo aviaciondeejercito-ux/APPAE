@@ -7,6 +7,7 @@ const conectarDB = require('./config/db');
 /**
  * ESTÁNDAR DE SEGURIDAD AE
  * Configuración de motor centralizado para API de Aviación de Ejército.
+ * Actualización: Inclusión de Módulo de Gestión de Material (Aeronaves).
  */
 
 // --- CONFIGURACIÓN DE ENTORNO ---
@@ -30,14 +31,14 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Límite de carga para prevenir ataques DoS básicos (10kb es suficiente para JSON de eventos)
+// Límite de carga para prevenir ataques DoS básicos
 app.use(express.json({ limit: '15kb' })); 
 
 // --- IMPORTACIÓN DE RUTAS ---
-// Nota: Los archivos deben existir en backend/routes/ con estos nombres exactos
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
 const adminRoutes = require('./routes/admin'); 
+const aircraftRoutes = require('./routes/aircraft'); // <--- NUEVA RUTA DE MATERIAL
 
 // --- DEFINICIÓN DE RUTAS API ---
 
@@ -53,10 +54,11 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Registro de módulos operativos (Mantenemos el estándar de rutas pedido)
+// Registro de módulos operativos
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
 app.use('/api/admin', adminRoutes); 
+app.use('/api/aircraft', aircraftRoutes); // <--- REGISTRO DE MÓDULO AERONAVES
 
 /**
  * SECCIÓN DE FRONTEND ELIMINADA:
@@ -84,7 +86,6 @@ app.use((err, req, res, next) => {
     res.status(err.status || 500).json({
         success: false,
         message: 'Error interno de procesamiento en el servidor AE.',
-        // Solo enviamos el stack en desarrollo para no exponer la estructura interna en producción
         error: process.env.NODE_ENV === 'development' ? err.stack : 'Información reservada'
     });
 });
@@ -93,14 +94,12 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
     console.log(`🚀 Servidor AE operativo en puerto ${PORT}`);
-    console.log(`📡 Módulos activos: /api/auth, /api/events, /api/admin`);
+    console.log(`📡 Módulos activos: /api/auth, /api/events, /api/admin, /api/aircraft`);
 });
 
 // Manejo de cierres inesperados para evitar corrupción de memoria (Graceful Shutdown)
 process.on('unhandledRejection', (err) => {
     console.error(`❌ Fallo crítico de promesa no manejada: ${err.message}`);
-    // No cerramos el servidor inmediatamente para permitir que Render intente recuperar la instancia
-    // server.close(() => process.exit(1)); 
 });
 
 module.exports = app;

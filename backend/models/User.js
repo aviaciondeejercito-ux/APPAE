@@ -3,20 +3,19 @@ const bcrypt = require('bcryptjs');
 
 /**
  * Modelo de Usuario - Estándar de Seguridad Aviación de Ejército
- * Actualización: El acceso se realiza mediante 'nombreReal' (Usuario).
- * El 'username' se mantiene como identificador GDE secundario.
+ * Actualización: Integración de Rol S4 y Vinculación por Elemento/Unidad.
  */
 const userSchema = new mongoose.Schema({
     nombreReal: { 
         type: String, 
         required: [true, 'El nombre de usuario (Nombre y Apellido) es obligatorio'], 
-        unique: true, // Credencial principal de acceso
+        unique: true, 
         trim: true
     },
     username: { 
         type: String, 
         required: [true, 'El identificador GDE es obligatorio'], 
-        unique: true, // Evita duplicidad de legajos GDE
+        unique: true, 
         trim: true,
         lowercase: true 
     },
@@ -40,16 +39,15 @@ const userSchema = new mongoose.Schema({
     },
     role: { 
         type: String, 
-        enum: ['user', 'admin', 'boss'], 
+        enum: ['user', 'admin', 'boss', 'S4_UNIDAD'], // Se añade el rol operativo S4
         default: 'user' 
     }
 }, { 
-    timestamps: true // Auditoría de seguridad: creación y última modificación
+    timestamps: true 
 });
 
 // --- ENCRIPTACIÓN DE SEGURIDAD (BCRYPT) ---
 userSchema.pre('save', async function(next) {
-    // Solo hashear si la contraseña es nueva o fue modificada
     if (!this.isModified('password')) {
         return next();
     }
@@ -64,7 +62,6 @@ userSchema.pre('save', async function(next) {
 });
 
 // --- VERIFICACIÓN DE CREDENCIALES ---
-// Usamos una función tradicional para asegurar que 'this' apunte al documento
 userSchema.methods.comparePassword = async function(enteredPassword) {
     try {
         return await bcrypt.compare(enteredPassword, this.password);

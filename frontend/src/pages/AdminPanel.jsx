@@ -131,7 +131,7 @@ const AdminPanel = () => {
                     <div style={styles.inputGroup}>
                         <label style={styles.label}>Elemento</label>
                         <input 
-                            type="text" placeholder="Ej: Av Ej 601" required 
+                            type="text" placeholder="Ej: SEC AE M 6" required 
                             value={newUser.elemento} 
                             onChange={e => setNewUser({...newUser, elemento: e.target.value})}
                             style={styles.input}
@@ -153,9 +153,10 @@ const AdminPanel = () => {
                             onChange={e => setNewUser({...newUser, role: e.target.value})}
                             style={styles.select}
                         >
-                            <option value="user">Usuario</option>
-                            <option value="boss">Boss</option>
-                            <option value="admin">Admin</option>
+                            <option value="user">Usuario (Consulta)</option>
+                            <option value="S4_UNIDAD">S4 Unidad (Carga Material)</option>
+                            <option value="boss">Boss (Comando)</option>
+                            <option value="admin">Admin (Total)</option>
                         </select>
                     </div>
                     <button type="submit" style={styles.btnRegister}>Dar de Alta</button>
@@ -191,9 +192,14 @@ const AdminPanel = () => {
                                             <select 
                                                 value={user.role} 
                                                 onChange={(e) => handleRoleChange(user._id, e.target.value)}
-                                                style={styles.roleSelect}
+                                                style={{
+                                                    ...styles.roleSelect,
+                                                    color: user.role === 'admin' ? '#d9534f' : 
+                                                           user.role === 'S4_UNIDAD' ? '#2980b9' : '#333'
+                                                }}
                                             >
                                                 <option value="user">USER</option>
+                                                <option value="S4_UNIDAD">S4 UNIDAD</option>
                                                 <option value="boss">BOSS</option>
                                                 <option value="admin">ADMIN</option>
                                             </select>
@@ -237,7 +243,7 @@ const styles = {
     inputGroup: { display: 'flex', flexDirection: 'column', gap: '5px', flex: '1', minWidth: '140px' },
     label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' },
     input: { padding: '10px', borderRadius: '5px', border: '1px solid #ccc', fontSize: '0.85rem' },
-    select: { padding: '10px', borderRadius: '5px', border: '1px solid #ccc', backgroundColor: '#fff', cursor: 'pointer' },
+    select: { padding: '10px', borderRadius: '5px', border: '1px solid #ccc', backgroundColor: '#fff', cursor: 'pointer', fontSize: '0.85rem' },
     btnRegister: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '11px 20px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
     table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px' },
     theadRow: { backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' },

@@ -3,7 +3,8 @@ import CalendarPage from './pages/CalendarPage';
 import Login from './pages/Login';
 import AdminPanel from './pages/AdminPanel';
 import Estadisticas from './pages/Estadisticas';
-import Operaciones from './pages/Operaciones'; // <--- IMPORTADO
+import Operaciones from './pages/Operaciones'; 
+import EstadoAeronaves from './pages/EstadoAeronaves'; // <--- NUEVO MÓDULO IMPORTADO
 
 function App() {
     // 1. Estados de Autenticación y Navegación
@@ -34,6 +35,7 @@ function App() {
         localStorage.removeItem('token');
         localStorage.removeItem('role');
         localStorage.removeItem('username');
+        localStorage.removeItem('elemento'); // Limpieza de unidad asignada
         setAuth(false);
         setRole(null);
         setView('calendar');
@@ -77,6 +79,18 @@ function App() {
                                 📅 Monitor
                             </button>
 
+                            {/* BOTÓN ESTADO DE MATERIAL (AERONAVES) */}
+                            <button 
+                                onClick={() => setView('material')}
+                                style={{
+                                    ...styles.btnNav,
+                                    backgroundColor: view === 'material' ? '#2c3e50' : '#4a69bd',
+                                    border: view === 'material' ? '2px solid white' : 'none'
+                                }}
+                            >
+                                🚁 Material
+                            </button>
+
                             {/* BOTÓN ESTADÍSTICAS */}
                             <button 
                                 onClick={() => setView('stats')}
@@ -89,8 +103,8 @@ function App() {
                                 📊 Stats
                             </button>
 
-                            {/* BOTÓN OPERACIONES: Ahora redirige al componente Operaciones */}
-                            {(role === 'admin' || role === 'user') && (
+                            {/* BOTÓN OPERACIONES / CARGA (Visible para Admin, User y S4) */}
+                            {(role === 'admin' || role === 'user' || role === 'S4_UNIDAD') && (
                                 <button 
                                     onClick={() => setView('operaciones')}
                                     style={{
@@ -133,15 +147,15 @@ function App() {
             </nav>
 
             {/* ÁREA DE CONTENIDO (Ruteo Dinámico) */}
-            <main style={view === 'stats' ? styles.containerStats : styles.container}>
+            <main style={(view === 'stats' || view === 'material') ? styles.containerStats : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats') return <Estadisticas />;
-                        // Ruteo a la nueva página de Operaciones
                         if (view === 'operaciones') return <Operaciones />; 
+                        if (view === 'material') return <EstadoAeronaves />; // <--- NUEVA VISTA
                         return <CalendarPage />;
                     })()
                 )}

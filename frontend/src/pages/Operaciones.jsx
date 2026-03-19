@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/api';
+import { getEvents, createEvent, deleteEvent, updateEvent, getAircrafts, updateAircraftStatus } from '../services/api';
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
+    const [aircrafts, setAircrafts] = useState([]); // Nuevo: Estado para material
     const [role] = useState(localStorage.getItem('role'));
+    const [userElemento] = useState(localStorage.getItem('elemento')); // Para filtrar por unidad
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [isMobile] = useState(window.innerWidth < 768);
@@ -18,13 +20,37 @@ const Operaciones = () => {
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: []
     });
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => { 
+        fetchData();
+        if (role === 'S4_UNIDAD' || role === 'admin') {
+            fetchMaterial();
+        }
+    }, []);
 
     const fetchData = async () => {
         try {
             const { data } = await getEvents();
             setEvents(data);
-        } catch (error) { console.error("Error AE: Fallo de sincronización"); }
+        } catch (error) { console.error("Error AE: Fallo de sincronización de eventos"); }
+    };
+
+    const fetchMaterial = async () => {
+        try {
+            const { data } = await getAircrafts();
+            // Si es S4, solo mostramos lo de su unidad. Si es admin, todo.
+            const filtrados = role === 'admin' ? data : data.filter(a => a.unidad === userElemento);
+            setAircrafts(filtrados);
+        } catch (error) { console.error("Error AE: Fallo de sincronización de material"); }
+    };
+
+    const handleUpdateAircraft = async (id, updatedFields) => {
+        try {
+            await updateAircraftStatus(id, updatedFields);
+            fetchMaterial();
+            alert("Estado de Aeronave actualizado correctamente.");
+        } catch (error) {
+            alert("Error al actualizar material. Verifique jurisdicción S4.");
+        }
     };
 
     const handleTipoApoyoChange = (e) => {
@@ -107,7 +133,7 @@ const Operaciones = () => {
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
                 
-                {/* FORMULARIO DE CARGA */}
+                {/* FORMULARIO DE CARGA DE VUELO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Misión" : "➕ Nueva Carga de Vuelo"}</h3>
                     <form onSubmit={handleSubmit} style={styles.form}>
@@ -157,7 +183,43 @@ const Operaciones = () => {
                     </form>
                 </div>
 
-                {/* LISTADO DE EVENTOS PARA ELIMINAR/EDITAR */}
+                {/* PANEL EXCLUSIVO S4: ESTADO DE AERONAVES */}
+                {(role === 'S4_UNIDAD' || role === 'admin') && (
+                    <div style={styles.card}>
+                        <h3 style={styles.title}>🛠️ Gestión de Material - {userElemento}</h3>
+                        <div style={styles.scrollList}>
+                            {aircrafts.length === 0 ? <p style={{textAlign: 'center', opacity: 0.5}}>No hay aeronaves asignadas a su unidad</p> : 
+                            aircrafts.map(air => (
+                                <div key={air._id} style={{...styles.logItem, borderLeft: air.estado === 'E/S' ? '5px solid #28a745' : '5px solid #e74c3c'}}>
+                                    <div style={{flex: 1}}>
+                                        <div style={{fontWeight: 'bold'}}>{air.matricula} ({air.sda})</div>
+                                        <div style={{fontSize: '0.8rem'}}>Hs Rem: <strong>{air.horasRemanentes}</strong></div>
+                                    </div>
+                                    <div style={{display: 'flex', gap: '5px'}}>
+                                        <select 
+                                            value={air.estado} 
+                                            onChange={(e) => handleUpdateAircraft(air._id, { estado: e.target.value })}
+                                            style={{...styles.input, padding: '5px', fontSize: '0.8rem'}}
+                                        >
+                                            <option value="E/S">E/S</option>
+                                            <option value="F/S">F/S</option>
+                                        </select>
+                                        <button 
+                                            onClick={() => {
+                                                const nuevaHs = prompt("Ingrese nuevas horas remanentes:", air.horasRemanentes);
+                                                if(nuevaHs !== null) handleUpdateAircraft(air._id, { horasRemanentes: Number(nuevaHs) });
+                                            }}
+                                            style={styles.btnIconEdit}
+                                        >⏱️</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <p style={{fontSize: '0.7rem', marginTop: '10px', color: '#666'}}>* Solo puede gestionar material de su unidad asignada.</p>
+                    </div>
+                )}
+
+                {/* REGISTRO OPERATIVO DE EVENTOS */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro Operativo</h3>
                     <div style={styles.scrollList}>
