@@ -9,7 +9,8 @@ import { getEvents } from '../services/api';
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
     const [role] = useState(localStorage.getItem('role'));
-    const [selectedEvent, setSelectedEvent] = useState(null); // Estado para el Pop-up
+    const [userUnidad] = useState(localStorage.getItem('elemento')); 
+    const [selectedEvent, setSelectedEvent] = useState(null); 
     const [isMobile] = useState(window.innerWidth < 768);
 
     useEffect(() => { fetchData(); }, []);
@@ -23,7 +24,6 @@ const CalendarPage = () => {
         }
     };
 
-    // Función para abrir el Pop-up al hacer clic
     const handleEventClick = (info) => {
         const { event } = info;
         setSelectedEvent({
@@ -32,23 +32,56 @@ const CalendarPage = () => {
             end: event.end,
             color: event.backgroundColor,
             notes: event.extendedProps.notes,
-            user: event.extendedProps.user
+            user: event.extendedProps.user,
+            origen: event.extendedProps.tipoOrigen,
+            elemento: event.extendedProps.elemento,
+            etapa: event.extendedProps.etapa,
+            tipoApoyo: event.extendedProps.tipoApoyo
         });
     };
 
-    // Función para cerrar el Pop-up
     const closeModal = () => setSelectedEvent(null);
+
+    // Lógica de visualización de colores, bordes y estados
+    const eventDidMount = (info) => {
+        const { tipoOrigen, esGlobal, etapa } = info.event.extendedProps;
+        
+        // Estilo de Comando (Borde Dorado)
+        if (tipoOrigen === 'COMANDO' || esGlobal) {
+            info.el.style.border = '2px solid #FFD700'; 
+            info.el.style.fontWeight = 'bold';
+        }
+
+        // Opacidad según etapa (Visualización jerárquica)
+        if (etapa === 'recepcion') {
+            info.el.style.opacity = '0.6'; // Borrador/Ingreso
+            info.el.style.borderStyle = 'dashed';
+        } else if (etapa === 'revision') {
+            info.el.style.opacity = '0.85'; // En proceso de revisión
+        }
+    };
+
+    // Helper para etiquetas de etapa en el Modal
+    const getEtapaLabel = (etapa) => {
+        const etiquetas = {
+            'recepcion': { text: '🟡 RECEPCIÓN / SOLICITUD', color: '#f1c40f' },
+            'revision': { text: '🟠 EN REVISIÓN (DIR AE)', color: '#e67e22' },
+            'ordenada': { text: '🟢 ORDENADA / CONFIRMADA', color: '#27ae60' }
+        };
+        return etiquetas[etapa] || { text: 'S/D', color: '#95a5a6' };
+    };
 
     return (
         <div style={styles.pageContainer}>
-            
-            {/* MONITOR PRINCIPAL */}
             <div style={styles.mainCard}>
                 <div style={styles.headerMonitor}>
                     <h2 style={styles.title}>🗓️ Monitor de Actividades Operativas</h2>
-                    <span style={styles.modeBadge}>
-                        {role === 'boss' ? 'MODO: LECTURA (JEFE)' : 'MODO: GESTIÓN ACTIVA'}
-                    </span>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <span style={styles.unidadBadge}>{userUnidad || "No detectado"}</span>
+                        <span style={styles.modeBadge}>
+                            {role === 'boss' ? 'MODO: LECTURA (JEFE)' : 'MODO: GESTIÓN ACTIVA'}
+                        </span>
+                    </div>
                 </div>
                 
                 <FullCalendar
@@ -57,16 +90,25 @@ const CalendarPage = () => {
                     locale={esLocale}
                     events={events.map(ev => ({
                         id: ev._id,
-                        title: ev.title,
+                        title: `${ev.tipoApoyo ? `[${ev.tipoApoyo}] ` : ''}${ev.title}`,
                         start: ev.start,
                         end: ev.end,
-                        backgroundColor: ev.color,
+                        backgroundColor: ev.tipoOrigen === 'COMANDO' ? '#c0392b' : ev.color, 
                         borderColor: 'transparent',
-                        extendedProps: { notes: ev.notes, user: ev.userName }
+                        extendedProps: { 
+                            notes: ev.notes, 
+                            user: ev.userName,
+                            tipoOrigen: ev.tipoOrigen,
+                            elemento: ev.elemento,
+                            esGlobal: ev.esGlobal,
+                            etapa: ev.etapa,
+                            tipoApoyo: ev.tipoApoyo
+                        }
                     }))}
                     height="75vh"
                     editable={false}
-                    eventClick={handleEventClick} // Activamos el Pop-up
+                    eventClick={handleEventClick}
+                    eventDidMount={eventDidMount} 
                     headerToolbar={{ 
                         left: 'prev,next today', 
                         center: 'title', 
@@ -78,26 +120,48 @@ const CalendarPage = () => {
                 />
             </div>
 
-            {/* MODAL / POP-UP DE INFORMACIÓN */}
             {selectedEvent && (
                 <div style={styles.modalOverlay} onClick={closeModal}>
                     <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
                         <div style={{...styles.modalHeader, backgroundColor: selectedEvent.color}}>
-                            <h3 style={styles.modalTitle}>{selectedEvent.title}</h3>
+                            <h3 style={styles.modalTitle}>
+                                {selectedEvent.origen === 'COMANDO' ? `⚠️ [COMANDO] ${selectedEvent.title}` : selectedEvent.title}
+                            </h3>
                             <button onClick={closeModal} style={styles.btnClose}>×</button>
                         </div>
                         
                         <div style={styles.modalBody}>
+                            {/* ESTADO DE LA ORDEN */}
+                            <div style={{...styles.etapaBanner, backgroundColor: getEtapaLabel(selectedEvent.etapa).color}}>
+                                {getEtapaLabel(selectedEvent.etapa).text}
+                            </div>
+
                             <div style={styles.infoRow}>
-                                <strong>⏱️ Horario:</strong> 
-                                <span>{selectedEvent.start.toLocaleString()} - {selectedEvent.end.toLocaleString()}</span>
+                                <strong>🏢 Origen / Elemento:</strong> 
+                                <span style={{ color: selectedEvent.origen === 'COMANDO' ? '#c0392b' : '#1b3a57', fontWeight: 'bold' }}>
+                                    {selectedEvent.elemento}
+                                </span>
                             </div>
                             <hr style={styles.divider} />
+                            
                             <div style={styles.infoRow}>
-                                <strong>👤 Operador:</strong> 
+                                <strong>🚁 Tipo de Apoyo:</strong> 
+                                <span>{selectedEvent.tipoApoyo || 'No especificado'}</span>
+                            </div>
+                            <hr style={styles.divider} />
+
+                            <div style={styles.infoRow}>
+                                <strong>⏱️ Horario:</strong> 
+                                <span>{new Date(selectedEvent.start).toLocaleString()} - {new Date(selectedEvent.end).toLocaleString()}</span>
+                            </div>
+                            <hr style={styles.divider} />
+                            
+                            <div style={styles.infoRow}>
+                                <strong>👤 Registrado por:</strong> 
                                 <span style={styles.badge}>{selectedEvent.user || 'Sistema'}</span>
                             </div>
                             <hr style={styles.divider} />
+                            
                             <div style={styles.notesBox}>
                                 <strong>📝 Detalle Operativo:</strong>
                                 <p style={styles.notesText}>{selectedEvent.notes || 'Sin observaciones adicionales.'}</p>
@@ -132,6 +196,15 @@ const styles = {
         gap: '10px'
     },
     title: { color: '#1b3a57', margin: 0, fontSize: '1.2rem' },
+    unidadBadge: {
+        fontSize: '0.75rem',
+        background: '#e9ecef',
+        color: '#1b3a57',
+        padding: '4px 10px',
+        borderRadius: '4px',
+        fontWeight: 'bold',
+        border: '1px solid #1b3a57'
+    },
     modeBadge: { 
         fontSize: '0.7rem', 
         background: '#1b3a57', 
@@ -140,79 +213,40 @@ const styles = {
         borderRadius: '4px',
         fontWeight: 'bold'
     },
-
-    // ESTILOS DEL MODAL (POP-UP)
+    etapaBanner: {
+        padding: '8px',
+        borderRadius: '6px',
+        color: 'white',
+        fontWeight: 'bold',
+        textAlign: 'center',
+        fontSize: '0.85rem',
+        marginBottom: '15px'
+    },
     modalOverlay: {
         position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
+        top: 0, left: 0, width: '100%', height: '100%',
         backgroundColor: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 2000,
-        padding: '20px'
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        zIndex: 2000, padding: '20px'
     },
     modalContent: {
-        background: 'white',
-        borderRadius: '12px',
-        width: '100%',
-        maxWidth: '500px',
-        overflow: 'hidden',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-        animation: 'fadeIn 0.3s ease'
+        background: 'white', borderRadius: '12px', width: '100%', maxWidth: '500px',
+        overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
     },
     modalHeader: {
-        padding: '15px 20px',
-        color: 'white',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
+        padding: '15px 20px', color: 'white', display: 'flex',
+        justifyContent: 'space-between', alignItems: 'center'
     },
     modalTitle: { margin: 0, fontSize: '1.1rem' },
-    btnClose: {
-        background: 'transparent',
-        border: 'none',
-        color: 'white',
-        fontSize: '1.8rem',
-        cursor: 'pointer',
-        lineHeight: 1
-    },
+    btnClose: { background: 'transparent', border: 'none', color: 'white', fontSize: '1.8rem', cursor: 'pointer' },
     modalBody: { padding: '20px' },
-    infoRow: { display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '0.95rem' },
-    divider: { border: 'none', borderBottom: '1px solid #eee', margin: '15px 0' },
-    badge: { 
-        background: '#e9ecef', 
-        padding: '4px 12px', 
-        borderRadius: '15px', 
-        fontSize: '0.8rem', 
-        width: 'fit-content' 
-    },
+    infoRow: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.95rem' },
+    divider: { border: 'none', borderBottom: '1px solid #eee', margin: '12px 0' },
+    badge: { background: '#e9ecef', padding: '4px 12px', borderRadius: '15px', fontSize: '0.8rem', width: 'fit-content' },
     notesBox: { marginTop: '10px' },
-    notesText: { 
-        background: '#f8f9fa', 
-        padding: '10px', 
-        borderRadius: '8px', 
-        fontSize: '0.9rem', 
-        color: '#444',
-        whiteSpace: 'pre-line' 
-    },
-    modalFooter: {
-        padding: '15px 20px',
-        borderTop: '1px solid #eee',
-        textAlign: 'right'
-    },
-    btnOk: {
-        background: '#1b3a57',
-        color: 'white',
-        border: 'none',
-        padding: '10px 25px',
-        borderRadius: '6px',
-        fontWeight: 'bold',
-        cursor: 'pointer'
-    }
+    notesText: { background: '#f8f9fa', padding: '10px', borderRadius: '8px', fontSize: '0.9rem', color: '#444', whiteSpace: 'pre-line' },
+    modalFooter: { padding: '15px 20px', borderTop: '1px solid #eee', textAlign: 'right' },
+    btnOk: { background: '#1b3a57', color: 'white', border: 'none', padding: '10px 25px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }
 };
 
 export default CalendarPage;
