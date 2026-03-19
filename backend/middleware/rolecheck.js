@@ -1,23 +1,37 @@
 /**
- * Middleware para restringir acceso según el rol del usuario
- * @param {...string} rolesPermitidos - Lista de roles que pueden acceder (ej: 'admin', 'user')
+ * MIDDLEWARE DE AUTORIZACIÓN JERÁRQUICA - SISTEMA AE
+ * Restringe el acceso a rutas específicas según el rol del usuario.
+ * @param {...string} rolesPermitidos - Lista de roles autorizados (ej: 'admin', 'S4_UNIDAD')
  */
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
-        // Verificamos si el usuario existe (inyectado por authMiddleware)
+        // 1. Verificación de Identidad (Inyectado previamente por authMiddleware)
         if (!req.user) {
-            return res.status(401).json({ message: 'No autorizado, usuario no identificado' });
-        }
-
-        // Verificamos si el rol del usuario está en la lista de permitidos
-        if (!rolesPermitidos.includes(req.user.role)) {
-            return res.status(403).json({ 
-                message: `Acceso denegado: El rol '${req.user.role}' no tiene permisos para esta acción` 
+            console.error('[SEGURIDAD] Intento de autorización sin usuario identificado.');
+            return res.status(401).json({ 
+                success: false,
+                message: 'No autorizado: Usuario no identificado por el sistema' 
             });
         }
 
-        next(); // El usuario tiene el rol adecuado, puede continuar
+        // 2. Verificación de Permisos por Rol
+        // Comprobamos si el rol actual (ej: 'S4_UNIDAD') está en la lista de permitidos para esta ruta
+        if (!rolesPermitidos.includes(req.user.role)) {
+            console.warn(`[BLOQUEO] Acceso Denegado: Usuario ${req.user.username} (Rol: ${req.user.role}) intentó acceder a una ruta restringida.`);
+            
+            return res.status(403).json({ 
+                success: false,
+                message: `Acceso denegado: El nivel '${req.user.role}' no posee permisos de escritura/modificación para esta acción.` 
+            });
+        }
+
+        // 3. Validación de Integridad AE
+        // El usuario cumple con el rol, se le permite continuar al controlador
+        next(); 
     };
 };
 
+/**
+ * EXPORTACIÓN DE SEGURIDAD
+ */
 module.exports = { authorize };

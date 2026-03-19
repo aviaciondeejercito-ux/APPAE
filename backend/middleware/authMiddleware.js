@@ -18,19 +18,27 @@ const authMiddleware = async (req, res, next) => {
             // 2. Verificación del secreto de entorno (Failsafe)
             if (!process.env.JWT_SECRET) {
                 console.error('❌ ERROR CRÍTICO: JWT_SECRET no detectado en las variables de entorno.');
-                return res.status(500).json({ message: 'Error interno de configuración de seguridad' });
+                return res.status(500).json({ 
+                    success: false,
+                    message: 'Error interno de configuración de seguridad' 
+                });
             }
 
             // 3. Decodificación y Verificación de Integridad del Token
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
             // 4. Inyección del Usuario en la Petición
-            // IMPORTANTE: Traemos 'role' y 'elemento' explícitamente para validaciones de S4
+            // IMPORTANTE: Traemos 'role', 'elemento' y 'username' explícitamente.
+            // .select('-password') asegura que la clave nunca viaje en req.user
             req.user = await User.findById(decoded.id).select('-password');
 
             // 5. Validación de existencia del usuario (Seguridad ante bajas recientes)
             if (!req.user) {
-                return res.status(401).json({ message: 'Acceso denegado: Usuario inexistente o dado de baja' });
+                console.warn(`[SEGURIDAD] Intento de uso de token de usuario eliminado. ID: ${decoded.id}`);
+                return res.status(401).json({ 
+                    success: false,
+                    message: 'Acceso denegado: Usuario inexistente o dado de baja' 
+                });
             }
 
             // 6. Autorización exitosa: El flujo continúa al siguiente middleware o controlador
@@ -45,18 +53,25 @@ const authMiddleware = async (req, res, next) => {
                 mensaje = 'Sesión expirada. Por favor, ingrese nuevamente.';
             }
 
-            return res.status(401).json({ message: mensaje });
+            return res.status(401).json({ 
+                success: false,
+                message: mensaje 
+            });
         }
     }
 
     // 7. Bloqueo por falta de credenciales
     if (!token) {
-        return res.status(401).json({ message: 'No autorizado: Falta token de acceso' });
+        return res.status(401).json({ 
+            success: false,
+            message: 'No autorizado: Falta token de acceso' 
+        });
     }
 };
 
 /**
  * EXPORTACIÓN COMPUESTA (Solución definitiva para Render/Vercel)
+ * Mantenemos todas las variantes para asegurar que no se rompa ninguna ruta.
  */
 module.exports = authMiddleware;
 module.exports.protect = authMiddleware;
