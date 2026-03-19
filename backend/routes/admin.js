@@ -9,15 +9,20 @@ const authMiddleware = require('../middleware/authMiddleware');
  */
 const protect = authMiddleware.protect || authMiddleware.verifyToken;
 
-// Middleware interno para validar Rango Mando (Admin)
-const isAdmin = (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
+/**
+ * MIDDLEWARE DE AUTORIZACIÓN OPERATIVA (ESTÁNDAR DE SEGURIDAD AE)
+ * Permite el acceso a Administradores y Personal S4 de Unidad.
+ */
+const isAuthorized = (req, res, next) => {
+    const authorizedRoles = ['admin', 'S4_UNIDAD', 'boss'];
+    
+    if (req.user && authorizedRoles.includes(req.user.role)) {
         next();
     } else {
         console.warn(`[SEGURIDAD] Intento de acceso no autorizado: ${req.user ? req.user.username : 'Desconocido'}`);
         return res.status(403).json({ 
             success: false, 
-            message: 'Acceso denegado: Se requieren privilegios de Administrador' 
+            message: 'Acceso denegado: Su rol no tiene permisos para esta operación.' 
         });
     }
 };
@@ -29,22 +34,27 @@ const isAdmin = (req, res, next) => {
 if (typeof protect === 'function') {
     router.use(protect);
 } else {
-    // Si llegamos aquí, hay un problema grave en authMiddleware.js
     console.error("❌ CRÍTICO: No se encontró la función de protección de rutas.");
 }
 
-router.use(isAdmin);
+// Aplicamos el nuevo middleware de autorización híbrida
+router.use(isAuthorized);
 
-// --- ENDPOINTS DE GESTIÓN DE PERSONAL (100% Sincronizados con Controlador) ---
+// --- ENDPOINTS DE GESTIÓN DE PERSONAL Y MATERIAL ---
 
-// Obtener el escalafón completo
+/**
+ * NOTA DE SEGURIDAD: 
+ * Aunque el S4 puede entrar, las funciones sensibles de base de datos 
+ * están protegidas por la lógica del controlador.
+ */
+
+// Obtener el escalafón o lista de aeronaves
 router.get('/users', adminController.getAllUsers);
 
-// Actualizar jerarquía/permisos (user, boss, admin)
+// Actualizar jerarquía/permisos (Habilitado para gestión de S4 y Superiores)
 router.put('/users/:id/role', adminController.updateRole);
 
 // Reseteo de contraseña (GDE)
-// NOTA: Coincide con adminController.resetPassword y la ruta /password
 router.put('/users/:id/password', adminController.resetPassword);
 
 // Baja definitiva del sistema

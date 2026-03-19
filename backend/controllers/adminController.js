@@ -34,10 +34,13 @@ exports.updateRole = async (req, res) => {
     try {
         const { role } = req.body;
         
-        // Validación estricta de jerarquía AE
-        const rolesValidos = ['user', 'boss', 'admin'];
+        // ACTUALIZACIÓN: Inclusión de S4_UNIDAD en la jerarquía reconocida por el sistema
+        const rolesValidos = ['user', 'boss', 'admin', 'S4_UNIDAD'];
         if (!rolesValidos.includes(role)) {
-            return res.status(400).json({ message: 'Rango o rol no reconocido por el sistema' });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Rango o rol no reconocido por el estándar de seguridad AE' 
+            });
         }
 
         const user = await User.findByIdAndUpdate(
@@ -46,7 +49,7 @@ exports.updateRole = async (req, res) => {
             { new: true, runValidators: true }
         ).select('-password');
         
-        if (!user) return res.status(404).json({ message: 'Usuario no localizado' });
+        if (!user) return res.status(404).json({ message: 'Usuario no localizado en la base de datos' });
         
         res.status(200).json({ 
             success: true,
@@ -54,7 +57,8 @@ exports.updateRole = async (req, res) => {
             data: user 
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error al actualizar permisos' });
+        console.error('Error en updateRole:', error);
+        res.status(500).json({ success: false, message: 'Fallo interno al actualizar permisos' });
     }
 };
 
@@ -62,9 +66,9 @@ exports.updateRole = async (req, res) => {
 // @route   PUT /api/admin/users/:id/password
 exports.resetPassword = async (req, res) => {
     try {
-        // AJUSTE: Aceptamos 'password' para coincidir con el llamado del frontend
-        const { password, newPassword } = req.body;
-        const passwordToSet = password || newPassword;
+        // AJUSTE: Compatibilidad total con las claves del frontend
+        const { password, newPassword, newPass } = req.body;
+        const passwordToSet = password || newPassword || newPass;
         
         if (!passwordToSet || passwordToSet.length < 6) {
             return res.status(400).json({ message: 'La nueva clave debe tener mínimo 6 caracteres' });
@@ -73,7 +77,7 @@ exports.resetPassword = async (req, res) => {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ message: 'Usuario no localizado' });
 
-        // Al asignar y usar .save(), activamos el middleware de encriptación (bcrypt) definido en el Modelo
+        // Activamos middleware de bcrypt mediante .save()
         user.password = passwordToSet;
         await user.save();
 
@@ -92,7 +96,6 @@ exports.resetPassword = async (req, res) => {
 exports.deleteUser = async (req, res) => {
     try {
         // SEGURIDAD: Bloqueo de auto-eliminación
-        // Verificamos si el ID a borrar es el mismo que el del usuario que hace la petición
         if (req.user && req.params.id === req.user._id.toString()) {
             return res.status(400).json({ 
                 success: false, 
@@ -109,6 +112,7 @@ exports.deleteUser = async (req, res) => {
             message: `El usuario GDE: ${user.username} ha sido dado de baja del sistema` 
         });
     } catch (error) {
+        console.error('Error en deleteUser:', error);
         res.status(500).json({ success: false, message: 'Error al procesar la baja' });
     }
 };
