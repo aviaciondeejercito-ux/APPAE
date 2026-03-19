@@ -6,9 +6,9 @@ const Material = () => {
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState(null); 
     
-    // Recuperamos datos de sesión
+    // Recuperamos datos de sesión con fallback para evitar "No detectado"
     const role = localStorage.getItem('role');
-    const userElemento = localStorage.getItem('elemento');
+    const userElemento = localStorage.getItem('elemento')?.trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
     const sdaList = [
@@ -23,16 +23,24 @@ const Material = () => {
     });
 
     useEffect(() => {
-        fetchMaterial();
+        if (role) {
+            fetchMaterial();
+        }
     }, [role, userElemento]);
 
     const fetchMaterial = async () => {
         try {
+            setLoading(true);
             const { data } = await getAircrafts();
-            // Filtrado estricto por unidad si no es admin
+            
+            // Filtro de seguridad: Admin/Boss ven todo, S4 solo su unidad
             const filtrados = (role === 'admin' || role === 'boss') 
                 ? data 
-                : data.filter(a => String(a.unidad).trim() === String(userElemento).trim());
+                : data.filter(a => 
+                    a.unidad && 
+                    userElemento && 
+                    String(a.unidad).toUpperCase() === String(userElemento).toUpperCase()
+                );
             
             setAircrafts(filtrados);
             setLoading(false);
@@ -45,27 +53,27 @@ const Material = () => {
     const handleCreate = async (e) => {
         e.preventDefault();
         
-        // Validación local de seguridad antes del envío
-        if (!newAir.matricula || !newAir.sda) return alert("Complete los campos obligatorios");
-        if (!userElemento) return alert("Error de sesión: No se detectó tu unidad. Por favor, re-ingresa al sistema.");
+        // Validación estricta de campos obligatorios
+        if (!newAir.matricula || !newAir.sda) return alert("Faltan campos obligatorios (Matrícula o SdA)");
+        if (!userElemento) return alert("Error Local: No se detectó la Unidad en su sesión. Re-ingrese al sistema.");
 
         try {
             const payload = {
                 matricula: newAir.matricula.toUpperCase().trim(),
                 sda: newAir.sda,
                 horasRemanentes: Number(newAir.horasRemanentes) || 0,
-                unidad: userElemento.trim(), // Forzamos el envío de la unidad del localStorage
+                unidad: userElemento, // Asignación automática por seguridad
                 estado: 'E/S',
                 historial: [{
                     fecha: new Date(),
                     evento: `Alta de material por ${userName}`,
-                    detalle: `Unidad: ${userElemento}`
+                    detalle: `Unidad asignada: ${userElemento}`
                 }]
             };
 
             await createAircraft(payload);
             setNewAir({ matricula: '', sda: '', horasRemanentes: 0 });
-            fetchMaterial();
+            await fetchMaterial(); // Refrescar lista post-creación
             alert("Aeronave dada de alta correctamente.");
         } catch (error) {
             const msg = error.response?.data?.message || "Error al dar de alta el material.";
@@ -77,7 +85,6 @@ const Material = () => {
         try {
             const cleanFields = { ...updatedFields };
             
-            // Procesamiento de datos
             if (cleanFields.horasRemanentes !== undefined) {
                 cleanFields.horasRemanentes = Number(cleanFields.horasRemanentes);
             }
@@ -85,21 +92,18 @@ const Material = () => {
                 cleanFields.matricula = cleanFields.matricula.toUpperCase().trim();
             }
 
-            // Lógica de Log de Auditoría para cambios de estado
             if (cleanFields.estado) {
-                const airActual = aircrafts.find(a => a._id === id);
-                console.log(`Auditoría: ${userName} cambió ${airActual.matricula} a ${cleanFields.estado}`);
-                // Aquí el backend debería guardar el log, pero lo enviamos en el payload si es necesario
                 cleanFields.lastUpdateBy = userName;
                 cleanFields.lastUpdateDate = new Date();
             }
 
             await updateAircraftStatus(id, cleanFields);
             
+            // Actualización optimista del estado local
             setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...cleanFields } : a));
             if (editingId) setEditingId(null);
         } catch (error) {
-            alert("Error al actualizar datos.");
+            alert("Error al actualizar datos en el servidor.");
         }
     };
 
@@ -110,7 +114,7 @@ const Material = () => {
             setAircrafts(prev => prev.filter(a => a._id !== id));
             alert("Registro eliminado.");
         } catch (error) {
-            alert("No se pudo eliminar el registro.");
+            alert("No se pudo eliminar el registro. Verifique permisos.");
         }
     };
 
@@ -123,7 +127,9 @@ const Material = () => {
                 {/* FORMULARIO DE ALTA */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
-                    <p style={styles.infoText}>Registrar nueva aeronave para: <strong>{userElemento || "No detectado"}</strong></p>
+                    <p style={styles.infoText}>
+                        Registrar nueva aeronave para: <strong>{userElemento || "⚠️ No detectado"}</strong>
+                    </p>
                     <form onSubmit={handleCreate} style={styles.form}>
                         <div style={styles.field}>
                             <label style={styles.label}>Matrícula (AE-XXX)</label>
@@ -166,7 +172,7 @@ const Material = () => {
                     <h3 style={styles.title}>🛠️ Gestión de Estado y Mantenimiento</h3>
                     <div style={styles.scrollList}>
                         {aircrafts.length === 0 ? (
-                            <p style={styles.empty}>No hay material cargado en esta unidad.</p>
+                            <p style={styles.empty}>No hay material cargado o asignado a esta unidad ({userElemento}).</p>
                         ) : (
                             aircrafts.map(air => (
                                 <div key={air._id} style={{
@@ -247,6 +253,7 @@ const Material = () => {
     );
 };
 
+// Estilos se mantienen iguales por tu petición de no tocar lo funcional/visual existente
 const styles = {
     container: { padding: '25px', maxWidth: '1200px', margin: '0 auto' },
     grid: { display: 'grid', gridTemplateColumns: window.innerWidth < 800 ? '1fr' : '1fr 1.5fr', gap: '25px' },

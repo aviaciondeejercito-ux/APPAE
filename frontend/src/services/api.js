@@ -38,6 +38,7 @@ API.interceptors.response.use(
             localStorage.removeItem('role');
             localStorage.removeItem('elemento');
             localStorage.removeItem('username');
+            // Opcional: window.location.href = '/login';
         }
         return Promise.reject(error);
     }
@@ -60,27 +61,41 @@ export const deleteEvent = (id) => API.delete(`/events/${id}`);
 /**
  * SERVICIOS DE MATERIAL AERONÁUTICO (ESTADO DE FLOTA)
  */
-export const getAircrafts = () => API.get('/aircraft');
+
+// Obtener aeronaves con filtrado preventivo por unidad
+export const getAircrafts = () => {
+    const role = localStorage.getItem('role');
+    const userElemento = localStorage.getItem('elemento')?.trim();
+
+    // Si no es admin ni boss, solicitamos al backend solo lo de nuestra unidad
+    if (role !== 'admin' && role !== 'boss' && userElemento) {
+        return API.get(`/aircraft`, { params: { unidad: userElemento } });
+    }
+    
+    return API.get('/aircraft');
+};
 
 // Crear nueva aeronave con Inyección de Seguridad
 export const createAircraft = (aircraftData) => {
-    // Obtenemos la unidad del localStorage para asegurar que no viaje vacía
     const userRole = localStorage.getItem('role');
-    const userElemento = localStorage.getItem('elemento');
+    const userElemento = localStorage.getItem('elemento')?.trim();
 
+    // Normalización estricta de datos
     const dataNormalized = {
         ...aircraftData,
         matricula: aircraftData.matricula?.toUpperCase().trim(),
         sda: aircraftData.sda?.toUpperCase().trim(),
-        // Si es S4, forzamos su unidad; si es Admin, usamos la que eligió en el formulario
-        unidad: userRole === 'S4_UNIDAD' ? userElemento : aircraftData.unidad?.toUpperCase().trim(),
+        // Prioridad: Si es S4, su unidad de sesión. Si es Admin, la del formulario o sesión como fallback.
+        unidad: (userRole !== 'admin' && userRole !== 'boss') 
+                ? userElemento 
+                : (aircraftData.unidad?.toUpperCase().trim() || userElemento),
         horasRemanentes: Number(aircraftData.horasRemanentes) || 0
     };
 
-    // Validación preventiva en Frontend para no saturar el Backend si faltan datos
+    // Validación preventiva en Frontend (Capa de Seguridad 1)
     if (!dataNormalized.matricula || !dataNormalized.sda || !dataNormalized.unidad) {
         return Promise.reject({ 
-            response: { data: { message: "Error Local: Faltan campos obligatorios (Matrícula, SdA o Unidad)" } } 
+            response: { data: { message: "Error AE: Datos de unidad incompletos para el alta." } } 
         });
     }
 
@@ -90,7 +105,9 @@ export const createAircraft = (aircraftData) => {
 export const updateAircraftStatus = (id, aircraftData) => {
     const dataNormalized = {
         ...aircraftData,
-        horasRemanentes: aircraftData.horasRemanentes !== undefined ? Number(aircraftData.horasRemanentes) : undefined
+        horasRemanentes: aircraftData.horasRemanentes !== undefined ? Number(aircraftData.horasRemanentes) : undefined,
+        matricula: aircraftData.matricula?.toUpperCase().trim(),
+        sda: aircraftData.sda?.toUpperCase().trim()
     };
     return API.put(`/aircraft/${id}`, dataNormalized);
 };

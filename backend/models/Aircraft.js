@@ -59,7 +59,20 @@ const AircraftSchema = new mongoose.Schema({
         required: [true, 'El registro de autoría es obligatorio para auditoría']
     }
 }, { 
-    timestamps: true // Crea automáticamente createdAt y updatedAt (Estándar de Seguridad)
+    timestamps: true // Crea automáticamente createdAt y updatedAt (Estándar de Seguridad AE)
+});
+
+/**
+ * MIDDLEWARE DE PRE-GUARDADO (INYECCIÓN DE SEGURIDAD)
+ * Asegura la integridad de los datos antes de que lleguen a la base de datos.
+ */
+AircraftSchema.pre('save', function(next) {
+    if (this.matricula) this.matricula = this.matricula.toUpperCase().trim();
+    if (this.sda) this.sda = this.sda.toUpperCase().trim();
+    if (this.unidad) this.unidad = this.unidad.toUpperCase().trim();
+    
+    this.ultimaActualizacion = Date.now();
+    next();
 });
 
 /**
