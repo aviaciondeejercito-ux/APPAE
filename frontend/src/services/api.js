@@ -37,7 +37,10 @@ API.interceptors.response.use(
         if (error.response && error.response.status === 401) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            // Opcional: window.location.href = '/login';
+            localStorage.removeItem('role');
+            localStorage.removeItem('elemento');
+            // Redirección opcional si falla la sesión
+            // window.location.href = '/login';
         }
         return Promise.reject(error);
     }
@@ -61,17 +64,22 @@ export const deleteEvent = (id) => API.delete(`/events/${id}`);
  * SERVICIOS DE MATERIAL AERONÁUTICO (ESTADO DE FLOTA)
  * Rutas para la gestión de SdA, Matrículas y Horas Remanentes.
  */
-// Obtener flota. Si se pasa 'elemento', filtra por unidad específica.
-export const getAircrafts = (elemento = null) => {
-    const url = elemento ? `/aircraft?elemento=${elemento}` : '/aircraft';
-    return API.get(url);
+// Obtener flota completa. El filtrado se realiza en el Frontend para mayor velocidad de carga.
+export const getAircrafts = () => API.get('/aircraft');
+
+// Crear nueva aeronave (Habilitado para S4_UNIDAD y Admin según lógica de Operaciones)
+export const createAircraft = (aircraftData) => {
+    // Normalizamos a mayúsculas antes de enviar para evitar errores de búsqueda
+    const dataNormalized = {
+        ...aircraftData,
+        matricula: aircraftData.matricula?.toUpperCase(),
+        sda: aircraftData.sda?.toUpperCase(),
+        unidad: aircraftData.unidad?.toUpperCase()
+    };
+    return API.post('/aircraft', dataNormalized);
 };
 
-// Crear nueva aeronave (Solo Admin)
-export const createAircraft = (aircraftData) => API.post('/aircraft', aircraftData);
-
-// Actualizar Estado, Horas o Novedades (S4 de la Unidad o Admin)
-// Nota: aircraftData debe incluir horasTotales, estado, novedad, etc.
+// Actualizar Estado, Horas o Novedades
 export const updateAircraftStatus = (id, aircraftData) => API.put(`/aircraft/${id}`, aircraftData);
 
 // Eliminar aeronave del registro (Solo Admin)

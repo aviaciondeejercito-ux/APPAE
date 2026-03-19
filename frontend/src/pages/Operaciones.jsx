@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getEvents, createEvent, deleteEvent, updateEvent, getAircrafts, updateAircraftStatus } from '../services/api';
+// He añadido createAircraft a las importaciones
+import { getEvents, createEvent, deleteEvent, updateEvent, getAircrafts, updateAircraftStatus, createAircraft } from '../services/api';
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
@@ -37,10 +38,32 @@ const Operaciones = () => {
     const fetchMaterial = async () => {
         try {
             const { data } = await getAircrafts();
-            // Filtrado estricto por unidad para S4
+            // Mantenemos 'unidad' pero aseguramos que el filtro sea efectivo
             const filtrados = role === 'admin' || role === 'boss' ? data : data.filter(a => a.unidad === userElemento);
             setAircrafts(filtrados);
         } catch (error) { console.error("Error AE: Fallo de sincronización de material"); }
+    };
+
+    // NUEVA FUNCIÓN: Permite al S4 o Admin dar de alta material directamente
+    const handleAddAircraft = async () => {
+        const matricula = prompt("Ingrese Matrícula (Ej: AE-432):");
+        if (!matricula) return;
+        const sda = prompt(`Ingrese SdA para ${matricula} (Ej: UH-1H):`);
+        if (!sda) return;
+
+        try {
+            await createAircraft({
+                matricula: matricula.toUpperCase(),
+                sda: sda.toUpperCase(),
+                unidad: userElemento, // Se asigna automáticamente la unidad del usuario logueado
+                estado: 'E/S',
+                horasRemanentes: 0
+            });
+            fetchMaterial();
+            alert("Aeronave dada de alta en el sistema.");
+        } catch (error) {
+            alert("Error al dar de alta. Verifique si su rol tiene permisos de escritura.");
+        }
     };
 
     const handleUpdateAircraft = async (id, updatedFields) => {
@@ -183,13 +206,18 @@ const Operaciones = () => {
                     </form>
                 </div>
 
-                {/* 2. PANEL S4: GESTIÓN DE MATERIAL (VISOR Y ACTUALIZACIÓN) */}
+                {/* 2. PANEL S4: GESTIÓN DE MATERIAL */}
                 {(role === 'S4_UNIDAD' || role === 'admin' || role === 'boss') && (
                     <div style={styles.card}>
-                        <h3 style={styles.title}>🛠️ Gestión de Material - {userElemento}</h3>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f0f2f5', paddingBottom: '10px', marginBottom: '15px'}}>
+                            <h3 style={{...styles.title, borderBottom: 'none', margin: 0}}>🛠️ Gestión de Material</h3>
+                            <button onClick={handleAddAircraft} style={styles.btnAddMaterial}>+ Alta Material</button>
+                        </div>
                         <div style={styles.scrollList}>
                             {aircrafts.length === 0 ? (
-                                <p style={{textAlign: 'center', opacity: 0.5, padding: '20px'}}>No hay aeronaves asignadas a su unidad</p>
+                                <div style={{textAlign: 'center', padding: '20px'}}>
+                                    <p style={{opacity: 0.5}}>No hay aeronaves asignadas a {userElemento}</p>
+                                </div>
                             ) : (
                                 aircrafts.map(air => (
                                     <div key={air._id} style={{...styles.logItem, borderLeft: air.estado === 'E/S' ? '5px solid #28a745' : '5px solid #e74c3c'}}>
@@ -222,7 +250,7 @@ const Operaciones = () => {
                             )}
                         </div>
                         <p style={{fontSize: '0.7rem', marginTop: '10px', color: '#666', fontStyle: 'italic'}}>
-                            * Solo personal autorizado puede modificar el estado operativo.
+                            * Solo personal autorizado de {userElemento} puede modificar el estado operativo.
                         </p>
                     </div>
                 )}
@@ -266,6 +294,7 @@ const styles = {
     textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', minHeight: '80px', fontSize: '0.9rem', resize: 'none' },
     sdaBox: { display: 'flex', gap: '8px' },
     btnAdd: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', width: '45px', cursor: 'pointer', fontSize: '1.2rem' },
+    btnAddMaterial: { background: '#0056b3', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' },
     tagWrap: { display: 'flex', flexWrap: 'wrap', gap: '5px' },
     tag: { background: '#e1e8ed', padding: '5px 10px', borderRadius: '15px', fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57' },
     btnTagX: { background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold' },
