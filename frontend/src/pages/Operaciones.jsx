@@ -3,9 +3,9 @@ import { getEvents, createEvent, deleteEvent, updateEvent, getAircrafts, updateA
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
-    const [aircrafts, setAircrafts] = useState([]); // Nuevo: Estado para material
+    const [aircrafts, setAircrafts] = useState([]); 
     const [role] = useState(localStorage.getItem('role'));
-    const [userElemento] = useState(localStorage.getItem('elemento')); // Para filtrar por unidad
+    const [userElemento] = useState(localStorage.getItem('elemento')); 
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [isMobile] = useState(window.innerWidth < 768);
@@ -22,7 +22,7 @@ const Operaciones = () => {
 
     useEffect(() => { 
         fetchData();
-        if (role === 'S4_UNIDAD' || role === 'admin') {
+        if (role === 'S4_UNIDAD' || role === 'admin' || role === 'boss') {
             fetchMaterial();
         }
     }, []);
@@ -37,8 +37,8 @@ const Operaciones = () => {
     const fetchMaterial = async () => {
         try {
             const { data } = await getAircrafts();
-            // Si es S4, solo mostramos lo de su unidad. Si es admin, todo.
-            const filtrados = role === 'admin' ? data : data.filter(a => a.unidad === userElemento);
+            // Filtrado estricto por unidad para S4
+            const filtrados = role === 'admin' || role === 'boss' ? data : data.filter(a => a.unidad === userElemento);
             setAircrafts(filtrados);
         } catch (error) { console.error("Error AE: Fallo de sincronización de material"); }
     };
@@ -47,9 +47,9 @@ const Operaciones = () => {
         try {
             await updateAircraftStatus(id, updatedFields);
             fetchMaterial();
-            alert("Estado de Aeronave actualizado correctamente.");
+            alert("Estado de Material actualizado correctamente.");
         } catch (error) {
-            alert("Error al actualizar material. Verifique jurisdicción S4.");
+            alert("Error al actualizar material. Verifique jurisdicción de su usuario.");
         }
     };
 
@@ -133,7 +133,7 @@ const Operaciones = () => {
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
                 
-                {/* FORMULARIO DE CARGA DE VUELO */}
+                {/* 1. FORMULARIO DE CARGA DE VUELO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Misión" : "➕ Nueva Carga de Vuelo"}</h3>
                     <form onSubmit={handleSubmit} style={styles.form}>
@@ -183,52 +183,62 @@ const Operaciones = () => {
                     </form>
                 </div>
 
-                {/* PANEL EXCLUSIVO S4: ESTADO DE AERONAVES */}
-                {(role === 'S4_UNIDAD' || role === 'admin') && (
+                {/* 2. PANEL S4: GESTIÓN DE MATERIAL (VISOR Y ACTUALIZACIÓN) */}
+                {(role === 'S4_UNIDAD' || role === 'admin' || role === 'boss') && (
                     <div style={styles.card}>
                         <h3 style={styles.title}>🛠️ Gestión de Material - {userElemento}</h3>
                         <div style={styles.scrollList}>
-                            {aircrafts.length === 0 ? <p style={{textAlign: 'center', opacity: 0.5}}>No hay aeronaves asignadas a su unidad</p> : 
-                            aircrafts.map(air => (
-                                <div key={air._id} style={{...styles.logItem, borderLeft: air.estado === 'E/S' ? '5px solid #28a745' : '5px solid #e74c3c'}}>
-                                    <div style={{flex: 1}}>
-                                        <div style={{fontWeight: 'bold'}}>{air.matricula} ({air.sda})</div>
-                                        <div style={{fontSize: '0.8rem'}}>Hs Rem: <strong>{air.horasRemanentes}</strong></div>
+                            {aircrafts.length === 0 ? (
+                                <p style={{textAlign: 'center', opacity: 0.5, padding: '20px'}}>No hay aeronaves asignadas a su unidad</p>
+                            ) : (
+                                aircrafts.map(air => (
+                                    <div key={air._id} style={{...styles.logItem, borderLeft: air.estado === 'E/S' ? '5px solid #28a745' : '5px solid #e74c3c'}}>
+                                        <div style={{flex: 1}}>
+                                            <div style={{fontWeight: 'bold'}}>{air.matricula} ({air.sda})</div>
+                                            <div style={{fontSize: '0.8rem'}}>Hs Rem: <strong>{air.horasRemanentes}</strong></div>
+                                        </div>
+                                        <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                                            <select 
+                                                value={air.estado} 
+                                                onChange={(e) => handleUpdateAircraft(air._id, { estado: e.target.value })}
+                                                style={{...styles.input, padding: '5px', fontSize: '0.8rem', height: '35px'}}
+                                            >
+                                                <option value="E/S">E/S</option>
+                                                <option value="F/S">F/S</option>
+                                            </select>
+                                            <button 
+                                                title="Actualizar Horas"
+                                                onClick={() => {
+                                                    const nuevaHs = prompt(`Actualizar Remanente para ${air.matricula}:`, air.horasRemanentes);
+                                                    if(nuevaHs !== null && !isNaN(nuevaHs)) {
+                                                        handleUpdateAircraft(air._id, { horasRemanentes: Number(nuevaHs) });
+                                                    }
+                                                }}
+                                                style={styles.btnIconEdit}
+                                            >⏱️</button>
+                                        </div>
                                     </div>
-                                    <div style={{display: 'flex', gap: '5px'}}>
-                                        <select 
-                                            value={air.estado} 
-                                            onChange={(e) => handleUpdateAircraft(air._id, { estado: e.target.value })}
-                                            style={{...styles.input, padding: '5px', fontSize: '0.8rem'}}
-                                        >
-                                            <option value="E/S">E/S</option>
-                                            <option value="F/S">F/S</option>
-                                        </select>
-                                        <button 
-                                            onClick={() => {
-                                                const nuevaHs = prompt("Ingrese nuevas horas remanentes:", air.horasRemanentes);
-                                                if(nuevaHs !== null) handleUpdateAircraft(air._id, { horasRemanentes: Number(nuevaHs) });
-                                            }}
-                                            style={styles.btnIconEdit}
-                                        >⏱️</button>
-                                    </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
-                        <p style={{fontSize: '0.7rem', marginTop: '10px', color: '#666'}}>* Solo puede gestionar material de su unidad asignada.</p>
+                        <p style={{fontSize: '0.7rem', marginTop: '10px', color: '#666', fontStyle: 'italic'}}>
+                            * Solo personal autorizado puede modificar el estado operativo.
+                        </p>
                     </div>
                 )}
 
-                {/* REGISTRO OPERATIVO DE EVENTOS */}
-                <div style={styles.card}>
-                    <h3 style={styles.title}>📜 Registro Operativo</h3>
-                    <div style={styles.scrollList}>
+                {/* 3. REGISTRO OPERATIVO DE EVENTOS */}
+                <div style={{...styles.card, gridColumn: isMobile ? 'auto' : 'span 2'}}>
+                    <h3 style={styles.title}>📜 Registro de Misiones Recientes</h3>
+                    <div style={{...styles.scrollList, maxHeight: '300px'}}>
                         {events.length === 0 ? <p style={{textAlign: 'center', opacity: 0.5}}>No hay eventos registrados</p> : 
-                        events.map(ev => (
+                        events.slice(0).reverse().map(ev => (
                             <div key={ev._id} style={styles.logItem}>
                                 <div>
                                     <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.title}</div>
-                                    <div style={{fontSize: '0.75rem', color: '#666'}}>{new Date(ev.start).toLocaleDateString()} | {ev.userName || 'Admin'}</div>
+                                    <div style={{fontSize: '0.75rem', color: '#666'}}>
+                                        {new Date(ev.start).toLocaleDateString()} | {ev.userName || 'Sistema AE'}
+                                    </div>
                                 </div>
                                 <div style={styles.logActions}>
                                     <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
