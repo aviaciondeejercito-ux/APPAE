@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-// He añadido createAircraft a las importaciones
 import { getEvents, createEvent, deleteEvent, updateEvent, getAircrafts, updateAircraftStatus, createAircraft } from '../services/api';
 
 const Operaciones = () => {
@@ -23,10 +22,11 @@ const Operaciones = () => {
 
     useEffect(() => { 
         fetchData();
+        // El S4, Admin y Boss siempre deben disparar la carga de material
         if (role === 'S4_UNIDAD' || role === 'admin' || role === 'boss') {
             fetchMaterial();
         }
-    }, []);
+    }, [role, userElemento]); // Se añade dependencia para asegurar carga post-login
 
     const fetchData = async () => {
         try {
@@ -38,13 +38,17 @@ const Operaciones = () => {
     const fetchMaterial = async () => {
         try {
             const { data } = await getAircrafts();
-            // Mantenemos 'unidad' pero aseguramos que el filtro sea efectivo
-            const filtrados = role === 'admin' || role === 'boss' ? data : data.filter(a => a.unidad === userElemento);
+            // Filtro robusto: Si no es admin/boss, solo ve lo de su unidad asignada
+            const filtrados = (role === 'admin' || role === 'boss') 
+                ? data 
+                : data.filter(a => String(a.unidad).trim() === String(userElemento).trim());
+            
             setAircrafts(filtrados);
-        } catch (error) { console.error("Error AE: Fallo de sincronización de material"); }
+        } catch (error) { 
+            console.error("Error AE: Fallo de sincronización de material"); 
+        }
     };
 
-    // NUEVA FUNCIÓN: Permite al S4 o Admin dar de alta material directamente
     const handleAddAircraft = async () => {
         const matricula = prompt("Ingrese Matrícula (Ej: AE-432):");
         if (!matricula) return;
@@ -55,24 +59,25 @@ const Operaciones = () => {
             await createAircraft({
                 matricula: matricula.toUpperCase(),
                 sda: sda.toUpperCase(),
-                unidad: userElemento, // Se asigna automáticamente la unidad del usuario logueado
+                unidad: userElemento, // El S4 siempre da de alta para su propia unidad
                 estado: 'E/S',
                 horasRemanentes: 0
             });
             fetchMaterial();
-            alert("Aeronave dada de alta en el sistema.");
+            alert("Aeronave dada de alta exitosamente.");
         } catch (error) {
-            alert("Error al dar de alta. Verifique si su rol tiene permisos de escritura.");
+            alert("Error al dar de alta. Verifique permisos de escritura.");
         }
     };
 
     const handleUpdateAircraft = async (id, updatedFields) => {
         try {
             await updateAircraftStatus(id, updatedFields);
-            fetchMaterial();
-            alert("Estado de Material actualizado correctamente.");
+            // Actualización optimista en el estado local para rapidez visual
+            setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...updatedFields } : a));
+            fetchMaterial(); 
         } catch (error) {
-            alert("Error al actualizar material. Verifique jurisdicción de su usuario.");
+            alert("Error al actualizar material. Verifique su jurisdicción.");
         }
     };
 
@@ -117,8 +122,8 @@ const Operaciones = () => {
             }
             resetForm();
             fetchData();
-            alert("Operación registrada con éxito en el Sistema AE");
-        } catch (error) { alert("Error en el registro. Verifique conexión."); }
+            alert("Operación registrada con éxito.");
+        } catch (error) { alert("Error en el registro."); }
     };
 
     const resetForm = () => {
@@ -146,7 +151,7 @@ const Operaciones = () => {
     };
 
     const handleDelete = async (id) => {
-        if (window.confirm("¿Confirmar ELIMINACIÓN OPERATIVA? Esta acción es irreversible.")) {
+        if (window.confirm("¿Confirmar ELIMINACIÓN?")) {
             await deleteEvent(id);
             fetchData();
         }
@@ -206,30 +211,32 @@ const Operaciones = () => {
                     </form>
                 </div>
 
-                {/* 2. PANEL S4: GESTIÓN DE MATERIAL */}
+                {/* 2. PANEL S4: GESTIÓN DE MATERIAL - REFORZADO */}
                 {(role === 'S4_UNIDAD' || role === 'admin' || role === 'boss') && (
                     <div style={styles.card}>
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f0f2f5', paddingBottom: '10px', marginBottom: '15px'}}>
-                            <h3 style={{...styles.title, borderBottom: 'none', margin: 0}}>🛠️ Gestión de Material</h3>
+                            <h3 style={{...styles.title, borderBottom: 'none', margin: 0}}>🛠️ Gestión de Material - {userElemento}</h3>
                             <button onClick={handleAddAircraft} style={styles.btnAddMaterial}>+ Alta Material</button>
                         </div>
                         <div style={styles.scrollList}>
                             {aircrafts.length === 0 ? (
-                                <div style={{textAlign: 'center', padding: '20px'}}>
-                                    <p style={{opacity: 0.5}}>No hay aeronaves asignadas a {userElemento}</p>
+                                <div style={{textAlign: 'center', padding: '40px 20px'}}>
+                                    <p style={{opacity: 0.6, fontSize: '0.9rem'}}>No hay aeronaves cargadas para <strong>{userElemento}</strong>.</p>
+                                    <p style={{fontSize: '0.75rem', color: '#888'}}>Use el botón "+ Alta Material" para iniciar el inventario.</p>
                                 </div>
                             ) : (
                                 aircrafts.map(air => (
-                                    <div key={air._id} style={{...styles.logItem, borderLeft: air.estado === 'E/S' ? '5px solid #28a745' : '5px solid #e74c3c'}}>
+                                    <div key={air._id} style={{...styles.logItem, borderLeft: air.estado === 'E/S' ? '5px solid #28a745' : '5px solid #e74c3c', backgroundColor: '#fdfdfd', marginBottom: '8px', borderRadius: '4px'}}>
                                         <div style={{flex: 1}}>
-                                            <div style={{fontWeight: 'bold'}}>{air.matricula} ({air.sda})</div>
-                                            <div style={{fontSize: '0.8rem'}}>Hs Rem: <strong>{air.horasRemanentes}</strong></div>
+                                            <div style={{fontWeight: 'bold', fontSize: '1rem'}}>{air.matricula}</div>
+                                            <div style={{fontSize: '0.8rem', color: '#555'}}>{air.sda}</div>
+                                            <div style={{fontSize: '0.75rem', marginTop: '4px'}}>Hs Rem: <strong style={{color: air.horasRemanentes < 10 ? '#e74c3c' : '#2ecc71'}}>{air.horasRemanentes}</strong></div>
                                         </div>
                                         <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
                                             <select 
                                                 value={air.estado} 
                                                 onChange={(e) => handleUpdateAircraft(air._id, { estado: e.target.value })}
-                                                style={{...styles.input, padding: '5px', fontSize: '0.8rem', height: '35px'}}
+                                                style={{...styles.input, padding: '5px', fontSize: '0.85rem', height: '35px', fontWeight: 'bold', border: '1px solid #ccc'}}
                                             >
                                                 <option value="E/S">E/S</option>
                                                 <option value="F/S">F/S</option>
@@ -237,25 +244,25 @@ const Operaciones = () => {
                                             <button 
                                                 title="Actualizar Horas"
                                                 onClick={() => {
-                                                    const nuevaHs = prompt(`Actualizar Remanente para ${air.matricula}:`, air.horasRemanentes);
+                                                    const nuevaHs = prompt(`Actualizar Horas Remanentes para ${air.matricula}:`, air.horasRemanentes);
                                                     if(nuevaHs !== null && !isNaN(nuevaHs)) {
                                                         handleUpdateAircraft(air._id, { horasRemanentes: Number(nuevaHs) });
                                                     }
                                                 }}
-                                                style={styles.btnIconEdit}
+                                                style={styles.btnIconHs}
                                             >⏱️</button>
                                         </div>
                                     </div>
                                 ))
                             )}
                         </div>
-                        <p style={{fontSize: '0.7rem', marginTop: '10px', color: '#666', fontStyle: 'italic'}}>
-                            * Solo personal autorizado de {userElemento} puede modificar el estado operativo.
+                        <p style={{fontSize: '0.7rem', marginTop: '15px', color: '#7f8c8d', fontStyle: 'italic'}}>
+                            * Los cambios realizados impactan en tiempo real en el Monitor General.
                         </p>
                     </div>
                 )}
 
-                {/* 3. REGISTRO OPERATIVO DE EVENTOS */}
+                {/* 3. REGISTRO OPERATIVO */}
                 <div style={{...styles.card, gridColumn: isMobile ? 'auto' : 'span 2'}}>
                     <h3 style={styles.title}>📜 Registro de Misiones Recientes</h3>
                     <div style={{...styles.scrollList, maxHeight: '300px'}}>
@@ -276,7 +283,6 @@ const Operaciones = () => {
                         ))}
                     </div>
                 </div>
-
             </div>
         </div>
     );
@@ -301,9 +307,10 @@ const styles = {
     btnSave: { flex: 2, color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
     btnCancel: { flex: 1, background: '#bdc3c7', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' },
     scrollList: { maxHeight: '500px', overflowY: 'auto', paddingRight: '5px' },
-    logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #f9f9f9', transition: '0.2s' },
+    logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #f0f0f0', transition: '0.2s' },
     logActions: { display: 'flex', gap: '5px' },
     btnIconEdit: { background: '#f1c40f', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' },
+    btnIconHs: { background: '#e1e8ed', border: '1px solid #ccc', padding: '8px', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem' },
     btnIconDel: { background: '#fadbd8', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }
 };
 
