@@ -10,7 +10,7 @@ const AircraftSchema = new mongoose.Schema({
         required: [true, 'La matrícula es obligatoria para el registro'], 
         unique: true,
         uppercase: true,
-        trim: true // Elimina espacios accidentales
+        trim: true // Elimina espacios accidentales para evitar duplicados falsos
     },
     sda: { 
         type: String, 
@@ -22,13 +22,14 @@ const AircraftSchema = new mongoose.Schema({
         type: String, 
         required: [true, 'La asignación a una Unidad/Elemento es obligatoria'],
         uppercase: true,
-        trim: true // Asegura coincidencia exacta con el elemento del usuario S4
+        trim: true // CRÍTICO: Asegura coincidencia exacta con el 'elemento' del usuario logueado
     },
     estado: { 
         type: String, 
+        required: [true, 'El estado operativo es obligatorio'],
         enum: {
             values: ['E/S', 'F/S'],
-            message: '{VALUE} no es un estado válido (Usar E/S o F/S)'
+            message: '{VALUE} no es un estado válido (Usar E/S para En Servicio o F/S para Fuera de Servicio)'
         },
         default: 'E/S' 
     },
@@ -43,6 +44,7 @@ const AircraftSchema = new mongoose.Schema({
         default: 'Sin novedades reportadas.',
         trim: true
     },
+    // Auditoría de cambios en tiempo real
     ultimaActualizacion: { 
         type: Date, 
         default: Date.now 
@@ -51,15 +53,20 @@ const AircraftSchema = new mongoose.Schema({
         type: String,
         default: 'Sistema (Carga Inicial)' 
     },
-    // Campo de auditoría adicional para trazabilidad total
+    // Trazabilidad de origen del dato
     creadoPor: {
-        type: String
+        type: String,
+        required: [true, 'El registro de autoría es obligatorio para auditoría']
     }
 }, { 
-    timestamps: true // Crea automáticamente campos createdAt y updatedAt para auditoría técnica
+    timestamps: true // Crea automáticamente createdAt y updatedAt (Estándar de Seguridad)
 });
 
-// Índice para optimizar las búsquedas por unidad (usado frecuentemente por S4)
+/**
+ * ÍNDICES DE RENDIMIENTO Y SEGURIDAD
+ * Optimizan las búsquedas frecuentes por Unidad (S4) y Matrícula (Única).
+ */
 AircraftSchema.index({ unidad: 1 });
+AircraftSchema.index({ matricula: 1 }, { unique: true });
 
 module.exports = mongoose.model('Aircraft', AircraftSchema);
