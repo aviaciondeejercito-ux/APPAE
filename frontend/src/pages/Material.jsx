@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { getAircrafts, updateAircraftStatus, createAircraft } from '../services/api';
+import { getAircrafts, updateAircraftStatus, createAircraft, deleteAircraft } from '../services/api';
 
 const Material = () => {
     const [aircrafts, setAircrafts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [editingId, setEditingId] = useState(null); 
     
-    // Datos de sesión para persistencia y seguridad
     const role = localStorage.getItem('role');
     const userElemento = localStorage.getItem('elemento');
 
@@ -27,7 +27,6 @@ const Material = () => {
     const fetchMaterial = async () => {
         try {
             const { data } = await getAircrafts();
-            // Filtro: S4 solo ve su unidad. Admin/Boss ve todo.
             const filtrados = (role === 'admin' || role === 'boss') 
                 ? data 
                 : data.filter(a => String(a.unidad).trim() === String(userElemento).trim());
@@ -47,25 +46,45 @@ const Material = () => {
         try {
             await createAircraft({
                 ...newAir,
-                matricula: newAir.matricula.toUpperCase(),
-                unidad: userElemento, // Asignación automática por sesión
+                matricula: newAir.matricula.toUpperCase().trim(),
+                horasRemanentes: Number(newAir.horasRemanentes),
+                unidad: userElemento,
                 estado: 'E/S'
             });
             setNewAir({ matricula: '', sda: '', horasRemanentes: 0 });
             fetchMaterial();
             alert("Aeronave dada de alta correctamente.");
         } catch (error) {
-            alert("Error al dar de alta el material.");
+            const msg = error.response?.data?.message || "Error al dar de alta el material.";
+            alert(msg);
         }
     };
 
-    const handleUpdateStatus = async (id, updatedFields) => {
+    const handleUpdateField = async (id, updatedFields) => {
         try {
-            await updateAircraftStatus(id, updatedFields);
-            // Actualización optimista
-            setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...updatedFields } : a));
+            const cleanFields = { ...updatedFields };
+            if (cleanFields.horasRemanentes !== undefined) {
+                cleanFields.horasRemanentes = Number(cleanFields.horasRemanentes);
+            }
+            if (cleanFields.matricula) cleanFields.matricula = cleanFields.matricula.toUpperCase().trim();
+
+            await updateAircraftStatus(id, cleanFields);
+            
+            setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...cleanFields } : a));
+            if (editingId) setEditingId(null);
         } catch (error) {
-            alert("Error al actualizar. Verifique conexión.");
+            alert("Error al actualizar datos.");
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm("¿Está seguro de eliminar esta aeronave del registro oficial?")) return;
+        try {
+            await deleteAircraft(id);
+            setAircrafts(prev => prev.filter(a => a._id !== id));
+            alert("Registro eliminado.");
+        } catch (error) {
+            alert("No se pudo eliminar el registro.");
         }
     };
 
@@ -75,7 +94,7 @@ const Material = () => {
         <div style={styles.container}>
             <div style={styles.grid}>
                 
-                {/* FORMULARIO DE ALTA (SOLO S4 O ADMIN) */}
+                {/* FORMULARIO DE ALTA */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
                     <p style={styles.infoText}>Registrar nueva aeronave para: <strong>{userElemento}</strong></p>
@@ -128,9 +147,31 @@ const Material = () => {
                                     ...styles.item,
                                     borderLeft: air.estado === 'E/S' ? '6px solid #28a745' : '6px solid #e74c3c'
                                 }}>
-                                    <div style={{flex: 1}}>
-                                        <div style={styles.itemMain}>{air.matricula}</div>
-                                        <div style={styles.itemSub}>{air.sda}</div>
+                                    <div style={{flex: 1.5}}>
+                                        {editingId === air._id ? (
+                                            <div style={styles.editForm}>
+                                                <input 
+                                                    style={styles.inputSmallEdit}
+                                                    defaultValue={air.matricula}
+                                                    onBlur={(e) => handleUpdateField(air._id, { matricula: e.target.value })}
+                                                    placeholder="Matrícula"
+                                                    autoFocus
+                                                />
+                                                <select 
+                                                    style={styles.selectSmall}
+                                                    defaultValue={air.sda}
+                                                    onChange={(e) => handleUpdateField(air._id, { sda: e.target.value })}
+                                                >
+                                                    {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
+                                                </select>
+                                                <button onClick={() => setEditingId(null)} style={styles.btnOk}>Confirmar</button>
+                                            </div>
+                                        ) : (
+                                            <div onClick={() => setEditingId(air._id)} style={{cursor: 'pointer'}}>
+                                                <div style={styles.itemMain}>{air.matricula} <span style={{fontSize: '0.7rem'}}>✏️</span></div>
+                                                <div style={styles.itemSub}>{air.sda}</div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div style={styles.actions}>
@@ -138,7 +179,7 @@ const Material = () => {
                                             <label style={styles.tinyLabel}>ESTADO</label>
                                             <select 
                                                 value={air.estado} 
-                                                onChange={(e) => handleUpdateStatus(air._id, { estado: e.target.value })}
+                                                onChange={(e) => handleUpdateField(air._id, { estado: e.target.value })}
                                                 style={{...styles.selectSmall, color: air.estado === 'E/S' ? '#28a745' : '#e74c3c'}}
                                             >
                                                 <option value="E/S">E/S</option>
@@ -151,17 +192,26 @@ const Material = () => {
                                             <input 
                                                 type="number" 
                                                 value={air.horasRemanentes} 
-                                                onChange={(e) => handleUpdateStatus(air._id, { horasRemanentes: Number(e.target.value) })}
+                                                onChange={(e) => handleUpdateField(air._id, { horasRemanentes: e.target.value })}
                                                 style={styles.inputSmall}
                                             />
                                         </div>
+
+                                        {(role === 'admin') && (
+                                            <button 
+                                                onClick={() => handleDelete(air._id)} 
+                                                style={styles.btnDelete}
+                                                title="Eliminar registro"
+                                            >
+                                                🗑️
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))
                         )}
                     </div>
                 </div>
-
             </div>
         </div>
     );
@@ -183,10 +233,14 @@ const styles = {
     item: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', background: '#fcfcfc', borderRadius: '8px', marginBottom: '10px', border: '1px solid #eee' },
     itemMain: { fontWeight: 'bold', fontSize: '1rem', color: '#1b3a57' },
     itemSub: { fontSize: '0.8rem', color: '#777' },
-    actions: { display: 'flex', gap: '15px' },
+    actions: { display: 'flex', gap: '12px', alignItems: 'center' },
     controlGroup: { display: 'flex', flexDirection: 'column', gap: '3px' },
     selectSmall: { padding: '5px', borderRadius: '5px', border: '1px solid #ccc', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' },
-    inputSmall: { width: '60px', padding: '5px', borderRadius: '5px', border: '1px solid #ccc', textAlign: 'center', fontSize: '0.85rem' },
+    inputSmall: { width: '65px', padding: '5px', borderRadius: '5px', border: '1px solid #ccc', textAlign: 'center', fontSize: '0.85rem' },
+    inputSmallEdit: { padding: '5px', borderRadius: '5px', border: '1px solid #1b3a57', fontSize: '0.85rem', width: '120px', marginBottom: '5px' },
+    editForm: { display: 'flex', flexDirection: 'column', gap: '5px' },
+    btnOk: { background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.75rem', padding: '5px', cursor: 'pointer' },
+    btnDelete: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '5px' },
     empty: { textAlign: 'center', padding: '40px', color: '#999', fontSize: '0.9rem' },
     loader: { textAlign: 'center', marginTop: '100px', fontWeight: 'bold', color: '#1b3a57' }
 };

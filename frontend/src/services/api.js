@@ -5,7 +5,6 @@ import axios from 'axios';
  * Manejo dinámico de comunicación entre Frontend y Backend.
  */
 const API = axios.create({
-    // VITE_API_URL debe estar configurada en las variables de entorno de Render
     baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
     headers: {
         'Content-Type': 'application/json'
@@ -36,11 +35,9 @@ API.interceptors.response.use(
     (error) => {
         if (error.response && error.response.status === 401) {
             localStorage.removeItem('token');
-            localStorage.removeItem('user');
             localStorage.removeItem('role');
             localStorage.removeItem('elemento');
-            // Redirección opcional si falla la sesión
-            // window.location.href = '/login';
+            localStorage.removeItem('username');
         }
         return Promise.reject(error);
     }
@@ -62,31 +59,46 @@ export const deleteEvent = (id) => API.delete(`/events/${id}`);
 
 /**
  * SERVICIOS DE MATERIAL AERONÁUTICO (ESTADO DE FLOTA)
- * Rutas para la gestión de SdA, Matrículas y Horas Remanentes.
  */
-// Obtener flota completa. El filtrado se realiza en el Frontend para mayor velocidad de carga.
 export const getAircrafts = () => API.get('/aircraft');
 
-// Crear nueva aeronave (Habilitado para S4_UNIDAD y Admin según lógica de Operaciones)
+// Crear nueva aeronave con Inyección de Seguridad
 export const createAircraft = (aircraftData) => {
-    // Normalizamos a mayúsculas antes de enviar para evitar errores de búsqueda
+    // Obtenemos la unidad del localStorage para asegurar que no viaje vacía
+    const userRole = localStorage.getItem('role');
+    const userElemento = localStorage.getItem('elemento');
+
     const dataNormalized = {
         ...aircraftData,
-        matricula: aircraftData.matricula?.toUpperCase(),
-        sda: aircraftData.sda?.toUpperCase(),
-        unidad: aircraftData.unidad?.toUpperCase()
+        matricula: aircraftData.matricula?.toUpperCase().trim(),
+        sda: aircraftData.sda?.toUpperCase().trim(),
+        // Si es S4, forzamos su unidad; si es Admin, usamos la que eligió en el formulario
+        unidad: userRole === 'S4_UNIDAD' ? userElemento : aircraftData.unidad?.toUpperCase().trim(),
+        horasRemanentes: Number(aircraftData.horasRemanentes) || 0
     };
+
+    // Validación preventiva en Frontend para no saturar el Backend si faltan datos
+    if (!dataNormalized.matricula || !dataNormalized.sda || !dataNormalized.unidad) {
+        return Promise.reject({ 
+            response: { data: { message: "Error Local: Faltan campos obligatorios (Matrícula, SdA o Unidad)" } } 
+        });
+    }
+
     return API.post('/aircraft', dataNormalized);
 };
 
-// Actualizar Estado, Horas o Novedades
-export const updateAircraftStatus = (id, aircraftData) => API.put(`/aircraft/${id}`, aircraftData);
+export const updateAircraftStatus = (id, aircraftData) => {
+    const dataNormalized = {
+        ...aircraftData,
+        horasRemanentes: aircraftData.horasRemanentes !== undefined ? Number(aircraftData.horasRemanentes) : undefined
+    };
+    return API.put(`/aircraft/${id}`, dataNormalized);
+};
 
-// Eliminar aeronave del registro (Solo Admin)
 export const deleteAircraft = (id) => API.delete(`/aircraft/${id}`);
 
 /**
- * SERVICIOS DE ADMINISTRACIÓN (GESTIÓN DE PERSONAL)
+ * SERVICIOS DE ADMINISTRACIÓN
  */
 export const getUsers = () => API.get('/admin/users');
 export const deleteUser = (id) => API.delete('/admin/users/' + id);
