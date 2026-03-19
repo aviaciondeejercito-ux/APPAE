@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { getEvents, createEvent, deleteEvent, updateEvent, getAircrafts, updateAircraftStatus, createAircraft } from '../services/api';
+import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/api';
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
-    const [aircrafts, setAircrafts] = useState([]); 
     const [role] = useState(localStorage.getItem('role'));
-    const [userElemento] = useState(localStorage.getItem('elemento')); 
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [isMobile] = useState(window.innerWidth < 768);
@@ -22,62 +20,14 @@ const Operaciones = () => {
 
     useEffect(() => { 
         fetchData();
-        // El S4, Admin y Boss siempre deben disparar la carga de material
-        if (role === 'S4_UNIDAD' || role === 'admin' || role === 'boss') {
-            fetchMaterial();
-        }
-    }, [role, userElemento]); // Se añade dependencia para asegurar carga post-login
+    }, []);
 
     const fetchData = async () => {
         try {
             const { data } = await getEvents();
             setEvents(data);
-        } catch (error) { console.error("Error AE: Fallo de sincronización de eventos"); }
-    };
-
-    const fetchMaterial = async () => {
-        try {
-            const { data } = await getAircrafts();
-            // Filtro robusto: Si no es admin/boss, solo ve lo de su unidad asignada
-            const filtrados = (role === 'admin' || role === 'boss') 
-                ? data 
-                : data.filter(a => String(a.unidad).trim() === String(userElemento).trim());
-            
-            setAircrafts(filtrados);
         } catch (error) { 
-            console.error("Error AE: Fallo de sincronización de material"); 
-        }
-    };
-
-    const handleAddAircraft = async () => {
-        const matricula = prompt("Ingrese Matrícula (Ej: AE-432):");
-        if (!matricula) return;
-        const sda = prompt(`Ingrese SdA para ${matricula} (Ej: UH-1H):`);
-        if (!sda) return;
-
-        try {
-            await createAircraft({
-                matricula: matricula.toUpperCase(),
-                sda: sda.toUpperCase(),
-                unidad: userElemento, // El S4 siempre da de alta para su propia unidad
-                estado: 'E/S',
-                horasRemanentes: 0
-            });
-            fetchMaterial();
-            alert("Aeronave dada de alta exitosamente.");
-        } catch (error) {
-            alert("Error al dar de alta. Verifique permisos de escritura.");
-        }
-    };
-
-    const handleUpdateAircraft = async (id, updatedFields) => {
-        try {
-            await updateAircraftStatus(id, updatedFields);
-            // Actualización optimista en el estado local para rapidez visual
-            setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...updatedFields } : a));
-            fetchMaterial(); 
-        } catch (error) {
-            alert("Error al actualizar material. Verifique su jurisdicción.");
+            console.error("Error AE: Fallo de sincronización de eventos"); 
         }
     };
 
@@ -123,7 +73,9 @@ const Operaciones = () => {
             resetForm();
             fetchData();
             alert("Operación registrada con éxito.");
-        } catch (error) { alert("Error en el registro."); }
+        } catch (error) { 
+            alert("Error en el registro."); 
+        }
     };
 
     const resetForm = () => {
@@ -159,13 +111,20 @@ const Operaciones = () => {
 
     return (
         <div style={styles.container}>
-            <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
+            <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
                 {/* 1. FORMULARIO DE CARGA DE VUELO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Misión" : "➕ Nueva Carga de Vuelo"}</h3>
                     <form onSubmit={handleSubmit} style={styles.form}>
-                        <input type="text" required placeholder="Nombre de la Misión" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input}/>
+                        <input 
+                            type="text" 
+                            required 
+                            placeholder="Nombre de la Misión / Orden de Vuelo" 
+                            value={formData.title} 
+                            onChange={e => setFormData({...formData, title: e.target.value})} 
+                            style={styles.input}
+                        />
                         
                         <div style={styles.row}>
                             <div style={{flex: 1}}>
@@ -200,7 +159,7 @@ const Operaciones = () => {
                             ))}
                         </div>
 
-                        <textarea placeholder="Observaciones y detalles..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
+                        <textarea placeholder="Observaciones y detalles de la misión..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
                         
                         <div style={styles.row}>
                             <button type="submit" style={{...styles.btnSave, backgroundColor: isEditing ? '#f39c12' : '#1b3a57'}}>
@@ -211,76 +170,29 @@ const Operaciones = () => {
                     </form>
                 </div>
 
-                {/* 2. PANEL S4: GESTIÓN DE MATERIAL - REFORZADO */}
-                {(role === 'S4_UNIDAD' || role === 'admin' || role === 'boss') && (
-                    <div style={styles.card}>
-                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f0f2f5', paddingBottom: '10px', marginBottom: '15px'}}>
-                            <h3 style={{...styles.title, borderBottom: 'none', margin: 0}}>🛠️ Gestión de Material - {userElemento}</h3>
-                            <button onClick={handleAddAircraft} style={styles.btnAddMaterial}>+ Alta Material</button>
-                        </div>
-                        <div style={styles.scrollList}>
-                            {aircrafts.length === 0 ? (
-                                <div style={{textAlign: 'center', padding: '40px 20px'}}>
-                                    <p style={{opacity: 0.6, fontSize: '0.9rem'}}>No hay aeronaves cargadas para <strong>{userElemento}</strong>.</p>
-                                    <p style={{fontSize: '0.75rem', color: '#888'}}>Use el botón "+ Alta Material" para iniciar el inventario.</p>
-                                </div>
-                            ) : (
-                                aircrafts.map(air => (
-                                    <div key={air._id} style={{...styles.logItem, borderLeft: air.estado === 'E/S' ? '5px solid #28a745' : '5px solid #e74c3c', backgroundColor: '#fdfdfd', marginBottom: '8px', borderRadius: '4px'}}>
-                                        <div style={{flex: 1}}>
-                                            <div style={{fontWeight: 'bold', fontSize: '1rem'}}>{air.matricula}</div>
-                                            <div style={{fontSize: '0.8rem', color: '#555'}}>{air.sda}</div>
-                                            <div style={{fontSize: '0.75rem', marginTop: '4px'}}>Hs Rem: <strong style={{color: air.horasRemanentes < 10 ? '#e74c3c' : '#2ecc71'}}>{air.horasRemanentes}</strong></div>
-                                        </div>
-                                        <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
-                                            <select 
-                                                value={air.estado} 
-                                                onChange={(e) => handleUpdateAircraft(air._id, { estado: e.target.value })}
-                                                style={{...styles.input, padding: '5px', fontSize: '0.85rem', height: '35px', fontWeight: 'bold', border: '1px solid #ccc'}}
-                                            >
-                                                <option value="E/S">E/S</option>
-                                                <option value="F/S">F/S</option>
-                                            </select>
-                                            <button 
-                                                title="Actualizar Horas"
-                                                onClick={() => {
-                                                    const nuevaHs = prompt(`Actualizar Horas Remanentes para ${air.matricula}:`, air.horasRemanentes);
-                                                    if(nuevaHs !== null && !isNaN(nuevaHs)) {
-                                                        handleUpdateAircraft(air._id, { horasRemanentes: Number(nuevaHs) });
-                                                    }
-                                                }}
-                                                style={styles.btnIconHs}
-                                            >⏱️</button>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                        <p style={{fontSize: '0.7rem', marginTop: '15px', color: '#7f8c8d', fontStyle: 'italic'}}>
-                            * Los cambios realizados impactan en tiempo real en el Monitor General.
-                        </p>
-                    </div>
-                )}
-
-                {/* 3. REGISTRO OPERATIVO */}
-                <div style={{...styles.card, gridColumn: isMobile ? 'auto' : 'span 2'}}>
+                {/* 2. REGISTRO OPERATIVO */}
+                <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Misiones Recientes</h3>
-                    <div style={{...styles.scrollList, maxHeight: '300px'}}>
-                        {events.length === 0 ? <p style={{textAlign: 'center', opacity: 0.5}}>No hay eventos registrados</p> : 
-                        events.slice(0).reverse().map(ev => (
-                            <div key={ev._id} style={styles.logItem}>
-                                <div>
-                                    <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.title}</div>
-                                    <div style={{fontSize: '0.75rem', color: '#666'}}>
-                                        {new Date(ev.start).toLocaleDateString()} | {ev.userName || 'Sistema AE'}
+                    <div style={styles.scrollList}>
+                        {events.length === 0 ? (
+                            <p style={{textAlign: 'center', opacity: 0.5, padding: '20px'}}>No hay eventos registrados</p>
+                        ) : (
+                            events.slice(0).reverse().map(ev => (
+                                <div key={ev._id} style={styles.logItem}>
+                                    <div style={{flex: 1}}>
+                                        <div style={{fontWeight: 'bold', color: '#1b3a57', fontSize: '0.95rem'}}>{ev.title}</div>
+                                        <div style={{fontSize: '0.75rem', color: '#666', marginTop: '3px'}}>
+                                            {new Date(ev.start).toLocaleDateString()} | {ev.userName || 'Sistema AE'}
+                                        </div>
+                                        <div style={{fontSize: '0.7rem', color: ev.color, fontWeight: 'bold'}}>{ev.tipoApoyo}</div>
+                                    </div>
+                                    <div style={styles.logActions}>
+                                        <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
+                                        <button onClick={() => handleDelete(ev._id)} style={styles.btnIconDel}>🗑️</button>
                                     </div>
                                 </div>
-                                <div style={styles.logActions}>
-                                    <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
-                                    <button onClick={() => handleDelete(ev._id)} style={styles.btnIconDel}>🗑️</button>
-                                </div>
-                            </div>
-                        ))}
+                            ))
+                        )}
                     </div>
                 </div>
             </div>
@@ -290,28 +202,26 @@ const Operaciones = () => {
 
 const styles = {
     container: { padding: '20px', maxWidth: '1200px', margin: '0 auto' },
-    grid: { display: 'grid', gap: '20px' },
-    card: { background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', height: 'fit-content' },
-    title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '10px', fontSize: '1.1rem', color: '#1b3a57' },
-    form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    row: { display: 'flex', gap: '10px' },
-    label: { fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '5px', display: 'block' },
-    input: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem' },
-    textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', minHeight: '80px', fontSize: '0.9rem', resize: 'none' },
-    sdaBox: { display: 'flex', gap: '8px' },
-    btnAdd: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', width: '45px', cursor: 'pointer', fontSize: '1.2rem' },
-    btnAddMaterial: { background: '#0056b3', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' },
-    tagWrap: { display: 'flex', flexWrap: 'wrap', gap: '5px' },
-    tag: { background: '#e1e8ed', padding: '5px 10px', borderRadius: '15px', fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57' },
-    btnTagX: { background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold' },
-    btnSave: { flex: 2, color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
-    btnCancel: { flex: 1, background: '#bdc3c7', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' },
-    scrollList: { maxHeight: '500px', overflowY: 'auto', paddingRight: '5px' },
-    logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #f0f0f0', transition: '0.2s' },
-    logActions: { display: 'flex', gap: '5px' },
-    btnIconEdit: { background: '#f1c40f', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' },
-    btnIconHs: { background: '#e1e8ed', border: '1px solid #ccc', padding: '8px', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem' },
-    btnIconDel: { background: '#fadbd8', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }
+    grid: { display: 'grid', gap: '25px', alignItems: 'start' },
+    card: { background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f0f2f5' },
+    title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '12px', fontSize: '1.2rem', color: '#1b3a57', marginBottom: '20px' },
+    form: { display: 'flex', flexDirection: 'column', gap: '18px' },
+    row: { display: 'flex', gap: '12px' },
+    label: { fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '6px', display: 'block', color: '#555' },
+    input: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.95rem', outline: 'none', transition: '0.2s' },
+    textarea: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', minHeight: '100px', fontSize: '0.95rem', resize: 'none', outline: 'none' },
+    sdaBox: { display: 'flex', gap: '10px' },
+    btnAdd: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', width: '50px', cursor: 'pointer', fontSize: '1.3rem', transition: '0.2s' },
+    tagWrap: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
+    tag: { background: '#e1e8ed', padding: '6px 12px', borderRadius: '18px', fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57', display: 'flex', alignItems: 'center', gap: '5px' },
+    btnTagX: { background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem' },
+    btnSave: { flex: 2, color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' },
+    btnCancel: { flex: 1, background: '#bdc3c7', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
+    scrollList: { maxHeight: '600px', overflowY: 'auto', paddingRight: '8px' },
+    logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', borderBottom: '1px solid #f0f0f0', transition: '0.2s' },
+    logActions: { display: 'flex', gap: '8px' },
+    btnIconEdit: { background: '#f1c40f', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' },
+    btnIconDel: { background: '#fadbd8', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }
 };
 
 export default Operaciones;

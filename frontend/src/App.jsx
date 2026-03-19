@@ -4,7 +4,8 @@ import Login from './pages/Login';
 import AdminPanel from './pages/AdminPanel';
 import Estadisticas from './pages/Estadisticas';
 import Operaciones from './pages/Operaciones'; 
-import EstadoAeronaves from './pages/EstadoAeronaves'; // <--- NUEVO MÓDULO IMPORTADO
+import EstadoAeronaves from './pages/EstadoAeronaves';
+import Material from './pages/Material'; // <--- IMPORTADO PARA GESTIÓN S4
 
 function App() {
     // 1. Estados de Autenticación y Navegación
@@ -35,7 +36,7 @@ function App() {
         localStorage.removeItem('token');
         localStorage.removeItem('role');
         localStorage.removeItem('username');
-        localStorage.removeItem('elemento'); // Limpieza de unidad asignada
+        localStorage.removeItem('elemento'); 
         setAuth(false);
         setRole(null);
         setView('calendar');
@@ -67,7 +68,7 @@ function App() {
                 }}>
                     {auth ? (
                         <>
-                            {/* BOTÓN MONITOR */}
+                            {/* BOTÓN MONITOR (CALENDARIO) */}
                             <button 
                                 onClick={() => setView('calendar')}
                                 style={{
@@ -79,17 +80,31 @@ function App() {
                                 📅 Monitor
                             </button>
 
-                            {/* BOTÓN ESTADO DE MATERIAL (AERONAVES) */}
+                            {/* BOTÓN ESTADO GENERAL (VISOR) */}
                             <button 
-                                onClick={() => setView('material')}
+                                onClick={() => setView('estado')}
                                 style={{
                                     ...styles.btnNav,
-                                    backgroundColor: view === 'material' ? '#2c3e50' : '#4a69bd',
-                                    border: view === 'material' ? '2px solid white' : 'none'
+                                    backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd',
+                                    border: view === 'estado' ? '2px solid white' : 'none'
                                 }}
                             >
-                                🚁 Material
+                                🚁 Estado
                             </button>
+
+                            {/* BOTÓN GESTIÓN MATERIAL (SOLO S4 Y ADMIN) */}
+                            {(role === 'admin' || role === 'S4_UNIDAD') && (
+                                <button 
+                                    onClick={() => setView('material')}
+                                    style={{
+                                        ...styles.btnNav,
+                                        backgroundColor: view === 'material' ? '#8e44ad' : '#4a69bd',
+                                        border: view === 'material' ? '2px solid white' : 'none'
+                                    }}
+                                >
+                                    🛠️ Material
+                                </button>
+                            )}
 
                             {/* BOTÓN ESTADÍSTICAS */}
                             <button 
@@ -103,7 +118,7 @@ function App() {
                                 📊 Stats
                             </button>
 
-                            {/* BOTÓN OPERACIONES / CARGA (Visible para Admin, User y S4) */}
+                            {/* BOTÓN OPERACIONES / CARGA */}
                             {(role === 'admin' || role === 'user' || role === 'S4_UNIDAD') && (
                                 <button 
                                     onClick={() => setView('operaciones')}
@@ -147,7 +162,7 @@ function App() {
             </nav>
 
             {/* ÁREA DE CONTENIDO (Ruteo Dinámico) */}
-            <main style={(view === 'stats' || view === 'material') ? styles.containerStats : styles.container}>
+            <main style={(view === 'stats' || view === 'material' || view === 'estado') ? styles.containerStats : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
@@ -155,7 +170,8 @@ function App() {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats') return <Estadisticas />;
                         if (view === 'operaciones') return <Operaciones />; 
-                        if (view === 'material') return <EstadoAeronaves />; // <--- NUEVA VISTA
+                        if (view === 'estado') return <EstadoAeronaves />;
+                        if (view === 'material' && (role === 'admin' || role === 'S4_UNIDAD')) return <Material />;
                         return <CalendarPage />;
                     })()
                 )}
