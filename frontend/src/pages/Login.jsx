@@ -3,7 +3,7 @@ import { login } from '../services/api';
 
 /**
  * COMPONENTE DE LOGIN - SISTEMA GESTIÓN AE
- * Actualizado: Acceso mediante Usuario (Nombre y Apellido) y Contraseña.
+ * Actualizado: Captura y persistencia de Unidad (Elemento) para filtrado operativo.
  */
 const Login = ({ setAuth }) => {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -23,21 +23,29 @@ const Login = ({ setAuth }) => {
       const userData = response.data;
 
       /**
-       * ESTÁNDAR DE SEGURIDAD Y PERSISTENCIA
-       * Extraemos los datos según la respuesta del authController (id, nombreReal, role, token)
+       * ESTÁNDAR DE SEGURIDAD Y PERSISTENCIA AE
+       * Extraemos los datos del authController (token, role, elemento, nombreReal)
        */
       const token = userData.token;
       const userRole = userData.role;
+      const userElemento = userData.elemento; // <--- DATO CRÍTICO RECUPERADO
       const displayName = userData.nombreReal || userData.username;
 
       if (!token || !userRole) {
         throw new Error('Respuesta del servidor incompleta (Falta Token o Rol)');
       }
 
-      // Guardamos en el almacenamiento local para persistir la sesión
+      // GUARDADO EN STORAGE - CAPA DE PERSISTENCIA
       localStorage.setItem('token', token);
       localStorage.setItem('role', userRole);
       localStorage.setItem('username', displayName); 
+      
+      // Si el usuario tiene unidad asignada (S4), la guardamos para que 'Material.jsx' la use
+      if (userElemento) {
+        localStorage.setItem('elemento', userElemento.toUpperCase().trim());
+      } else if (userRole === 'admin') {
+        localStorage.setItem('elemento', 'SECCIÓN AVIACIÓN EJÉRCITO'); // Fallback para Admin
+      }
 
       // Notificamos a App.jsx que el usuario está autenticado
       setAuth(true);
@@ -46,7 +54,7 @@ const Login = ({ setAuth }) => {
       // Capturamos el mensaje de error del backend (401, 400, 500)
       const message = err.response?.data?.message || err.message || 'Error de conexión con el servidor';
       setError(message);
-      console.error("Fallo en inicio de sesión:", err);
+      console.error("Fallo en inicio de sesión AE:", err);
     } finally {
       setLoading(false);
     }

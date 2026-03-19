@@ -22,6 +22,7 @@ function App() {
     }, []);
 
     // 2. Efecto de sincronización de seguridad
+    // Actualizado para capturar el rol correctamente tras el login
     useEffect(() => {
         const token = localStorage.getItem('token');
         const savedRole = localStorage.getItem('role');
@@ -41,6 +42,13 @@ function App() {
         setRole(null);
         setView('calendar');
     };
+
+    /**
+     * LÓGICA DE PERMISOS UNIFICADA
+     * Definimos quiénes pueden ver las pestañas críticas.
+     */
+    const puedeGestionarMaterial = role === 'admin' || role === 'S4' || role === 'S4_UNIDAD';
+    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'S4' || role === 'S4_UNIDAD';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif' }}>
@@ -93,7 +101,7 @@ function App() {
                             </button>
 
                             {/* BOTÓN GESTIÓN MATERIAL (SOLO S4 Y ADMIN) */}
-                            {(role === 'admin' || role === 'S4_UNIDAD') && (
+                            {puedeGestionarMaterial && (
                                 <button 
                                     onClick={() => setView('material')}
                                     style={{
@@ -119,7 +127,7 @@ function App() {
                             </button>
 
                             {/* BOTÓN OPERACIONES / CARGA */}
-                            {(role === 'admin' || role === 'user' || role === 'S4_UNIDAD') && (
+                            {puedeCargarOperaciones && (
                                 <button 
                                     onClick={() => setView('operaciones')}
                                     style={{
@@ -171,7 +179,7 @@ function App() {
                         if (view === 'stats') return <Estadisticas />;
                         if (view === 'operaciones') return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
-                        if (view === 'material' && (role === 'admin' || role === 'S4_UNIDAD')) return <Material />;
+                        if (view === 'material' && puedeGestionarMaterial) return <Material />;
                         return <CalendarPage />;
                     })()
                 )}
