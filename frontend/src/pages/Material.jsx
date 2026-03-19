@@ -6,8 +6,10 @@ const Material = () => {
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState(null); 
     
+    // Recuperamos datos de sesión
     const role = localStorage.getItem('role');
     const userElemento = localStorage.getItem('elemento');
+    const userName = localStorage.getItem('username') || 'Usuario';
 
     const sdaList = [
         "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
@@ -27,6 +29,7 @@ const Material = () => {
     const fetchMaterial = async () => {
         try {
             const { data } = await getAircrafts();
+            // Filtrado estricto por unidad si no es admin
             const filtrados = (role === 'admin' || role === 'boss') 
                 ? data 
                 : data.filter(a => String(a.unidad).trim() === String(userElemento).trim());
@@ -41,16 +44,26 @@ const Material = () => {
 
     const handleCreate = async (e) => {
         e.preventDefault();
+        
+        // Validación local de seguridad antes del envío
         if (!newAir.matricula || !newAir.sda) return alert("Complete los campos obligatorios");
+        if (!userElemento) return alert("Error de sesión: No se detectó tu unidad. Por favor, re-ingresa al sistema.");
 
         try {
-            await createAircraft({
-                ...newAir,
+            const payload = {
                 matricula: newAir.matricula.toUpperCase().trim(),
-                horasRemanentes: Number(newAir.horasRemanentes),
-                unidad: userElemento,
-                estado: 'E/S'
-            });
+                sda: newAir.sda,
+                horasRemanentes: Number(newAir.horasRemanentes) || 0,
+                unidad: userElemento.trim(), // Forzamos el envío de la unidad del localStorage
+                estado: 'E/S',
+                historial: [{
+                    fecha: new Date(),
+                    evento: `Alta de material por ${userName}`,
+                    detalle: `Unidad: ${userElemento}`
+                }]
+            };
+
+            await createAircraft(payload);
             setNewAir({ matricula: '', sda: '', horasRemanentes: 0 });
             fetchMaterial();
             alert("Aeronave dada de alta correctamente.");
@@ -63,10 +76,23 @@ const Material = () => {
     const handleUpdateField = async (id, updatedFields) => {
         try {
             const cleanFields = { ...updatedFields };
+            
+            // Procesamiento de datos
             if (cleanFields.horasRemanentes !== undefined) {
                 cleanFields.horasRemanentes = Number(cleanFields.horasRemanentes);
             }
-            if (cleanFields.matricula) cleanFields.matricula = cleanFields.matricula.toUpperCase().trim();
+            if (cleanFields.matricula) {
+                cleanFields.matricula = cleanFields.matricula.toUpperCase().trim();
+            }
+
+            // Lógica de Log de Auditoría para cambios de estado
+            if (cleanFields.estado) {
+                const airActual = aircrafts.find(a => a._id === id);
+                console.log(`Auditoría: ${userName} cambió ${airActual.matricula} a ${cleanFields.estado}`);
+                // Aquí el backend debería guardar el log, pero lo enviamos en el payload si es necesario
+                cleanFields.lastUpdateBy = userName;
+                cleanFields.lastUpdateDate = new Date();
+            }
 
             await updateAircraftStatus(id, cleanFields);
             
@@ -97,7 +123,7 @@ const Material = () => {
                 {/* FORMULARIO DE ALTA */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
-                    <p style={styles.infoText}>Registrar nueva aeronave para: <strong>{userElemento}</strong></p>
+                    <p style={styles.infoText}>Registrar nueva aeronave para: <strong>{userElemento || "No detectado"}</strong></p>
                     <form onSubmit={handleCreate} style={styles.form}>
                         <div style={styles.field}>
                             <label style={styles.label}>Matrícula (AE-XXX)</label>
@@ -135,7 +161,7 @@ const Material = () => {
                     </form>
                 </div>
 
-                {/* LOG DE GESTIÓN Y MODIFICACIÓN */}
+                {/* GESTIÓN Y LISTADO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>🛠️ Gestión de Estado y Mantenimiento</h3>
                     <div style={styles.scrollList}>
@@ -154,7 +180,6 @@ const Material = () => {
                                                     style={styles.inputSmallEdit}
                                                     defaultValue={air.matricula}
                                                     onBlur={(e) => handleUpdateField(air._id, { matricula: e.target.value })}
-                                                    placeholder="Matrícula"
                                                     autoFocus
                                                 />
                                                 <select 
@@ -170,6 +195,11 @@ const Material = () => {
                                             <div onClick={() => setEditingId(air._id)} style={{cursor: 'pointer'}}>
                                                 <div style={styles.itemMain}>{air.matricula} <span style={{fontSize: '0.7rem'}}>✏️</span></div>
                                                 <div style={styles.itemSub}>{air.sda}</div>
+                                                {air.lastUpdateBy && (
+                                                    <div style={{fontSize: '0.6rem', color: '#999', marginTop: '4px'}}>
+                                                        Modificado por: {air.lastUpdateBy}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
