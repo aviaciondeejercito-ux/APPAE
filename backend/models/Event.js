@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
  * Seguridad: Trazabilidad completa con logs de usuario integrados.
  * Estándar de Seguridad: Atómico, con soporte para BOSS (DIR AE) y Unidades.
- * Mejora: Flujo de Aprobación DIR AE y Segmentación por Elemento (1% Jackpot Standard Logic Applied to Data Integrity).
+ * Aplicado: Estándar de Seguridad Sincro Joker para Integridad de Datos.
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -15,7 +15,7 @@ const eventSchema = new mongoose.Schema({
     notes: { 
         type: String, 
         trim: true,
-        default: '' // Notas detalladas visibles al pasar el mouse (Tooltip)
+        default: '' 
     },
     start: { 
         type: Date, 
@@ -31,9 +31,8 @@ const eventSchema = new mongoose.Schema({
     },
     color: { 
         type: String, 
-        default: '#1b3a57' // Azul AE por defecto
+        default: '#1b3a57' 
     },
-    // Ajustado para coincidir con la dinámica del monitor operativo
     type: { 
         type: String, 
         default: 'operativo' 
@@ -48,7 +47,7 @@ const eventSchema = new mongoose.Schema({
     tipoApoyo: {
         type: String,
         trim: true,
-        default: '' // Ej: "Fuerza Operativa", "Sostenimiento", "Educación"
+        default: '' 
     },
     
     // Campo crítico para el almacenamiento de medios aéreos
@@ -65,7 +64,8 @@ const eventSchema = new mongoose.Schema({
     },
     etapa: {
         type: String,
-        enum: ['recepcion', 'revision', 'ordenada'],
+        // Se mantienen los originales y se asegura compatibilidad con etiquetas del frontend
+        enum: ['recepcion', 'revision', 'ordenada', 'solicitud'],
         default: 'recepcion',
         required: true,
         index: true
@@ -78,7 +78,7 @@ const eventSchema = new mongoose.Schema({
     },
     esGlobal: { 
         type: Boolean, 
-        default: false // Si es TRUE, el BOSS lo hace visible para todas las unidades
+        default: false 
     },
 
     // --- SECCIÓN DE AUDITORÍA Y SEGURIDAD ---
@@ -87,27 +87,35 @@ const eventSchema = new mongoose.Schema({
         ref: 'User', 
         required: true 
     },
+    updatedBy: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'User'
+    },
     userName: { 
         type: String, 
-        required: true // Jerarquía y Nombre del operador
+        required: true 
     }
 }, { 
-    timestamps: true // Auditoría de creación y última modificación
+    timestamps: true 
 });
 
 /**
  * VALIDACIÓN DE SEGURIDAD ATÓMICA:
- * Middleware que previene errores lógicos de fechas y limpia datos antes de persistir.
+ * Previene errores lógicos de fechas y asegura integridad de color.
  */
 eventSchema.pre('validate', function(next) {
     if (this.start && this.end) {
-        if (this.end < this.start) {
+        // Asegurar que sean objetos Date para la comparación
+        const dStart = new Date(this.start);
+        const dEnd = new Date(this.end);
+
+        if (dEnd < dStart) {
             this.invalidate('end', 'La fecha de finalización debe ser posterior a la de inicio');
         }
     }
     
-    // Aseguramos que el color siempre tenga el formato correcto para el frontend
-    if (!this.color.startsWith('#')) {
+    // Normalización de color
+    if (this.color && !this.color.startsWith('#')) {
         this.color = '#1b3a57';
     }
     
@@ -116,7 +124,7 @@ eventSchema.pre('validate', function(next) {
 
 // ÍNDICES PARA ALTA DISPONIBILIDAD OPERATIVA
 eventSchema.index({ start: 1, end: 1 });
-eventSchema.index({ elemento: 1, etapa: 1 }); // Optimización para filtrado BOSS/Unidad
+eventSchema.index({ elemento: 1, etapa: 1 }); 
 eventSchema.index({ esGlobal: 1 }); 
 eventSchema.index({ createdBy: 1 });
 eventSchema.index({ createdAt: -1 }); 

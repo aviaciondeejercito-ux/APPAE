@@ -4,7 +4,6 @@ const Event = require('../models/Event');
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
  * Seguridad: Validación de roles, trazabilidad y permisos diferenciados.
  * Estándar actualizado: BOSS y ADMIN (Control Total y Gestión Global).
- * Flujo de Aprobación DIR AE: Recepción -> Revisión -> Ordenada.
  */
 
 // @desc    Obtener eventos filtrados por jerarquía, unidad y estado de aprobación
@@ -13,23 +12,13 @@ const getEvents = async (req, res) => {
         const { elemento, role } = req.user; 
         let query = {};
 
-        /**
-         * LÓGICA DE VISIÓN TOTAL (DIR AE / ADMIN / BOSS):
-         * Acceso completo a todas las etapas del flujo de trabajo y todas las unidades.
-         */
         if (role === 'admin' || role === 'boss' || elemento === 'DIR AE') {
             query = {}; 
         } 
-        /**
-         * LÓGICA DE UNIDAD (FILTRO DE SEGURIDAD OPERATIVA):
-         * Una unidad solo ve:
-         * 1. Sus propios eventos (locales).
-         * 2. Eventos donde es destinataria Y están en etapa 'ordenada'.
-         */
         else {
             query = {
                 $or: [
-                    { elemento: { $regex: elemento, $options: 'i' } }, // Actividades donde la unidad está mencionada
+                    { elemento: { $regex: elemento, $options: 'i' } },
                     { 
                         $and: [
                             { etapa: 'ordenada' }, 
@@ -56,7 +45,6 @@ const getEvents = async (req, res) => {
 // @desc    Crear un nuevo evento con segmentación de etapa y destino
 const createEvent = async (req, res) => {
     try {
-        // Capturamos sdaListado explícitamente del body
         const { 
             title, start, end, notes, color, esGlobal, 
             elemento, etapa, tipoApoyo, sdaListado 
@@ -75,10 +63,9 @@ const createEvent = async (req, res) => {
             notes: notes || '', 
             color: color || '#1b3a57',
             tipoApoyo: tipoApoyo || '',
-            sdaListado: sdaListado || [], // Persistencia del array de medios
+            sdaListado: sdaListado || [], 
             createdBy: req.user._id,
             userName: req.user.username,
-            // Si es Mando, el 'elemento' puede ser una lista de unidades. Si no, su unidad.
             elemento: (isMando && elemento) ? elemento : req.user.elemento,
             etapa: etapa || 'recepcion', 
             tipoOrigen: isMando ? 'COMANDO' : 'LOCAL',
@@ -99,7 +86,6 @@ const updateEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'Evento no localizado.' });
 
-        // SEGURIDAD: Solo el creador, el ADMIN o el BOSS pueden editar.
         const esDuenio = event.createdBy && event.createdBy.toString() === req.user._id.toString();
         const esMando = req.user.role === 'admin' || req.user.role === 'boss';
 
@@ -107,17 +93,18 @@ const updateEvent = async (req, res) => {
             return res.status(403).json({ message: 'No tiene permisos para modificar esta orden.' });
         }
 
-        // Preparamos los datos para actualización atómica
-        const updateData = { 
-            ...req.body,
-            userName: req.user.username // Trazabilidad de quién editó por última vez
-        };
+        // --- SOLUCIÓN ERROR 400: Limpieza de datos críticos ---
+        const updateData = { ...req.body };
+        delete updateData._id; // Evita error de modificación de ID inmutable
+        delete updateData.__v;
         
-        // Conversión de fechas para asegurar formato Date en MongoDB
+        updateData.userName = req.user.username; // Trazabilidad obligatoria
+
+        // Conversión explícita de fechas para pasar validación de Schema
         if (updateData.start) updateData.start = new Date(updateData.start);
         if (updateData.end) updateData.end = new Date(updateData.end);
 
-        // Si un usuario NO es mando, no puede cambiar el campo esGlobal ni la etapa por fuerza
+        // Restricciones de seguridad por Rol
         if (!esMando) {
             delete updateData.esGlobal;
             delete updateData.etapa;
@@ -125,14 +112,18 @@ const updateEvent = async (req, res) => {
 
         const updatedEvent = await Event.findByIdAndUpdate(
             req.params.id,
-            { $set: updateData }, // Usamos $set para seguridad atómica
+            { $set: updateData }, 
             { new: true, runValidators: true }
         );
 
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        res.status(400).json({ message: 'Fallo al actualizar el registro operativo.' });
+        // Enviamos el mensaje de error específico de Mongoose si existe para debug
+        res.status(400).json({ 
+            message: 'Fallo al actualizar el registro operativo.',
+            details: error.message 
+        });
     }
 };
 
@@ -142,7 +133,6 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'El evento no existe.' });
 
-        // SEGURIDAD MÁXIMA: Solo BOSS y ADMIN pueden borrar registros operativos.
         if (req.user.role !== 'admin' && req.user.role !== 'boss') {
             return res.status(403).json({ message: 'Baja denegada: Requiere nivel BOSS o superior.' });
         }
