@@ -96,7 +96,10 @@ exports.resetPassword = async (req, res) => {
 exports.deleteUser = async (req, res) => {
     try {
         // SEGURIDAD: Bloqueo de auto-eliminación
-        if (req.user && req.params.id === req.user._id.toString()) {
+        // Verificamos si req.user existe (inyectado por authMiddleware)
+        const requesterId = req.user ? req.user._id.toString() : null;
+
+        if (requesterId && req.params.id === requesterId) {
             return res.status(400).json({ 
                 success: false, 
                 message: 'Operación denegada: Un administrador no puede darse de baja a sí mismo.' 
@@ -114,5 +117,26 @@ exports.deleteUser = async (req, res) => {
     } catch (error) {
         console.error('Error en deleteUser:', error);
         res.status(500).json({ success: false, message: 'Error al procesar la baja' });
+    }
+};
+
+// @desc    Obtener estadísticas rápidas (Para AdminPanel)
+// @route   GET /api/admin/stats
+exports.getAdminStats = async (req, res) => {
+    try {
+        const totalUsers = await User.countDocuments();
+        const admins = await User.countDocuments({ role: 'admin' });
+        const s4Unidades = await User.countDocuments({ role: 'S4_UNIDAD' });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalUsers,
+                admins,
+                s4Unidades
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error al obtener estadísticas' });
     }
 };

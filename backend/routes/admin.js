@@ -9,6 +9,8 @@ const authMiddleware = require('../middleware/authMiddleware');
  * 'authorize' verifica el nivel de comando (Rol).
  */
 const { authorize } = require('../middleware/rolecheck');
+
+// Verificación de compatibilidad de nombres en el middleware de autenticación
 const protect = authMiddleware.protect || authMiddleware.verifyToken;
 
 /**
@@ -28,19 +30,20 @@ if (typeof protect === 'function') {
  * - S4_UNIDAD / S4: Gestión de Material y Personal de su elemento.
  */
 
-// --- NUEVO: ENDPOINT DE ESTADÍSTICAS ESTRATÉGICAS ---
+// --- SECCIÓN: ESTADÍSTICAS ESTRATÉGICAS ---
 
 // @route   GET /api/admin/stats
 // @desc    Obtener métricas de disponibilidad y operatividad
 // @access  RESTRINGIDO: Solo ADMIN y BOSS (User y S4 bloqueados)
-router.get('/stats', authorize('admin', 'boss'), adminController.getStats);
+// SOLUCIÓN: Cambiado 'getStats' por 'getAdminStats' para coincidir con el controlador.
+router.get('/stats', authorize('admin', 'boss'), adminController.getAdminStats);
 
 
-// --- ENDPOINTS DE GESTIÓN DE PERSONAL Y MATERIAL ---
+// --- SECCIÓN: GESTIÓN DE PERSONAL Y MATERIAL ---
 
 // @route   GET /api/admin/users
-// @desc    Obtener lista de personal y aeronaves (Escalafón)
-// Permiso: BOSS, S4 y ADMIN.
+// @desc    Obtener lista de personal (Escalafón)
+// Permiso: BOSS, S4_UNIDAD y ADMIN.
 router.get('/users', authorize('admin', 'boss', 's4', 'S4_UNIDAD'), adminController.getAllUsers);
 
 // @route   PUT /api/admin/users/:id/role
@@ -50,12 +53,12 @@ router.put('/users/:id/role', authorize('admin', 'boss'), adminController.update
 
 // @route   PUT /api/admin/users/:id/password
 // @desc    Reseteo de contraseña (GDE)
-// Permiso: ADMIN, BOSS y S4 (Para facilitar la operatividad en la unidad).
+// Permiso: ADMIN, BOSS y S4_UNIDAD.
 router.put('/users/:id/password', authorize('admin', 'boss', 's4', 'S4_UNIDAD'), adminController.resetPassword);
 
 // @route   DELETE /api/admin/users/:id
 // @desc    Baja definitiva del sistema
-// Permiso: EXCLUSIVO ADMIN (Seguridad máxima en eliminaciones).
+// Permiso: EXCLUSIVO ADMIN (Seguridad máxima en eliminaciones por integridad de datos).
 router.delete('/users/:id', authorize('admin'), adminController.deleteUser);
 
 module.exports = router;
