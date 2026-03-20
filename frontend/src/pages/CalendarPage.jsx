@@ -8,28 +8,24 @@ import { getEvents } from '../services/api';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
-    // Normalizamos el rol a minúsculas
     const [role] = useState(localStorage.getItem('role')?.toLowerCase());
     const [userUnidad] = useState(localStorage.getItem('elemento')); 
     const [selectedEvent, setSelectedEvent] = useState(null); 
     const [isMobile] = useState(window.innerWidth < 768);
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => { 
+        fetchData(); 
+    }, []);
 
     const fetchData = async () => {
         try {
-            const { data } = await getEvents();
-            
-            // LÓGICA DE VISIBILIDAD CRÍTICA:
-            // 1. Admin/Boss ven TODO.
-            // 2. S4/User ven lo de su UNIDAD O lo que sea GLOBAL (esGlobal === true).
-            const filteredData = (role === 'admin' || role === 'boss')
-                ? data
-                : data.filter(ev => (ev.elemento?.includes(userUnidad)) || ev.esGlobal === true);
-
-            setEvents(filteredData);
+            const response = await getEvents();
+            // El backend ya realiza el filtrado de seguridad atómico.
+            // Simplemente validamos que la data exista y la seteamos.
+            const data = response.data || response; 
+            setEvents(Array.isArray(data) ? data : []);
         } catch (error) { 
-            console.error("Error de conexión con el servidor AE"); 
+            console.error("❌ Error de sincronización con el Monitor AE:", error); 
         }
     };
 
@@ -46,28 +42,29 @@ const CalendarPage = () => {
             elemento: event.extendedProps.elemento,
             etapa: event.extendedProps.etapa,
             tipoApoyo: event.extendedProps.tipoApoyo,
-            esGlobal: event.extendedProps.esGlobal
+            esGlobal: event.extendedProps.esGlobal,
+            sdaListado: event.extendedProps.sdaListado || []
         });
     };
 
     const closeModal = () => setSelectedEvent(null);
 
-    // Lógica de visualización de colores, bordes y estados
     const eventDidMount = (info) => {
         const { tipoOrigen, esGlobal, etapa } = info.event.extendedProps;
         
-        // Estilo de Comando / Global (Borde Dorado)
+        // Estilo de Comando / Global (Borde Dorado y Realce)
         if (tipoOrigen === 'COMANDO' || esGlobal) {
             info.el.style.border = '2px solid #FFD700'; 
+            info.el.style.boxShadow = '0 0 5px rgba(255, 215, 0, 0.5)';
             info.el.style.fontWeight = 'bold';
         }
 
-        // Opacidad según etapa (Visualización jerárquica)
+        // Opacidad y Estilo según etapa del flujo DIR AE
         if (etapa === 'recepcion') {
             info.el.style.opacity = '0.7'; 
             info.el.style.borderStyle = 'dashed';
         } else if (etapa === 'revision') {
-            info.el.style.opacity = '0.85';
+            info.el.style.opacity = '0.9';
         }
     };
 
@@ -86,7 +83,7 @@ const CalendarPage = () => {
                 <div style={styles.headerMonitor}>
                     <h2 style={styles.title}>🗓️ Monitor de Actividades Operativas</h2>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <span style={styles.unidadBadge}>{userUnidad || "No detectado"}</span>
+                        <span style={styles.unidadBadge}>{userUnidad || "SIN UNIDAD"}</span>
                         <span style={styles.modeBadge}>
                             {role === 'boss' || role === 'admin' ? `MODO: COMANDO (${role.toUpperCase()})` : 'MODO: UNIDAD (S4)'}
                         </span>
@@ -99,12 +96,10 @@ const CalendarPage = () => {
                     locale={esLocale}
                     events={events.map(ev => ({
                         id: ev._id,
-                        // Si es global, le ponemos el icono de mundo en el título del calendario
                         title: `${ev.esGlobal ? '🌐 ' : ''}${ev.tipoApoyo ? `[${ev.tipoApoyo}] ` : ''}${ev.title}`,
                         start: ev.start,
                         end: ev.end,
-                        // El color de fondo es el de la etapa, salvo que sea Comando directo
-                        backgroundColor: ev.tipoOrigen === 'COMANDO' ? '#1b3a57' : ev.color, 
+                        backgroundColor: ev.tipoOrigen === 'COMANDO' ? '#1b3a57' : (ev.color || '#1b3a57'), 
                         borderColor: 'transparent',
                         extendedProps: { 
                             notes: ev.notes, 
@@ -113,7 +108,8 @@ const CalendarPage = () => {
                             elemento: ev.elemento,
                             esGlobal: ev.esGlobal,
                             etapa: ev.etapa,
-                            tipoApoyo: ev.tipoApoyo
+                            tipoApoyo: ev.tipoApoyo,
+                            sdaListado: ev.sdaListado
                         }
                     }))}
                     height="75vh"
@@ -125,8 +121,8 @@ const CalendarPage = () => {
                         center: 'title', 
                         right: isMobile ? 'timeGridDay,dayGridMonth' : 'dayGridMonth,timeGridWeek,timeGridDay'
                     }}
-                    eventTimeFormat={{ hour: '2-digit', minute: '2-digit', meridian: false, hour12: false }}
-                    dayMaxEvents={isMobile ? 2 : 4}
+                    eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+                    dayMaxEvents={isMobile ? 2 : 5}
                     nowIndicator={true}
                 />
             </div>
@@ -148,15 +144,20 @@ const CalendarPage = () => {
 
                             <div style={styles.infoRow}>
                                 <strong>🏢 Unidades Involucradas:</strong> 
-                                <span style={{ color: '#1b3a57', fontWeight: 'bold' }}>
-                                    {selectedEvent.elemento}
-                                </span>
+                                <span style={{ color: '#1b3a57', fontWeight: 'bold' }}>{selectedEvent.elemento}</span>
                             </div>
                             <hr style={styles.divider} />
                             
                             <div style={styles.infoRow}>
-                                <strong>🚁 Tipo de Apoyo:</strong> 
+                                <strong>🚁 Tipo de Apoyo y Medios:</strong> 
                                 <span>{selectedEvent.tipoApoyo || 'No especificado'}</span>
+                                {selectedEvent.sdaListado?.length > 0 && (
+                                    <div style={styles.sdaContainer}>
+                                        {selectedEvent.sdaListado.map((sda, idx) => (
+                                            <span key={idx} style={styles.sdaBadge}>⚙️ {sda}</span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                             <hr style={styles.divider} />
 
@@ -205,6 +206,8 @@ const styles = {
     infoRow: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.95rem' },
     divider: { border: 'none', borderBottom: '1px solid #eee', margin: '12px 0' },
     badge: { background: '#e9ecef', padding: '4px 12px', borderRadius: '15px', fontSize: '0.8rem', width: 'fit-content' },
+    sdaContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '8px' },
+    sdaBadge: { background: '#f1f4f8', color: '#1b3a57', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid #d1d9e6' },
     notesBox: { marginTop: '10px' },
     notesText: { background: '#f8f9fa', padding: '10px', borderRadius: '8px', fontSize: '0.9rem', color: '#444', whiteSpace: 'pre-line' },
     modalFooter: { padding: '15px 20px', borderTop: '1px solid #eee', textAlign: 'right' },
