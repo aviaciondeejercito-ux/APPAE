@@ -5,8 +5,8 @@ const Material = () => {
     const [aircrafts, setAircrafts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState(null); 
+    const [selectedNote, setSelectedNote] = useState(null); // Para el Pop-up de notas
     
-    // Recuperamos datos de sesión con fallback para evitar "No detectado"
     const role = localStorage.getItem('role');
     const userElemento = localStorage.getItem('elemento')?.trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
@@ -19,7 +19,8 @@ const Material = () => {
     const [newAir, setNewAir] = useState({
         matricula: '',
         sda: '',
-        horasRemanentes: 0
+        horasRemanentes: 0,
+        notas: '' // Nuevo campo en el alta
     });
 
     useEffect(() => {
@@ -32,8 +33,6 @@ const Material = () => {
         try {
             setLoading(true);
             const { data } = await getAircrafts();
-            
-            // Filtro de seguridad: Admin/Boss ven todo, S4 solo su unidad
             const filtrados = (role === 'admin' || role === 'boss') 
                 ? data 
                 : data.filter(a => 
@@ -41,7 +40,6 @@ const Material = () => {
                     userElemento && 
                     String(a.unidad).toUpperCase() === String(userElemento).toUpperCase()
                 );
-            
             setAircrafts(filtrados);
             setLoading(false);
         } catch (error) {
@@ -52,234 +50,195 @@ const Material = () => {
 
     const handleCreate = async (e) => {
         e.preventDefault();
-        
-        // Validación estricta de campos obligatorios
-        if (!newAir.matricula || !newAir.sda) return alert("Faltan campos obligatorios (Matrícula o SdA)");
-        if (!userElemento) return alert("Error Local: No se detectó la Unidad en su sesión. Re-ingrese al sistema.");
+        if (!newAir.matricula || !newAir.sda) return alert("Faltan campos obligatorios");
+        if (!userElemento) return alert("Error de sesión: Unidad no detectada.");
 
         try {
             const payload = {
                 matricula: newAir.matricula.toUpperCase().trim(),
                 sda: newAir.sda,
                 horasRemanentes: Number(newAir.horasRemanentes) || 0,
-                unidad: userElemento, // Asignación automática por seguridad
+                unidad: userElemento,
                 estado: 'E/S',
+                notas: newAir.notas ? `[${new Date().toLocaleDateString()}] ${userName}: ${newAir.notas}` : '',
                 historial: [{
                     fecha: new Date(),
                     evento: `Alta de material por ${userName}`,
-                    detalle: `Unidad asignada: ${userElemento}`
+                    detalle: `Unidad: ${userElemento}`
                 }]
             };
 
             await createAircraft(payload);
-            setNewAir({ matricula: '', sda: '', horasRemanentes: 0 });
-            await fetchMaterial(); // Refrescar lista post-creación
-            alert("Aeronave dada de alta correctamente.");
+            setNewAir({ matricula: '', sda: '', horasRemanentes: 0, notas: '' });
+            await fetchMaterial();
+            alert("Aeronave registrada.");
         } catch (error) {
-            const msg = error.response?.data?.message || "Error al dar de alta el material.";
-            alert(msg);
+            alert("Error al dar de alta el material.");
         }
     };
 
     const handleUpdateField = async (id, updatedFields) => {
         try {
-            const cleanFields = { ...updatedFields };
-            
-            if (cleanFields.horasRemanentes !== undefined) {
-                cleanFields.horasRemanentes = Number(cleanFields.horasRemanentes);
-            }
-            if (cleanFields.matricula) {
-                cleanFields.matricula = cleanFields.matricula.toUpperCase().trim();
+            const targetAir = aircrafts.find(a => a._id === id);
+            if (!targetAir) return;
+
+            if (role !== 'admin' && role !== 'boss' && targetAir.unidad !== userElemento) {
+                return alert("Seguridad: No tiene permisos sobre esta unidad.");
             }
 
-            if (cleanFields.estado) {
-                cleanFields.lastUpdateBy = userName;
-                cleanFields.lastUpdateDate = new Date();
-            }
+            const cleanFields = { ...updatedFields };
+            if (cleanFields.horasRemanentes !== undefined) cleanFields.horasRemanentes = Number(cleanFields.horasRemanentes);
+            if (cleanFields.matricula) cleanFields.matricula = cleanFields.matricula.toUpperCase().trim();
+
+            cleanFields.lastUpdateBy = userName;
+            cleanFields.lastUpdateDate = new Date();
 
             await updateAircraftStatus(id, cleanFields);
-            
-            // Actualización optimista del estado local
             setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...cleanFields } : a));
             if (editingId) setEditingId(null);
         } catch (error) {
-            alert("Error al actualizar datos en el servidor.");
+            alert("Error al actualizar servidor.");
         }
+    };
+
+    const handleSaveNote = async (id, text) => {
+        const fullNote = `[${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}] ${userName}: ${text}`;
+        await handleUpdateField(id, { notas: fullNote });
+        alert("Novedad actualizada.");
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm("¿Está seguro de eliminar esta aeronave del registro oficial?")) return;
+        if (!window.confirm("¿Confirmar eliminación del registro oficial?")) return;
         try {
             await deleteAircraft(id);
             setAircrafts(prev => prev.filter(a => a._id !== id));
-            alert("Registro eliminado.");
         } catch (error) {
-            alert("No se pudo eliminar el registro. Verifique permisos.");
+            alert("Error al eliminar.");
         }
     };
 
-    if (loading) return <div style={styles.loader}>Cargando inventario de unidad...</div>;
+    if (loading) return <div style={styles.loader}>Sincronizando material aéreo...</div>;
 
     return (
         <div style={styles.container}>
             <div style={styles.grid}>
                 
-                {/* FORMULARIO DE ALTA */}
+                {/* ALTA DE MATERIAL */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
-                    <p style={styles.infoText}>
-                        Registrar nueva aeronave para: <strong>{userElemento || "⚠️ No detectado"}</strong>
-                    </p>
                     <form onSubmit={handleCreate} style={styles.form}>
                         <div style={styles.field}>
                             <label style={styles.label}>Matrícula (AE-XXX)</label>
-                            <input 
-                                type="text" 
-                                placeholder="Ej: AE-432" 
-                                value={newAir.matricula} 
-                                onChange={e => setNewAir({...newAir, matricula: e.target.value})} 
-                                style={styles.input} 
-                                required
-                            />
+                            <input type="text" value={newAir.matricula} onChange={e => setNewAir({...newAir, matricula: e.target.value})} style={styles.input} required />
                         </div>
                         <div style={styles.field}>
                             <label style={styles.label}>Sistema de Armas</label>
-                            <select 
-                                value={newAir.sda} 
-                                onChange={e => setNewAir({...newAir, sda: e.target.value})} 
-                                style={styles.input} 
-                                required
-                            >
+                            <select value={newAir.sda} onChange={e => setNewAir({...newAir, sda: e.target.value})} style={styles.input} required>
                                 <option value="">Seleccione SdA...</option>
                                 {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
                         <div style={styles.field}>
-                            <label style={styles.label}>Horas Remanentes Iniciales</label>
-                            <input 
-                                type="number" 
-                                value={newAir.horasRemanentes} 
-                                onChange={e => setNewAir({...newAir, horasRemanentes: e.target.value})} 
-                                style={styles.input}
-                            />
+                            <label style={styles.label}>Horas Remanentes</label>
+                            <input type="number" value={newAir.horasRemanentes} onChange={e => setNewAir({...newAir, horasRemanentes: e.target.value})} style={styles.input} />
                         </div>
-                        <button type="submit" style={styles.btnPrimary}>Dar de Alta en Unidad</button>
+                        <div style={styles.field}>
+                            <label style={styles.label}>Novedades Iniciales</label>
+                            <textarea value={newAir.notas} onChange={e => setNewAir({...newAir, notas: e.target.value})} style={{...styles.input, height: '60px', resize: 'none'}} placeholder="Ej: Próxima inspección de 100hs..." />
+                        </div>
+                        <button type="submit" style={styles.btnPrimary}>Registrar en {userElemento}</button>
                     </form>
                 </div>
 
-                {/* GESTIÓN Y LISTADO */}
+                {/* LISTADO Y GESTIÓN */}
                 <div style={styles.card}>
-                    <h3 style={styles.title}>🛠️ Gestión de Estado y Mantenimiento</h3>
+                    <h3 style={styles.title}>🛠️ Gestión y Novedades</h3>
                     <div style={styles.scrollList}>
-                        {aircrafts.length === 0 ? (
-                            <p style={styles.empty}>No hay material cargado o asignado a esta unidad ({userElemento}).</p>
-                        ) : (
-                            aircrafts.map(air => (
-                                <div key={air._id} style={{
-                                    ...styles.item,
-                                    borderLeft: air.estado === 'E/S' ? '6px solid #28a745' : '6px solid #e74c3c'
-                                }}>
-                                    <div style={{flex: 1.5}}>
-                                        {editingId === air._id ? (
-                                            <div style={styles.editForm}>
-                                                <input 
-                                                    style={styles.inputSmallEdit}
-                                                    defaultValue={air.matricula}
-                                                    onBlur={(e) => handleUpdateField(air._id, { matricula: e.target.value })}
-                                                    autoFocus
-                                                />
-                                                <select 
-                                                    style={styles.selectSmall}
-                                                    defaultValue={air.sda}
-                                                    onChange={(e) => handleUpdateField(air._id, { sda: e.target.value })}
-                                                >
-                                                    {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
-                                                </select>
-                                                <button onClick={() => setEditingId(null)} style={styles.btnOk}>Confirmar</button>
-                                            </div>
-                                        ) : (
-                                            <div onClick={() => setEditingId(air._id)} style={{cursor: 'pointer'}}>
-                                                <div style={styles.itemMain}>{air.matricula} <span style={{fontSize: '0.7rem'}}>✏️</span></div>
-                                                <div style={styles.itemSub}>{air.sda}</div>
-                                                {air.lastUpdateBy && (
-                                                    <div style={{fontSize: '0.6rem', color: '#999', marginTop: '4px'}}>
-                                                        Modificado por: {air.lastUpdateBy}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div style={styles.actions}>
-                                        <div style={styles.controlGroup}>
-                                            <label style={styles.tinyLabel}>ESTADO</label>
-                                            <select 
-                                                value={air.estado} 
-                                                onChange={(e) => handleUpdateField(air._id, { estado: e.target.value })}
-                                                style={{...styles.selectSmall, color: air.estado === 'E/S' ? '#28a745' : '#e74c3c'}}
-                                            >
-                                                <option value="E/S">E/S</option>
-                                                <option value="F/S">F/S</option>
-                                            </select>
-                                        </div>
-
-                                        <div style={styles.controlGroup}>
-                                            <label style={styles.tinyLabel}>HS REM</label>
-                                            <input 
-                                                type="number" 
-                                                value={air.horasRemanentes} 
-                                                onChange={(e) => handleUpdateField(air._id, { horasRemanentes: e.target.value })}
-                                                style={styles.inputSmall}
-                                            />
-                                        </div>
-
-                                        {(role === 'admin') && (
-                                            <button 
-                                                onClick={() => handleDelete(air._id)} 
-                                                style={styles.btnDelete}
-                                                title="Eliminar registro"
-                                            >
-                                                🗑️
-                                            </button>
-                                        )}
-                                    </div>
+                        {aircrafts.map(air => (
+                            <div key={air._id} style={{...styles.item, borderLeft: air.estado === 'E/S' ? '6px solid #28a745' : '6px solid #e74c3c'}}>
+                                <div style={{flex: 1.2}}>
+                                    <div style={styles.itemMain}>{air.matricula}</div>
+                                    <div style={styles.itemSub}>{air.sda}</div>
+                                    <button onClick={() => setSelectedNote(air)} style={styles.btnNoteTrigger}>
+                                        {air.notas ? "📋 Ver Novedades" : "➕ Agregar Nota"}
+                                    </button>
                                 </div>
-                            ))
-                        )}
+
+                                <div style={styles.actions}>
+                                    <div style={styles.controlGroup}>
+                                        <label style={styles.tinyLabel}>ESTADO</label>
+                                        <select value={air.estado} onChange={(e) => handleUpdateField(air._id, { estado: e.target.value })} style={{...styles.selectSmall, color: air.estado === 'E/S' ? '#28a745' : '#e74c3c'}}>
+                                            <option value="E/S">E/S</option>
+                                            <option value="F/S">F/S</option>
+                                        </select>
+                                    </div>
+                                    <div style={styles.controlGroup}>
+                                        <label style={styles.tinyLabel}>HS REM</label>
+                                        <input type="number" value={air.horasRemanentes} onChange={(e) => handleUpdateField(air._id, { horasRemanentes: e.target.value })} style={styles.inputSmall} />
+                                    </div>
+                                    {role === 'admin' && <button onClick={() => handleDelete(air._id)} style={styles.btnDelete}>🗑️</button>}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
+
+            {/* POP-UP MODAL DE NOVEDADES */}
+            {selectedNote && (
+                <div style={styles.modalOverlay}>
+                    <div style={styles.modal}>
+                        <h4 style={{marginTop: 0, color: '#1b3a57'}}>Novedades: {selectedNote.matricula}</h4>
+                        <div style={styles.noteContent}>
+                            {selectedNote.notas || "Sin novedades registradas."}
+                        </div>
+                        <textarea 
+                            id="newNoteText"
+                            placeholder="Escribir nueva novedad..." 
+                            style={{...styles.input, width: '100%', height: '80px', marginTop: '15px', boxSizing: 'border-box'}}
+                        />
+                        <div style={{display: 'flex', gap: '10px', marginTop: '15px'}}>
+                            <button onClick={() => {
+                                const val = document.getElementById('newNoteText').value;
+                                if(val) handleSaveNote(selectedNote._id, val);
+                                setSelectedNote(null);
+                            }} style={{...styles.btnPrimary, flex: 1, margin: 0}}>Guardar Nota</button>
+                            <button onClick={() => setSelectedNote(null)} style={styles.btnCancel}>Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
-// Estilos se mantienen iguales por tu petición de no tocar lo funcional/visual existente
 const styles = {
     container: { padding: '25px', maxWidth: '1200px', margin: '0 auto' },
-    grid: { display: 'grid', gridTemplateColumns: window.innerWidth < 800 ? '1fr' : '1fr 1.5fr', gap: '25px' },
+    grid: { display: 'grid', gridTemplateColumns: window.innerWidth < 900 ? '1fr' : '1fr 1.5fr', gap: '25px' },
     card: { background: 'white', padding: '25px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', border: '1px solid #f0f2f5' },
-    title: { marginTop: 0, marginBottom: '20px', fontSize: '1.2rem', color: '#1b3a57', borderBottom: '2px solid #f8f9fa', paddingBottom: '10px' },
-    infoText: { fontSize: '0.85rem', color: '#666', marginBottom: '20px' },
-    form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    field: { display: 'flex', flexDirection: 'column', gap: '5px' },
-    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#555' },
-    tinyLabel: { fontSize: '0.65rem', fontWeight: 'bold', color: '#999', textAlign: 'center' },
-    input: { padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem' },
-    btnPrimary: { background: '#1b3a57', color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' },
-    scrollList: { maxHeight: '600px', overflowY: 'auto' },
-    item: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', background: '#fcfcfc', borderRadius: '8px', marginBottom: '10px', border: '1px solid #eee' },
-    itemMain: { fontWeight: 'bold', fontSize: '1rem', color: '#1b3a57' },
-    itemSub: { fontSize: '0.8rem', color: '#777' },
-    actions: { display: 'flex', gap: '12px', alignItems: 'center' },
-    controlGroup: { display: 'flex', flexDirection: 'column', gap: '3px' },
-    selectSmall: { padding: '5px', borderRadius: '5px', border: '1px solid #ccc', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' },
-    inputSmall: { width: '65px', padding: '5px', borderRadius: '5px', border: '1px solid #ccc', textAlign: 'center', fontSize: '0.85rem' },
-    inputSmallEdit: { padding: '5px', borderRadius: '5px', border: '1px solid #1b3a57', fontSize: '0.85rem', width: '120px', marginBottom: '5px' },
-    editForm: { display: 'flex', flexDirection: 'column', gap: '5px' },
-    btnOk: { background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.75rem', padding: '5px', cursor: 'pointer' },
-    btnDelete: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '5px' },
-    empty: { textAlign: 'center', padding: '40px', color: '#999', fontSize: '0.9rem' },
-    loader: { textAlign: 'center', marginTop: '100px', fontWeight: 'bold', color: '#1b3a57' }
+    title: { marginTop: 0, marginBottom: '20px', fontSize: '1.1rem', color: '#1b3a57', borderBottom: '2px solid #f8f9fa', paddingBottom: '10px', fontWeight: 'bold' },
+    form: { display: 'flex', flexDirection: 'column', gap: '12px' },
+    field: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#555', textTransform: 'uppercase' },
+    input: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem', outline: 'none' },
+    btnPrimary: { background: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
+    scrollList: { maxHeight: '600px', overflowY: 'auto', paddingRight: '5px' },
+    item: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', background: '#fcfcfc', borderRadius: '10px', marginBottom: '12px', border: '1px solid #eee' },
+    itemMain: { fontWeight: 'bold', fontSize: '1.1rem', color: '#1b3a57' },
+    itemSub: { fontSize: '0.8rem', color: '#777', marginBottom: '8px' },
+    btnNoteTrigger: { background: '#eef2f7', border: 'none', color: '#1b3a57', padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' },
+    actions: { display: 'flex', gap: '10px', alignItems: 'center' },
+    controlGroup: { display: 'flex', flexDirection: 'column', gap: '2px' },
+    tinyLabel: { fontSize: '0.6rem', fontWeight: 'bold', color: '#999', textAlign: 'center' },
+    selectSmall: { padding: '6px', borderRadius: '6px', border: '1px solid #ccc', fontWeight: 'bold', fontSize: '0.8rem' },
+    inputSmall: { width: '60px', padding: '6px', borderRadius: '6px', border: '1px solid #ccc', textAlign: 'center', fontSize: '0.8rem' },
+    btnDelete: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' },
+    loader: { textAlign: 'center', marginTop: '100px', fontWeight: 'bold', color: '#1b3a57' },
+    // Estilos del Modal
+    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+    modal: { background: 'white', padding: '25px', borderRadius: '15px', width: '90%', maxWidth: '450px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' },
+    noteContent: { background: '#f8f9fa', padding: '15px', borderRadius: '8px', fontSize: '0.85rem', color: '#444', borderLeft: '4px solid #1b3a57', minHeight: '50px', whiteSpace: 'pre-wrap' },
+    btnCancel: { background: '#eee', color: '#666', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', flex: 1 }
 };
 
 export default Material;

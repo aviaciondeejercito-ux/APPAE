@@ -4,28 +4,12 @@ const adminController = require('../controllers/adminController');
 const authMiddleware = require('../middleware/authMiddleware');
 
 /**
- * CONFIGURACIÓN DE MIDDLEWARES
- * Buscamos 'protect' o 'verifyToken' para asegurar compatibilidad.
+ * IMPORTACIÓN DE SEGURIDAD JERÁRQUICA AE
+ * 'protect' verifica la identidad (Token).
+ * 'authorize' verifica el nivel de comando (Rol).
  */
+const { authorize } = require('../middleware/rolecheck');
 const protect = authMiddleware.protect || authMiddleware.verifyToken;
-
-/**
- * MIDDLEWARE DE AUTORIZACIÓN OPERATIVA (ESTÁNDAR DE SEGURIDAD AE)
- * Permite el acceso a Administradores y Personal S4 de Unidad.
- */
-const isAuthorized = (req, res, next) => {
-    const authorizedRoles = ['admin', 'S4_UNIDAD', 'boss'];
-    
-    if (req.user && authorizedRoles.includes(req.user.role)) {
-        next();
-    } else {
-        console.warn(`[SEGURIDAD] Intento de acceso no autorizado: ${req.user ? req.user.username : 'Desconocido'}`);
-        return res.status(403).json({ 
-            success: false, 
-            message: 'Acceso denegado: Su rol no tiene permisos para esta operación.' 
-        });
-    }
-};
 
 /**
  * CAPA DE SEGURIDAD GLOBAL
@@ -37,27 +21,33 @@ if (typeof protect === 'function') {
     console.error("❌ CRÍTICO: No se encontró la función de protección de rutas.");
 }
 
-// Aplicamos el nuevo middleware de autorización híbrida
-router.use(isAuthorized);
+/**
+ * CONFIGURACIÓN DE ACCESOS SEGÚN MATRIZ DE PERMISOS:
+ * - ADMIN: Acceso total a todas las funciones.
+ * - BOSS: Monitor Full y Gestión de Personal/Aeronaves.
+ * - S4_UNIDAD / S4: Gestión de Material y Personal de su elemento.
+ */
 
 // --- ENDPOINTS DE GESTIÓN DE PERSONAL Y MATERIAL ---
 
-/**
- * NOTA DE SEGURIDAD: 
- * Aunque el S4 puede entrar, las funciones sensibles de base de datos 
- * están protegidas por la lógica del controlador.
- */
+// @route   GET /api/admin/users
+// @desc    Obtener lista de personal y aeronaves (Escalafón)
+// Permiso: BOSS, S4 y ADMIN.
+router.get('/users', authorize('admin', 'boss', 's4', 'S4_UNIDAD'), adminController.getAllUsers);
 
-// Obtener el escalafón o lista de aeronaves
-router.get('/users', adminController.getAllUsers);
+// @route   PUT /api/admin/users/:id/role
+// @desc    Actualizar jerarquía/permisos
+// Permiso: Solo ADMIN y BOSS (Para mantener la cadena de mando).
+router.put('/users/:id/role', authorize('admin', 'boss'), adminController.updateRole);
 
-// Actualizar jerarquía/permisos (Habilitado para gestión de S4 y Superiores)
-router.put('/users/:id/role', adminController.updateRole);
+// @route   PUT /api/admin/users/:id/password
+// @desc    Reseteo de contraseña (GDE)
+// Permiso: ADMIN, BOSS y S4 (Para facilitar la operatividad en la unidad).
+router.put('/users/:id/password', authorize('admin', 'boss', 's4', 'S4_UNIDAD'), adminController.resetPassword);
 
-// Reseteo de contraseña (GDE)
-router.put('/users/:id/password', adminController.resetPassword);
-
-// Baja definitiva del sistema
-router.delete('/users/:id', adminController.deleteUser);
+// @route   DELETE /api/admin/users/:id
+// @desc    Baja definitiva del sistema
+// Permiso: EXCLUSIVO ADMIN (Seguridad máxima en eliminaciones).
+router.delete('/users/:id', authorize('admin'), adminController.deleteUser);
 
 module.exports = router;
