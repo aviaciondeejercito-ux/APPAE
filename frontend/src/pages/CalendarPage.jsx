@@ -4,7 +4,8 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import esLocale from '@fullcalendar/core/locales/es';
-import { getEvents } from '../services/api';
+// Cambiamos la importación para usar el servicio que normaliza la data
+import { getEvents } from '../services/EventService';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
@@ -19,10 +20,8 @@ const CalendarPage = () => {
 
     const fetchData = async () => {
         try {
-            const response = await getEvents();
-            // El backend ya realiza el filtrado de seguridad atómico.
-            // Simplemente validamos que la data exista y la seteamos.
-            const data = response.data || response; 
+            const data = await getEvents();
+            // El backend ya filtra, aquí solo aseguramos que sea un Array
             setEvents(Array.isArray(data) ? data : []);
         } catch (error) { 
             console.error("❌ Error de sincronización con el Monitor AE:", error); 
@@ -43,6 +42,7 @@ const CalendarPage = () => {
             etapa: event.extendedProps.etapa,
             tipoApoyo: event.extendedProps.tipoApoyo,
             esGlobal: event.extendedProps.esGlobal,
+            // Priorizamos la data que viene del backend (ev.sdaListado)
             sdaListado: event.extendedProps.sdaListado || []
         });
     };
@@ -52,14 +52,12 @@ const CalendarPage = () => {
     const eventDidMount = (info) => {
         const { tipoOrigen, esGlobal, etapa } = info.event.extendedProps;
         
-        // Estilo de Comando / Global (Borde Dorado y Realce)
         if (tipoOrigen === 'COMANDO' || esGlobal) {
             info.el.style.border = '2px solid #FFD700'; 
             info.el.style.boxShadow = '0 0 5px rgba(255, 215, 0, 0.5)';
             info.el.style.fontWeight = 'bold';
         }
 
-        // Opacidad y Estilo según etapa del flujo DIR AE
         if (etapa === 'recepcion') {
             info.el.style.opacity = '0.7'; 
             info.el.style.borderStyle = 'dashed';
@@ -109,7 +107,7 @@ const CalendarPage = () => {
                             esGlobal: ev.esGlobal,
                             etapa: ev.etapa,
                             tipoApoyo: ev.tipoApoyo,
-                            sdaListado: ev.sdaListado
+                            sdaListado: ev.sdaListado // Aseguramos que pase al calendario
                         }
                     }))}
                     height="75vh"
@@ -124,6 +122,7 @@ const CalendarPage = () => {
                     eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
                     dayMaxEvents={isMobile ? 2 : 5}
                     nowIndicator={true}
+                    timeZone="local" // Fuerza al calendario a usar la hora del sistema
                 />
             </div>
 
@@ -163,7 +162,10 @@ const CalendarPage = () => {
 
                             <div style={styles.infoRow}>
                                 <strong>⏱️ Horario Operativo:</strong> 
-                                <span>{new Date(selectedEvent.start).toLocaleString()} - {new Date(selectedEvent.end).toLocaleString()}</span>
+                                <span>
+                                    {new Date(selectedEvent.start).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })} - 
+                                    {new Date(selectedEvent.end).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                                </span>
                             </div>
                             <hr style={styles.divider} />
                             
@@ -189,6 +191,7 @@ const CalendarPage = () => {
     );
 };
 
+// ... (Los estilos se mantienen iguales)
 const styles = {
     pageContainer: { padding: '10px', backgroundColor: '#f4f7f6', minHeight: '85vh' },
     mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', marginBottom: '20px' },

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/api';
+// IMPORTANTE: Usamos el servicio centralizado para normalizar fechas y seguridad
+import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/EventService';
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
@@ -33,12 +34,12 @@ const Operaciones = () => {
 
     const fetchData = async () => {
         try {
-            const { data } = await getEvents();
+            const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
             const filteredData = esMando 
                 ? data 
                 : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
-            setEvents(filteredData);
+            setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
             console.error("❌ Error de Sincronización AE"); 
         }
@@ -63,7 +64,12 @@ const Operaciones = () => {
     const addSda = () => {
         if (!formData.sdaSelected) return;
         const nuevoSda = `${formData.sdaCantidad}x ${formData.sdaSelected}`;
-        setFormData({ ...formData, sdaListado: [...formData.sdaListado, nuevoSda], sdaSelected: '', sdaCantidad: 1 });
+        setFormData({ 
+            ...formData, 
+            sdaListado: [...formData.sdaListado, nuevoSda], 
+            sdaSelected: '', 
+            sdaCantidad: 1 
+        });
     };
 
     const removeSda = (index) => {
@@ -76,15 +82,13 @@ const Operaciones = () => {
         e.preventDefault();
         
         const esAutorizadoGlobal = role === 'admin' || role === 'boss';
-        
-        // LIMPIEZA DE NOTAS: Evitamos que se repita el prefijo SdA si ya existe
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
         const finalData = {
             ...formData,
             esGlobal: esAutorizadoGlobal ? publicarGlobal : false,
             tipoOrigen: esAutorizadoGlobal && publicarGlobal ? 'COMANDO' : 'UNIDAD',
-            // Solo concatenamos para la vista de notas general, pero enviamos sdaListado limpio
+            // Mantenemos la estructura de notas para compatibilidad, pero enviamos sdaListado para el modal
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
             elemento: (esAutorizadoGlobal && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
@@ -121,15 +125,15 @@ const Operaciones = () => {
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
 
-        // PARSEO INTELIGENTE: Recuperamos la observación limpia
         const parts = ev.notes?.split(' | Obs: ');
         const obsPart = parts && parts.length > 1 ? parts[1] : ev.notes;
 
-        // Formateo de fecha compatible con input datetime-local (YYYY-MM-DDTHH:mm)
+        // CORRECCIÓN HORARIA: Formateo ISO local para evitar el desfase de 3hs en el input
         const formatFecha = (d) => {
+            if (!d) return '';
             const date = new Date(d);
-            const tzOffset = date.getTimezoneOffset() * 60000;
-            return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+            const offset = date.getTimezoneOffset() * 60000;
+            return new Date(date.getTime() - offset).toISOString().slice(0, 16);
         };
 
         setFormData({
@@ -138,7 +142,7 @@ const Operaciones = () => {
             end: formatFecha(ev.end),
             color: ev.color,
             notes: obsPart || '',
-            sdaListado: ev.sdaListado || [], // Usamos el array del backend si existe
+            sdaListado: ev.sdaListado || [], 
             tipoApoyo: ev.tipoApoyo || '',
             etapa: ev.etapa || 'recepcion',
             unidadesInvolucradas: ev.elemento ? ev.elemento.split(', ') : []
@@ -257,7 +261,7 @@ const Operaciones = () => {
                                         {ev.esGlobal && "🌐 "}{ev.title}
                                     </div>
                                     <div style={{fontSize: '0.75rem', color: '#666'}}>
-                                        {ev.elemento} | {new Date(ev.start).toLocaleDateString()}
+                                        {ev.elemento} | {new Date(ev.start).toLocaleDateString('es-AR')}
                                     </div>
                                     <span style={{...styles.miniBadge, backgroundColor: ev.color}}>
                                         {ev.etapa?.toUpperCase() || 'PROCESANDO'}
@@ -276,7 +280,6 @@ const Operaciones = () => {
     );
 };
 
-// ... (Mantenemos tus estilos exactamente igual)
 const styles = {
     container: { padding: '20px', maxWidth: '1200px', margin: '0 auto' },
     grid: { display: 'grid', gap: '25px', alignItems: 'start' },
