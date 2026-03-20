@@ -3,14 +3,12 @@ import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/ap
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
-    // Normalizamos el rol a minúsculas para evitar errores de comparación
     const [role] = useState(localStorage.getItem('role')?.toLowerCase());
     const [userUnidad] = useState(localStorage.getItem('elemento'));
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [isMobile] = useState(window.innerWidth < 768);
 
-    // Estado para el botón de Global (Habilitado para BOSS y ADMIN)
     const [publicarGlobal, setPublicarGlobal] = useState(false);
 
     const sdaList = [
@@ -18,7 +16,6 @@ const Operaciones = () => {
         "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
     ];
 
-    // Listado de Unidades actualizado según estándar AE
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
         "SEC AE 11", "ESC AV EXPL ATQ 602", "EC AE", "SEC AE DR", 
@@ -37,7 +34,6 @@ const Operaciones = () => {
     const fetchData = async () => {
         try {
             const { data } = await getEvents();
-            // SEGURIDAD: ADMIN y BOSS ven todo. S4/USER ven lo propio + lo Global.
             const esMando = role === 'admin' || role === 'boss';
             const filteredData = esMando 
                 ? data 
@@ -81,13 +77,15 @@ const Operaciones = () => {
         
         const esAutorizadoGlobal = role === 'admin' || role === 'boss';
         
+        // LIMPIEZA DE NOTAS: Evitamos que se repita el prefijo SdA si ya existe
+        const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
+
         const finalData = {
             ...formData,
-            // El BOSS ahora puede setear esGlobal: true
             esGlobal: esAutorizadoGlobal ? publicarGlobal : false,
             tipoOrigen: esAutorizadoGlobal && publicarGlobal ? 'COMANDO' : 'UNIDAD',
-            notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${formData.notes}`,
-            // Si es BOSS/ADMIN y eligió unidades, se graban esas. Si no, su unidad por defecto.
+            // Solo concatenamos para la vista de notas general, pero enviamos sdaListado limpio
+            notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
             elemento: (esAutorizadoGlobal && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
                       : userUnidad
@@ -122,15 +120,25 @@ const Operaciones = () => {
         setIsEditing(true);
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
-        const sdaPart = ev.notes?.split(' | Obs: ')[0]?.replace('SdA: ', '') || '';
-        const obsPart = ev.notes?.split(' | Obs: ')[1] || ev.notes || '';
+
+        // PARSEO INTELIGENTE: Recuperamos la observación limpia
+        const parts = ev.notes?.split(' | Obs: ');
+        const obsPart = parts && parts.length > 1 ? parts[1] : ev.notes;
+
+        // Formateo de fecha compatible con input datetime-local (YYYY-MM-DDTHH:mm)
+        const formatFecha = (d) => {
+            const date = new Date(d);
+            const tzOffset = date.getTimezoneOffset() * 60000;
+            return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+        };
+
         setFormData({
             title: ev.title,
-            start: new Date(ev.start).toISOString().slice(0, 16),
-            end: new Date(ev.end).toISOString().slice(0, 16),
+            start: formatFecha(ev.start),
+            end: formatFecha(ev.end),
             color: ev.color,
-            notes: obsPart,
-            sdaListado: sdaPart ? sdaPart.split(', ') : [],
+            notes: obsPart || '',
+            sdaListado: ev.sdaListado || [], // Usamos el array del backend si existe
             tipoApoyo: ev.tipoApoyo || '',
             etapa: ev.etapa || 'recepcion',
             unidadesInvolucradas: ev.elemento ? ev.elemento.split(', ') : []
@@ -152,7 +160,6 @@ const Operaciones = () => {
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
                     
-                    {/* CONTROL GLOBAL: Habilitado para BOSS y ADMIN */}
                     {(role === 'admin' || role === 'boss') && (
                         <div style={styles.globalToggleContainer}>
                             <button 
@@ -168,7 +175,6 @@ const Operaciones = () => {
                         </div>
                     )}
 
-                    {/* FLUJO DE MANDO: Solo para BOSS/ADMIN */}
                     {(role === 'admin' || role === 'boss') && (
                         <div style={styles.etapaWrapper}>
                             <label style={styles.labelEtapa}>CONTROL DE ESTADO (FLUJO AE):</label>
@@ -194,7 +200,6 @@ const Operaciones = () => {
                             <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
                         </div>
 
-                        {/* SELECTOR DE UNIDADES: Habilitado para BOSS si es Global */}
                         {(role === 'admin' || role === 'boss') && publicarGlobal && (
                             <div style={styles.unidadSelector}>
                                 <label style={styles.label}>Asignar Unidades Destinatarias:</label>
@@ -237,6 +242,7 @@ const Operaciones = () => {
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
                             {isEditing ? "ACTUALIZAR REGISTRO" : "GRABAR EN MONITOR OPERATIVO"}
                         </button>
+                        {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR EDICIÓN</button>}
                     </form>
                 </div>
 
@@ -270,6 +276,7 @@ const Operaciones = () => {
     );
 };
 
+// ... (Mantenemos tus estilos exactamente igual)
 const styles = {
     container: { padding: '20px', maxWidth: '1200px', margin: '0 auto' },
     grid: { display: 'grid', gap: '25px', alignItems: 'start' },

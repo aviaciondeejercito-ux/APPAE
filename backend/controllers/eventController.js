@@ -29,7 +29,7 @@ const getEvents = async (req, res) => {
         else {
             query = {
                 $or: [
-                    { elemento: elemento }, // Actividades creadas localmente
+                    { elemento: { $regex: elemento, $options: 'i' } }, // Actividades donde la unidad está mencionada
                     { 
                         $and: [
                             { etapa: 'ordenada' }, 
@@ -56,8 +56,11 @@ const getEvents = async (req, res) => {
 // @desc    Crear un nuevo evento con segmentación de etapa y destino
 const createEvent = async (req, res) => {
     try {
-        // ELIMINADO: La restricción que impedía al BOSS crear eventos.
-        const { title, start, end, notes, color, esGlobal, elemento, etapa, tipoApoyo } = req.body;
+        // Capturamos sdaListado explícitamente del body
+        const { 
+            title, start, end, notes, color, esGlobal, 
+            elemento, etapa, tipoApoyo, sdaListado 
+        } = req.body;
 
         if (!title || !start || !end) {
             return res.status(400).json({ message: 'Datos incompletos.' });
@@ -72,6 +75,7 @@ const createEvent = async (req, res) => {
             notes: notes || '', 
             color: color || '#1b3a57',
             tipoApoyo: tipoApoyo || '',
+            sdaListado: sdaListado || [], // Persistencia del array de medios
             createdBy: req.user._id,
             userName: req.user.username,
             // Si es Mando, el 'elemento' puede ser una lista de unidades. Si no, su unidad.
@@ -92,7 +96,6 @@ const createEvent = async (req, res) => {
 // @desc    Actualizar evento (Permite avanzar etapas en el flujo DIR AE)
 const updateEvent = async (req, res) => {
     try {
-        // ELIMINADO: La restricción que impedía al BOSS editar.
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'Evento no localizado.' });
 
@@ -104,17 +107,25 @@ const updateEvent = async (req, res) => {
             return res.status(403).json({ message: 'No tiene permisos para modificar esta orden.' });
         }
 
+        // Preparamos los datos para actualización atómica
         const updateData = { 
             ...req.body,
-            userName: req.user.username 
+            userName: req.user.username // Trazabilidad de quién editó por última vez
         };
         
+        // Conversión de fechas para asegurar formato Date en MongoDB
         if (updateData.start) updateData.start = new Date(updateData.start);
         if (updateData.end) updateData.end = new Date(updateData.end);
 
+        // Si un usuario NO es mando, no puede cambiar el campo esGlobal ni la etapa por fuerza
+        if (!esMando) {
+            delete updateData.esGlobal;
+            delete updateData.etapa;
+        }
+
         const updatedEvent = await Event.findByIdAndUpdate(
             req.params.id,
-            updateData,
+            { $set: updateData }, // Usamos $set para seguridad atómica
             { new: true, runValidators: true }
         );
 
@@ -128,7 +139,6 @@ const updateEvent = async (req, res) => {
 // @desc    Eliminar un evento
 const deleteEvent = async (req, res) => {
     try {
-        // ELIMINADO: La restricción que impedía al BOSS eliminar.
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'El evento no existe.' });
 
