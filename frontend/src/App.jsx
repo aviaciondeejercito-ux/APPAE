@@ -64,7 +64,7 @@ function App() {
                     onClick={() => setView('calendar')}
                     title="Volver al Monitor Principal"
                 >
-                    {isMobile ? '🦅 GESTIÓN AE' : '🦅 SISTEMA GESTIÓN AE'}
+                    {isMobile ? '🦅 GESTIÓN AE' : '🦅 OPERACIONES AVIACION DE EJERCITO'}
                 </div>
                 
                 <div style={{
