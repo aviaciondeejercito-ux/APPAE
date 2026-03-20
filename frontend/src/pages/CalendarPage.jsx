@@ -8,7 +8,8 @@ import { getEvents } from '../services/api';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
-    const [role] = useState(localStorage.getItem('role'));
+    // Normalizamos el rol a minúsculas
+    const [role] = useState(localStorage.getItem('role')?.toLowerCase());
     const [userUnidad] = useState(localStorage.getItem('elemento')); 
     const [selectedEvent, setSelectedEvent] = useState(null); 
     const [isMobile] = useState(window.innerWidth < 768);
@@ -18,7 +19,15 @@ const CalendarPage = () => {
     const fetchData = async () => {
         try {
             const { data } = await getEvents();
-            setEvents(data);
+            
+            // LÓGICA DE VISIBILIDAD CRÍTICA:
+            // 1. Admin/Boss ven TODO.
+            // 2. S4/User ven lo de su UNIDAD O lo que sea GLOBAL (esGlobal === true).
+            const filteredData = (role === 'admin' || role === 'boss')
+                ? data
+                : data.filter(ev => (ev.elemento?.includes(userUnidad)) || ev.esGlobal === true);
+
+            setEvents(filteredData);
         } catch (error) { 
             console.error("Error de conexión con el servidor AE"); 
         }
@@ -36,7 +45,8 @@ const CalendarPage = () => {
             origen: event.extendedProps.tipoOrigen,
             elemento: event.extendedProps.elemento,
             etapa: event.extendedProps.etapa,
-            tipoApoyo: event.extendedProps.tipoApoyo
+            tipoApoyo: event.extendedProps.tipoApoyo,
+            esGlobal: event.extendedProps.esGlobal
         });
     };
 
@@ -46,7 +56,7 @@ const CalendarPage = () => {
     const eventDidMount = (info) => {
         const { tipoOrigen, esGlobal, etapa } = info.event.extendedProps;
         
-        // Estilo de Comando (Borde Dorado)
+        // Estilo de Comando / Global (Borde Dorado)
         if (tipoOrigen === 'COMANDO' || esGlobal) {
             info.el.style.border = '2px solid #FFD700'; 
             info.el.style.fontWeight = 'bold';
@@ -54,18 +64,17 @@ const CalendarPage = () => {
 
         // Opacidad según etapa (Visualización jerárquica)
         if (etapa === 'recepcion') {
-            info.el.style.opacity = '0.6'; // Borrador/Ingreso
+            info.el.style.opacity = '0.7'; 
             info.el.style.borderStyle = 'dashed';
         } else if (etapa === 'revision') {
-            info.el.style.opacity = '0.85'; // En proceso de revisión
+            info.el.style.opacity = '0.85';
         }
     };
 
-    // Helper para etiquetas de etapa en el Modal
     const getEtapaLabel = (etapa) => {
         const etiquetas = {
             'recepcion': { text: '🟡 RECEPCIÓN / SOLICITUD', color: '#f1c40f' },
-            'revision': { text: '🟠 EN REVISIÓN (DIR AE)', color: '#e67e22' },
+            'revision': { text: '🔵 EN REVISIÓN (DIR AE)', color: '#3498db' },
             'ordenada': { text: '🟢 ORDENADA / CONFIRMADA', color: '#27ae60' }
         };
         return etiquetas[etapa] || { text: 'S/D', color: '#95a5a6' };
@@ -79,7 +88,7 @@ const CalendarPage = () => {
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                         <span style={styles.unidadBadge}>{userUnidad || "No detectado"}</span>
                         <span style={styles.modeBadge}>
-                            {role === 'boss' ? 'MODO: LECTURA (JEFE)' : 'MODO: GESTIÓN ACTIVA'}
+                            {role === 'boss' || role === 'admin' ? `MODO: COMANDO (${role.toUpperCase()})` : 'MODO: UNIDAD (S4)'}
                         </span>
                     </div>
                 </div>
@@ -90,10 +99,12 @@ const CalendarPage = () => {
                     locale={esLocale}
                     events={events.map(ev => ({
                         id: ev._id,
-                        title: `${ev.tipoApoyo ? `[${ev.tipoApoyo}] ` : ''}${ev.title}`,
+                        // Si es global, le ponemos el icono de mundo en el título del calendario
+                        title: `${ev.esGlobal ? '🌐 ' : ''}${ev.tipoApoyo ? `[${ev.tipoApoyo}] ` : ''}${ev.title}`,
                         start: ev.start,
                         end: ev.end,
-                        backgroundColor: ev.tipoOrigen === 'COMANDO' ? '#c0392b' : ev.color, 
+                        // El color de fondo es el de la etapa, salvo que sea Comando directo
+                        backgroundColor: ev.tipoOrigen === 'COMANDO' ? '#1b3a57' : ev.color, 
                         borderColor: 'transparent',
                         extendedProps: { 
                             notes: ev.notes, 
@@ -114,7 +125,7 @@ const CalendarPage = () => {
                         center: 'title', 
                         right: isMobile ? 'timeGridDay,dayGridMonth' : 'dayGridMonth,timeGridWeek,timeGridDay'
                     }}
-                    eventTimeFormat={{ hour: '2-digit', minute: '2-digit', meridian: false }}
+                    eventTimeFormat={{ hour: '2-digit', minute: '2-digit', meridian: false, hour12: false }}
                     dayMaxEvents={isMobile ? 2 : 4}
                     nowIndicator={true}
                 />
@@ -125,20 +136,19 @@ const CalendarPage = () => {
                     <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
                         <div style={{...styles.modalHeader, backgroundColor: selectedEvent.color}}>
                             <h3 style={styles.modalTitle}>
-                                {selectedEvent.origen === 'COMANDO' ? `⚠️ [COMANDO] ${selectedEvent.title}` : selectedEvent.title}
+                                {selectedEvent.esGlobal ? `🌐 [GLOBAL] ${selectedEvent.title}` : selectedEvent.title}
                             </h3>
                             <button onClick={closeModal} style={styles.btnClose}>×</button>
                         </div>
                         
                         <div style={styles.modalBody}>
-                            {/* ESTADO DE LA ORDEN */}
                             <div style={{...styles.etapaBanner, backgroundColor: getEtapaLabel(selectedEvent.etapa).color}}>
                                 {getEtapaLabel(selectedEvent.etapa).text}
                             </div>
 
                             <div style={styles.infoRow}>
-                                <strong>🏢 Origen / Elemento:</strong> 
-                                <span style={{ color: selectedEvent.origen === 'COMANDO' ? '#c0392b' : '#1b3a57', fontWeight: 'bold' }}>
+                                <strong>🏢 Unidades Involucradas:</strong> 
+                                <span style={{ color: '#1b3a57', fontWeight: 'bold' }}>
                                     {selectedEvent.elemento}
                                 </span>
                             </div>
@@ -151,25 +161,25 @@ const CalendarPage = () => {
                             <hr style={styles.divider} />
 
                             <div style={styles.infoRow}>
-                                <strong>⏱️ Horario:</strong> 
+                                <strong>⏱️ Horario Operativo:</strong> 
                                 <span>{new Date(selectedEvent.start).toLocaleString()} - {new Date(selectedEvent.end).toLocaleString()}</span>
                             </div>
                             <hr style={styles.divider} />
                             
                             <div style={styles.infoRow}>
-                                <strong>👤 Registrado por:</strong> 
-                                <span style={styles.badge}>{selectedEvent.user || 'Sistema'}</span>
+                                <strong>👤 Responsable Registro:</strong> 
+                                <span style={styles.badge}>{selectedEvent.user || 'Sistema AE'}</span>
                             </div>
                             <hr style={styles.divider} />
                             
                             <div style={styles.notesBox}>
-                                <strong>📝 Detalle Operativo:</strong>
+                                <strong>📝 Detalle de la Misión:</strong>
                                 <p style={styles.notesText}>{selectedEvent.notes || 'Sin observaciones adicionales.'}</p>
                             </div>
                         </div>
 
                         <div style={styles.modalFooter}>
-                            <button onClick={closeModal} style={styles.btnOk}>Entendido</button>
+                            <button onClick={closeModal} style={styles.btnOk}>Cerrar Monitor</button>
                         </div>
                     </div>
                 </div>
@@ -180,63 +190,15 @@ const CalendarPage = () => {
 
 const styles = {
     pageContainer: { padding: '10px', backgroundColor: '#f4f7f6', minHeight: '85vh' },
-    mainCard: { 
-        background: '#fff', 
-        padding: '20px', 
-        borderRadius: '12px', 
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)', 
-        marginBottom: '20px' 
-    },
-    headerMonitor: { 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        marginBottom: '15px',
-        flexWrap: 'wrap',
-        gap: '10px'
-    },
+    mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', marginBottom: '20px' },
+    headerMonitor: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' },
     title: { color: '#1b3a57', margin: 0, fontSize: '1.2rem' },
-    unidadBadge: {
-        fontSize: '0.75rem',
-        background: '#e9ecef',
-        color: '#1b3a57',
-        padding: '4px 10px',
-        borderRadius: '4px',
-        fontWeight: 'bold',
-        border: '1px solid #1b3a57'
-    },
-    modeBadge: { 
-        fontSize: '0.7rem', 
-        background: '#1b3a57', 
-        color: 'white', 
-        padding: '4px 10px', 
-        borderRadius: '4px',
-        fontWeight: 'bold'
-    },
-    etapaBanner: {
-        padding: '8px',
-        borderRadius: '6px',
-        color: 'white',
-        fontWeight: 'bold',
-        textAlign: 'center',
-        fontSize: '0.85rem',
-        marginBottom: '15px'
-    },
-    modalOverlay: {
-        position: 'fixed',
-        top: 0, left: 0, width: '100%', height: '100%',
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        display: 'flex', justifyContent: 'center', alignItems: 'center',
-        zIndex: 2000, padding: '20px'
-    },
-    modalContent: {
-        background: 'white', borderRadius: '12px', width: '100%', maxWidth: '500px',
-        overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
-    },
-    modalHeader: {
-        padding: '15px 20px', color: 'white', display: 'flex',
-        justifyContent: 'space-between', alignItems: 'center'
-    },
+    unidadBadge: { fontSize: '0.75rem', background: '#e9ecef', color: '#1b3a57', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
+    modeBadge: { fontSize: '0.7rem', background: '#1b3a57', color: 'white', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold' },
+    etapaBanner: { padding: '8px', borderRadius: '6px', color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: '0.85rem', marginBottom: '15px' },
+    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: '20px' },
+    modalContent: { background: 'white', borderRadius: '12px', width: '100%', maxWidth: '500px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' },
+    modalHeader: { padding: '15px 20px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     modalTitle: { margin: 0, fontSize: '1.1rem' },
     btnClose: { background: 'transparent', border: 'none', color: 'white', fontSize: '1.8rem', cursor: 'pointer' },
     modalBody: { padding: '20px' },

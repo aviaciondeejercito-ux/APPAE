@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { login } from '../services/api';
 
 /**
- * COMPONENTE DE LOGIN - SISTEMA GESTIÓN AE
+ * COMPONENTE DE LOGIN - OPERACIONES AVIACION DE EJERCITO
  * Actualizado: Captura y persistencia de Unidad (Elemento) para filtrado operativo.
  */
 const Login = ({ setAuth }) => {

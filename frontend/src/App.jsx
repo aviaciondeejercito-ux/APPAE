@@ -34,10 +34,7 @@ function App() {
 
     // 3. Gestión de Cierre de Sesión Seguro
     const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('role');
-        localStorage.removeItem('username');
-        localStorage.removeItem('elemento'); 
+        localStorage.clear(); // Limpieza total para mayor seguridad
         setAuth(false);
         setRole(null);
         setView('calendar');
@@ -49,6 +46,8 @@ function App() {
      */
     const puedeGestionarMaterial = role === 'admin' || role === 'S4' || role === 'S4_UNIDAD';
     const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'S4' || role === 'S4_UNIDAD';
+    // NUEVA RESTRICCIÓN: Solo Admin y Boss ven Estadísticas
+    const puedeVerStats = role === 'admin' || role === 'boss';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif' }}>
@@ -114,17 +113,19 @@ function App() {
                                 </button>
                             )}
 
-                            {/* BOTÓN ESTADÍSTICAS */}
-                            <button 
-                                onClick={() => setView('stats')}
-                                style={{
-                                    ...styles.btnNav,
-                                    backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd',
-                                    border: view === 'stats' ? '2px solid white' : 'none'
-                                }}
-                            >
-                                📊 Stats
-                            </button>
+                            {/* BOTÓN ESTADÍSTICAS - AHORA RESTRINGIDO */}
+                            {puedeVerStats && (
+                                <button 
+                                    onClick={() => setView('stats')}
+                                    style={{
+                                        ...styles.btnNav,
+                                        backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd',
+                                        border: view === 'stats' ? '2px solid white' : 'none'
+                                    }}
+                                >
+                                    📊 Stats
+                                </button>
+                            )}
 
                             {/* BOTÓN OPERACIONES / CARGA */}
                             {puedeCargarOperaciones && (
@@ -176,7 +177,8 @@ function App() {
                 ) : (
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
-                        if (view === 'stats') return <Estadisticas />;
+                        // Validación de seguridad para la vista de Stats
+                        if (view === 'stats' && puedeVerStats) return <Estadisticas />;
                         if (view === 'operaciones') return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
                         if (view === 'material' && puedeGestionarMaterial) return <Material />;

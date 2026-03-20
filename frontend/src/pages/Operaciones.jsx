@@ -3,24 +3,32 @@ import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/ap
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
-    const [role] = useState(localStorage.getItem('role'));
+    // Normalizamos el rol a minúsculas para evitar errores de comparación
+    const [role] = useState(localStorage.getItem('role')?.toLowerCase());
     const [userUnidad] = useState(localStorage.getItem('elemento'));
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [isMobile] = useState(window.innerWidth < 768);
+
+    // Estado para el botón de Global (Solo para BOSS/ADMIN)
+    const [publicarGlobal, setPublicarGlobal] = useState(false);
 
     const sdaList = [
         "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
         "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
     ];
 
-    // Listado de Unidades para transferencia (DIR AE)
-    const unidadesAE = ["BAV I", "BAV II", "BAV III", "B MANTE AV 601", "SEC AV EJ", "ESCUELA AV"];
+    // Listado de Unidades actualizado según imagen proporcionada
+    const unidadesAE = [
+        "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
+        "SEC AE 11", "ESC AV EXPL ATQ 602", "EC AE", "SEC AE DR", 
+        "SEC AE MTE 12", "B AB MANT AERON 601", "SEC AE MTE 3", "SEC AE 9"
+    ];
 
     const [formData, setFormData] = useState({
         title: '', start: '', end: '', color: '#1b3a57', notes: '',
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
-        etapa: 'recepcion', // recepcion | revision | ordenada
+        etapa: 'recepcion', 
         unidadesInvolucradas: []
     });
 
@@ -29,19 +37,21 @@ const Operaciones = () => {
     const fetchData = async () => {
         try {
             const { data } = await getEvents();
-            setEvents(data);
+            // Seguridad: El S4/User solo ve lo de su unidad. El Admin/Boss ve todo.
+            const filteredData = (role === 'admin' || role === 'boss') 
+                ? data 
+                : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
+            setEvents(filteredData);
         } catch (error) { 
             console.error("Error AE: Fallo de sincronización"); 
         }
     };
 
-    // Lógica de colores según etapa de aprobación
     const handleEtapaChange = (nuevaEtapa) => {
-        let colorEtapa = '#95a5a6'; // Gris default
-        if (nuevaEtapa === 'recepcion') colorEtapa = '#f39c12'; // Naranja (Atención)
-        if (nuevaEtapa === 'revision') colorEtapa = '#3498db';  // Azul (Proceso)
-        if (nuevaEtapa === 'ordenada') colorEtapa = '#27ae60';  // Verde (Ejecución)
-        
+        let colorEtapa = '#95a5a6';
+        if (nuevaEtapa === 'recepcion') colorEtapa = '#f39c12';
+        if (nuevaEtapa === 'revision') colorEtapa = '#3498db';
+        if (nuevaEtapa === 'ordenada') colorEtapa = '#27ae60';
         setFormData({ ...formData, etapa: nuevaEtapa, color: colorEtapa });
     };
 
@@ -56,11 +66,7 @@ const Operaciones = () => {
     const addSda = () => {
         if (!formData.sdaSelected) return;
         const nuevoSda = `${formData.sdaCantidad}x ${formData.sdaSelected}`;
-        setFormData({
-            ...formData,
-            sdaListado: [...formData.sdaListado, nuevoSda],
-            sdaSelected: '', sdaCantidad: 1
-        });
+        setFormData({ ...formData, sdaListado: [...formData.sdaListado, nuevoSda], sdaSelected: '', sdaCantidad: 1 });
     };
 
     const removeSda = (index) => {
@@ -72,13 +78,16 @@ const Operaciones = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
+        const esAutorizado = role === 'admin' || role === 'boss';
+        
         const finalData = {
             ...formData,
-            // Solo se publica globalmente si está en etapa "Ordenada"
-            esGlobal: formData.etapa === 'ordenada',
-            tipoOrigen: 'COMANDO',
+            // Solo es global si es Jefe y apretó el botón. S4/User siempre false.
+            esGlobal: esAutorizado ? publicarGlobal : false,
+            tipoOrigen: esAutorizado && publicarGlobal ? 'COMANDO' : 'UNIDAD',
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${formData.notes}`,
-            elemento: formData.unidadesInvolucradas.length > 0 
+            // Si es Jefe y seleccionó unidades, se guardan esas. Si es S4, solo su unidad.
+            elemento: esAutorizado && formData.unidadesInvolucradas.length > 0 
                       ? formData.unidadesInvolucradas.join(', ') 
                       : userUnidad
         };
@@ -91,7 +100,7 @@ const Operaciones = () => {
             }
             resetForm();
             fetchData();
-            alert("Operación actualizada en el sistema AE.");
+            alert("Operación procesada correctamente en el sistema.");
         } catch (error) { 
             alert("Error en el registro."); 
         }
@@ -103,6 +112,7 @@ const Operaciones = () => {
             tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
             etapa: 'recepcion', unidadesInvolucradas: []
         });
+        setPublicarGlobal(false);
         setIsEditing(false);
         setSelectedId(null);
     };
@@ -110,9 +120,9 @@ const Operaciones = () => {
     const handleEdit = (ev) => {
         setIsEditing(true);
         setSelectedId(ev._id);
+        setPublicarGlobal(ev.esGlobal || false);
         const sdaPart = ev.notes?.split(' | Obs: ')[0]?.replace('SdA: ', '') || '';
         const obsPart = ev.notes?.split(' | Obs: ')[1] || ev.notes || '';
-
         setFormData({
             title: ev.title,
             start: new Date(ev.start).toISOString().slice(0, 16),
@@ -139,26 +149,38 @@ const Operaciones = () => {
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>{isEditing ? "📝 Gestionar Orden" : "➕ Nueva Solicitud de Vuelo"}</h3>
+                    <h3 style={styles.title}>{isEditing ? "📝 Gestionar Orden" : "➕ Nueva Solicitud"}</h3>
                     
-                    {/* BOTONES DINÁMICOS DE ETAPA (CHECKLIST) */}
-                    <div style={styles.etapaWrapper}>
-                        <label style={styles.labelEtapa}>FLUJO DE TRABAJO DIR AE:</label>
-                        <div style={styles.etapaGrid}>
-                            <button type="button" onClick={() => handleEtapaChange('recepcion')} 
-                                    style={{...styles.btnStep, opacity: formData.etapa === 'recepcion' ? 1 : 0.4, border: '2px solid #f39c12'}}>
-                                🟡 Recepción
-                            </button>
-                            <button type="button" onClick={() => handleEtapaChange('revision')} 
-                                    style={{...styles.btnStep, opacity: formData.etapa === 'revision' ? 1 : 0.4, border: '2px solid #3498db'}}>
-                                🔵 Revisión
-                            </button>
-                            <button type="button" onClick={() => handleEtapaChange('ordenada')} 
-                                    style={{...styles.btnStep, opacity: formData.etapa === 'ordenada' ? 1 : 0.4, border: '2px solid #27ae60'}}>
-                                🟢 Ordenada
+                    {/* BOTÓN GLOBAL: Solo visible para BOSS y ADMIN */}
+                    {(role === 'admin' || role === 'boss') && (
+                        <div style={styles.globalToggleContainer}>
+                            <button 
+                                type="button" 
+                                onClick={() => setPublicarGlobal(!publicarGlobal)}
+                                style={{
+                                    ...styles.btnGlobal, 
+                                    backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7'
+                                }}
+                            >
+                                {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL ACTIVADA" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
                             </button>
                         </div>
-                    </div>
+                    )}
+
+                    {/* FLUJO DE TRABAJO: Solo para BOSS/ADMIN */}
+                    {(role === 'admin' || role === 'boss') && (
+                        <div style={styles.etapaWrapper}>
+                            <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
+                            <div style={styles.etapaGrid}>
+                                <button type="button" onClick={() => handleEtapaChange('recepcion')} 
+                                        style={{...styles.btnStep, opacity: formData.etapa === 'recepcion' ? 1 : 0.4, border: '2px solid #f39c12'}}>🟡 Recibida</button>
+                                <button type="button" onClick={() => handleEtapaChange('revision')} 
+                                        style={{...styles.btnStep, opacity: formData.etapa === 'revision' ? 1 : 0.4, border: '2px solid #3498db'}}>🔵 Revisión</button>
+                                <button type="button" onClick={() => handleEtapaChange('ordenada')} 
+                                        style={{...styles.btnStep, opacity: formData.etapa === 'ordenada' ? 1 : 0.4, border: '2px solid #27ae60'}}>🟢 Ordenada</button>
+                            </div>
+                        </div>
+                    )}
 
                     <form onSubmit={handleSubmit} style={styles.form}>
                         <input type="text" required placeholder="Título de la Misión" value={formData.title} 
@@ -171,18 +193,20 @@ const Operaciones = () => {
                             <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
                         </div>
 
-                        {/* SELECTOR DE ELEMENTOS INVOLUCRADOS */}
-                        <div style={styles.unidadSelector}>
-                            <label style={styles.label}>Transferir a Unidades (Selección Múltiple):</label>
-                            <div style={styles.unidadChips}>
-                                {unidadesAE.map(u => (
-                                    <button key={u} type="button" onClick={() => toggleUnidad(u)}
-                                            style={{...styles.chip, backgroundColor: formData.unidadesInvolucradas.includes(u) ? '#1b3a57' : '#eee', color: formData.unidadesInvolucradas.includes(u) ? 'white' : '#555'}}>
-                                        {u}
-                                    </button>
-                                ))}
+                        {/* SELECTOR DE UNIDADES: Solo si es Boss/Admin y activó Global */}
+                        {(role === 'admin' || role === 'boss') && publicarGlobal && (
+                            <div style={styles.unidadSelector}>
+                                <label style={styles.label}>Asignar a Unidades (DIR AE):</label>
+                                <div style={styles.unidadChips}>
+                                    {unidadesAE.map(u => (
+                                        <button key={u} type="button" onClick={() => toggleUnidad(u)}
+                                                style={{...styles.chip, backgroundColor: formData.unidadesInvolucradas.includes(u) ? '#1b3a57' : '#eee', color: formData.unidadesInvolucradas.includes(u) ? 'white' : '#555'}}>
+                                            {u}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <select value={formData.tipoApoyo} onChange={e => setFormData({...formData, tipoApoyo: e.target.value})} style={styles.input} required>
                             <option value="">Tipo de Apoyo...</option>
@@ -214,17 +238,19 @@ const Operaciones = () => {
                 </div>
 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>📜 Órdenes de Comando Recientes</h3>
+                    <h3 style={styles.title}>📜 Órdenes {role === 'admin' || role === 'boss' ? 'Generales' : `de ${userUnidad}`}</h3>
                     <div style={styles.scrollList}>
                         {events.map(ev => (
                             <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
                                 <div style={{flex: 1}}>
-                                    <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.title}</div>
+                                    <div style={{fontWeight: 'bold', color: '#1b3a57'}}>
+                                        {ev.esGlobal && "🌐 "}{ev.title}
+                                    </div>
                                     <div style={{fontSize: '0.75rem', color: '#666'}}>
                                         {ev.elemento} | {new Date(ev.start).toLocaleDateString()}
                                     </div>
                                     <span style={{...styles.miniBadge, backgroundColor: ev.color}}>
-                                        {ev.etapa?.toUpperCase() || 'PROPIO'}
+                                        {ev.etapa?.toUpperCase() || 'LOCAL'}
                                     </span>
                                 </div>
                                 <div style={styles.logActions}>
@@ -246,6 +272,8 @@ const styles = {
     card: { background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f0f2f5' },
     title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '12px', fontSize: '1.2rem', color: '#1b3a57', marginBottom: '20px' },
     form: { display: 'flex', flexDirection: 'column', gap: '15px' },
+    globalToggleContainer: { marginBottom: '15px' },
+    btnGlobal: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' },
     etapaWrapper: { marginBottom: '20px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' },
     labelEtapa: { fontSize: '0.7rem', fontWeight: 'bold', color: '#777', marginBottom: '8px', display: 'block' },
     etapaGrid: { display: 'flex', gap: '8px' },

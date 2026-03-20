@@ -28,6 +28,14 @@ if (typeof protect === 'function') {
  * - S4_UNIDAD / S4: Gestión de Material y Personal de su elemento.
  */
 
+// --- NUEVO: ENDPOINT DE ESTADÍSTICAS ESTRATÉGICAS ---
+
+// @route   GET /api/admin/stats
+// @desc    Obtener métricas de disponibilidad y operatividad
+// @access  RESTRINGIDO: Solo ADMIN y BOSS (User y S4 bloqueados)
+router.get('/stats', authorize('admin', 'boss'), adminController.getStats);
+
+
 // --- ENDPOINTS DE GESTIÓN DE PERSONAL Y MATERIAL ---
 
 // @route   GET /api/admin/users
