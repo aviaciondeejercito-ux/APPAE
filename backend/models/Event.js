@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 /**
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
  * Seguridad: Trazabilidad completa con logs de usuario integrados.
+ * Estándar de Seguridad: Atómico, con soporte para BOSS (DIR AE) y Unidades.
  * Mejora: Flujo de Aprobación DIR AE y Segmentación por Elemento.
- * Estándar: Integración de etapas (Recepción, Revisión, Ordenada).
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -48,7 +48,14 @@ const eventSchema = new mongoose.Schema({
     tipoApoyo: {
         type: String,
         trim: true,
-        default: '' // Ej: "Aéreo", "Sanitario", "Logístico"
+        default: '' // Ej: "Fuerza Operativa", "Sostenimiento", "Educación"
+    },
+    
+    // Campo específico para almacenar el listado de SdA (Sistemas de Armas)
+    // Esto asegura que la data enviada desde el Frontend no se pierda
+    sdaListado: {
+        type: [String],
+        default: []
     },
 
     // --- SECCIÓN DE SEGURIDAD Y SEGMENTACIÓN (FLUJO DIR AE) ---
@@ -72,7 +79,7 @@ const eventSchema = new mongoose.Schema({
     },
     esGlobal: { 
         type: Boolean, 
-        default: false // Determina si la DIR AE lo envía a todas las unidades
+        default: false // Fundamental: Si es TRUE, el BOSS lo hace visible para todos
     },
 
     // --- SECCIÓN DE AUDITORÍA Y SEGURIDAD ---
@@ -83,10 +90,10 @@ const eventSchema = new mongoose.Schema({
     },
     userName: { 
         type: String, 
-        required: true // Nombre del operador para el panel de logs rápido
+        required: true // Nombre del operador (Teniente Primero / Capitán / etc.)
     }
 }, { 
-    timestamps: true // Genera automáticamente createdAt y updatedAt
+    timestamps: true // Genera automáticamente createdAt y updatedAt para auditoría
 });
 
 /**
@@ -105,7 +112,8 @@ eventSchema.pre('validate', function(next) {
 // ÍNDICES PARA ALTA DISPONIBILIDAD OPERATIVA
 // Optimizamos la búsqueda por rango de fechas, pertenencia y etapa
 eventSchema.index({ start: 1, end: 1 });
-eventSchema.index({ elemento: 1, etapa: 1 }); // Fundamental para el filtrado de seguridad
+eventSchema.index({ elemento: 1, etapa: 1 }); // Clave para el filtrado del BOSS vs Unidades
+eventSchema.index({ esGlobal: 1 }); // Búsqueda rápida de eventos del COMANDO
 eventSchema.index({ createdBy: 1 });
 eventSchema.index({ createdAt: -1 }); // Para reportes de actividad reciente
 

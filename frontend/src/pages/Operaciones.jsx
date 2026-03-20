@@ -10,7 +10,7 @@ const Operaciones = () => {
     const [selectedId, setSelectedId] = useState(null);
     const [isMobile] = useState(window.innerWidth < 768);
 
-    // Estado para el botón de Global (Solo para BOSS/ADMIN)
+    // Estado para el botón de Global (Habilitado para BOSS y ADMIN)
     const [publicarGlobal, setPublicarGlobal] = useState(false);
 
     const sdaList = [
@@ -18,7 +18,7 @@ const Operaciones = () => {
         "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
     ];
 
-    // Listado de Unidades actualizado según imagen proporcionada
+    // Listado de Unidades actualizado según estándar AE
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
         "SEC AE 11", "ESC AV EXPL ATQ 602", "EC AE", "SEC AE DR", 
@@ -26,7 +26,7 @@ const Operaciones = () => {
     ];
 
     const [formData, setFormData] = useState({
-        title: '', start: '', end: '', color: '#1b3a57', notes: '',
+        title: '', start: '', end: '', color: '#f39c12', notes: '',
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
         etapa: 'recepcion', 
         unidadesInvolucradas: []
@@ -37,13 +37,14 @@ const Operaciones = () => {
     const fetchData = async () => {
         try {
             const { data } = await getEvents();
-            // Seguridad: El S4/User solo ve lo de su unidad. El Admin/Boss ve todo.
-            const filteredData = (role === 'admin' || role === 'boss') 
+            // SEGURIDAD: ADMIN y BOSS ven todo. S4/USER ven lo propio + lo Global.
+            const esMando = role === 'admin' || role === 'boss';
+            const filteredData = esMando 
                 ? data 
                 : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
             setEvents(filteredData);
         } catch (error) { 
-            console.error("Error AE: Fallo de sincronización"); 
+            console.error("❌ Error de Sincronización AE"); 
         }
     };
 
@@ -78,16 +79,16 @@ const Operaciones = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        const esAutorizado = role === 'admin' || role === 'boss';
+        const esAutorizadoGlobal = role === 'admin' || role === 'boss';
         
         const finalData = {
             ...formData,
-            // Solo es global si es Jefe y apretó el botón. S4/User siempre false.
-            esGlobal: esAutorizado ? publicarGlobal : false,
-            tipoOrigen: esAutorizado && publicarGlobal ? 'COMANDO' : 'UNIDAD',
+            // El BOSS ahora puede setear esGlobal: true
+            esGlobal: esAutorizadoGlobal ? publicarGlobal : false,
+            tipoOrigen: esAutorizadoGlobal && publicarGlobal ? 'COMANDO' : 'UNIDAD',
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${formData.notes}`,
-            // Si es Jefe y seleccionó unidades, se guardan esas. Si es S4, solo su unidad.
-            elemento: esAutorizado && formData.unidadesInvolucradas.length > 0 
+            // Si es BOSS/ADMIN y eligió unidades, se graban esas. Si no, su unidad por defecto.
+            elemento: (esAutorizadoGlobal && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
                       : userUnidad
         };
@@ -100,9 +101,9 @@ const Operaciones = () => {
             }
             resetForm();
             fetchData();
-            alert("Operación procesada correctamente en el sistema.");
+            alert("Operación procesada con éxito en el Monitor AE.");
         } catch (error) { 
-            alert("Error en el registro."); 
+            alert("Error crítico en el registro de la orden."); 
         }
     };
 
@@ -138,7 +139,7 @@ const Operaciones = () => {
     };
 
     const handleDelete = async (id) => {
-        if (window.confirm("¿Confirmar ELIMINACIÓN de la orden?")) {
+        if (window.confirm("¿Confirmar ELIMINACIÓN de la orden operativa?")) {
             await deleteEvent(id);
             fetchData();
         }
@@ -149,9 +150,9 @@ const Operaciones = () => {
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>{isEditing ? "📝 Gestionar Orden" : "➕ Nueva Solicitud"}</h3>
+                    <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
                     
-                    {/* BOTÓN GLOBAL: Solo visible para BOSS y ADMIN */}
+                    {/* CONTROL GLOBAL: Habilitado para BOSS y ADMIN */}
                     {(role === 'admin' || role === 'boss') && (
                         <div style={styles.globalToggleContainer}>
                             <button 
@@ -162,15 +163,15 @@ const Operaciones = () => {
                                     backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7'
                                 }}
                             >
-                                {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL ACTIVADA" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
+                                {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE)" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
                             </button>
                         </div>
                     )}
 
-                    {/* FLUJO DE TRABAJO: Solo para BOSS/ADMIN */}
+                    {/* FLUJO DE MANDO: Solo para BOSS/ADMIN */}
                     {(role === 'admin' || role === 'boss') && (
                         <div style={styles.etapaWrapper}>
-                            <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
+                            <label style={styles.labelEtapa}>CONTROL DE ESTADO (FLUJO AE):</label>
                             <div style={styles.etapaGrid}>
                                 <button type="button" onClick={() => handleEtapaChange('recepcion')} 
                                         style={{...styles.btnStep, opacity: formData.etapa === 'recepcion' ? 1 : 0.4, border: '2px solid #f39c12'}}>🟡 Recibida</button>
@@ -183,20 +184,20 @@ const Operaciones = () => {
                     )}
 
                     <form onSubmit={handleSubmit} style={styles.form}>
-                        <input type="text" required placeholder="Título de la Misión" value={formData.title} 
+                        <input type="text" required placeholder="Nombre de la Misión / Ejercicio" value={formData.title} 
                                onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} />
                         
                         <div style={styles.row}>
-                            <div style={{flex: 1}}><label style={styles.label}>Inicio</label>
+                            <div style={{flex: 1}}><label style={styles.label}>H-Inicio</label>
                             <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/></div>
-                            <div style={{flex: 1}}><label style={styles.label}>Fin</label>
+                            <div style={{flex: 1}}><label style={styles.label}>H-Fin</label>
                             <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
                         </div>
 
-                        {/* SELECTOR DE UNIDADES: Solo si es Boss/Admin y activó Global */}
+                        {/* SELECTOR DE UNIDADES: Habilitado para BOSS si es Global */}
                         {(role === 'admin' || role === 'boss') && publicarGlobal && (
                             <div style={styles.unidadSelector}>
-                                <label style={styles.label}>Asignar a Unidades (DIR AE):</label>
+                                <label style={styles.label}>Asignar Unidades Destinatarias:</label>
                                 <div style={styles.unidadChips}>
                                     {unidadesAE.map(u => (
                                         <button key={u} type="button" onClick={() => toggleUnidad(u)}
@@ -209,10 +210,11 @@ const Operaciones = () => {
                         )}
 
                         <select value={formData.tipoApoyo} onChange={e => setFormData({...formData, tipoApoyo: e.target.value})} style={styles.input} required>
-                            <option value="">Tipo de Apoyo...</option>
+                            <option value="">Tipo de Misión...</option>
                             <option value="Sostenimiento">Sostenimiento</option>
                             <option value="Fuerza Operativa">Fuerza Operativa</option>
-                            <option value="Educacion">Educación</option>
+                            <option value="Educacion">Educación / Instrucción</option>
+                            <option value="Guardia">Servicio de Guardia</option>
                         </select>
 
                         <div style={styles.sdaBox}>
@@ -220,6 +222,7 @@ const Operaciones = () => {
                                 <option value="">SdA...</option>
                                 {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
+                            <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
                             <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
                         </div>
 
@@ -229,18 +232,19 @@ const Operaciones = () => {
                             ))}
                         </div>
 
-                        <textarea placeholder="Observaciones..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
+                        <textarea placeholder="Coordenadas, Carga, Personal o detalles adicionales..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
                         
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
-                            {isEditing ? "Actualizar Orden" : "Registrar en Sistema AE"}
+                            {isEditing ? "ACTUALIZAR REGISTRO" : "GRABAR EN MONITOR OPERATIVO"}
                         </button>
                     </form>
                 </div>
 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>📜 Órdenes {role === 'admin' || role === 'boss' ? 'Generales' : `de ${userUnidad}`}</h3>
+                    <h3 style={styles.title}>📜 Registro de Órdenes {role === 'admin' || role === 'boss' ? 'Generales' : `de ${userUnidad}`}</h3>
                     <div style={styles.scrollList}>
-                        {events.map(ev => (
+                        {events.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes registradas.</p> : 
+                        events.map(ev => (
                             <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
                                 <div style={{flex: 1}}>
                                     <div style={{fontWeight: 'bold', color: '#1b3a57'}}>
@@ -250,7 +254,7 @@ const Operaciones = () => {
                                         {ev.elemento} | {new Date(ev.start).toLocaleDateString()}
                                     </div>
                                     <span style={{...styles.miniBadge, backgroundColor: ev.color}}>
-                                        {ev.etapa?.toUpperCase() || 'LOCAL'}
+                                        {ev.etapa?.toUpperCase() || 'PROCESANDO'}
                                     </span>
                                 </div>
                                 <div style={styles.logActions}>

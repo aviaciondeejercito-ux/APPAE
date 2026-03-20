@@ -19,39 +19,42 @@ const {
 const authMiddleware = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/rolecheck');
 
-const protect = typeof authMiddleware === 'function' ? authMiddleware : authMiddleware.protect;
+// Verificación de compatibilidad del middleware de protección
+const protect = authMiddleware.protect || authMiddleware.verifyToken || authMiddleware;
 
 /**
  * SISTEMA GESTIÓN AE - CAPA DE RUTAS OPERATIVAS BLINDADAS
- * Jerarquía de permisos según Matriz Operativa:
- * - BOSS: Monitor Full y Carga (Criterio DIR AE).
- * - USER / S4: Monitor de Elemento y Carga (Criterio Unidad).
- * - ADMIN: Acceso Total.
+ * Jerarquía de permisos actualizada según Matriz Operativa:
+ * - ADMIN: Acceso Total (Global).
+ * - BOSS: Monitor Full, Carga Global/Individual, Edición y Baja (Criterio DIR AE).
+ * - S4_UNIDAD / S4: Monitor de su Elemento y Carga (Criterio Unidad).
+ * - USER: Carga y Monitor básico.
  */
 
-// 1. Protección de Identidad (Token JWT) para todas las rutas
+// 1. Protección de Identidad (Token JWT) para todas las rutas del calendario
 router.use(protect);
 
 // 2. Definición de Rutas con Autorización Jerárquica
 
 // @route   GET /api/events
-// @desc    Obtener lista de eventos (Filtro interno por unidad en el controlador)
+// @desc    Obtener lista de eventos (El filtrado por unidad/global se procesa en el controlador)
 // Permiso: Todos los roles autenticados pueden visualizar.
 router.get('/', getEvents);
 
 // @route   POST /api/events
 // @desc    Registrar nueva actividad (Vuelos, Guardias, Logística)
-// Permiso: USER, S4, BOSS y ADMIN pueden cargar según su nivel.
-router.post('/', authorize('user', 's4', 'boss', 'admin'), createEvent);
+// Permiso: USER, S4, S4_UNIDAD, BOSS y ADMIN pueden cargar.
+router.post('/', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), createEvent);
 
 // @route   PUT /api/events/:id
 // @desc    Actualizar detalles de una actividad existente
-// Permiso: USER, S4 y BOSS (Solo ADMIN tiene control total de edición global).
-router.put('/:id', authorize('user', 's4', 'boss', 'admin'), updateEvent);
+// Permiso: USER, S4, S4_UNIDAD, BOSS y ADMIN (BOSS tiene permisos de mando para corregir).
+router.put('/:id', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), updateEvent);
 
 // @route   DELETE /api/events/:id
 // @desc    Eliminación/Baja de actividad del registro
-// Permiso: Restringido para asegurar trazabilidad (USER/S4 solo sus propios eventos).
-router.delete('/:id', authorize('user', 's4', 'admin'), deleteEvent);
+// Permiso: BOSS y ADMIN tienen permiso de borrado total. USER/S4 según lógica interna.
+// AJUSTE: Se incluye al BOSS para que pueda gestionar la limpieza del monitor.
+router.delete('/:id', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), deleteEvent);
 
 module.exports = router;
