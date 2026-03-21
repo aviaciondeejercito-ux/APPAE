@@ -20,12 +20,11 @@ const Operaciones = () => {
         "SEC AE MTE 12", "B AB MANT AERON 601", "SEC AE MTE 3", "SEC AE 9"
     ];
 
-    // CONFIGURACIÓN DE MISIONES SOLICITADA
     const missionOptions = [
         { label: 'Sostenimiento', value: 'Sostenimiento', color: '#3498db' },
         { label: 'Fuerza Operativa', value: 'Fuerza Operativa', color: '#e67e22' },
         { label: 'Educación', value: 'Educacion', color: '#2ecc71' },
-        { label: 'Otros', value: 'Otros', color: '#000000' } // COLOR NEGRO
+        { label: 'Otros', value: 'Otros', color: '#000000' }
     ];
 
     const [formData, setFormData] = useState({
@@ -43,6 +42,7 @@ const Operaciones = () => {
         const fetchAeronaves = async () => {
             setLoadingAircraft(true);
             try {
+                // El Boss o Admin buscan aeronaves de la unidad seleccionada o de la suya propia
                 const destinoBusqueda = (formData.unidadesInvolucradas.length > 0) 
                     ? formData.unidadesInvolucradas[0] 
                     : userUnidad;
@@ -52,7 +52,7 @@ const Operaciones = () => {
                     const cleanData = data.map(a => ({
                         ...a,
                         matricula: a.matricula || 'S/M',
-                        modelo: a.sda || a.modelo || '' // Normalización para evitar undefined
+                        modelo: a.sda || a.modelo || ''
                     }));
                     setAvailableAircraft(cleanData);
                 }
@@ -69,16 +69,18 @@ const Operaciones = () => {
         try {
             const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
+            
+            // FILTRADO: Admin y Boss ven TODO. Unidades ven lo suyo + Globales.
             const filteredData = esMando 
                 ? data 
                 : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
+            
             setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
             console.error("❌ Error de Sincronización AE"); 
         }
     };
 
-    // MANEJO DE CAMBIO DE MISIÓN Y COLOR AUTOMÁTICO
     const handleMissionChange = (valor) => {
         const mision = missionOptions.find(m => m.value === valor);
         setFormData({ 
@@ -102,10 +104,8 @@ const Operaciones = () => {
 
     const addSda = () => {
         if (!formData.sdaSelected) return;
-        
         const valorLimpio = formData.sdaSelected.replace(/\s?\(undefined\)/g, '').replace(/\s?\(\)/g, '').trim();
         const nuevoSda = `${formData.sdaCantidad}x ${valorLimpio}`;
-        
         if (!formData.sdaListado.includes(nuevoSda)) {
             setFormData({ 
                 ...formData, 
@@ -124,7 +124,7 @@ const Operaciones = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const esAutorizadoGlobal = role === 'admin' || role === 'boss';
+        const esMando = role === 'admin' || role === 'boss';
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
         const finalData = {
@@ -135,10 +135,11 @@ const Operaciones = () => {
             tipoApoyo: formData.tipoApoyo,
             sdaListado: formData.sdaListado,
             etapa: formData.etapa,
-            esGlobal: esAutorizadoGlobal ? publicarGlobal : false,
-            tipoOrigen: (esAutorizadoGlobal && publicarGlobal) ? 'COMANDO' : 'UNIDAD',
+            esGlobal: esMando ? publicarGlobal : false,
+            tipoOrigen: (esMando && publicarGlobal) ? 'COMANDO' : 'UNIDAD',
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
-            elemento: (esAutorizadoGlobal && formData.unidadesInvolucradas.length > 0)
+            // Si es mando y eligió unidades, se guardan esas. Si no, su propia unidad.
+            elemento: (esMando && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
                       : userUnidad
         };
@@ -256,7 +257,7 @@ const Operaciones = () => {
                             <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
                         </div>
 
-                        {(role === 'admin' || role === 'boss') && publicarGlobal && (
+                        {(role === 'admin' || role === 'boss') && (
                             <div style={styles.unidadSelector}>
                                 <label style={styles.label}>Asignar Unidades Destinatarias:</label>
                                 <div style={styles.unidadChips}>

@@ -5,7 +5,7 @@ import AdminPanel from './pages/AdminPanel';
 import Estadisticas from './pages/Estadisticas';
 import Operaciones from './pages/Operaciones'; 
 import EstadoAeronaves from './pages/EstadoAeronaves';
-import Material from './pages/Material'; // <--- IMPORTADO PARA GESTIÓN S4
+import Material from './pages/Material'; 
 
 function App() {
     // 1. Estados de Autenticación y Navegación
@@ -22,7 +22,6 @@ function App() {
     }, []);
 
     // 2. Efecto de sincronización de seguridad
-    // Actualizado para capturar el rol correctamente tras el login
     useEffect(() => {
         const token = localStorage.getItem('token');
         const savedRole = localStorage.getItem('role');
@@ -34,19 +33,22 @@ function App() {
 
     // 3. Gestión de Cierre de Sesión Seguro
     const handleLogout = () => {
-        localStorage.clear(); // Limpieza total para mayor seguridad
+        localStorage.clear();
         setAuth(false);
         setRole(null);
         setView('calendar');
     };
 
     /**
-     * LÓGICA DE PERMISOS UNIFICADA
-     * Definimos quiénes pueden ver las pestañas críticas.
+     * LÓGICA DE PERMISOS UNIFICADA (ACTUALIZADA)
      */
+    // Boss NO gestiona material técnico, solo S4 y Admin.
     const puedeGestionarMaterial = role === 'admin' || role === 'S4' || role === 'S4_UNIDAD';
-    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'S4' || role === 'S4_UNIDAD';
-    // NUEVA RESTRICCIÓN: Solo Admin y Boss ven Estadísticas
+    
+    // Boss puede cargar operaciones si lo desea (Poder de mando total)
+    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'S4' || role === 'S4_UNIDAD' || role === 'boss';
+    
+    // El Boss es el destinatario principal de las Estadísticas
     const puedeVerStats = role === 'admin' || role === 'boss';
 
     return (
@@ -75,7 +77,7 @@ function App() {
                 }}>
                     {auth ? (
                         <>
-                            {/* BOTÓN MONITOR (CALENDARIO) */}
+                            {/* BOTÓN MONITOR */}
                             <button 
                                 onClick={() => setView('calendar')}
                                 style={{
@@ -87,7 +89,7 @@ function App() {
                                 📅 Monitor
                             </button>
 
-                            {/* BOTÓN ESTADO GENERAL (VISOR) */}
+                            {/* BOTÓN ESTADO GENERAL */}
                             <button 
                                 onClick={() => setView('estado')}
                                 style={{
@@ -99,7 +101,7 @@ function App() {
                                 🚁 Estado
                             </button>
 
-                            {/* BOTÓN GESTIÓN MATERIAL (SOLO S4 Y ADMIN) */}
+                            {/* BOTÓN GESTIÓN MATERIAL */}
                             {puedeGestionarMaterial && (
                                 <button 
                                     onClick={() => setView('material')}
@@ -113,7 +115,7 @@ function App() {
                                 </button>
                             )}
 
-                            {/* BOTÓN ESTADÍSTICAS - AHORA RESTRINGIDO */}
+                            {/* BOTÓN ESTADÍSTICAS */}
                             {puedeVerStats && (
                                 <button 
                                     onClick={() => setView('stats')}
@@ -170,14 +172,13 @@ function App() {
                 </div>
             </nav>
 
-            {/* ÁREA DE CONTENIDO (Ruteo Dinámico) */}
+            {/* ÁREA DE CONTENIDO */}
             <main style={(view === 'stats' || view === 'material' || view === 'estado') ? styles.containerStats : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
-                        // Validación de seguridad para la vista de Stats
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
                         if (view === 'operaciones') return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
