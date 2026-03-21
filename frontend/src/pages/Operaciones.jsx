@@ -20,8 +20,16 @@ const Operaciones = () => {
         "SEC AE MTE 12", "B AB MANT AERON 601", "SEC AE MTE 3", "SEC AE 9"
     ];
 
+    // CONFIGURACIÓN DE MISIONES SOLICITADA
+    const missionOptions = [
+        { label: 'Sostenimiento', value: 'Sostenimiento', color: '#3498db' },
+        { label: 'Fuerza Operativa', value: 'Fuerza Operativa', color: '#e67e22' },
+        { label: 'Educación', value: 'Educacion', color: '#2ecc71' },
+        { label: 'Otros', value: 'Otros', color: '#000000' } // COLOR NEGRO
+    ];
+
     const [formData, setFormData] = useState({
-        title: '', start: '', end: '', color: '#f39c12', notes: '',
+        title: '', start: '', end: '', color: '#3498db', notes: '',
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
         etapa: 'recepcion', 
         unidadesInvolucradas: []
@@ -41,16 +49,15 @@ const Operaciones = () => {
 
                 if (destinoBusqueda) {
                     const data = await getAvailableAircraft(destinoBusqueda);
-                    // Mapeo de seguridad para evitar datos corruptos
                     const cleanData = data.map(a => ({
                         ...a,
                         matricula: a.matricula || 'S/M',
-                        modelo: a.modelo || ''
+                        modelo: a.sda || a.modelo || '' // Normalización para evitar undefined
                     }));
                     setAvailableAircraft(cleanData);
                 }
             } catch (err) {
-                console.error("Error cargando aeronaves en servicio");
+                console.error("Error cargando aeronaves");
             } finally {
                 setLoadingAircraft(false);
             }
@@ -71,12 +78,18 @@ const Operaciones = () => {
         }
     };
 
+    // MANEJO DE CAMBIO DE MISIÓN Y COLOR AUTOMÁTICO
+    const handleMissionChange = (valor) => {
+        const mision = missionOptions.find(m => m.value === valor);
+        setFormData({ 
+            ...formData, 
+            tipoApoyo: valor, 
+            color: mision ? mision.color : '#7f8c8d' 
+        });
+    };
+
     const handleEtapaChange = (nuevaEtapa) => {
-        let colorEtapa = '#95a5a6';
-        if (nuevaEtapa === 'recepcion') colorEtapa = '#f39c12';
-        if (nuevaEtapa === 'revision') colorEtapa = '#3498db';
-        if (nuevaEtapa === 'ordenada') colorEtapa = '#27ae60';
-        setFormData({ ...formData, etapa: nuevaEtapa, color: colorEtapa });
+        setFormData({ ...formData, etapa: nuevaEtapa });
     };
 
     const toggleUnidad = (unidad) => {
@@ -90,7 +103,6 @@ const Operaciones = () => {
     const addSda = () => {
         if (!formData.sdaSelected) return;
         
-        // Limpiamos cualquier rastro de "undefined" o paréntesis vacíos que vengan del string del select
         const valorLimpio = formData.sdaSelected.replace(/\s?\(undefined\)/g, '').replace(/\s?\(\)/g, '').trim();
         const nuevoSda = `${formData.sdaCantidad}x ${valorLimpio}`;
         
@@ -142,14 +154,13 @@ const Operaciones = () => {
             resetForm();
             fetchData();
         } catch (error) { 
-            console.error("Error en Submit:", error);
             alert("❌ Error: Verifique que todos los campos y fechas sean correctos."); 
         }
     };
 
     const resetForm = () => {
         setFormData({ 
-            title: '', start: '', end: '', color: '#f39c12', notes: '', 
+            title: '', start: '', end: '', color: '#3498db', notes: '', 
             tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
             etapa: 'recepcion', unidadesInvolucradas: []
         });
@@ -177,7 +188,7 @@ const Operaciones = () => {
             title: ev.title || '',
             start: formatFecha(ev.start),
             end: formatFecha(ev.end),
-            color: ev.color || '#f39c12',
+            color: ev.color || '#3498db',
             notes: obsPart || '',
             sdaListado: Array.isArray(ev.sdaListado) ? ev.sdaListado : [], 
             tipoApoyo: ev.tipoApoyo || '',
@@ -222,14 +233,14 @@ const Operaciones = () => {
 
                     {(role === 'admin' || role === 'boss') && (
                         <div style={styles.etapaWrapper}>
-                            <label style={styles.labelEtapa}>CONTROL DE ESTADO (FLUJO AE):</label>
+                            <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
                             <div style={styles.etapaGrid}>
                                 <button type="button" onClick={() => handleEtapaChange('recepcion')} 
-                                        style={{...styles.btnStep, opacity: formData.etapa === 'recepcion' ? 1 : 0.4, border: '2px solid #f39c12'}}>🟡 Recibida</button>
+                                        style={{...styles.btnStep, background: formData.etapa === 'recepcion' ? '#f39c12' : 'white', color: formData.etapa === 'recepcion' ? 'white' : '#555'}}>🟡 Recibida</button>
                                 <button type="button" onClick={() => handleEtapaChange('revision')} 
-                                        style={{...styles.btnStep, opacity: formData.etapa === 'revision' ? 1 : 0.4, border: '2px solid #3498db'}}>🔵 Revisión</button>
+                                        style={{...styles.btnStep, background: formData.etapa === 'revision' ? '#3498db' : 'white', color: formData.etapa === 'revision' ? 'white' : '#555'}}>🔵 Revisión</button>
                                 <button type="button" onClick={() => handleEtapaChange('ordenada')} 
-                                        style={{...styles.btnStep, opacity: formData.etapa === 'ordenada' ? 1 : 0.4, border: '2px solid #27ae60'}}>🟢 Ordenada</button>
+                                        style={{...styles.btnStep, background: formData.etapa === 'ordenada' ? '#27ae60' : 'white', color: formData.etapa === 'ordenada' ? 'white' : '#555'}}>🟢 Ordenada</button>
                             </div>
                         </div>
                     )}
@@ -259,12 +270,16 @@ const Operaciones = () => {
                             </div>
                         )}
 
-                        <select value={formData.tipoApoyo} onChange={e => setFormData({...formData, tipoApoyo: e.target.value})} style={styles.input} required>
+                        <select 
+                            value={formData.tipoApoyo} 
+                            onChange={e => handleMissionChange(e.target.value)} 
+                            style={styles.input} 
+                            required
+                        >
                             <option value="">Tipo de Misión...</option>
-                            <option value="Sostenimiento">Sostenimiento</option>
-                            <option value="Fuerza Operativa">Fuerza Operativa</option>
-                            <option value="Educacion">Educación / Instrucción</option>
-                            <option value="Guardia">Servicio de Guardia</option>
+                            {missionOptions.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
                         </select>
 
                         <div style={styles.sdaBox}>
@@ -275,9 +290,8 @@ const Operaciones = () => {
                             >
                                 <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave E/S..."}</option>
                                 {availableAircraft.map(air => (
-                                    /* CORRECCIÓN VISUAL: Si no hay modelo, no mostramos paréntesis vacíos */
-                                    <option key={air._id} value={air.modelo ? `${air.matricula} (${air.modelo})` : air.matricula}>
-                                        {air.matricula} {air.modelo ? `- ${air.modelo}` : ''}
+                                    <option key={air._id} value={`${air.modelo} (${air.matricula})`}>
+                                        {air.modelo} - {air.matricula}
                                     </option>
                                 ))}
                             </select>
@@ -320,6 +334,9 @@ const Operaciones = () => {
                                     <div style={{fontSize: '0.75rem', color: '#666'}}>
                                         {ev.elemento} | {new Date(ev.start).toLocaleDateString('es-AR')}
                                     </div>
+                                    <div style={{fontSize: '0.7rem', color: '#555', marginTop: '3px', fontWeight: '500'}}>
+                                        {ev.tipoApoyo}
+                                    </div>
                                     <span style={{...styles.miniBadge, backgroundColor: ev.color}}>
                                         {ev.etapa?.toUpperCase() || 'PROCESANDO'}
                                     </span>
@@ -337,7 +354,6 @@ const Operaciones = () => {
     );
 };
 
-// LOS ESTILOS SE MANTIENEN IDÉNTICOS A TU VERSIÓN ORIGINAL
 const styles = {
     container: { padding: '20px', maxWidth: '1200px', margin: '0 auto' },
     grid: { display: 'grid', gap: '25px', alignItems: 'start' },
@@ -349,7 +365,7 @@ const styles = {
     etapaWrapper: { marginBottom: '20px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' },
     labelEtapa: { fontSize: '0.7rem', fontWeight: 'bold', color: '#777', marginBottom: '8px', display: 'block' },
     etapaGrid: { display: 'flex', gap: '8px' },
-    btnStep: { flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', background: 'white', transition: '0.3s' },
+    btnStep: { flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid #ddd', transition: '0.3s' },
     unidadSelector: { margin: '10px 0' },
     unidadChips: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '8px' },
     chip: { border: 'none', padding: '5px 10px', borderRadius: '15px', fontSize: '0.7rem', cursor: 'pointer', transition: '0.2s' },
@@ -361,7 +377,7 @@ const styles = {
     btnAdd: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', width: '40px', cursor: 'pointer' },
     tagWrap: { display: 'flex', flexWrap: 'wrap', gap: '5px' },
     tag: { background: '#e1e8ed', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', color: '#1b3a57', display: 'flex', alignItems: 'center' },
-    btnTagX: { background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer' },
+    btnTagX: { background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', marginLeft: '5px' },
     btnSave: { color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', marginTop: '10px' },
     scrollList: { maxHeight: '600px', overflowY: 'auto' },
     logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #f0f0f0' },

@@ -22,8 +22,6 @@ const CalendarPage = () => {
             const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
             
-            // FILTRADO DE SEGURIDAD: 
-            // Las unidades solo ven sus eventos o los marcados como globales.
             const filteredData = esMando 
                 ? data 
                 : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
@@ -58,19 +56,25 @@ const CalendarPage = () => {
     const eventDidMount = (info) => {
         const { tipoOrigen, esGlobal, etapa } = info.event.extendedProps;
         
-        // Estilo para Órdenes de Comando o Globales (Borde Dorado distintivo)
+        // Borde Dorado para Órdenes de Comando o Globales
         if (tipoOrigen === 'COMANDO' || esGlobal) {
             info.el.style.border = '2px solid #FFD700'; 
             info.el.style.boxShadow = '0 0 5px rgba(255, 215, 0, 0.5)';
             info.el.style.fontWeight = 'bold';
         }
 
-        // Estilos visuales por Etapa del Flujo
+        // Estilos por Etapa
         if (etapa === 'recepcion') {
             info.el.style.opacity = '0.7'; 
             info.el.style.borderStyle = 'dashed';
         } else if (etapa === 'revision') {
             info.el.style.opacity = '0.9';
+        }
+
+        // Corrección de visibilidad para eventos color Negro
+        if (info.event.backgroundColor === '#000000') {
+            const titleEl = info.el.querySelector('.fc-event-title');
+            if (titleEl) titleEl.style.color = '#FFFFFF';
         }
     };
 
@@ -102,11 +106,10 @@ const CalendarPage = () => {
                     locale={esLocale}
                     events={events.map(ev => ({
                         id: ev._id,
-                        // El título incluye el icono global si corresponde
                         title: `${ev.esGlobal ? '🌐 ' : ''}${ev.tipoApoyo ? `[${ev.tipoApoyo}] ` : ''}${ev.title}`,
                         start: ev.start,
                         end: ev.end,
-                        backgroundColor: ev.tipoOrigen === 'COMANDO' ? '#1b3a57' : (ev.color || '#1b3a57'), 
+                        backgroundColor: ev.color || '#1b3a57', 
                         borderColor: 'transparent',
                         extendedProps: { 
                             notes: ev.notes, 
