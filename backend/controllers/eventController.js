@@ -1,10 +1,29 @@
 const Event = require('../models/Event');
+const Aircraft = require('../models/Aircraft'); // IMPORTANTE: Importamos el modelo de aeronaves
 
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
  * Seguridad: Validación de roles, trazabilidad y permisos diferenciados.
  * Estándar actualizado: BOSS y ADMIN (Control Total y Gestión Global).
  */
+
+// @desc    Obtener aeronaves disponibles para la unidad (Solo las que están En Servicio E/S)
+const getAvailableAircraft = async (req, res) => {
+    try {
+        const { elemento } = req.params;
+        
+        // Buscamos aeronaves que pertenezcan al elemento y estén En Servicio (E/S)
+        const aircrafts = await Aircraft.find({ 
+            unidad: { $regex: elemento, $options: 'i' },
+            estado: 'E/S' 
+        });
+        
+        res.status(200).json(aircrafts);
+    } catch (error) {
+        console.error(`❌ Error en getAvailableAircraft: ${error.message}`);
+        res.status(500).json({ message: "Error al obtener aeronaves disponibles" });
+    }
+};
 
 // @desc    Obtener eventos filtrados por jerarquía, unidad y estado de aprobación
 const getEvents = async (req, res) => {
@@ -153,6 +172,7 @@ const deleteEvent = async (req, res) => {
 
 module.exports = {
     getEvents,
+    getAvailableAircraft, // Exportamos la nueva función
     createEvent,
     updateEvent,
     deleteEvent

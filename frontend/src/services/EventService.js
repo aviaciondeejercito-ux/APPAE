@@ -7,6 +7,20 @@ import API from './api';
  * Estándar de Seguridad: Limpieza de datos atómica antes del envío.
  */
 
+// --- NUEVA FUNCIÓN: Obtener aeronaves E/S por unidad ---
+export const getAvailableAircraft = async (elemento) => {
+    try {
+        // Codificamos el nombre del elemento para evitar problemas con espacios en la URL
+        const encodedElemento = encodeURIComponent(elemento);
+        const response = await API.get(`/events/aircraft/${encodedElemento}`);
+        return response.data;
+    } catch (error) {
+        console.error(`❌ Error al obtener aeronaves para ${elemento}:`, 
+            error.response?.data?.message || error.message);
+        throw error;
+    }
+};
+
 // Función para obtener eventos de la base de datos
 export const getEvents = async () => {
     try {
@@ -38,7 +52,7 @@ export const createEvent = async (eventData) => {
     }
 };
 
-// Función para actualizar un evento existente (Indispensable para el flujo de aprobación)
+// Función para actualizar un evento existente
 export const updateEvent = async (id, eventData) => {
     try {
         /**
@@ -71,7 +85,7 @@ export const updateEvent = async (id, eventData) => {
         return response.data;
     } catch (error) {
         const errorMsg = error.response?.data?.message || error.message;
-        const details = error.response?.data?.details || ""; // Captura detalles técnicos si el backend los envía
+        const details = error.response?.data?.details || ""; 
         
         console.error(`❌ Error al actualizar el evento ${id}:`, errorMsg, details);
         throw error;
@@ -95,6 +109,7 @@ export const deleteEvent = async (id) => {
  */
 const EventService = {
     getEvents,
+    getAvailableAircraft, // Agregado a la exportación
     createEvent,
     updateEvent,
     deleteEvent

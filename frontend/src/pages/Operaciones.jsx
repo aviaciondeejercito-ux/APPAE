@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 // IMPORTANTE: Usamos el servicio centralizado para normalizar fechas y seguridad
-import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/EventService';
+import { getEvents, createEvent, deleteEvent, updateEvent, getAvailableAircraft } from '../services/EventService';
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
@@ -11,11 +11,10 @@ const Operaciones = () => {
     const [isMobile] = useState(window.innerWidth < 768);
 
     const [publicarGlobal, setPublicarGlobal] = useState(false);
-
-    const sdaList = [
-        "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
-        "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
-    ];
+    
+    // ESTADO PARA AERONAVES REALES E/S
+    const [availableAircraft, setAvailableAircraft] = useState([]);
+    const [loadingAircraft, setLoadingAircraft] = useState(false);
 
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
@@ -30,7 +29,32 @@ const Operaciones = () => {
         unidadesInvolucradas: []
     });
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => { 
+        fetchData(); 
+    }, []);
+
+    // EFECTO: Cargar aeronaves reales cuando cambia la unidad o el modo global
+    useEffect(() => {
+        const fetchAeronaves = async () => {
+            setLoadingAircraft(true);
+            try {
+                // Si es ADMIN y hay unidades elegidas, buscamos de esas. Si no, de la unidad del usuario.
+                const destinoBusqueda = (formData.unidadesInvolucradas.length > 0) 
+                    ? formData.unidadesInvolucradas[0] // Traemos del primer elemento seleccionado para evitar desorden
+                    : userUnidad;
+
+                if (destinoBusqueda) {
+                    const data = await getAvailableAircraft(destinoBusqueda);
+                    setAvailableAircraft(data);
+                }
+            } catch (err) {
+                console.error("Error cargando aeronaves en servicio");
+            } finally {
+                setLoadingAircraft(false);
+            }
+        };
+        fetchAeronaves();
+    }, [formData.unidadesInvolucradas, userUnidad]);
 
     const fetchData = async () => {
         try {
@@ -64,6 +88,7 @@ const Operaciones = () => {
 
     const addSda = () => {
         if (!formData.sdaSelected) return;
+        // Ahora sdaSelected contiene la matrícula y modelo real
         const nuevoSda = `${formData.sdaCantidad}x ${formData.sdaSelected}`;
         setFormData({ 
             ...formData, 
@@ -81,16 +106,9 @@ const Operaciones = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
         const esAutorizadoGlobal = role === 'admin' || role === 'boss';
-        
-        // Limpiamos las notas para que no se acumulen prefijos SdA en cada edición
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
-        /**
-         * ESTÁNDAR DE SEGURIDAD: 
-         * Construimos el objeto final asegurando consistencia con el Schema del Backend
-         */
         const finalData = {
             title: formData.title,
             start: formData.start,
@@ -109,7 +127,6 @@ const Operaciones = () => {
 
         try {
             if (isEditing) {
-                // El service se encarga de la limpieza de IDs y normalización ISO
                 await updateEvent(selectedId, finalData);
             } else {
                 await createEvent(finalData);
@@ -139,11 +156,9 @@ const Operaciones = () => {
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
 
-        // Extraemos solo la parte de la observación humana del campo notas
         const parts = ev.notes?.split(' | Obs: ');
         const obsPart = parts && parts.length > 1 ? parts[1] : ev.notes;
 
-        // CORRECCIÓN HORARIA: Formateo ISO local para evitar el desfase de 3hs en los inputs datetime-local
         const formatFecha = (d) => {
             if (!d) return '';
             const date = new Date(d);
@@ -246,10 +261,20 @@ const Operaciones = () => {
                             <option value="Guardia">Servicio de Guardia</option>
                         </select>
 
+                        {/* SELECTOR DE AERONAVES REALES E/S */}
                         <div style={styles.sdaBox}>
-                            <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                <option value="">SdA...</option>
-                                {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
+                            <select 
+                                value={formData.sdaSelected} 
+                                onChange={e => setFormData({...formData, sdaSelected: e.target.value})} 
+                                style={{...styles.input, flex: 1}}
+                            >
+                                <option value="">{loadingAircraft ? "Cargando aeronaves..." : "Seleccionar Aeronave E/S..."}</option>
+                                {availableAircraft.length === 0 && !loadingAircraft && <option disabled>No hay aeronaves E/S en esta unidad</option>}
+                                {availableAircraft.map(air => (
+                                    <option key={air._id} value={`${air.matricula} (${air.modelo})`}>
+                                        {air.matricula} - {air.modelo}
+                                    </option>
+                                ))}
                             </select>
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
                             <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
