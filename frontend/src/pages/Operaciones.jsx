@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-// IMPORTANTE: Usamos el servicio centralizado para normalizar fechas y seguridad
 import { getEvents, createEvent, deleteEvent, updateEvent, getAvailableAircraft } from '../services/EventService';
 
 const Operaciones = () => {
@@ -12,7 +11,6 @@ const Operaciones = () => {
 
     const [publicarGlobal, setPublicarGlobal] = useState(false);
     
-    // ESTADO PARA AERONAVES REALES E/S
     const [availableAircraft, setAvailableAircraft] = useState([]);
     const [loadingAircraft, setLoadingAircraft] = useState(false);
 
@@ -33,14 +31,12 @@ const Operaciones = () => {
         fetchData(); 
     }, []);
 
-    // EFECTO: Cargar aeronaves reales cuando cambia la unidad o el modo global
     useEffect(() => {
         const fetchAeronaves = async () => {
             setLoadingAircraft(true);
             try {
-                // Si es ADMIN y hay unidades elegidas, buscamos de esas. Si no, de la unidad del usuario.
                 const destinoBusqueda = (formData.unidadesInvolucradas.length > 0) 
-                    ? formData.unidadesInvolucradas[0] // Traemos del primer elemento seleccionado para evitar desorden
+                    ? formData.unidadesInvolucradas[0] 
                     : userUnidad;
 
                 if (destinoBusqueda) {
@@ -60,7 +56,6 @@ const Operaciones = () => {
         try {
             const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
-            // Filtrado de seguridad: El mando ve todo, la unidad solo lo propio o lo global
             const filteredData = esMando 
                 ? data 
                 : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
@@ -86,16 +81,21 @@ const Operaciones = () => {
         setFormData({ ...formData, unidadesInvolucradas: updated });
     };
 
+    // CORRECCIÓN: Lógica para evitar "undefined" al agregar aeronaves
     const addSda = () => {
         if (!formData.sdaSelected) return;
-        // Ahora sdaSelected contiene la matrícula y modelo real
+        
+        // El valor de sdaSelected ya viene formateado desde el <select>
         const nuevoSda = `${formData.sdaCantidad}x ${formData.sdaSelected}`;
-        setFormData({ 
-            ...formData, 
-            sdaListado: [...formData.sdaListado, nuevoSda], 
-            sdaSelected: '', 
-            sdaCantidad: 1 
-        });
+        
+        if (!formData.sdaListado.includes(nuevoSda)) {
+            setFormData({ 
+                ...formData, 
+                sdaListado: [...formData.sdaListado, nuevoSda], 
+                sdaSelected: '', 
+                sdaCantidad: 1 
+            });
+        }
     };
 
     const removeSda = (index) => {
@@ -107,12 +107,15 @@ const Operaciones = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         const esAutorizadoGlobal = role === 'admin' || role === 'boss';
+        
+        // Limpiamos notas para no duplicar el prefijo SdA
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
         const finalData = {
             title: formData.title,
-            start: formData.start,
-            end: formData.end,
+            // Aseguramos formato ISO para evitar Error 400 en el Backend
+            start: new Date(formData.start).toISOString(),
+            end: new Date(formData.end).toISOString(),
             color: formData.color,
             tipoApoyo: formData.tipoApoyo,
             sdaListado: formData.sdaListado,
@@ -128,15 +131,16 @@ const Operaciones = () => {
         try {
             if (isEditing) {
                 await updateEvent(selectedId, finalData);
+                alert("✅ Registro actualizado correctamente.");
             } else {
                 await createEvent(finalData);
+                alert("✅ Grabado con éxito en el Monitor AE.");
             }
             resetForm();
             fetchData();
-            alert("Operación procesada con éxito en el Monitor AE.");
         } catch (error) { 
             console.error("Error en Submit:", error);
-            alert("Error crítico en el registro de la orden."); 
+            alert("❌ Error: Verifique que todos los campos y fechas sean correctos."); 
         }
     };
 
@@ -167,12 +171,12 @@ const Operaciones = () => {
         };
 
         setFormData({
-            title: ev.title,
+            title: ev.title || '',
             start: formatFecha(ev.start),
             end: formatFecha(ev.end),
-            color: ev.color,
+            color: ev.color || '#f39c12',
             notes: obsPart || '',
-            sdaListado: ev.sdaListado || [], 
+            sdaListado: Array.isArray(ev.sdaListado) ? ev.sdaListado : [], 
             tipoApoyo: ev.tipoApoyo || '',
             etapa: ev.etapa || 'recepcion',
             unidadesInvolucradas: ev.elemento ? ev.elemento.split(', ') : []
@@ -195,7 +199,6 @@ const Operaciones = () => {
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
-                {/* PANEL DE CARGA / EDICIÓN */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
                     
@@ -261,15 +264,13 @@ const Operaciones = () => {
                             <option value="Guardia">Servicio de Guardia</option>
                         </select>
 
-                        {/* SELECTOR DE AERONAVES REALES E/S */}
                         <div style={styles.sdaBox}>
                             <select 
                                 value={formData.sdaSelected} 
                                 onChange={e => setFormData({...formData, sdaSelected: e.target.value})} 
                                 style={{...styles.input, flex: 1}}
                             >
-                                <option value="">{loadingAircraft ? "Cargando aeronaves..." : "Seleccionar Aeronave E/S..."}</option>
-                                {availableAircraft.length === 0 && !loadingAircraft && <option disabled>No hay aeronaves E/S en esta unidad</option>}
+                                <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave E/S..."}</option>
                                 {availableAircraft.map(air => (
                                     <option key={air._id} value={`${air.matricula} (${air.modelo})`}>
                                         {air.matricula} - {air.modelo}
@@ -282,7 +283,10 @@ const Operaciones = () => {
 
                         <div style={styles.tagWrap}>
                             {formData.sdaListado.map((s, i) => (
-                                <span key={i} style={styles.tag}>{s} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
+                                <span key={i} style={styles.tag}>
+                                    {s} 
+                                    <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button>
+                                </span>
                             ))}
                         </div>
 
@@ -291,11 +295,14 @@ const Operaciones = () => {
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
                             {isEditing ? "ACTUALIZAR REGISTRO" : "GRABAR EN MONITOR OPERATIVO"}
                         </button>
-                        {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR EDICIÓN</button>}
+                        {isEditing && (
+                            <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>
+                                CANCELAR EDICIÓN
+                            </button>
+                        )}
                     </form>
                 </div>
 
-                {/* LISTADO DE ÓRDENES REGISTRADAS */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Órdenes {role === 'admin' || role === 'boss' ? 'Generales' : `de ${userUnidad}`}</h3>
                     <div style={styles.scrollList}>
