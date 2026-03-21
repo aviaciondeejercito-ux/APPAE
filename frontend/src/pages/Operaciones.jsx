@@ -82,13 +82,23 @@ const Operaciones = () => {
         e.preventDefault();
         
         const esAutorizadoGlobal = role === 'admin' || role === 'boss';
+        // Limpiamos notas para evitar duplicación de prefijos "SdA:" al editar varias veces
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
+        /**
+         * ESTÁNDAR DE SEGURIDAD: 
+         * Construimos el objeto final asegurando que los campos coincidan con el Schema
+         */
         const finalData = {
-            ...formData,
+            title: formData.title,
+            start: formData.start,
+            end: formData.end,
+            color: formData.color,
+            tipoApoyo: formData.tipoApoyo,
+            sdaListado: formData.sdaListado,
+            etapa: formData.etapa,
             esGlobal: esAutorizadoGlobal ? publicarGlobal : false,
             tipoOrigen: esAutorizadoGlobal && publicarGlobal ? 'COMANDO' : 'UNIDAD',
-            // Mantenemos la estructura de notas para compatibilidad, pero enviamos sdaListado para el modal
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
             elemento: (esAutorizadoGlobal && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
@@ -97,6 +107,7 @@ const Operaciones = () => {
 
         try {
             if (isEditing) {
+                // El service se encarga de quitar el _id y normalizar fechas ISO
                 await updateEvent(selectedId, finalData);
             } else {
                 await createEvent(finalData);
@@ -105,6 +116,7 @@ const Operaciones = () => {
             fetchData();
             alert("Operación procesada con éxito en el Monitor AE.");
         } catch (error) { 
+            console.error("Error en Submit:", error);
             alert("Error crítico en el registro de la orden."); 
         }
     };
@@ -152,8 +164,12 @@ const Operaciones = () => {
 
     const handleDelete = async (id) => {
         if (window.confirm("¿Confirmar ELIMINACIÓN de la orden operativa?")) {
-            await deleteEvent(id);
-            fetchData();
+            try {
+                await deleteEvent(id);
+                fetchData();
+            } catch (error) {
+                alert("No se pudo eliminar el evento.");
+            }
         }
     };
 
