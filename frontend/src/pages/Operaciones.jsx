@@ -41,7 +41,13 @@ const Operaciones = () => {
 
                 if (destinoBusqueda) {
                     const data = await getAvailableAircraft(destinoBusqueda);
-                    setAvailableAircraft(data);
+                    // Mapeo de seguridad para evitar datos corruptos
+                    const cleanData = data.map(a => ({
+                        ...a,
+                        matricula: a.matricula || 'S/M',
+                        modelo: a.modelo || ''
+                    }));
+                    setAvailableAircraft(cleanData);
                 }
             } catch (err) {
                 console.error("Error cargando aeronaves en servicio");
@@ -81,12 +87,12 @@ const Operaciones = () => {
         setFormData({ ...formData, unidadesInvolucradas: updated });
     };
 
-    // CORRECCIÓN: Lógica para evitar "undefined" al agregar aeronaves
     const addSda = () => {
         if (!formData.sdaSelected) return;
         
-        // El valor de sdaSelected ya viene formateado desde el <select>
-        const nuevoSda = `${formData.sdaCantidad}x ${formData.sdaSelected}`;
+        // Limpiamos cualquier rastro de "undefined" o paréntesis vacíos que vengan del string del select
+        const valorLimpio = formData.sdaSelected.replace(/\s?\(undefined\)/g, '').replace(/\s?\(\)/g, '').trim();
+        const nuevoSda = `${formData.sdaCantidad}x ${valorLimpio}`;
         
         if (!formData.sdaListado.includes(nuevoSda)) {
             setFormData({ 
@@ -107,13 +113,10 @@ const Operaciones = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         const esAutorizadoGlobal = role === 'admin' || role === 'boss';
-        
-        // Limpiamos notas para no duplicar el prefijo SdA
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
         const finalData = {
             title: formData.title,
-            // Aseguramos formato ISO para evitar Error 400 en el Backend
             start: new Date(formData.start).toISOString(),
             end: new Date(formData.end).toISOString(),
             color: formData.color,
@@ -272,8 +275,9 @@ const Operaciones = () => {
                             >
                                 <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave E/S..."}</option>
                                 {availableAircraft.map(air => (
-                                    <option key={air._id} value={`${air.matricula} (${air.modelo})`}>
-                                        {air.matricula} - {air.modelo}
+                                    /* CORRECCIÓN VISUAL: Si no hay modelo, no mostramos paréntesis vacíos */
+                                    <option key={air._id} value={air.modelo ? `${air.matricula} (${air.modelo})` : air.matricula}>
+                                        {air.matricula} {air.modelo ? `- ${air.modelo}` : ''}
                                     </option>
                                 ))}
                             </select>
@@ -333,6 +337,7 @@ const Operaciones = () => {
     );
 };
 
+// LOS ESTILOS SE MANTIENEN IDÉNTICOS A TU VERSIÓN ORIGINAL
 const styles = {
     container: { padding: '20px', maxWidth: '1200px', margin: '0 auto' },
     grid: { display: 'grid', gap: '25px', alignItems: 'start' },
