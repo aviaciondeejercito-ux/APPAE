@@ -36,6 +36,7 @@ const Operaciones = () => {
         try {
             const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
+            // Filtrado de seguridad: El mando ve todo, la unidad solo lo propio o lo global
             const filteredData = esMando 
                 ? data 
                 : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
@@ -82,12 +83,13 @@ const Operaciones = () => {
         e.preventDefault();
         
         const esAutorizadoGlobal = role === 'admin' || role === 'boss';
-        // Limpiamos notas para evitar duplicación de prefijos "SdA:" al editar varias veces
+        
+        // Limpiamos las notas para que no se acumulen prefijos SdA en cada edición
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
         /**
          * ESTÁNDAR DE SEGURIDAD: 
-         * Construimos el objeto final asegurando que los campos coincidan con el Schema
+         * Construimos el objeto final asegurando consistencia con el Schema del Backend
          */
         const finalData = {
             title: formData.title,
@@ -98,7 +100,7 @@ const Operaciones = () => {
             sdaListado: formData.sdaListado,
             etapa: formData.etapa,
             esGlobal: esAutorizadoGlobal ? publicarGlobal : false,
-            tipoOrigen: esAutorizadoGlobal && publicarGlobal ? 'COMANDO' : 'UNIDAD',
+            tipoOrigen: (esAutorizadoGlobal && publicarGlobal) ? 'COMANDO' : 'UNIDAD',
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
             elemento: (esAutorizadoGlobal && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
@@ -107,7 +109,7 @@ const Operaciones = () => {
 
         try {
             if (isEditing) {
-                // El service se encarga de quitar el _id y normalizar fechas ISO
+                // El service se encarga de la limpieza de IDs y normalización ISO
                 await updateEvent(selectedId, finalData);
             } else {
                 await createEvent(finalData);
@@ -137,10 +139,11 @@ const Operaciones = () => {
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
 
+        // Extraemos solo la parte de la observación humana del campo notas
         const parts = ev.notes?.split(' | Obs: ');
         const obsPart = parts && parts.length > 1 ? parts[1] : ev.notes;
 
-        // CORRECCIÓN HORARIA: Formateo ISO local para evitar el desfase de 3hs en el input
+        // CORRECCIÓN HORARIA: Formateo ISO local para evitar el desfase de 3hs en los inputs datetime-local
         const formatFecha = (d) => {
             if (!d) return '';
             const date = new Date(d);
@@ -177,6 +180,7 @@ const Operaciones = () => {
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
+                {/* PANEL DE CARGA / EDICIÓN */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
                     
@@ -266,6 +270,7 @@ const Operaciones = () => {
                     </form>
                 </div>
 
+                {/* LISTADO DE ÓRDENES REGISTRADAS */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Órdenes {role === 'admin' || role === 'boss' ? 'Generales' : `de ${userUnidad}`}</h3>
                     <div style={styles.scrollList}>
@@ -284,8 +289,8 @@ const Operaciones = () => {
                                     </span>
                                 </div>
                                 <div style={styles.logActions}>
-                                    <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
-                                    <button onClick={() => handleDelete(ev._id)} style={styles.btnIconDel}>🗑️</button>
+                                    <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit} title="Editar">✏️</button>
+                                    <button onClick={() => handleDelete(ev._id)} style={styles.btnIconDel} title="Eliminar">🗑️</button>
                                 </div>
                             </div>
                         ))}

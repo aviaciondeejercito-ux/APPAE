@@ -20,6 +20,7 @@ const CalendarPage = () => {
     const fetchData = async () => {
         try {
             const data = await getEvents();
+            // Validamos que la data sea un array antes de setear
             setEvents(Array.isArray(data) ? data : []);
         } catch (error) { 
             console.error("❌ Error de sincronización con el Monitor AE:", error); 
@@ -28,7 +29,7 @@ const CalendarPage = () => {
 
     const handleEventClick = (info) => {
         const { event } = info;
-        // Normalizamos la extracción de datos para asegurar compatibilidad
+        // Normalizamos la extracción de datos para asegurar compatibilidad total con el modal
         setSelectedEvent({
             id: event.id,
             title: event.title,
@@ -51,12 +52,14 @@ const CalendarPage = () => {
     const eventDidMount = (info) => {
         const { tipoOrigen, esGlobal, etapa } = info.event.extendedProps;
         
+        // Estilo para Órdenes de Comando o Globales (Borde Dorado)
         if (tipoOrigen === 'COMANDO' || esGlobal) {
             info.el.style.border = '2px solid #FFD700'; 
             info.el.style.boxShadow = '0 0 5px rgba(255, 215, 0, 0.5)';
             info.el.style.fontWeight = 'bold';
         }
 
+        // Estilos visuales por Etapa del Flujo
         if (etapa === 'recepcion') {
             info.el.style.opacity = '0.7'; 
             info.el.style.borderStyle = 'dashed';
@@ -93,6 +96,7 @@ const CalendarPage = () => {
                     locale={esLocale}
                     events={events.map(ev => ({
                         id: ev._id,
+                        // El título incluye el icono global si corresponde para identificación rápida
                         title: `${ev.esGlobal ? '🌐 ' : ''}${ev.tipoApoyo ? `[${ev.tipoApoyo}] ` : ''}${ev.title}`,
                         start: ev.start,
                         end: ev.end,

@@ -22,7 +22,7 @@ export const getEvents = async () => {
 // Función para crear un nuevo evento
 export const createEvent = async (eventData) => {
     try {
-        // Aseguramos que las fechas sean objetos Date o strings ISO válidos
+        // Aseguramos que las fechas sean strings ISO válidos para el Backend
         const payload = {
             ...eventData,
             start: new Date(eventData.start).toISOString(),
@@ -42,28 +42,38 @@ export const createEvent = async (eventData) => {
 export const updateEvent = async (id, eventData) => {
     try {
         /**
-         * SEGURIDAD Y LIMPIEZA:
-         * Eliminamos campos que MongoDB no permite actualizar o que causan Error 400.
+         * SEGURIDAD Y LIMPIEZA PROFUNDA:
+         * FullCalendar a veces envía objetos circulares o propiedades privadas (empezando con _)
+         * que causan Error 400. Aquí extraemos solo lo que el modelo Event necesita.
          */
-        const cleanData = { ...eventData };
-        
-        delete cleanData._id;   // Inmutable en MongoDB
-        delete cleanData.__v;   // Versión del documento
-        delete cleanData.createdAt; 
+        const cleanData = {
+            title: eventData.title,
+            notes: eventData.notes,
+            color: eventData.color,
+            elemento: eventData.elemento,
+            etapa: eventData.etapa,
+            tipoApoyo: eventData.tipoApoyo,
+            esGlobal: eventData.esGlobal,
+            sdaListado: Array.isArray(eventData.sdaListado) ? eventData.sdaListado : []
+        };
+
+        // Normalización estricta de fechas a ISO String
+        if (eventData.start) cleanData.start = new Date(eventData.start).toISOString();
+        if (eventData.end) cleanData.end = new Date(eventData.end).toISOString();
+
+        // Eliminación redundante por seguridad ante Mongoose
+        delete cleanData._id;
+        delete cleanData.__v;
+        delete cleanData.createdAt;
         delete cleanData.updatedAt;
-
-        // Normalización de fechas para evitar rechazos del validador de Mongoose
-        if (cleanData.start) cleanData.start = new Date(cleanData.start).toISOString();
-        if (cleanData.end) cleanData.end = new Date(cleanData.end).toISOString();
-
-        // Si sdaListado viene vacío o nulo, aseguramos que viaje como array vacío
-        if (!cleanData.sdaListado) cleanData.sdaListado = [];
 
         const response = await API.put(`/events/${id}`, cleanData);
         return response.data;
     } catch (error) {
         const errorMsg = error.response?.data?.message || error.message;
-        console.error(`❌ Error al actualizar el evento ${id}:`, errorMsg);
+        const details = error.response?.data?.details || ""; // Captura detalles técnicos si el backend los envía
+        
+        console.error(`❌ Error al actualizar el evento ${id}:`, errorMsg, details);
         throw error;
     }
 };
@@ -83,9 +93,11 @@ export const deleteEvent = async (id) => {
 /**
  * EXPORTACIÓN UNIFICADA
  */
-export default {
+const EventService = {
     getEvents,
     createEvent,
     updateEvent,
     deleteEvent
 };
+
+export default EventService;

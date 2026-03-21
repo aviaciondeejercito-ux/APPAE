@@ -87,27 +87,33 @@ const updateEvent = async (req, res) => {
         if (!event) return res.status(404).json({ message: 'Evento no localizado.' });
 
         const esDuenio = event.createdBy && event.createdBy.toString() === req.user._id.toString();
-        const esMando = req.user.role === 'admin' || req.user.role === 'boss';
+        const esMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
 
+        // Seguridad: Solo el dueño o personal de mando/DIR AE puede editar
         if (!esDuenio && !esMando) {
             return res.status(403).json({ message: 'No tiene permisos para modificar esta orden.' });
         }
 
         // --- SOLUCIÓN ERROR 400: Limpieza de datos críticos ---
         const updateData = { ...req.body };
-        delete updateData._id; // Evita error de modificación de ID inmutable
-        delete updateData.__v;
         
-        updateData.userName = req.user.username; // Trazabilidad obligatoria
+        // Eliminamos campos que MongoDB no permite actualizar manualmente o que causan conflicto
+        delete updateData._id; 
+        delete updateData.__v;
+        delete updateData.createdBy; // Protegemos la autoría original
 
-        // Conversión explícita de fechas para pasar validación de Schema
+        // Trazabilidad: Actualizamos quién fue el último en editar
+        updateData.userName = req.user.username; 
+
+        // Conversión robusta de fechas (Soluciona problemas de formato de strings)
         if (updateData.start) updateData.start = new Date(updateData.start);
         if (updateData.end) updateData.end = new Date(updateData.end);
 
-        // Restricciones de seguridad por Rol
+        // Restricciones de seguridad por Rol (Usuarios comunes no pueden cambiar etapa o visibilidad global)
         if (!esMando) {
             delete updateData.esGlobal;
             delete updateData.etapa;
+            delete updateData.elemento; // Un usuario local no puede mover el evento a otra unidad
         }
 
         const updatedEvent = await Event.findByIdAndUpdate(
@@ -119,7 +125,6 @@ const updateEvent = async (req, res) => {
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        // Enviamos el mensaje de error específico de Mongoose si existe para debug
         res.status(400).json({ 
             message: 'Fallo al actualizar el registro operativo.',
             details: error.message 
@@ -133,6 +138,7 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'El evento no existe.' });
 
+        // Solo Admin o Boss pueden borrar para mantener integridad histórica
         if (req.user.role !== 'admin' && req.user.role !== 'boss') {
             return res.status(403).json({ message: 'Baja denegada: Requiere nivel BOSS o superior.' });
         }
