@@ -14,7 +14,6 @@ const API = axios.create({
 /**
  * INTERCEPTOR DE SEGURIDAD JWT
  * Adjunta automáticamente el token de sesión a cada petición.
- * Esto garantiza que el backend identifique al usuario de forma inviolable.
  */
 API.interceptors.request.use(
     (config) => {
@@ -35,12 +34,8 @@ API.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response && error.response.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('role');
-            localStorage.removeItem('elemento');
-            localStorage.removeItem('username');
-            // Opcional: Redirigir si el router está disponible
-            // window.location.href = '/login';
+            localStorage.clear(); // Limpieza total de seguridad
+            window.location.href = '/login';
         }
         return Promise.reject(error);
     }
@@ -54,26 +49,18 @@ export const register = (userData) => API.post('/auth/register', userData);
 
 /**
  * SERVICIOS DE EVENTOS (CALENDARIO OPERATIVO)
- * Optimizado para Sincronización Doble Capa (Unidad / DIR AE)
  */
-
-// Obtener eventos: El backend filtrará por el Token (Seguridad Atómica)
 export const getEvents = () => API.get('/events');
 
-// Crear evento con metadatos de segmentación y limpieza de SdA
 export const createEvent = (eventData) => {
     const userElemento = localStorage.getItem('elemento');
-
     const dataNormalized = {
         ...eventData,
-        // Limpieza de datos antes del envío
         title: eventData.title?.trim(),
         elemento: eventData.elemento || userElemento,
         esGlobal: eventData.esGlobal || false,
-        // Aseguramos que la lista de SdA viaje limpia
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
     };
-
     return API.post('/events', dataNormalized);
 };
 
@@ -89,55 +76,62 @@ export const deleteEvent = (id) => API.delete(`/events/${id}`);
 
 /**
  * SERVICIOS DE MATERIAL AERONÁUTICO (ESTADO DE FLOTA)
+ * Sincronizado con el modelo de MongoDB actualizado.
  */
 
-// Obtener aeronaves con filtrado preventivo
 export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toLowerCase();
     const userElemento = localStorage.getItem('elemento')?.trim();
 
-    // Si no es jefe, solo pedimos lo de su unidad para reducir carga
+    // Si es un usuario de unidad, pedimos filtrado por query param para optimizar
     if (role !== 'admin' && role !== 'boss' && userElemento) {
         return API.get(`/aircraft`, { params: { unidad: userElemento } });
     }
-    
     return API.get('/aircraft');
 };
 
-// Crear nueva aeronave con Inyección de Seguridad y Tipado Fuerte
 export const createAircraft = (aircraftData) => {
     const userRole = localStorage.getItem('role')?.toLowerCase();
     const userElemento = localStorage.getItem('elemento')?.trim();
+    const userName = localStorage.getItem('username') || 'Usuario';
 
     const dataNormalized = {
         ...aircraftData,
         matricula: aircraftData.matricula?.toUpperCase().trim(),
         sda: aircraftData.sda?.toUpperCase().trim(),
-        // Seguridad: Un usuario común no puede dar de alta aviones en otras unidades
+        // Forzamos la unidad del usuario si no es jerárquico
         unidad: (userRole !== 'admin' && userRole !== 'boss') 
                 ? userElemento 
-                : (aircraftData.unidad?.toUpperCase().trim() || userElemento),
+                : (aircraftData.unidad?.trim() || userElemento),
         horasRemanentes: Number(aircraftData.horasRemanentes) || 0,
-        proximaInspeccion: Number(aircraftData.proximaInspeccion) || 0
+        novedades: aircraftData.novedades || "", // Cambio de 'notas' a 'novedades'
+        creadoPor: userName
     };
-
-    if (!dataNormalized.matricula || !dataNormalized.sda) {
-        return Promise.reject({ 
-            response: { data: { message: "Error AE: Matrícula y SdA son obligatorios." } } 
-        });
-    }
 
     return API.post('/aircraft', dataNormalized);
 };
 
 export const updateAircraftStatus = (id, aircraftData) => {
+    const userName = localStorage.getItem('username') || 'Usuario';
+    
+    // Normalización crítica para el PUT
     const dataNormalized = {
         ...aircraftData,
-        horasRemanentes: aircraftData.horasRemanentes !== undefined ? Number(aircraftData.horasRemanentes) : undefined,
-        proximaInspeccion: aircraftData.proximaInspeccion !== undefined ? Number(aircraftData.proximaInspeccion) : undefined,
-        matricula: aircraftData.matricula?.toUpperCase().trim(),
-        sda: aircraftData.sda?.toUpperCase().trim()
+        // Convertimos a número si el campo existe para evitar errores de validación
+        horasRemanentes: aircraftData.horasRemanentes !== undefined 
+            ? Number(aircraftData.horasRemanentes) 
+            : undefined,
+        // Aseguramos que novedades viaje con el nombre correcto
+        novedades: aircraftData.novedades !== undefined 
+            ? aircraftData.novedades 
+            : aircraftData.notas, // Fallback por si acaso
+        actualizadoPor: userName,
+        fechaActualizacion: new Date()
     };
+
+    // Eliminamos el campo 'notas' si existe para no confundir al backend
+    delete dataNormalized.notas;
+
     return API.put(`/aircraft/${id}`, dataNormalized);
 };
 

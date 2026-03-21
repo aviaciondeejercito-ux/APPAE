@@ -10,7 +10,7 @@ const AircraftSchema = new mongoose.Schema({
         required: [true, 'La matrícula es obligatoria para el registro'], 
         unique: true,
         uppercase: true,
-        trim: true // Elimina espacios accidentales para evitar duplicados falsos
+        trim: true 
     },
     sda: { 
         type: String, 
@@ -22,7 +22,7 @@ const AircraftSchema = new mongoose.Schema({
         type: String, 
         required: [true, 'La asignación a una Unidad/Elemento es obligatoria'],
         uppercase: true,
-        trim: true // CRÍTICO: Asegura coincidencia exacta con el 'elemento' del usuario logueado
+        trim: true 
     },
     estado: { 
         type: String, 
@@ -39,9 +39,10 @@ const AircraftSchema = new mongoose.Schema({
         min: [0, 'Las horas remanentes no pueden ser negativas'],
         default: 0
     },
+    // CAMBIO CLAVE: Se permite que sea vacío para facilitar la limpieza de notas desde el frontend
     novedades: { 
         type: String, 
-        default: 'Sin novedades reportadas.',
+        default: '', 
         trim: true
     },
     // Auditoría de cambios en tiempo real
@@ -59,25 +60,28 @@ const AircraftSchema = new mongoose.Schema({
         required: [true, 'El registro de autoría es obligatorio para auditoría']
     }
 }, { 
-    timestamps: true // Crea automáticamente createdAt y updatedAt (Estándar de Seguridad AE)
+    timestamps: true 
 });
 
 /**
  * MIDDLEWARE DE PRE-GUARDADO (INYECCIÓN DE SEGURIDAD)
- * Asegura la integridad de los datos antes de que lleguen a la base de datos.
  */
 AircraftSchema.pre('save', function(next) {
     if (this.matricula) this.matricula = this.matricula.toUpperCase().trim();
     if (this.sda) this.sda = this.sda.toUpperCase().trim();
     if (this.unidad) this.unidad = this.unidad.toUpperCase().trim();
     
+    // Si novedades viene como null o undefined, lo seteamos a string vacío para evitar errores
+    if (this.novedades === null || this.novedades === undefined) {
+        this.novedades = '';
+    }
+
     this.ultimaActualizacion = Date.now();
     next();
 });
 
 /**
  * ÍNDICES DE RENDIMIENTO Y SEGURIDAD
- * Optimizan las búsquedas frecuentes por Unidad (S4) y Matrícula (Única).
  */
 AircraftSchema.index({ unidad: 1 });
 AircraftSchema.index({ matricula: 1 }, { unique: true });

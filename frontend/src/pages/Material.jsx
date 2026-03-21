@@ -4,8 +4,7 @@ import { getAircrafts, updateAircraftStatus, createAircraft, deleteAircraft } fr
 const Material = () => {
     const [aircrafts, setAircrafts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [editingId, setEditingId] = useState(null); 
-    const [selectedNote, setSelectedNote] = useState(null); // Para el Pop-up de notas
+    const [selectedNote, setSelectedNote] = useState(null); // Para el Pop-up de novedades
     
     const role = localStorage.getItem('role');
     const userElemento = localStorage.getItem('elemento')?.trim() || "";
@@ -20,7 +19,7 @@ const Material = () => {
         matricula: '',
         sda: '',
         horasRemanentes: 0,
-        notas: '' // Nuevo campo en el alta
+        novedades: '' // Unificado con Backend
     });
 
     useEffect(() => {
@@ -60,18 +59,14 @@ const Material = () => {
                 horasRemanentes: Number(newAir.horasRemanentes) || 0,
                 unidad: userElemento,
                 estado: 'E/S',
-                notas: newAir.notas ? `[${new Date().toLocaleDateString()}] ${userName}: ${newAir.notas}` : '',
-                historial: [{
-                    fecha: new Date(),
-                    evento: `Alta de material por ${userName}`,
-                    detalle: `Unidad: ${userElemento}`
-                }]
+                novedades: newAir.novedades ? `[${new Date().toLocaleDateString()}] ${userName}: ${newAir.novedades}` : '',
+                creadoPor: userName // Requerido por el modelo
             };
 
             await createAircraft(payload);
-            setNewAir({ matricula: '', sda: '', horasRemanentes: 0, notas: '' });
+            setNewAir({ matricula: '', sda: '', horasRemanentes: 0, novedades: '' });
             await fetchMaterial();
-            alert("Aeronave registrada.");
+            alert("Aeronave registrada correctamente.");
         } catch (error) {
             alert("Error al dar de alta el material.");
         }
@@ -82,29 +77,27 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            if (role !== 'admin' && role !== 'boss' && targetAir.unidad !== userElemento) {
+            // Verificación de seguridad local (el backend también lo hace)
+            if (role !== 'admin' && role !== 'boss' && String(targetAir.unidad).trim() !== String(userElemento).trim()) {
                 return alert("Seguridad: No tiene permisos sobre esta unidad.");
             }
 
             const cleanFields = { ...updatedFields };
             if (cleanFields.horasRemanentes !== undefined) cleanFields.horasRemanentes = Number(cleanFields.horasRemanentes);
-            if (cleanFields.matricula) cleanFields.matricula = cleanFields.matricula.toUpperCase().trim();
-
-            cleanFields.lastUpdateBy = userName;
-            cleanFields.lastUpdateDate = new Date();
-
+            
             await updateAircraftStatus(id, cleanFields);
+            
+            // Actualización optimista del estado local
             setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...cleanFields } : a));
-            if (editingId) setEditingId(null);
         } catch (error) {
             alert("Error al actualizar servidor.");
         }
     };
 
-    const handleSaveNote = async (id, text) => {
-        const fullNote = `[${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}] ${userName}: ${text}`;
-        await handleUpdateField(id, { notas: fullNote });
-        alert("Novedad actualizada.");
+    const handleSaveNote = async (id, text, isClear = false) => {
+        const fullNote = isClear ? "" : `[${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}] ${userName}: ${text}`;
+        await handleUpdateField(id, { novedades: fullNote });
+        setSelectedNote(null);
     };
 
     const handleDelete = async (id) => {
@@ -144,7 +137,7 @@ const Material = () => {
                         </div>
                         <div style={styles.field}>
                             <label style={styles.label}>Novedades Iniciales</label>
-                            <textarea value={newAir.notas} onChange={e => setNewAir({...newAir, notas: e.target.value})} style={{...styles.input, height: '60px', resize: 'none'}} placeholder="Ej: Próxima inspección de 100hs..." />
+                            <textarea value={newAir.novedades} onChange={e => setNewAir({...newAir, novedades: e.target.value})} style={{...styles.input, height: '60px', resize: 'none'}} placeholder="Ej: Próxima inspección de 100hs..." />
                         </div>
                         <button type="submit" style={styles.btnPrimary}>Registrar en {userElemento}</button>
                     </form>
@@ -159,8 +152,8 @@ const Material = () => {
                                 <div style={{flex: 1.2}}>
                                     <div style={styles.itemMain}>{air.matricula}</div>
                                     <div style={styles.itemSub}>{air.sda}</div>
-                                    <button onClick={() => setSelectedNote(air)} style={styles.btnNoteTrigger}>
-                                        {air.notas ? "📋 Ver Novedades" : "➕ Agregar Nota"}
+                                    <button onClick={() => setSelectedNote(air)} style={{...styles.btnNoteTrigger, background: air.novedades ? '#fff3cd' : '#eef2f7'}}>
+                                        {air.novedades ? "📋 Ver Novedades" : "➕ Agregar Nota"}
                                     </button>
                                 </div>
 
@@ -184,26 +177,36 @@ const Material = () => {
                 </div>
             </div>
 
-            {/* POP-UP MODAL DE NOVEDADES */}
+            {/* POP-UP MODAL DE NOVEDADES (MODIFICADO) */}
             {selectedNote && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modal}>
-                        <h4 style={{marginTop: 0, color: '#1b3a57'}}>Novedades: {selectedNote.matricula}</h4>
+                        <h4 style={{marginTop: 0, color: '#1b3a57'}}>Gestión de Novedades: {selectedNote.matricula}</h4>
                         <div style={styles.noteContent}>
-                            {selectedNote.notas || "Sin novedades registradas."}
+                            <strong>Registro Actual:</strong><br/>
+                            {selectedNote.novedades || "Sin novedades registradas."}
                         </div>
+                        
                         <textarea 
                             id="newNoteText"
-                            placeholder="Escribir nueva novedad..." 
+                            placeholder="Escribir nueva novedad (esto reemplazará la anterior)..." 
                             style={{...styles.input, width: '100%', height: '80px', marginTop: '15px', boxSizing: 'border-box'}}
                         />
-                        <div style={{display: 'flex', gap: '10px', marginTop: '15px'}}>
-                            <button onClick={() => {
-                                const val = document.getElementById('newNoteText').value;
-                                if(val) handleSaveNote(selectedNote._id, val);
-                                setSelectedNote(null);
-                            }} style={{...styles.btnPrimary, flex: 1, margin: 0}}>Guardar Nota</button>
-                            <button onClick={() => setSelectedNote(null)} style={styles.btnCancel}>Cerrar</button>
+                        
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px'}}>
+                            <div style={{display: 'flex', gap: '10px'}}>
+                                <button onClick={() => {
+                                    const val = document.getElementById('newNoteText').value;
+                                    if(val) handleSaveNote(selectedNote._id, val);
+                                }} style={{...styles.btnPrimary, flex: 2, margin: 0}}>Actualizar Registro</button>
+                                
+                                <button onClick={() => {
+                                    if(window.confirm("¿Limpiar todas las novedades de esta aeronave?")) {
+                                        handleSaveNote(selectedNote._id, "", true);
+                                    }
+                                }} style={styles.btnClear}>Limpiar</button>
+                            </div>
+                            <button onClick={() => setSelectedNote(null)} style={styles.btnCancel}>Cerrar sin cambios</button>
                         </div>
                     </div>
                 </div>
@@ -226,7 +229,7 @@ const styles = {
     item: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', background: '#fcfcfc', borderRadius: '10px', marginBottom: '12px', border: '1px solid #eee' },
     itemMain: { fontWeight: 'bold', fontSize: '1.1rem', color: '#1b3a57' },
     itemSub: { fontSize: '0.8rem', color: '#777', marginBottom: '8px' },
-    btnNoteTrigger: { background: '#eef2f7', border: 'none', color: '#1b3a57', padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' },
+    btnNoteTrigger: { border: '1px solid #ddd', padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' },
     actions: { display: 'flex', gap: '10px', alignItems: 'center' },
     controlGroup: { display: 'flex', flexDirection: 'column', gap: '2px' },
     tinyLabel: { fontSize: '0.6rem', fontWeight: 'bold', color: '#999', textAlign: 'center' },
@@ -234,11 +237,11 @@ const styles = {
     inputSmall: { width: '60px', padding: '6px', borderRadius: '6px', border: '1px solid #ccc', textAlign: 'center', fontSize: '0.8rem' },
     btnDelete: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' },
     loader: { textAlign: 'center', marginTop: '100px', fontWeight: 'bold', color: '#1b3a57' },
-    // Estilos del Modal
     modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
     modal: { background: 'white', padding: '25px', borderRadius: '15px', width: '90%', maxWidth: '450px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' },
-    noteContent: { background: '#f8f9fa', padding: '15px', borderRadius: '8px', fontSize: '0.85rem', color: '#444', borderLeft: '4px solid #1b3a57', minHeight: '50px', whiteSpace: 'pre-wrap' },
-    btnCancel: { background: '#eee', color: '#666', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', flex: 1 }
+    noteContent: { background: '#f8f9fa', padding: '15px', borderRadius: '8px', fontSize: '0.85rem', color: '#444', borderLeft: '4px solid #1b3a57', minHeight: '50px', whiteSpace: 'pre-wrap', marginBottom: '10px' },
+    btnCancel: { background: '#eee', color: '#666', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
+    btnClear: { background: '#e74c3c', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', flex: 1 }
 };
 
 export default Material;

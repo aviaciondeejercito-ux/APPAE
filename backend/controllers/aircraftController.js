@@ -5,16 +5,13 @@ const Aircraft = require('../models/Aircraft');
  * Gestión de Material, Horas y Novedades por Unidad.
  */
 
-// 1. Obtener aeronaves (Con filtrado jerárquico: BOSS ve todo / USER-S4 ven su elemento)
+// 1. Obtener aeronaves (Con filtrado jerárquico)
 exports.getAircrafts = async (req, res) => {
     try {
         let query = {};
         const userRole = req.user.role;
         const userElemento = req.user.elemento ? String(req.user.elemento).trim() : null;
 
-        // MATRIZ DE VISIBILIDAD:
-        // 'admin' y 'boss' -> Ven todo (query vacía).
-        // 'user', 's4' y 'S4_UNIDAD' -> Solo ven su elemento.
         if (['user', 's4', 'S4_UNIDAD'].includes(userRole)) {
             if (!userElemento) {
                 return res.status(403).json({ 
@@ -25,7 +22,6 @@ exports.getAircrafts = async (req, res) => {
             query.unidad = userElemento;
         }
 
-        // Si el BOSS o ADMIN desean filtrar por una unidad específica desde el monitor
         if (req.query.unidad && (userRole === 'admin' || userRole === 'boss')) {
             query.unidad = String(req.query.unidad).trim();
         }
@@ -38,7 +34,7 @@ exports.getAircrafts = async (req, res) => {
     }
 };
 
-// 2. Crear una nueva aeronave (Habilitado para BOSS, ADMIN y S4)
+// 2. Crear una nueva aeronave
 exports.createAircraft = async (req, res) => {
     try {
         const { matricula, sda } = req.body;
@@ -46,8 +42,6 @@ exports.createAircraft = async (req, res) => {
         const userRole = req.user.role;
         const userElemento = req.user.elemento ? String(req.user.elemento).trim() : null;
 
-        // VALIDACIÓN DE SEGURIDAD OPERATIVA
-        // El S4 solo crea para SU unidad. BOSS y ADMIN pueden crear para cualquiera.
         if (['s4', 'S4_UNIDAD'].includes(userRole)) {
             if (!userElemento) return res.status(403).json({ message: "Falta asignación de unidad en su perfil." });
             unidad = userElemento;
@@ -85,7 +79,7 @@ exports.createAircraft = async (req, res) => {
     }
 };
 
-// 3. Actualizar Estado de Aeronave (Lógica de Mantenimiento S4 / BOSS / ADMIN)
+// 3. Actualizar Estado, Horas y NOVEDADES (Corregido y Mejorado)
 exports.updateAircraftStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -94,7 +88,7 @@ exports.updateAircraftStatus = async (req, res) => {
         const aircraft = await Aircraft.findById(id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no localizada." });
 
-        // SEGURIDAD: Solo ADMIN/BOSS o el S4 de la unidad dueña del material.
+        // SEGURIDAD: Solo ADMIN/BOSS o el S4 de la unidad dueña
         const esMandoSuperior = ['admin', 'boss'].includes(req.user.role);
         const userElemento = req.user.elemento ? String(req.user.elemento).trim() : null;
         
@@ -104,10 +98,16 @@ exports.updateAircraftStatus = async (req, res) => {
             });
         }
 
-        // Actualización y Auditoría
+        // Actualización de campos básicos
         if (estado) aircraft.estado = estado;
         if (horasRemanentes !== undefined) aircraft.horasRemanentes = Number(horasRemanentes);
-        if (novedades !== undefined) aircraft.novedades = novedades;
+        
+        // Lógica de Novedades: Si viene 'novedades' en el body, actualizamos el registro.
+        // Si el frontend manda string vacío, se limpia la novedad (importante para el botón de actualizar)
+        if (novedades !== undefined) {
+            aircraft.novedades = novedades; 
+        }
+
         if (matricula) aircraft.matricula = matricula.toUpperCase().trim();
         if (sda) aircraft.sda = sda.toUpperCase().trim();
         
@@ -115,15 +115,19 @@ exports.updateAircraftStatus = async (req, res) => {
         aircraft.actualizadoPor = `${req.user.userName || req.user.username} (${req.user.role})`;
 
         await aircraft.save();
-        res.json({ message: "Estado de aeronave actualizado y auditado", aircraft });
+        res.json({ 
+            success: true, 
+            message: "Registro operativo actualizado correctamente", 
+            aircraft 
+        });
 
     } catch (error) {
         console.error('Error AE (updateAircraftStatus):', error);
-        res.status(500).json({ message: "Error técnico en la actualización", error });
+        res.status(500).json({ success: false, message: "Error técnico en la actualización", error: error.message });
     }
 };
 
-// 4. Eliminar aeronave (Baja Definitiva - EXCLUSIVO ADMIN)
+// 4. Eliminar aeronave (Baja Definitiva)
 exports.deleteAircraft = async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
