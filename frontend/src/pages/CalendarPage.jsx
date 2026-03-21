@@ -4,7 +4,6 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import esLocale from '@fullcalendar/core/locales/es';
-// Cambiamos la importación para usar el servicio que normaliza la data
 import { getEvents } from '../services/EventService';
 
 const CalendarPage = () => {
@@ -21,7 +20,6 @@ const CalendarPage = () => {
     const fetchData = async () => {
         try {
             const data = await getEvents();
-            // El backend ya filtra, aquí solo aseguramos que sea un Array
             setEvents(Array.isArray(data) ? data : []);
         } catch (error) { 
             console.error("❌ Error de sincronización con el Monitor AE:", error); 
@@ -30,7 +28,9 @@ const CalendarPage = () => {
 
     const handleEventClick = (info) => {
         const { event } = info;
+        // Normalizamos la extracción de datos para asegurar compatibilidad
         setSelectedEvent({
+            id: event.id,
             title: event.title,
             start: event.start,
             end: event.end,
@@ -42,7 +42,6 @@ const CalendarPage = () => {
             etapa: event.extendedProps.etapa,
             tipoApoyo: event.extendedProps.tipoApoyo,
             esGlobal: event.extendedProps.esGlobal,
-            // Priorizamos la data que viene del backend (ev.sdaListado)
             sdaListado: event.extendedProps.sdaListado || []
         });
     };
@@ -107,7 +106,7 @@ const CalendarPage = () => {
                             esGlobal: ev.esGlobal,
                             etapa: ev.etapa,
                             tipoApoyo: ev.tipoApoyo,
-                            sdaListado: ev.sdaListado // Aseguramos que pase al calendario
+                            sdaListado: ev.sdaListado 
                         }
                     }))}
                     height="75vh"
@@ -122,14 +121,14 @@ const CalendarPage = () => {
                     eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
                     dayMaxEvents={isMobile ? 2 : 5}
                     nowIndicator={true}
-                    timeZone="local" // Fuerza al calendario a usar la hora del sistema
+                    timeZone="local" 
                 />
             </div>
 
             {selectedEvent && (
                 <div style={styles.modalOverlay} onClick={closeModal}>
                     <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-                        <div style={{...styles.modalHeader, backgroundColor: selectedEvent.color}}>
+                        <div style={{...styles.modalHeader, backgroundColor: selectedEvent.color || '#1b3a57'}}>
                             <h3 style={styles.modalTitle}>
                                 {selectedEvent.esGlobal ? `🌐 [GLOBAL] ${selectedEvent.title}` : selectedEvent.title}
                             </h3>
@@ -191,7 +190,6 @@ const CalendarPage = () => {
     );
 };
 
-// ... (Los estilos se mantienen iguales)
 const styles = {
     pageContainer: { padding: '10px', backgroundColor: '#f4f7f6', minHeight: '85vh' },
     mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', marginBottom: '20px' },
