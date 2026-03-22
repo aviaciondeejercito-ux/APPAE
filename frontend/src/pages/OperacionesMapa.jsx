@@ -76,8 +76,8 @@ const OperacionesMapa = () => {
             
             {/* Header del Sistema */}
             <div style={styles.header}>
-                <div style={{ fontWeight: 'bold', fontSize: '1.4rem', letterSpacing: '4px' }}>🛩️ OPERACIONES EN DESARROLLO</div>
-                <div style={{ fontSize: '0.7rem', color: '#bdc3c7', marginTop: '4px' }}>COMANDO DE AVIACIÓN DE EJERCITO - SITUACIÓN REAL</div>
+                <div style={{ fontWeight: 'bold', fontSize: '1.4rem', letterSpacing: '4px' }}> OPERACIONES EN DESARROLLO</div>
+                <div style={{ fontSize: '0.7rem', color: '#bdc3c7', marginTop: '4px' }}>DIRECCION DE AVIACIÓN DE EJERCITO - SITUACIÓN REAL</div>
             </div>
 
             {/* Contador de Medios en el aire */}
