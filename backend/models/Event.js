@@ -50,25 +50,34 @@ const eventSchema = new mongoose.Schema({
         default: '' 
     },
     
-    // Campo crítico para el almacenamiento de medios aéreos
+    // Campo crítico para el almacenamiento de medios aéreos (SDA + Matrícula)
     sdaListado: {
         type: [String],
         default: []
     },
 
-    // --- NUEVA SECCIÓN TÁCTICA (MAPA EN DESARROLLO) ---
+    // --- SECCIÓN TÁCTICA (SOPORTE PARA MAPA EN TIEMPO REAL) ---
     isRealTime: {
         type: Boolean,
-        default: false // Indica si debe aparecer en el mapa del Boss
+        default: false // Define si impacta en el Mapa Táctico del BOSS
     },
     ubicacion: {
-        nombre: { type: String, default: '' }, // Ej: "Campo de Mayo"
-        lat: { type: Number, default: 0 },
-        lng: { type: Number, default: 0 }
+        nombre: { 
+            type: String, 
+            default: 'Posición por Coordenadas' 
+        },
+        lat: { 
+            type: Number, 
+            default: 0 
+        },
+        lng: { 
+            type: Number, 
+            default: 0 
+        }
     },
     notasMarginales: {
         type: String, 
-        default: '', // Info adicional para el lateral del mapa (Trip, Frecuencia, etc.)
+        default: '', // Tripulación, Carga, Combustible (Visualizado en Mapa)
         trim: true
     },
 
@@ -128,10 +137,14 @@ eventSchema.pre('validate', function(next) {
         }
     }
     
-    // Normalización de color
+    // Normalización de color (evita strings vacíos o inválidos)
     if (this.color && !this.color.startsWith('#')) {
         this.color = '#1b3a57';
     }
+    
+    // Forzado de mayúsculas en campos tácticos para estandarización militar
+    if (this.title) this.title = this.title.toUpperCase();
+    if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
     
     next();
 });
@@ -140,7 +153,7 @@ eventSchema.pre('validate', function(next) {
 eventSchema.index({ start: 1, end: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
 eventSchema.index({ esGlobal: 1 }); 
-eventSchema.index({ isRealTime: 1, status: 1 }); // Optimización para el mapa del Boss
+eventSchema.index({ isRealTime: 1, status: 1 }); // Optimización clave para el mapa del Boss
 eventSchema.index({ createdBy: 1 });
 eventSchema.index({ createdAt: -1 }); 
 

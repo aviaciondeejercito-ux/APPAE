@@ -2,13 +2,13 @@ const express = require('express');
 const router = express.Router();
 
 /**
- * IMPORTACIÓN DE CONTROLADORES
- * Funciones encargadas de la lógica de negocio del calendario AE.
+ * IMPORTACIÓN DE CONTROLADORES - SISTEMA GESTIÓN AE
+ * Funciones encargadas de la lógica de negocio y despacho táctico.
  */
 const { 
     getEvents, 
     getAvailableAircraft,
-    getActiveOperations, // <--- NUEVA FUNCIÓN PARA EL MAPA TÁCTICO
+    getActiveOperations, // Para el Mapa Táctico (Tiempo Real)
     createEvent, 
     updateEvent, 
     deleteEvent 
@@ -27,40 +27,41 @@ const protect = authMiddleware.protect || authMiddleware.verifyToken || authMidd
 /**
  * SISTEMA GESTIÓN AE - CAPA DE RUTAS OPERATIVAS BLINDADAS
  * Jerarquía de permisos actualizada según Matriz Operativa:
- * - ADMIN: Acceso Total (Global).
- * - BOSS: Monitor Full, Carga Global/Individual, Edición y Baja (Criterio DIR AE).
- * - S4_UNIDAD / S4: Monitor de su Elemento y Carga (Criterio Unidad).
- * - USER: Carga y Monitor básico.
+ * - ADMIN / BOSS: Control Estratégico, Mapa Táctico y Gestión Global.
+ * - S4_UNIDAD / S4: Gestión de su propio Elemento.
+ * - USER: Carga de Vuelos y Monitor básico.
  */
 
-// 1. Protección de Identidad (Token JWT) para todas las rutas del calendario
+// 1. Protección de Identidad (Token JWT) para todas las rutas del calendario/mapa
 router.use(protect);
 
-// 2. Definición de Rutas con Autorización Jerárquica
+// --- 2. DEFINICIÓN DE RUTAS OPERATIVAS ---
 
 // @route    GET /api/events
-// @desc     Obtener lista de eventos (El filtrado por unidad/global se procesa en el controlador)
+// @desc     Obtener lista de eventos (Calendario General)
 router.get('/', getEvents);
 
 // @route    GET /api/events/active-map
-// @desc     Obtener operaciones en curso para el Mapa Táctico
-// Permiso: Restringido a BOSS y ADMIN para control estratégico.
+// @desc     Obtener misiones de VUELO TÁCTICO en curso para el Mapa
+// @permiso  Restringido a BOSS y ADMIN (Nivel Comando)
 router.get('/active-map', authorize('boss', 'admin'), getActiveOperations);
 
 // @route    GET /api/events/aircraft/:elemento
-// @desc     Obtener aeronaves en servicio (E/S) específicas de una unidad
+// @desc     Obtener aeronaves E/S (En Servicio) para el selector del Vuelo Táctico
+// @nota     Si elemento es 'all', el controlador devolverá la flota completa.
 router.get('/aircraft/:elemento', getAvailableAircraft);
 
 // @route    POST /api/events
-// @desc     Registrar nueva actividad (Vuelos, Guardias, Logística)
+// @desc     Registrar VUELO TÁCTICO o Actividad de Calendario
+// @permiso  Cualquier usuario autenticado puede iniciar una carga
 router.post('/', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), createEvent);
 
 // @route    PUT /api/events/:id
-// @desc     Actualizar detalles de una actividad existente
+// @desc     Actualizar datos de una misión (Cambio de ubicación o info marginal)
 router.put('/:id', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), updateEvent);
 
 // @route    DELETE /api/events/:id
-// @desc     Eliminación/Baja de actividad del registro
+// @desc     Baja de misión o evento del sistema
 router.delete('/:id', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), deleteEvent);
 
 module.exports = router;

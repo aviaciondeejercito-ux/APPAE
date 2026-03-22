@@ -6,7 +6,8 @@ import API from './api';
  * Garantiza que los datos de Tripulación, Carga y Combustible se procesen correctamente.
  */
 
-// --- NUEVA FUNCIÓN: Obtener operaciones para el Mapa Táctico (BOSS/ADMIN) ---
+// --- 1. NUEVA FUNCIÓN: Obtener operaciones para el Mapa Táctico (BOSS/ADMIN) ---
+// Conecta con la ruta router.get('/active-map', ...) del backend
 export const getActiveOperations = async () => {
     try {
         const response = await API.get('/events/active-map');
@@ -18,7 +19,8 @@ export const getActiveOperations = async () => {
     }
 };
 
-// --- NUEVA FUNCIÓN: Obtener aeronaves E/S por unidad ---
+// --- 2. NUEVA FUNCIÓN: Obtener aeronaves E/S por unidad ---
+// Se usa en el selector de medios del formulario de Vuelo Táctico
 export const getAvailableAircraft = async (elemento) => {
     try {
         const encodedElemento = encodeURIComponent(elemento);
@@ -31,7 +33,9 @@ export const getAvailableAircraft = async (elemento) => {
     }
 };
 
-// Función para obtener todos los eventos de la base de datos
+// --- 3. FUNCIONES DE CALENDARIO OPERATIVO ---
+
+// Obtener todos los eventos filtrados por la jerarquía del usuario logueado
 export const getEvents = async () => {
     try {
         const response = await API.get('/events');
@@ -43,7 +47,7 @@ export const getEvents = async () => {
     }
 };
 
-// Función para crear un nuevo evento (DESPACHO TÁCTICO)
+// Crear un nuevo evento (CALENDARIO o DESPACHO TÁCTICO)
 export const createEvent = async (eventData) => {
     try {
         const payload = {
@@ -54,59 +58,47 @@ export const createEvent = async (eventData) => {
             
             // --- CAMPOS CRÍTICOS PARA EL MAPA ---
             isRealTime: eventData.isRealTime || false,
-            // Si no hay coordenadas, inicializamos en 0 para evitar errores de renderizado
+            // Aseguramos que lat/lng sean números para evitar fallos en Leaflet
             ubicacion: {
-                nombre: eventData.ubicacion?.nombre || 'Sin ubicación',
+                nombre: eventData.ubicacion?.nombre || 'Posición No Definida',
                 lat: parseFloat(eventData.ubicacion?.lat) || 0,
                 lng: parseFloat(eventData.ubicacion?.lng) || 0
             },
-            // Aquí viaja la Tripulación, Carga y Combustible
-            notasMarginales: eventData.notasMarginales || ''
+            // Contiene info de Tripulación, Carga y Combustible
+            notasMarginales: (eventData.notasMarginales || '').toUpperCase()
         };
         
         const response = await API.post('/events', payload);
         return response.data;
     } catch (error) {
-        console.error("❌ Error al crear evento:", 
+        console.error("❌ Error al crear registro operativo:", 
             error.response?.data?.message || error.message);
         throw error;
     }
 };
 
-// Función para actualizar un evento existente
+// Actualizar un evento (Actualización de posición o avance de etapa)
 export const updateEvent = async (id, eventData) => {
     try {
-        /**
-         * SEGURIDAD Y LIMPIEZA PROFUNDA:
-         * Solo enviamos lo que el modelo de MongoDB espera.
-         */
-        const cleanData = {
-            title: eventData.title,
-            notes: eventData.notes,
-            color: eventData.color,
-            elemento: eventData.elemento,
-            etapa: eventData.etapa,
-            tipoApoyo: eventData.tipoApoyo,
-            esGlobal: eventData.esGlobal,
-            status: eventData.status,
-            sdaListado: Array.isArray(eventData.sdaListado) ? eventData.sdaListado : [],
-            
-            // --- ACTUALIZACIÓN DE DATOS TÁCTICOS ---
-            isRealTime: eventData.isRealTime,
-            ubicacion: {
-                nombre: eventData.ubicacion?.nombre,
-                lat: parseFloat(eventData.ubicacion?.lat),
-                lng: parseFloat(eventData.ubicacion?.lng)
-            },
-            notasMarginales: eventData.notasMarginales
-        };
+        // Clonamos y limpiamos para evitar enviar basura técnica de MongoDB al backend
+        const cleanData = { ...eventData };
 
-        if (eventData.start) cleanData.start = new Date(eventData.start).toISOString();
-        if (eventData.end) cleanData.end = new Date(eventData.end).toISOString();
+        // Sanitización de coordenadas
+        if (cleanData.ubicacion) {
+            cleanData.ubicacion = {
+                nombre: cleanData.ubicacion.nombre || 'Actualización de posición',
+                lat: parseFloat(cleanData.ubicacion.lat) || 0,
+                lng: parseFloat(cleanData.ubicacion.lng) || 0
+            };
+        }
 
-        // Limpieza de metadatos de MongoDB para evitar errores de validación
-        const protectedFields = ['_id', '__v', 'createdAt', 'updatedAt'];
-        protectedFields.forEach(field => delete cleanData[field]);
+        // Normalización de strings para estandarización militar
+        if (cleanData.title) cleanData.title = cleanData.title.toUpperCase();
+        if (cleanData.notasMarginales) cleanData.notasMarginales = cleanData.notasMarginales.toUpperCase();
+
+        // Eliminación de campos protegidos
+        const forbidden = ['_id', '__v', 'createdAt', 'updatedAt', 'createdBy', 'userName'];
+        forbidden.forEach(field => delete cleanData[field]);
 
         const response = await API.put(`/events/${id}`, cleanData);
         return response.data;
@@ -117,7 +109,7 @@ export const updateEvent = async (id, eventData) => {
     }
 };
 
-// Función para eliminar un evento (Solo BOSS / ADMIN)
+// Eliminar un evento (Solo nivel BOSS / ADMIN)
 export const deleteEvent = async (id) => {
     try {
         const response = await API.delete(`/events/${id}`);
@@ -130,7 +122,7 @@ export const deleteEvent = async (id) => {
 };
 
 /**
- * EXPORTACIÓN UNIFICADA
+ * EXPORTACIÓN UNIFICADA (Default y Nominal)
  */
 const EventService = {
     getEvents,

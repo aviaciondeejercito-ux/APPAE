@@ -111,7 +111,7 @@ function App() {
                                         border: view === 'despacho' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    ⚡ Despacho
+                                    ⚡ Vuelo
                                 </button>
                             )}
 
