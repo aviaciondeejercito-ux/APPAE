@@ -167,7 +167,7 @@ const CargaTactica = () => {
             {/* COLUMNA IZQUIERDA: FORMULARIO */}
             <div style={styles.container}>
                 <div style={styles.card}>
-                    <h2 style={styles.title}>{editingId ? '📍 ACTUALIZAR POSICIÓN' : '⚡ NUEVO DESPACHO'}</h2>
+                    <h2 style={styles.title}>{editingId ? '📍 ACTUALIZAR POSICIÓN' : '⚡ NUEVA OPERACION'}</h2>
                     <p style={styles.subtitle}>Mando y Control - Aviación de Ejército</p>
                     
                     <form onSubmit={handleSubmit}>
@@ -228,7 +228,7 @@ const CargaTactica = () => {
 
                 {/* COLUMNA DERECHA: LOG DE OPERACIONES */}
                 <div style={styles.logCard}>
-                    <h3 style={{ color: '#f39c12', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>🛸 LOG EN DESARROLLO</h3>
+                    <h3 style={{ color: '#f39c12', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>🛸 OPERACION EN DESARROLLO</h3>
                     <div style={styles.scrollArea}>
                         {misionesActivas.length === 0 ? <p style={{color: '#7f8c8d'}}>No hay operaciones activas.</p> : 
                         misionesActivas.map(m => (
