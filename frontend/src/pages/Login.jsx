@@ -80,7 +80,7 @@ const Login = ({ setAuth }) => {
         {/* Identidad del Sistema */}
         <div style={{ marginBottom: '30px' }}>
             <h2 style={{ margin: '0', color: '#1b3a57', fontSize: '1.8rem', letterSpacing: '1px' }}>Sistema AE</h2>
-            <p style={{ color: '#6c757d', fontSize: '0.9rem', marginTop: '8px' }}>Gestión Operativa de Actividades</p>
+            <p style={{ color: '#6c757d', fontSize: '0.9rem', marginTop: '8px' }}>Gestión de Operaciones de Vuelo</p>
         </div>
         
         {error && (
