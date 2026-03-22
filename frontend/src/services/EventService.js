@@ -2,9 +2,8 @@ import API from './api';
 
 /**
  * SERVICIO DE EVENTOS - SISTEMA GESTIÓN AE
- * Interfaz de comunicación de alto nivel para el Calendario Operativo.
- * Garantiza que los errores sean capturados y reportados correctamente.
- * Estándar de Seguridad: Limpieza de datos atómica antes del envío.
+ * Interfaz de comunicación de alto nivel para el Calendario Operativo y Mapa Táctico.
+ * Garantiza que los datos de Tripulación, Carga y Combustible se procesen correctamente.
  */
 
 // --- NUEVA FUNCIÓN: Obtener operaciones para el Mapa Táctico (BOSS/ADMIN) ---
@@ -32,7 +31,7 @@ export const getAvailableAircraft = async (elemento) => {
     }
 };
 
-// Función para obtener eventos de la base de datos
+// Función para obtener todos los eventos de la base de datos
 export const getEvents = async () => {
     try {
         const response = await API.get('/events');
@@ -44,16 +43,24 @@ export const getEvents = async () => {
     }
 };
 
-// Función para crear un nuevo evento
+// Función para crear un nuevo evento (DESPACHO TÁCTICO)
 export const createEvent = async (eventData) => {
     try {
         const payload = {
             ...eventData,
-            start: new Date(eventData.start).toISOString(),
-            end: new Date(eventData.end).toISOString(),
-            // Aseguramos estructura de ubicación si existe
+            // Normalización de fechas para estándar ISO
+            start: eventData.start ? new Date(eventData.start).toISOString() : new Date().toISOString(),
+            end: eventData.end ? new Date(eventData.end).toISOString() : new Date().toISOString(),
+            
+            // --- CAMPOS CRÍTICOS PARA EL MAPA ---
             isRealTime: eventData.isRealTime || false,
-            ubicacion: eventData.ubicacion || { nombre: '', lat: 0, lng: 0 },
+            // Si no hay coordenadas, inicializamos en 0 para evitar errores de renderizado
+            ubicacion: {
+                nombre: eventData.ubicacion?.nombre || 'Sin ubicación',
+                lat: parseFloat(eventData.ubicacion?.lat) || 0,
+                lng: parseFloat(eventData.ubicacion?.lng) || 0
+            },
+            // Aquí viaja la Tripulación, Carga y Combustible
             notasMarginales: eventData.notasMarginales || ''
         };
         
@@ -71,7 +78,7 @@ export const updateEvent = async (id, eventData) => {
     try {
         /**
          * SEGURIDAD Y LIMPIEZA PROFUNDA:
-         * Se extraen solo las propiedades necesarias para el modelo Event.
+         * Solo enviamos lo que el modelo de MongoDB espera.
          */
         const cleanData = {
             title: eventData.title,
@@ -83,33 +90,34 @@ export const updateEvent = async (id, eventData) => {
             esGlobal: eventData.esGlobal,
             status: eventData.status,
             sdaListado: Array.isArray(eventData.sdaListado) ? eventData.sdaListado : [],
-            // NUEVOS CAMPOS TÁCTICOS
+            
+            // --- ACTUALIZACIÓN DE DATOS TÁCTICOS ---
             isRealTime: eventData.isRealTime,
-            ubicacion: eventData.ubicacion,
+            ubicacion: {
+                nombre: eventData.ubicacion?.nombre,
+                lat: parseFloat(eventData.ubicacion?.lat),
+                lng: parseFloat(eventData.ubicacion?.lng)
+            },
             notasMarginales: eventData.notasMarginales
         };
 
         if (eventData.start) cleanData.start = new Date(eventData.start).toISOString();
         if (eventData.end) cleanData.end = new Date(eventData.end).toISOString();
 
-        // Eliminación de campos protegidos
-        delete cleanData._id;
-        delete cleanData.__v;
-        delete cleanData.createdAt;
-        delete cleanData.updatedAt;
+        // Limpieza de metadatos de MongoDB para evitar errores de validación
+        const protectedFields = ['_id', '__v', 'createdAt', 'updatedAt'];
+        protectedFields.forEach(field => delete cleanData[field]);
 
         const response = await API.put(`/events/${id}`, cleanData);
         return response.data;
     } catch (error) {
         const errorMsg = error.response?.data?.message || error.message;
-        const details = error.response?.data?.details || ""; 
-        
-        console.error(`❌ Error al actualizar el evento ${id}:`, errorMsg, details);
+        console.error(`❌ Error al actualizar el evento ${id}:`, errorMsg);
         throw error;
     }
 };
 
-// Función para eliminar un evento (Solo nivel BOSS / ADMIN)
+// Función para eliminar un evento (Solo BOSS / ADMIN)
 export const deleteEvent = async (id) => {
     try {
         const response = await API.delete(`/events/${id}`);
@@ -126,7 +134,7 @@ export const deleteEvent = async (id) => {
  */
 const EventService = {
     getEvents,
-    getActiveOperations, // Agregado para el Mapa Táctico
+    getActiveOperations, 
     getAvailableAircraft,
     createEvent,
     updateEvent,
