@@ -97,7 +97,7 @@ function App() {
                                         border: view === 'mapa' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    📍 Operaciones en Desarrollo
+                                    📍 En Desarrollo
                                 </button>
                             )}
 
@@ -111,7 +111,7 @@ function App() {
                                         border: view === 'despacho' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    ⚡ Carga/Actualizacion de Vuelos
+                                    ⚡ Vuelos
                                 </button>
                             )}
 
@@ -137,7 +137,7 @@ function App() {
                                         border: view === 'material' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    🛠️ Carga del Material
+                                    🛠️ Material
                                 </button>
                             )}
 
@@ -165,7 +165,7 @@ function App() {
                                         border: view === 'operaciones' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    📝 Cargar en Calendario
+                                    📝 Carga
                                 </button>
                             )}
 
