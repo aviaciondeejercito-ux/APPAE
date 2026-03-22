@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import EventService from '../services/EventService';
 
-// --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA PURA (SVG) ---
+// --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA ---
 
 // Triángulo Azul - Aviones
 const planeIcon = L.divIcon({
@@ -20,8 +20,8 @@ const planeIcon = L.divIcon({
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <rect x="40" y="0" width="20" height="100" fill="#0044ff" stroke="#ffffff" stroke-width="4"/>
-            <rect x="0" y="40" width="100" height="20" fill="#0044ff" stroke="#ffffff" stroke-width="4"/>
+            <rect x="40" y="0" width="20" height="100" fill="#0044ff" stroke="#ffffff" stroke-width="6"/>
+            <rect x="0" y="40" width="100" height="20" fill="#0044ff" stroke="#ffffff" stroke-width="6"/>
            </svg>`,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
@@ -73,18 +73,15 @@ const OperacionesMapa = () => {
     return (
         <div style={styles.mapWrapper}>
             
-            {/* Header */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '4px' }}>MONITOR DE OPERACIONES</div>
                 <div style={{ fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px' }}>AVIACIÓN DE EJÉRCITO</div>
             </div>
 
-            {/* Toggle Vista */}
             <button onClick={() => setDarkMode(!darkMode)} style={styles.mapToggle}>
                 {darkMode ? '🛰️ VISTA ESTÁNDAR' : '🕶️ VISTA TÁCTICA'}
             </button>
 
-            {/* Contador */}
             <div style={styles.counter}>
                 <span style={{color: '#f39c12', fontWeight: 'bold'}}>MEDIOS:</span> {misiones.length}
             </div>
@@ -109,11 +106,17 @@ const OperacionesMapa = () => {
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
                         icon={getIcon(m.title)}
                     >
-                        {/* Etiqueta solo matrícula, sin fondo */}
-                        <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent className="label-tactica">
-                            <span style={darkMode ? styles.textMatriculaDark : styles.textMatriculaLight}>
+                        {/* Tooltip con recuadro sutil y matrícula visible */}
+                        <Tooltip 
+                            direction="right" 
+                            offset={[15, 0]} 
+                            opacity={1} 
+                            permanent 
+                            className="custom-label-tactica"
+                        >
+                            <div style={darkMode ? styles.labelBoxDark : styles.labelBoxLight}>
                                 {m.title.split('-')[0].trim()}
-                            </span>
+                            </div>
                         </Tooltip>
 
                         <Popup>
@@ -132,15 +135,15 @@ const OperacionesMapa = () => {
                 ))}
             </MapContainer>
 
-            {/* CSS para limpiar Tooltips de Leaflet */}
             <style>{`
-                .leaflet-tooltip.label-tactica {
+                /* Eliminamos CUALQUIER rastro del diseño por defecto de Leaflet */
+                .leaflet-tooltip.custom-label-tactica {
                     background: transparent !important;
                     border: none !important;
                     box-shadow: none !important;
                     padding: 0 !important;
                 }
-                .leaflet-tooltip-top.label-tactica::before {
+                .leaflet-tooltip-right.custom-label-tactica::before {
                     display: none !important;
                 }
             `}</style>
@@ -151,11 +154,36 @@ const OperacionesMapa = () => {
 const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#000' },
     loadingScreen: { backgroundColor: '#0a0a0a', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
-    header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', borderRadius: '2px', border: '1px solid #f39c12', textAlign: 'center' },
+    header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', borderRadius: '2px', border: '1px solid #f39c12', textAlign: 'center', backdropFilter: 'blur(5px)' },
     mapToggle: { position: 'absolute', top: '15px', right: '15px', zIndex: 1000, background: '#f39c12', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', fontFamily: 'monospace' },
     counter: { position: 'absolute', bottom: '20px', left: '15px', zIndex: 1000, background: 'rgba(0,0,0,0.85)', color: 'white', padding: '8px 12px', borderRadius: '2px', fontSize: '0.8rem', borderLeft: '4px solid #f39c12', fontFamily: 'monospace' },
-    textMatriculaDark: { color: '#00ff00', fontWeight: 'bold', fontSize: '0.9rem', textShadow: '2px 2px 3px #000', fontFamily: 'monospace' },
-    textMatriculaLight: { color: '#000', fontWeight: 'bold', fontSize: '0.9rem', textShadow: '1px 1px 2px #fff', fontFamily: 'monospace' },
+    
+    // Diseño del recuadro de la matrícula
+    labelBoxDark: {
+        background: 'rgba(0, 40, 0, 0.8)',
+        color: '#00ff00',
+        border: '1px solid #00ff00',
+        padding: '2px 6px',
+        borderRadius: '3px',
+        fontSize: '0.8rem',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        textShadow: '1px 1px 2px #000',
+        whiteSpace: 'nowrap'
+    },
+    labelBoxLight: {
+        background: 'rgba(255, 255, 255, 0.9)',
+        color: '#0044ff',
+        border: '1px solid #0044ff',
+        padding: '2px 6px',
+        borderRadius: '3px',
+        fontSize: '0.8rem',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        boxShadow: '2px 2px 5px rgba(0,0,0,0.2)',
+        whiteSpace: 'nowrap'
+    },
+
     popupContainer: { minWidth: '180px', fontFamily: 'monospace' },
     popupHeader: { background: '#f39c12', color: 'black', padding: '4px', fontWeight: 'bold', textAlign: 'center' },
     popupMarginal: { background: '#2f3542', color: '#ffffff', padding: '8px', fontSize: '0.75rem' }
