@@ -84,7 +84,7 @@ function App() {
                                     border: view === 'calendar' ? '2px solid white' : 'none'
                                 }}
                             >
-                                📅 Monitor
+                                📅 Calendario
                             </button>
 
                             {/* BOTÓN MAPA TÁCTICO */}
@@ -97,7 +97,7 @@ function App() {
                                         border: view === 'mapa' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    📍 Mapa
+                                    📍 Operaciones en Desarrollo
                                 </button>
                             )}
 
@@ -111,7 +111,7 @@ function App() {
                                         border: view === 'despacho' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    ⚡ Vuelo
+                                    ⚡ Carga/Actualizacion de Vuelos
                                 </button>
                             )}
 
@@ -124,7 +124,7 @@ function App() {
                                     border: view === 'estado' ? '2px solid white' : 'none'
                                 }}
                             >
-                                🚁 Estado
+                                🚁 Estado del Material
                             </button>
 
                             {/* BOTÓN GESTIÓN MATERIAL */}
@@ -137,7 +137,7 @@ function App() {
                                         border: view === 'material' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    🛠️ Material
+                                    🛠️ Carga del Material
                                 </button>
                             )}
 
@@ -151,7 +151,7 @@ function App() {
                                         border: view === 'stats' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    📊 Stats
+                                    📊 Estadisticas
                                 </button>
                             )}
 
@@ -165,7 +165,7 @@ function App() {
                                         border: view === 'operaciones' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    📝 Cargar
+                                    📝 Cargar en Calendario
                                 </button>
                             )}
 
