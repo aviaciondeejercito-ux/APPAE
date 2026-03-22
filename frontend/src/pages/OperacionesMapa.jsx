@@ -10,18 +10,18 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 let DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// --- ICONOS PROFESIONALES (Simbología Táctica Silueta) ---
+// --- ICONOS REALISTAS (SILUETAS TÉCNICAS) ---
 const heloIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/3563/3563394.png', // Silueta superior técnica de helicóptero
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/1000/1000854.png', // Silueta real de helicóptero de transporte/ataque
+    iconSize: [45, 45],
+    iconAnchor: [22, 22],
     popupAnchor: [0, -20],
 });
 
 const planeIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/2807/2807183.png', // Silueta superior técnica de avión
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/3211/3211501.png', // Silueta real de avión de transporte/misión
+    iconSize: [50, 50],
+    iconAnchor: [25, 25],
     popupAnchor: [0, -20],
 });
 
@@ -34,6 +34,7 @@ const OperacionesMapa = () => {
         try {
             const data = await EventService.getActiveOperations(); 
             if (data && Array.isArray(data)) {
+                // Solo mostrar los que tienen bandera de tiempo real y coordenadas válidas
                 const validas = data.filter(m => m.isRealTime && m.ubicacion?.lat && m.ubicacion?.lng);
                 setMisiones(validas);
             }
@@ -46,12 +47,14 @@ const OperacionesMapa = () => {
 
     useEffect(() => {
         cargarSituacionTactica();
-        const interval = setInterval(cargarSituacionTactica, 15000);
+        const interval = setInterval(cargarSituacionTactica, 15000); // Actualización cada 15 seg
         return () => clearInterval(interval);
     }, []);
 
     const getIcon = (title) => {
         const t = title.toUpperCase();
+        
+        // Lógica de detección según tu lista de aeronaves
         const esAvion = 
             t.includes('C-212') || t.includes('C-208') || t.includes('C-550') || 
             t.includes('DA-62') || t.includes('DHC-6') || t.includes('C-182') || 
@@ -91,10 +94,10 @@ const OperacionesMapa = () => {
             </div>
 
             <MapContainer 
-                center={[-34.528, -58.641]} 
+                center={[-34.528, -58.641]} // Centrado inicial en Campo de Mayo
                 zoom={5} 
                 style={{ height: '100%', width: '100%' }}
-                zoomControl={false}
+                zoomControl={false} // Limpieza visual
             >
                 <TileLayer 
                     url={darkMode 
@@ -110,6 +113,7 @@ const OperacionesMapa = () => {
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
                         icon={getIcon(m.title)}
                     >
+                        {/* Etiqueta con el indicativo (Matrícula) */}
                         <Tooltip direction="right" offset={[15, 0]} opacity={0.9} permanent>
                             <span style={darkMode ? styles.tooltipLabelDark : styles.tooltipLabelLight}>
                                 {m.title.split('-')[0].trim()}
