@@ -106,9 +106,10 @@ const CargaTactica = () => {
         const payload = {
             title: editingId ? formData.title : `${formData.aeronaveSel} - ${formData.title}`,
             elemento: formData.elemento,
-            // Cambio clave: No usamos campos que el calendario interpreta para no ensuciarlo
+            // INDEPENDENCIA TÁCTICA: isRealTime true y status en_desarrollo
+            // El backend y el modelo ya permiten NO enviar start/end
             isRealTime: true, 
-            status: 'en_desarrollo', // Usamos un status operativo independiente
+            status: 'en_desarrollo', 
             ubicacion: {
                 nombre: formData.locNombre || 'Posición por Coordenadas',
                 lat: latDec, lng: lngDec
@@ -119,11 +120,11 @@ const CargaTactica = () => {
 
         try {
             if (editingId) {
+                // Para actualizar posición, enviamos solo los cambios de ubicación
                 await EventService.updateEvent(editingId, payload);
                 alert("📍 POSICIÓN ACTUALIZADA EN RADAR");
             } else {
-                // No enviamos 'start' ni 'end' para que el calendario no lo renderice como evento
-                // Solo enviamos lo necesario para el Monitor Táctico
+                // Creación limpia sin fechas para evitar el calendario administrativo
                 await EventService.createEvent(payload);
                 alert("🚀 OPERACIÓN LANZADA AL MONITOR");
             }
@@ -131,7 +132,8 @@ const CargaTactica = () => {
             setFormData({ title: '', elemento: '', notasMarginales: '', aeronaveSel: '', latG: 34, latM: 31, latS: 40, latDir: 'S', lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', locNombre: '' });
             cargarDatos();
         } catch (error) {
-            alert("Error en la operación táctica");
+            console.error(error);
+            alert("Error en la operación táctica. Verifique conexión.");
         }
     };
 
@@ -154,9 +156,11 @@ const CargaTactica = () => {
     const handleFinalizar = async (id) => {
         if (!window.confirm("¿Remover del Monitor de Operaciones?")) return;
         try {
-            // Al finalizar, quitamos el flag de tiempo real y cambiamos status
-            // Esto lo remueve del monitor sin afectar al calendario
-            await EventService.updateEvent(id, { status: 'completado_tactico', isRealTime: false });
+            // Al finalizar, isRealTime pasa a false. El registro queda en DB pero sale del mapa.
+            await EventService.updateEvent(id, { 
+                status: 'finalizado', 
+                isRealTime: false 
+            });
             cargarDatos();
         } catch (error) {
             alert("Error al remover operación");

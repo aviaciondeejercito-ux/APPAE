@@ -3,8 +3,7 @@ const mongoose = require('mongoose');
 /**
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
  * Seguridad: Trazabilidad completa con logs de usuario integrados.
- * Estándar de Seguridad: Atómico, con soporte para BOSS (DIR AE) y Unidades.
- * Aplicado: Estándar de Seguridad Sincro Joker para Integridad de Datos.
+ * Independencia: Soporte híbrido para Calendario Operativo y Mapa Táctico.
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -17,13 +16,14 @@ const eventSchema = new mongoose.Schema({
         trim: true,
         default: '' 
     },
+    // MODIFICACIÓN: Se quita 'required' para permitir operaciones de Mapa Táctico sin agenda
     start: { 
-        type: Date, 
-        required: [true, 'La fecha de inicio es obligatoria'] 
+        type: Date,
+        required: false 
     },
     end: { 
-        type: Date, 
-        required: [true, 'La fecha de fin es obligatoria'] 
+        type: Date,
+        required: false 
     },
     allDay: {
         type: Boolean,
@@ -39,7 +39,8 @@ const eventSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        enum: ['programado', 'en_curso', 'finalizado', 'cancelado'], 
+        // Se agrega 'en_desarrollo' para operaciones tácticas activas
+        enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado'], 
         default: 'programado' 
     },
 
@@ -50,7 +51,6 @@ const eventSchema = new mongoose.Schema({
         default: '' 
     },
     
-    // Campo crítico para el almacenamiento de medios aéreos (SDA + Matrícula)
     sdaListado: {
         type: [String],
         default: []
@@ -59,7 +59,7 @@ const eventSchema = new mongoose.Schema({
     // --- SECCIÓN TÁCTICA (SOPORTE PARA MAPA EN TIEMPO REAL) ---
     isRealTime: {
         type: Boolean,
-        default: false // Define si impacta en el Mapa Táctico del BOSS
+        default: false 
     },
     ubicacion: {
         nombre: { 
@@ -77,7 +77,7 @@ const eventSchema = new mongoose.Schema({
     },
     notasMarginales: {
         type: String, 
-        default: '', // Tripulación, Carga, Combustible (Visualizado en Mapa)
+        default: '', 
         trim: true
     },
 
@@ -125,9 +125,10 @@ const eventSchema = new mongoose.Schema({
 
 /**
  * VALIDACIÓN DE SEGURIDAD ATÓMICA:
- * Previene errores lógicos de fechas y asegura integridad de color.
+ * Solo valida cronología si AMBAS fechas están presentes.
  */
 eventSchema.pre('validate', function(next) {
+    // Solo validamos lógica de fechas si el evento es para el Calendario (tiene fechas)
     if (this.start && this.end) {
         const dStart = new Date(this.start);
         const dEnd = new Date(this.end);
@@ -137,23 +138,23 @@ eventSchema.pre('validate', function(next) {
         }
     }
     
-    // Normalización de color (evita strings vacíos o inválidos)
+    // Normalización de color
     if (this.color && !this.color.startsWith('#')) {
         this.color = '#1b3a57';
     }
     
-    // Forzado de mayúsculas en campos tácticos para estandarización militar
+    // Estandarización militar
     if (this.title) this.title = this.title.toUpperCase();
     if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
     
     next();
 });
 
-// ÍNDICES PARA ALTA DISPONIBILIDAD OPERATIVA Y TÁCTICA
+// ÍNDICES PARA ALTA DISPONIBILIDAD
 eventSchema.index({ start: 1, end: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
 eventSchema.index({ esGlobal: 1 }); 
-eventSchema.index({ isRealTime: 1, status: 1 }); // Optimización clave para el mapa del Boss
+eventSchema.index({ isRealTime: 1, status: 1 }); 
 eventSchema.index({ createdBy: 1 });
 eventSchema.index({ createdAt: -1 }); 
 
