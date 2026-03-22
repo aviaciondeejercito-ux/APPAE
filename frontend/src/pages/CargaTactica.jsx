@@ -64,7 +64,7 @@ const CargaTactica = () => {
 
     useEffect(() => {
         cargarDatos();
-        const interval = setInterval(cargarDatos, 15000); // Auto-sync cada 15 seg
+        const interval = setInterval(cargarDatos, 15000);
         return () => clearInterval(interval);
     }, []);
 
@@ -73,7 +73,6 @@ const CargaTactica = () => {
         return (dir === 'S' || dir === 'W') ? dec * -1 : dec;
     };
 
-    // Función para convertir decimal a GMS (para edición)
     const fromDecimal = (dec, type) => {
         const abs = Math.abs(dec);
         const g = Math.floor(abs);
@@ -107,8 +106,9 @@ const CargaTactica = () => {
         const payload = {
             title: editingId ? formData.title : `${formData.aeronaveSel} - ${formData.title}`,
             elemento: formData.elemento,
-            isRealTime: true,
-            status: 'en_curso',
+            // Cambio clave: No usamos campos que el calendario interpreta para no ensuciarlo
+            isRealTime: true, 
+            status: 'en_desarrollo', // Usamos un status operativo independiente
             ubicacion: {
                 nombre: formData.locNombre || 'Posición por Coordenadas',
                 lat: latDec, lng: lngDec
@@ -120,19 +120,18 @@ const CargaTactica = () => {
         try {
             if (editingId) {
                 await EventService.updateEvent(editingId, payload);
-                alert("📍 POSICIÓN ACTUALIZADA");
+                alert("📍 POSICIÓN ACTUALIZADA EN RADAR");
             } else {
-                payload.start = new Date();
-                payload.end = new Date(new Date().getTime() + 6 * 60 * 60 * 1000);
-                payload.etapa = 'ordenada';
+                // No enviamos 'start' ni 'end' para que el calendario no lo renderice como evento
+                // Solo enviamos lo necesario para el Monitor Táctico
                 await EventService.createEvent(payload);
-                alert("🚀 VUELO LANZADO");
+                alert("🚀 OPERACIÓN LANZADA AL MONITOR");
             }
             setEditingId(null);
             setFormData({ title: '', elemento: '', notasMarginales: '', aeronaveSel: '', latG: 34, latM: 31, latS: 40, latDir: 'S', lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', locNombre: '' });
             cargarDatos();
         } catch (error) {
-            alert("Error en la operación");
+            alert("Error en la operación táctica");
         }
     };
 
@@ -144,7 +143,7 @@ const CargaTactica = () => {
             title: m.title,
             elemento: m.elemento,
             notasMarginales: m.notasMarginales,
-            aeronaveSel: '', // No se cambia la aeronave en update
+            aeronaveSel: '', 
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
             locNombre: m.ubicacion.nombre
@@ -153,27 +152,29 @@ const CargaTactica = () => {
     };
 
     const handleFinalizar = async (id) => {
-        if (!window.confirm("¿Finalizar operación y remover del mapa?")) return;
+        if (!window.confirm("¿Remover del Monitor de Operaciones?")) return;
         try {
-            await EventService.updateEvent(id, { status: 'finalizado', isRealTime: false });
+            // Al finalizar, quitamos el flag de tiempo real y cambiamos status
+            // Esto lo remueve del monitor sin afectar al calendario
+            await EventService.updateEvent(id, { status: 'completado_tactico', isRealTime: false });
             cargarDatos();
         } catch (error) {
-            alert("Error al finalizar");
+            alert("Error al remover operación");
         }
     };
 
     return (
         <div style={styles.page}>
-            {/* COLUMNA IZQUIERDA: FORMULARIO */}
             <div style={styles.container}>
+                {/* COLUMNA IZQUIERDA: FORMULARIO */}
                 <div style={styles.card}>
-                    <h2 style={styles.title}>{editingId ? '📍 ACTUALIZAR POSICIÓN' : '⚡ NUEVA OPERACION'}</h2>
-                    <p style={styles.subtitle}>Mando y Control - Aviación de Ejército</p>
+                    <h2 style={styles.title}>{editingId ? '📍 ACTUALIZAR POSICIÓN' : '⚡ DESPACHO OPERATIVO'}</h2>
+                    <p style={styles.subtitle}>Gestión Táctica Independiente del Calendario</p>
                     
                     <form onSubmit={handleSubmit}>
                         {!editingId && (
                             <>
-                                <label style={styles.label}>Aeronave (E/S):</label>
+                                <label style={styles.label}>Aeronave (Matrícula/SDA):</label>
                                 <select style={styles.input} required value={formData.aeronaveSel} onChange={(e) => setFormData({...formData, aeronaveSel: e.target.value})}>
                                     <option value="">Seleccione Aeronave...</option>
                                     {aeronavesDisponibles.map(a => <option key={a._id} value={`${a.sda} ${a.matricula}`}>{a.sda} - {a.matricula} ({a.unidad})</option>)}
@@ -181,8 +182,8 @@ const CargaTactica = () => {
                             </>
                         )}
 
-                        <label style={styles.label}>Indicativo / Misión:</label>
-                        <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value.toUpperCase()})} required />
+                        <label style={styles.label}>Indicativo de Vuelo / Misión:</label>
+                        <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value.toUpperCase()})} required placeholder="Ej: ASALTO AEREO / SANITARIO" />
 
                         <label style={styles.label}>Unidad Responsable:</label>
                         <select style={styles.input} value={formData.elemento} onChange={(e) => setFormData({...formData, elemento: e.target.value})} required>
@@ -191,7 +192,7 @@ const CargaTactica = () => {
                         </select>
 
                         <div style={styles.geoBox}>
-                            <label style={styles.label}>Referencia Geográfica:</label>
+                            <label style={styles.label}>Referencia de Aeródromo:</label>
                             <select onChange={handleAeropuerto} style={styles.input} value={formData.locNombre}>
                                 <option value="">Opcional: Cargar Aeródromo...</option>
                                 {AEROPUERTOS_ESTANDAR.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
@@ -216,11 +217,11 @@ const CargaTactica = () => {
                             </div>
                         </div>
 
-                        <label style={styles.label}>TRIP / CARGA / COMB:</label>
+                        <label style={styles.label}>TRIPULACIÓN / CARGA / COMBUSTIBLE:</label>
                         <textarea style={styles.textarea} value={formData.notasMarginales} onChange={(e) => setFormData({...formData, notasMarginales: e.target.value.toUpperCase()})} required />
 
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
-                            {editingId ? '💾 ACTUALIZAR SITUACIÓN' : '🚀 LANZAR VUELO'}
+                            {editingId ? '💾 ACTUALIZAR POSICIÓN' : '🚀 LANZAR VUELO'}
                         </button>
                         {editingId && <button type="button" onClick={() => setEditingId(null)} style={styles.btnCancel}>CANCELAR</button>}
                     </form>
@@ -228,9 +229,9 @@ const CargaTactica = () => {
 
                 {/* COLUMNA DERECHA: LOG DE OPERACIONES */}
                 <div style={styles.logCard}>
-                    <h3 style={{ color: '#f39c12', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>🛸 OPERACION EN DESARROLLO</h3>
+                    <h3 style={{ color: '#f39c12', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>🛰️ RADAR DE OPERACIONES ACTIVAS</h3>
                     <div style={styles.scrollArea}>
-                        {misionesActivas.length === 0 ? <p style={{color: '#7f8c8d'}}>No hay operaciones activas.</p> : 
+                        {misionesActivas.length === 0 ? <p style={{color: '#7f8c8d'}}>No hay medios reportando posición.</p> : 
                         misionesActivas.map(m => (
                             <div key={m._id} style={styles.misionItem}>
                                 <div style={{fontWeight: 'bold', color: '#ecf0f1'}}>{m.title}</div>
@@ -250,7 +251,7 @@ const CargaTactica = () => {
 
 const styles = {
     page: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh' },
-    container: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', maxWidth: '1200px', margin: '0 auto' },
+    container: { display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '20px', maxWidth: '1400px', margin: '0 auto' },
     card: { backgroundColor: '#1e272e', color: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #f39c12' },
     logCard: { backgroundColor: '#1e272e', color: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #7f8c8d' },
     scrollArea: { maxHeight: '600px', overflowY: 'auto', marginTop: '15px' },
