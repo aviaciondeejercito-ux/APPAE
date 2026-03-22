@@ -10,18 +10,18 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 let DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// --- ICONOS TÁCTICOS AMPLIADOS (50px) ---
+// --- ICONOS TÁCTICOS SIMPLIFICADOS (Siluetas Limpias) ---
 const heloIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/3715/3715761.png',
-    iconSize: [50, 50],
-    iconAnchor: [25, 25],
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/575/575453.png', // Silueta simple de helicóptero
+    iconSize: [45, 45],
+    iconAnchor: [22, 22],
     popupAnchor: [0, -20],
 });
 
 const planeIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/3063/3063822.png', 
-    iconSize: [50, 50],
-    iconAnchor: [25, 25],
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/619/619043.png', // Silueta simple de avión
+    iconSize: [45, 45],
+    iconAnchor: [22, 22],
     popupAnchor: [0, -20],
 });
 
@@ -33,7 +33,8 @@ const OperacionesMapa = () => {
         try {
             const data = await EventService.getActiveOperations(); 
             if (data && Array.isArray(data)) {
-                const validas = data.filter(m => m.ubicacion?.lat && m.ubicacion?.lng);
+                // Solo mostrar los que tienen bandera de tiempo real y coordenadas válidas
+                const validas = data.filter(m => m.isRealTime && m.ubicacion?.lat && m.ubicacion?.lng);
                 setMisiones(validas);
             }
         } catch (err) {
@@ -45,29 +46,35 @@ const OperacionesMapa = () => {
 
     useEffect(() => {
         cargarSituacionTactica();
-        const interval = setInterval(cargarSituacionTactica, 30000); 
+        const interval = setInterval(cargarSituacionTactica, 15000); // Actualización cada 15 seg
         return () => clearInterval(interval);
     }, []);
 
-    // Lógica de detección de tipo de aeronave para asignar icono
+    // Lógica de detección precisa basada en tu lista
     const getIcon = (title) => {
         const t = title.toUpperCase();
-        // Lista de aeronaves de ala fija (Aviones) del Ejército
-        const esAvion = t.includes('C-182') || 
-                        t.includes('T-20') || 
-                        t.includes('CESSNA') || 
-                        t.includes('CARAVAN') || 
-                        t.includes('C-212') || 
-                        t.includes('DA-42') || 
-                        t.includes('AVION');
         
+        // Definición de Ala Fija (Aviones) según tu lista y estándar
+        const esAvion = 
+            t.includes('C-212') || 
+            t.includes('C-208') || 
+            t.includes('C-550') || 
+            t.includes('DA-62') || 
+            t.includes('DHC-6') || 
+            t.includes('C-182') || 
+            t.includes('CESSNA') || 
+            t.includes('T-20')  || 
+            t.includes('MERLIN') ||
+            t.includes('AVION');
+        
+        // Si no es avión, por defecto es helicóptero (UH, BELL, AS, AB, LAMA, 407)
         return esAvion ? planeIcon : heloIcon;
     };
 
     if (loading) return (
         <div style={styles.loadingScreen}>
             <div className="radar-loader"></div>
-            <p style={{marginTop: '20px', letterSpacing: '3px'}}>📡 SINCRONIZANDO OPERACIONES...</p>
+            <p style={{marginTop: '20px', letterSpacing: '3px'}}>📡 SINCRONIZANDO RADAR TÁCTICO...</p>
         </div>
     );
 
@@ -76,23 +83,23 @@ const OperacionesMapa = () => {
             
             {/* Header del Sistema */}
             <div style={styles.header}>
-                <div style={{ fontWeight: 'bold', fontSize: '1.4rem', letterSpacing: '4px' }}> OPERACIONES EN DESARROLLO</div>
-                <div style={{ fontSize: '0.7rem', color: '#bdc3c7', marginTop: '4px' }}>DIRECCION DE AVIACIÓN DE EJERCITO - SITUACIÓN REAL</div>
+                <div style={{ fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '4px' }}>MONITOR DE OPERACIONES</div>
+                <div style={{ fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px' }}>SISTEMA DE GESTIÓN AE - TIEMPO REAL</div>
             </div>
 
-            {/* Contador de Medios en el aire */}
+            {/* Contador de Medios */}
             <div style={styles.counter}>
-                <span style={{color: '#f39c12', fontWeight: 'bold'}}>MEDIOS ACTIVOS:</span> {misiones.length}
+                <span style={{color: '#f39c12', fontWeight: 'bold'}}>MEDIOS EN VUELO:</span> {misiones.length}
             </div>
 
             <MapContainer 
-                center={[-38.4161, -63.6167]} 
+                center={[-34.528, -58.641]} // Centrado inicial en Campo de Mayo
                 zoom={5} 
                 style={{ height: '100%', width: '100%' }}
-                zoomControl={true}
+                zoomControl={false} // Limpieza visual
             >
                 <TileLayer 
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" // Mapa oscuro más táctico
                     attribution='&copy; Aviación de Ejército'
                 />
                 
@@ -102,9 +109,11 @@ const OperacionesMapa = () => {
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
                         icon={getIcon(m.title)}
                     >
-                        {/* Etiqueta flotante permanente con el indicativo */}
-                        <Tooltip direction="bottom" offset={[0, 20]} opacity={1} permanent>
-                            <span style={styles.tooltipLabel}>{m.title.split('-')[0]}</span>
+                        {/* Etiqueta con el indicativo (Matrícula) */}
+                        <Tooltip direction="right" offset={[15, 0]} opacity={0.9} permanent>
+                            <span style={styles.tooltipLabel}>
+                                {m.title.split('-')[0].trim()}
+                            </span>
                         </Tooltip>
 
                         <Popup>
@@ -112,14 +121,15 @@ const OperacionesMapa = () => {
                                 <div style={styles.popupHeader}>
                                     {m.title}
                                 </div>
-                                <div style={{ fontSize: '0.9rem', marginBottom: '10px' }}>
-                                    <strong>UIP:</strong> {m.elemento}<br/>
-                                    <strong>POS:</strong> {parseFloat(m.ubicacion.lat).toFixed(4)}, {parseFloat(m.ubicacion.lng).toFixed(4)}
+                                <div style={{ fontSize: '0.85rem', marginBottom: '8px', color: '#ecf0f1' }}>
+                                    <strong>UNIDAD:</strong> {m.elemento}<br/>
+                                    <strong>UBICACIÓN:</strong> {m.ubicacion.nombre}<br/>
+                                    <strong>COORD:</strong> {parseFloat(m.ubicacion.lat).toFixed(4)}, {parseFloat(m.ubicacion.lng).toFixed(4)}
                                 </div>
                                 
                                 <div style={styles.popupMarginal}>
-                                    <strong style={{color: '#f39c12'}}>DATOS DE MISIÓN:</strong><br/>
-                                    {m.notasMarginales || "SIN REGISTRO ADICIONAL"}
+                                    <strong style={{color: '#f39c12', fontSize: '0.7rem'}}>SITUACIÓN:</strong><br/>
+                                    {m.notasMarginales || "SIN NOVEDAD"}
                                 </div>
                             </div>
                         </Popup>
@@ -131,36 +141,38 @@ const OperacionesMapa = () => {
 };
 
 const styles = {
-    mapWrapper: { width: '100%', height: 'calc(100vh - 80px)', position: 'relative', backgroundColor: '#000' },
+    mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#000' },
     loadingScreen: {
-        padding: '40px', backgroundColor: '#121212', color: '#f39c12', 
+        backgroundColor: '#0a0a0a', color: '#f39c12', 
         height: '100vh', textAlign: 'center', display: 'flex', 
-        flexDirection: 'column', justifyContent: 'center', alignItems: 'center'
+        flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+        fontFamily: 'monospace'
     },
     header: {
-        position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)',
-        zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', 
-        padding: '12px 30px', borderRadius: '4px', border: '2px solid #f39c12',
-        textAlign: 'center', boxShadow: '0 0 20px rgba(243, 156, 18, 0.4)'
+        position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)',
+        zIndex: 1000, background: 'rgba(20, 20, 20, 0.85)', color: '#f39c12', 
+        padding: '10px 25px', borderRadius: '2px', border: '1px solid #f39c12',
+        textAlign: 'center', backdropFilter: 'blur(5px)'
     },
     counter: {
-        position: 'absolute', bottom: '30px', left: '20px',
+        position: 'absolute', top: '15px', left: '15px',
         zIndex: 1000, background: 'rgba(0,0,0,0.8)', color: 'white', 
-        padding: '10px 15px', borderRadius: '4px', fontSize: '0.9rem', 
-        borderLeft: '5px solid #f39c12', boxShadow: '5px 5px 15px rgba(0,0,0,0.5)'
+        padding: '8px 12px', borderRadius: '2px', fontSize: '0.8rem', 
+        borderLeft: '4px solid #f39c12', fontFamily: 'monospace'
     },
     tooltipLabel: {
-        backgroundColor: '#1e272e', color: '#f39c12', padding: '2px 6px', 
-        borderRadius: '3px', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid #f39c12'
+        backgroundColor: 'rgba(26, 26, 26, 0.9)', color: '#00ff00', padding: '3px 8px', 
+        borderRadius: '2px', fontWeight: 'bold', fontSize: '0.8rem', 
+        border: '1px solid #00ff00', fontFamily: 'monospace', textShadow: '0 0 5px rgba(0,255,0,0.5)'
     },
-    popupContainer: { minWidth: '220px', fontFamily: 'monospace' },
+    popupContainer: { minWidth: '200px', fontFamily: 'monospace', backgroundColor: '#1e272e' },
     popupHeader: { 
-        background: '#f39c12', color: 'black', padding: '5px', 
-        fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' 
+        background: '#f39c12', color: 'black', padding: '4px', 
+        fontWeight: 'bold', marginBottom: '8px', textAlign: 'center', fontSize: '0.9rem'
     },
     popupMarginal: {
-        background: '#1e272e', color: '#00ff00', padding: '10px', 
-        borderRadius: '3px', fontSize: '0.8rem', border: '1px solid #2f3542'
+        background: '#000', color: '#00ff00', padding: '8px', 
+        borderRadius: '2px', fontSize: '0.75rem', border: '1px solid #333'
     }
 };
 
