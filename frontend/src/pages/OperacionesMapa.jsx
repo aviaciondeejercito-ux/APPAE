@@ -4,37 +4,38 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import EventService from '../services/EventService';
 
-// Fix de iconos para Leaflet en Vite
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-let DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
-L.Marker.prototype.options.icon = DefaultIcon;
+// --- CONFIGURACIÓN DE ICONOS TÁCTICOS (SVG) ---
 
-// --- ICONOS REALISTAS (SILUETAS TÉCNICAS) ---
-const heloIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/1000/1000854.png', // Silueta real de helicóptero de transporte/ataque
-    iconSize: [45, 45],
-    iconAnchor: [22, 22],
-    popupAnchor: [0, -20],
+// Triángulo Azul para Aviones
+const planeIcon = L.divIcon({
+    className: 'custom-tactic-icon',
+    html: `<svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="50,15 90,85 10,85" fill="#007bff" stroke="#ffffff" stroke-width="5"/>
+           </svg>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
 });
 
-const planeIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/3211/3211501.png', // Silueta real de avión de transporte/misión
-    iconSize: [50, 50],
-    iconAnchor: [25, 25],
-    popupAnchor: [0, -20],
+// Cruz Azul para Helicópteros
+const heloIcon = L.divIcon({
+    className: 'custom-tactic-icon',
+    html: `<svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <rect x="40" y="10" width="20" height="80" fill="#007bff" stroke="#ffffff" stroke-width="2"/>
+            <rect x="10" y="40" width="80" height="20" fill="#007bff" stroke="#ffffff" stroke-width="2"/>
+           </svg>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
 });
 
 const OperacionesMapa = () => {
     const [misiones, setMisiones] = useState([]); 
     const [loading, setLoading] = useState(true);
-    const [darkMode, setDarkMode] = useState(true); // Estado para el modo de mapa
+    const [darkMode, setDarkMode] = useState(true);
 
     const cargarSituacionTactica = async () => {
         try {
             const data = await EventService.getActiveOperations(); 
             if (data && Array.isArray(data)) {
-                // Solo mostrar los que tienen bandera de tiempo real y coordenadas válidas
                 const validas = data.filter(m => m.isRealTime && m.ubicacion?.lat && m.ubicacion?.lng);
                 setMisiones(validas);
             }
@@ -47,14 +48,12 @@ const OperacionesMapa = () => {
 
     useEffect(() => {
         cargarSituacionTactica();
-        const interval = setInterval(cargarSituacionTactica, 15000); // Actualización cada 15 seg
+        const interval = setInterval(cargarSituacionTactica, 15000);
         return () => clearInterval(interval);
     }, []);
 
     const getIcon = (title) => {
         const t = title.toUpperCase();
-        
-        // Lógica de detección según tu lista de aeronaves
         const esAvion = 
             t.includes('C-212') || t.includes('C-208') || t.includes('C-550') || 
             t.includes('DA-62') || t.includes('DHC-6') || t.includes('C-182') || 
@@ -74,30 +73,24 @@ const OperacionesMapa = () => {
     return (
         <div style={styles.mapWrapper}>
             
-            {/* Header del Sistema */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '4px' }}>MONITOR DE OPERACIONES</div>
                 <div style={{ fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px' }}>SISTEMA DE GESTIÓN AE - TIEMPO REAL</div>
             </div>
 
-            {/* Selector de Modo de Mapa */}
-            <button 
-                onClick={() => setDarkMode(!darkMode)} 
-                style={styles.mapToggle}
-            >
+            <button onClick={() => setDarkMode(!darkMode)} style={styles.mapToggle}>
                 {darkMode ? '🛰️ VISTA ESTÁNDAR' : '🕶️ VISTA TÁCTICA'}
             </button>
 
-            {/* Contador de Medios */}
             <div style={styles.counter}>
                 <span style={{color: '#f39c12', fontWeight: 'bold'}}>MEDIOS EN VUELO:</span> {misiones.length}
             </div>
 
             <MapContainer 
-                center={[-34.528, -58.641]} // Centrado inicial en Campo de Mayo
+                center={[-34.528, -58.641]} 
                 zoom={5} 
                 style={{ height: '100%', width: '100%' }}
-                zoomControl={false} // Limpieza visual
+                zoomControl={false}
             >
                 <TileLayer 
                     url={darkMode 
@@ -113,24 +106,21 @@ const OperacionesMapa = () => {
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
                         icon={getIcon(m.title)}
                     >
-                        {/* Etiqueta con el indicativo (Matrícula) */}
-                        <Tooltip direction="right" offset={[15, 0]} opacity={0.9} permanent>
-                            <span style={darkMode ? styles.tooltipLabelDark : styles.tooltipLabelLight}>
+                        {/* Etiqueta limpia con la matrícula solamente */}
+                        <Tooltip direction="top" offset={[0, -15]} opacity={1} permanent className="clean-tooltip">
+                            <span style={darkMode ? styles.labelDark : styles.labelLight}>
                                 {m.title.split('-')[0].trim()}
                             </span>
                         </Tooltip>
 
                         <Popup>
                             <div style={styles.popupContainer}>
-                                <div style={styles.popupHeader}>
-                                    {m.title}
-                                </div>
+                                <div style={styles.popupHeader}>{m.title}</div>
                                 <div style={{ fontSize: '0.85rem', marginBottom: '8px' }}>
                                     <strong>UNIDAD:</strong> {m.elemento}<br/>
                                     <strong>UBICACIÓN:</strong> {m.ubicacion.nombre}<br/>
                                     <strong>COORD:</strong> {parseFloat(m.ubicacion.lat).toFixed(4)}, {parseFloat(m.ubicacion.lng).toFixed(4)}
                                 </div>
-                                
                                 <div style={styles.popupMarginal}>
                                     <strong style={{color: '#f39c12', fontSize: '0.7rem'}}>SITUACIÓN:</strong><br/>
                                     {m.notasMarginales || "SIN NOVEDAD"}
@@ -140,6 +130,19 @@ const OperacionesMapa = () => {
                     </Marker>
                 ))}
             </MapContainer>
+
+            {/* Inyección de CSS para quitar el "cuadradito" de Leaflet */}
+            <style>{`
+                .leaflet-tooltip.clean-tooltip {
+                    background: transparent;
+                    border: none;
+                    box-shadow: none;
+                    padding: 0;
+                }
+                .leaflet-tooltip-top.clean-tooltip::before {
+                    display: none;
+                }
+            `}</style>
         </div>
     );
 };
@@ -170,15 +173,13 @@ const styles = {
         padding: '8px 12px', borderRadius: '2px', fontSize: '0.8rem', 
         borderLeft: '4px solid #f39c12', fontFamily: 'monospace'
     },
-    tooltipLabelDark: {
-        backgroundColor: 'rgba(0, 0, 0, 0.85)', color: '#00ff00', padding: '3px 8px', 
-        borderRadius: '2px', fontWeight: 'bold', fontSize: '0.8rem', 
-        border: '1px solid #00ff00', fontFamily: 'monospace'
+    labelDark: {
+        color: '#00ff00', fontWeight: 'bold', fontSize: '0.85rem', 
+        textShadow: '2px 2px 2px #000', fontFamily: 'monospace'
     },
-    tooltipLabelLight: {
-        backgroundColor: 'white', color: '#2c3e50', padding: '3px 8px', 
-        borderRadius: '2px', fontWeight: 'bold', fontSize: '0.8rem', 
-        border: '1px solid #2c3e50', boxShadow: '2px 2px 5px rgba(0,0,0,0.2)'
+    labelLight: {
+        color: '#000', fontWeight: 'bold', fontSize: '0.85rem', 
+        textShadow: '1px 1px 1px #fff', fontFamily: 'monospace'
     },
     popupContainer: { minWidth: '200px', fontFamily: 'monospace' },
     popupHeader: { 
