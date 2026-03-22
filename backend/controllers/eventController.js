@@ -1,5 +1,5 @@
 const Event = require('../models/Event');
-const Aircraft = require('../models/Aircraft'); // IMPORTANTE: Importamos el modelo de aeronaves
+const Aircraft = require('../models/Aircraft');
 
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
@@ -12,7 +12,6 @@ const getAvailableAircraft = async (req, res) => {
     try {
         const { elemento } = req.params;
         
-        // Buscamos aeronaves que pertenezcan al elemento y estén En Servicio (E/S)
         const aircrafts = await Aircraft.find({ 
             unidad: { $regex: elemento, $options: 'i' },
             estado: 'E/S' 
@@ -61,12 +60,32 @@ const getEvents = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Obtener operaciones para el Mapa Táctico (Solo las marcadas en tiempo real y activas)
+ * @access  Privado (Admin/Boss)
+ */
+const getActiveOperations = async (req, res) => {
+    try {
+        // Filtramos misiones marcadas como RealTime que estén 'en_curso'
+        const activeOps = await Event.find({ 
+            isRealTime: true, 
+            status: 'en_curso' 
+        }).sort({ updatedAt: -1 });
+
+        res.status(200).json(activeOps);
+    } catch (error) {
+        console.error(`❌ Error en getActiveOperations: ${error.message}`);
+        res.status(500).json({ message: 'Error al recuperar mapa táctico.' });
+    }
+};
+
 // @desc    Crear un nuevo evento con segmentación de etapa y destino
 const createEvent = async (req, res) => {
     try {
         const { 
             title, start, end, notes, color, esGlobal, 
-            elemento, etapa, tipoApoyo, sdaListado 
+            elemento, etapa, tipoApoyo, sdaListado,
+            isRealTime, ubicacion, notasMarginales, status // Campos para el mapa
         } = req.body;
 
         if (!title || !start || !end) {
@@ -88,7 +107,12 @@ const createEvent = async (req, res) => {
             elemento: (isMando && elemento) ? elemento : req.user.elemento,
             etapa: etapa || 'recepcion', 
             tipoOrigen: isMando ? 'COMANDO' : 'LOCAL',
-            esGlobal: isMando ? (esGlobal || false) : false
+            esGlobal: isMando ? (esGlobal || false) : false,
+            // Inyección de datos tácticos
+            isRealTime: isRealTime || false,
+            ubicacion: ubicacion || { nombre: '', lat: 0, lng: 0 },
+            notasMarginales: notasMarginales || '',
+            status: status || 'programado'
         });
 
         await newEvent.save();
@@ -108,31 +132,26 @@ const updateEvent = async (req, res) => {
         const esDuenio = event.createdBy && event.createdBy.toString() === req.user._id.toString();
         const esMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
 
-        // Seguridad: Solo el dueño o personal de mando/DIR AE puede editar
         if (!esDuenio && !esMando) {
             return res.status(403).json({ message: 'No tiene permisos para modificar esta orden.' });
         }
 
-        // --- SOLUCIÓN ERROR 400: Limpieza de datos críticos ---
         const updateData = { ...req.body };
         
-        // Eliminamos campos que MongoDB no permite actualizar manualmente o que causan conflicto
         delete updateData._id; 
         delete updateData.__v;
-        delete updateData.createdBy; // Protegemos la autoría original
+        delete updateData.createdBy; 
 
-        // Trazabilidad: Actualizamos quién fue el último en editar
         updateData.userName = req.user.username; 
 
-        // Conversión robusta de fechas (Soluciona problemas de formato de strings)
         if (updateData.start) updateData.start = new Date(updateData.start);
         if (updateData.end) updateData.end = new Date(updateData.end);
 
-        // Restricciones de seguridad por Rol (Usuarios comunes no pueden cambiar etapa o visibilidad global)
+        // Restricciones de seguridad por Rol
         if (!esMando) {
             delete updateData.esGlobal;
             delete updateData.etapa;
-            delete updateData.elemento; // Un usuario local no puede mover el evento a otra unidad
+            delete updateData.elemento;
         }
 
         const updatedEvent = await Event.findByIdAndUpdate(
@@ -157,7 +176,6 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'El evento no existe.' });
 
-        // Solo Admin o Boss pueden borrar para mantener integridad histórica
         if (req.user.role !== 'admin' && req.user.role !== 'boss') {
             return res.status(403).json({ message: 'Baja denegada: Requiere nivel BOSS o superior.' });
         }
@@ -172,7 +190,8 @@ const deleteEvent = async (req, res) => {
 
 module.exports = {
     getEvents,
-    getAvailableAircraft, // Exportamos la nueva función
+    getAvailableAircraft,
+    getActiveOperations, // Exportación de la nueva funcionalidad táctica
     createEvent,
     updateEvent,
     deleteEvent

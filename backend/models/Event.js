@@ -56,6 +56,22 @@ const eventSchema = new mongoose.Schema({
         default: []
     },
 
+    // --- NUEVA SECCIÓN TÁCTICA (MAPA EN DESARROLLO) ---
+    isRealTime: {
+        type: Boolean,
+        default: false // Indica si debe aparecer en el mapa del Boss
+    },
+    ubicacion: {
+        nombre: { type: String, default: '' }, // Ej: "Campo de Mayo"
+        lat: { type: Number, default: 0 },
+        lng: { type: Number, default: 0 }
+    },
+    notasMarginales: {
+        type: String, 
+        default: '', // Info adicional para el lateral del mapa (Trip, Frecuencia, etc.)
+        trim: true
+    },
+
     // --- SECCIÓN DE SEGURIDAD Y SEGMENTACIÓN (FLUJO DIR AE) ---
     elemento: { 
         type: String, 
@@ -64,7 +80,6 @@ const eventSchema = new mongoose.Schema({
     },
     etapa: {
         type: String,
-        // Se mantienen los originales y se asegura compatibilidad con etiquetas del frontend
         enum: ['recepcion', 'revision', 'ordenada', 'solicitud'],
         default: 'recepcion',
         required: true,
@@ -105,7 +120,6 @@ const eventSchema = new mongoose.Schema({
  */
 eventSchema.pre('validate', function(next) {
     if (this.start && this.end) {
-        // Asegurar que sean objetos Date para la comparación
         const dStart = new Date(this.start);
         const dEnd = new Date(this.end);
 
@@ -122,10 +136,11 @@ eventSchema.pre('validate', function(next) {
     next();
 });
 
-// ÍNDICES PARA ALTA DISPONIBILIDAD OPERATIVA
+// ÍNDICES PARA ALTA DISPONIBILIDAD OPERATIVA Y TÁCTICA
 eventSchema.index({ start: 1, end: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
 eventSchema.index({ esGlobal: 1 }); 
+eventSchema.index({ isRealTime: 1, status: 1 }); // Optimización para el mapa del Boss
 eventSchema.index({ createdBy: 1 });
 eventSchema.index({ createdAt: -1 }); 
 

@@ -6,6 +6,8 @@ import Estadisticas from './pages/Estadisticas';
 import Operaciones from './pages/Operaciones'; 
 import EstadoAeronaves from './pages/EstadoAeronaves';
 import Material from './pages/Material'; 
+import OperacionesMapa from './pages/OperacionesMapa';
+import CargaTactica from './pages/CargaTactica'; // <--- NUEVO COMPONENTE
 
 function App() {
     // 1. Estados de Autenticación y Navegación
@@ -40,16 +42,12 @@ function App() {
     };
 
     /**
-     * LÓGICA DE PERMISOS UNIFICADA (ACTUALIZADA)
+     * LÓGICA DE PERMISOS UNIFICADA
      */
-    // Boss NO gestiona material técnico, solo S4 y Admin.
     const puedeGestionarMaterial = role === 'admin' || role === 'S4' || role === 'S4_UNIDAD';
-    
-    // Boss puede cargar operaciones si lo desea (Poder de mando total)
     const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'S4' || role === 'S4_UNIDAD' || role === 'boss';
-    
-    // El Boss es el destinatario principal de las Estadísticas
     const puedeVerStats = role === 'admin' || role === 'boss';
+    const puedeVerMapa = role === 'admin' || role === 'boss';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif' }}>
@@ -88,6 +86,34 @@ function App() {
                             >
                                 📅 Monitor
                             </button>
+
+                            {/* BOTÓN MAPA TÁCTICO */}
+                            {puedeVerMapa && (
+                                <button 
+                                    onClick={() => setView('mapa')}
+                                    style={{
+                                        ...styles.btnNav,
+                                        backgroundColor: view === 'mapa' ? '#d35400' : '#4a69bd',
+                                        border: view === 'mapa' ? '2px solid white' : 'none'
+                                    }}
+                                >
+                                    📍 Mapa
+                                </button>
+                            )}
+
+                            {/* BOTÓN DESPACHO TÁCTICO (NUEVO FORMULARIO) */}
+                            {puedeCargarOperaciones && (
+                                <button 
+                                    onClick={() => setView('despacho')}
+                                    style={{
+                                        ...styles.btnNav,
+                                        backgroundColor: view === 'despacho' ? '#e67e22' : '#4a69bd',
+                                        border: view === 'despacho' ? '2px solid white' : 'none'
+                                    }}
+                                >
+                                    ⚡ Despacho
+                                </button>
+                            )}
 
                             {/* BOTÓN ESTADO GENERAL */}
                             <button 
@@ -129,7 +155,7 @@ function App() {
                                 </button>
                             )}
 
-                            {/* BOTÓN OPERACIONES / CARGA */}
+                            {/* BOTÓN CARGA ADMINISTRATIVA (FORMULARIO ORIGINAL) */}
                             {puedeCargarOperaciones && (
                                 <button 
                                     onClick={() => setView('operaciones')}
@@ -173,13 +199,15 @@ function App() {
             </nav>
 
             {/* ÁREA DE CONTENIDO */}
-            <main style={(view === 'stats' || view === 'material' || view === 'estado') ? styles.containerStats : styles.container}>
+            <main style={(view === 'stats' || view === 'material' || view === 'estado' || view === 'mapa' || view === 'despacho') ? styles.containerStats : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
+                        if (view === 'mapa' && puedeVerMapa) return <OperacionesMapa />;
+                        if (view === 'despacho' && puedeCargarOperaciones) return <CargaTactica />;
                         if (view === 'operaciones') return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
                         if (view === 'material' && puedeGestionarMaterial) return <Material />;

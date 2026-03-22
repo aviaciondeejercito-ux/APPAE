@@ -7,10 +7,21 @@ import API from './api';
  * Estándar de Seguridad: Limpieza de datos atómica antes del envío.
  */
 
+// --- NUEVA FUNCIÓN: Obtener operaciones para el Mapa Táctico (BOSS/ADMIN) ---
+export const getActiveOperations = async () => {
+    try {
+        const response = await API.get('/events/active-map');
+        return response.data;
+    } catch (error) {
+        console.error("❌ Error al obtener operaciones en desarrollo:", 
+            error.response?.data?.message || error.message);
+        throw error;
+    }
+};
+
 // --- NUEVA FUNCIÓN: Obtener aeronaves E/S por unidad ---
 export const getAvailableAircraft = async (elemento) => {
     try {
-        // Codificamos el nombre del elemento para evitar problemas con espacios en la URL
         const encodedElemento = encodeURIComponent(elemento);
         const response = await API.get(`/events/aircraft/${encodedElemento}`);
         return response.data;
@@ -36,11 +47,14 @@ export const getEvents = async () => {
 // Función para crear un nuevo evento
 export const createEvent = async (eventData) => {
     try {
-        // Aseguramos que las fechas sean strings ISO válidos para el Backend
         const payload = {
             ...eventData,
             start: new Date(eventData.start).toISOString(),
-            end: new Date(eventData.end).toISOString()
+            end: new Date(eventData.end).toISOString(),
+            // Aseguramos estructura de ubicación si existe
+            isRealTime: eventData.isRealTime || false,
+            ubicacion: eventData.ubicacion || { nombre: '', lat: 0, lng: 0 },
+            notasMarginales: eventData.notasMarginales || ''
         };
         
         const response = await API.post('/events', payload);
@@ -57,8 +71,7 @@ export const updateEvent = async (id, eventData) => {
     try {
         /**
          * SEGURIDAD Y LIMPIEZA PROFUNDA:
-         * FullCalendar a veces envía objetos circulares o propiedades privadas (empezando con _)
-         * que causan Error 400. Aquí extraemos solo lo que el modelo Event necesita.
+         * Se extraen solo las propiedades necesarias para el modelo Event.
          */
         const cleanData = {
             title: eventData.title,
@@ -68,14 +81,18 @@ export const updateEvent = async (id, eventData) => {
             etapa: eventData.etapa,
             tipoApoyo: eventData.tipoApoyo,
             esGlobal: eventData.esGlobal,
-            sdaListado: Array.isArray(eventData.sdaListado) ? eventData.sdaListado : []
+            status: eventData.status,
+            sdaListado: Array.isArray(eventData.sdaListado) ? eventData.sdaListado : [],
+            // NUEVOS CAMPOS TÁCTICOS
+            isRealTime: eventData.isRealTime,
+            ubicacion: eventData.ubicacion,
+            notasMarginales: eventData.notasMarginales
         };
 
-        // Normalización estricta de fechas a ISO String
         if (eventData.start) cleanData.start = new Date(eventData.start).toISOString();
         if (eventData.end) cleanData.end = new Date(eventData.end).toISOString();
 
-        // Eliminación redundante por seguridad ante Mongoose
+        // Eliminación de campos protegidos
         delete cleanData._id;
         delete cleanData.__v;
         delete cleanData.createdAt;
@@ -109,7 +126,8 @@ export const deleteEvent = async (id) => {
  */
 const EventService = {
     getEvents,
-    getAvailableAircraft, // Agregado a la exportación
+    getActiveOperations, // Agregado para el Mapa Táctico
+    getAvailableAircraft,
     createEvent,
     updateEvent,
     deleteEvent

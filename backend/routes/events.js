@@ -7,7 +7,8 @@ const router = express.Router();
  */
 const { 
     getEvents, 
-    getAvailableAircraft, // NUEVA FUNCIÓN AGREGADA
+    getAvailableAircraft,
+    getActiveOperations, // <--- NUEVA FUNCIÓN PARA EL MAPA TÁCTICO
     createEvent, 
     updateEvent, 
     deleteEvent 
@@ -39,28 +40,27 @@ router.use(protect);
 
 // @route    GET /api/events
 // @desc     Obtener lista de eventos (El filtrado por unidad/global se procesa en el controlador)
-// Permiso: Todos los roles autenticados pueden visualizar.
 router.get('/', getEvents);
+
+// @route    GET /api/events/active-map
+// @desc     Obtener operaciones en curso para el Mapa Táctico
+// Permiso: Restringido a BOSS y ADMIN para control estratégico.
+router.get('/active-map', authorize('boss', 'admin'), getActiveOperations);
 
 // @route    GET /api/events/aircraft/:elemento
 // @desc     Obtener aeronaves en servicio (E/S) específicas de una unidad
-// Permiso: Todos los roles autenticados para que puedan ver disponibilidad al cargar.
 router.get('/aircraft/:elemento', getAvailableAircraft);
 
 // @route    POST /api/events
 // @desc     Registrar nueva actividad (Vuelos, Guardias, Logística)
-// Permiso: USER, S4, S4_UNIDAD, BOSS y ADMIN pueden cargar.
 router.post('/', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), createEvent);
 
 // @route    PUT /api/events/:id
 // @desc     Actualizar detalles de una actividad existente
-// Permiso: USER, S4, S4_UNIDAD, BOSS y ADMIN (BOSS tiene permisos de mando para corregir).
 router.put('/:id', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), updateEvent);
 
 // @route    DELETE /api/events/:id
 // @desc     Eliminación/Baja de actividad del registro
-// Permiso: BOSS y ADMIN tienen permiso de borrado total. USER/S4 según lógica interna.
-// AJUSTE: Se incluye al BOSS para que pueda gestionar la limpieza del monitor.
 router.delete('/:id', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), deleteEvent);
 
 module.exports = router;
