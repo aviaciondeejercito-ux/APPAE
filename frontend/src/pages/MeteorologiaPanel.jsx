@@ -1,30 +1,25 @@
 import React, { useState, useEffect } from 'react';
-// Importamos el servicio formal del API.js
 import { getWeatherData } from '../services/api';
 
 /**
  * PANEL METEOROLÓGICO OPERATIVO - AVIACIÓN DE EJÉRCITO
- * Visualización de METAR y TAF en tiempo real mediante Proxy AE.
+ * Incluye Control de Capas Meteorológicas y Selectores de Mapa Base.
  */
-const MeteorologiaPanel = () => {
+const MeteorologiaPanel = ({ capasMet, setCapasMet, mapBase, setMapBase }) => {
     const [datos, setDatos] = useState([]);
     const [filtro, setFiltro] = useState('');
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(null);
 
-    // FUNCIÓN DE CARGA DE DATOS (CONEXIÓN CON BACKEND AE VIA SERVICIO)
+    // FUNCIÓN DE CARGA DE DATOS OPMET
     const fetchMeteorologia = async () => {
         setLoading(true);
         try {
-            // Usamos el servicio formal que ya maneja baseURL y Headers
             const response = await getWeatherData();
-            
-            // Axios devuelve la data en .data. Validamos estructura.
             const data = response && response.data ? response.data : response;
 
             if (data && Array.isArray(data)) {
-                // Ordenamos alfabéticamente por ICAO para facilitar la lectura
                 const ordenados = [...data].sort((a, b) => a.icaoId.localeCompare(b.icaoId));
                 setDatos(ordenados);
                 setLastUpdate(new Date().toLocaleTimeString());
@@ -39,11 +34,10 @@ const MeteorologiaPanel = () => {
 
     useEffect(() => {
         fetchMeteorologia();
-        const interval = setInterval(fetchMeteorologia, 900000); // Refresco cada 15 min
+        const interval = setInterval(fetchMeteorologia, 900000); 
         return () => clearInterval(interval);
     }, []);
 
-    // Lógica de filtrado para el buscador (incluye ICAO y Nombre de estación)
     const datosFiltrados = Array.isArray(datos) ? datos.filter(d => 
         (d.icaoId && d.icaoId.toUpperCase().includes(filtro.toUpperCase())) || 
         (d.name && d.name.toUpperCase().includes(filtro.toUpperCase()))
@@ -51,17 +45,21 @@ const MeteorologiaPanel = () => {
 
     const getFlightCategoryColor = (cat) => {
         switch (cat) {
-            case 'VFR': return '#2ecc71';   // Verde: Visual
-            case 'MVFR': return '#3498db';  // Azul: Marginal
-            case 'IFR': return '#e74c3c';   // Rojo: Instrumental
-            case 'LIFR': return '#9b59b6';  // Violeta: Bajo IFR
+            case 'VFR': return '#2ecc71';
+            case 'MVFR': return '#3498db';
+            case 'IFR': return '#e74c3c';
+            case 'LIFR': return '#9b59b6';
             default: return '#7f8c8d';
         }
     };
 
+    // Manejador para los switches de capas
+    const toggleCapa = (capa) => {
+        setCapasMet(prev => ({ ...prev, [capa]: !prev[capa] }));
+    };
+
     return (
         <div style={{...styles.container, left: visible ? '0' : '-380px'}}>
-            {/* PESTAÑA DE APERTURA OPERATIVA */}
             <button onClick={() => setVisible(!visible)} style={styles.tab}>
                 <div style={styles.tabIcon}>{visible ? '◀' : '🌤️'}</div>
                 <div style={styles.tabText}>{visible ? '' : 'MET'}</div>
@@ -69,11 +67,45 @@ const MeteorologiaPanel = () => {
             
             <div style={styles.content}>
                 <div style={styles.headerContainer}>
-                    <h3 style={styles.title}>METAR / TAF OPERATIVO</h3>
+                    <h3 style={styles.title}>CENTRO DE CONTROL TÁCTICO</h3>
                     {loading ? <span className="loader-mini"></span> : <span style={styles.updateTime}>{lastUpdate}</span>}
                 </div>
 
-                {/* BUSCADOR TÁCTICO */}
+                {/* --- SECCIÓN 1: SELECTOR DE MAPA BASE --- */}
+                <div style={styles.section}>
+                    <span style={styles.sectionTitle}>VISTA DE MAPA</span>
+                    <div style={styles.baseMapContainer}>
+                        <button 
+                            onClick={() => setMapBase('topo')} 
+                            style={{...styles.btnBase, backgroundColor: mapBase === 'topo' ? '#f39c12' : '#222'}}
+                        >
+                            Físico-Político
+                        </button>
+                        <button 
+                            onClick={() => setMapBase('sat')} 
+                            style={{...styles.btnBase, backgroundColor: mapBase === 'sat' ? '#f39c12' : '#222'}}
+                        >
+                            Satelital
+                        </button>
+                    </div>
+                </div>
+
+                {/* --- SECCIÓN 2: CAPAS METEOROLÓGICAS --- */}
+                <div style={styles.section}>
+                    <span style={styles.sectionTitle}>CAPAS DINÁMICAS (RAINVIER)</span>
+                    <div style={styles.layersContainer}>
+                        {Object.keys(capasMet).map(capa => (
+                            <div key={capa} style={styles.layerRow} onClick={() => toggleCapa(capa)}>
+                                <span style={{textTransform: 'uppercase', fontSize: '0.7rem'}}>{capa}</span>
+                                <div style={{...styles.switch, backgroundColor: capasMet[capa] ? '#f39c12' : '#444'}}>
+                                    <div style={{...styles.switchKnob, left: capasMet[capa] ? '18px' : '2px'}} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* --- SECCIÓN 3: OPMET (METAR/TAF) --- */}
                 <div style={styles.searchBox}>
                     <input 
                         type="text" 
@@ -85,7 +117,6 @@ const MeteorologiaPanel = () => {
                     {filtro && <button onClick={() => setFiltro('')} style={styles.clearBtn}>X</button>}
                 </div>
 
-                {/* AREA DE DATOS */}
                 <div className="meteorologia-scroll" style={styles.scrollArea}>
                     {datosFiltrados.length > 0 ? datosFiltrados.map(d => (
                         <div key={d.icaoId} style={styles.card}>
@@ -134,7 +165,6 @@ const MeteorologiaPanel = () => {
             <style>{`
                 .loader-mini { width: 12px; height: 12px; border: 2px solid #f39c12; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; }
                 @keyframes rotation { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-                
                 .meteorologia-scroll::-webkit-scrollbar { width: 5px; }
                 .meteorologia-scroll::-webkit-scrollbar-track { background: #0a0a0a; }
                 .meteorologia-scroll::-webkit-scrollbar-thumb { background: #f39c12; border-radius: 10px; }
@@ -151,6 +181,14 @@ const styles = {
     content: { padding: '15px', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
     headerContainer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
     title: { fontSize: '0.85rem', color: '#f39c12', fontFamily: 'monospace', margin: 0 },
+    section: { marginBottom: '15px', borderBottom: '1px solid #222', paddingBottom: '10px' },
+    sectionTitle: { fontSize: '0.6rem', color: '#777', fontWeight: 'bold', display: 'block', marginBottom: '8px' },
+    baseMapContainer: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
+    btnBase: { color: 'white', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', transition: '0.3s' },
+    layersContainer: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
+    layerRow: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer' },
+    switch: { width: '35px', height: '18px', borderRadius: '10px', position: 'relative', transition: '0.3s' },
+    switchKnob: { width: '14px', height: '14px', backgroundColor: 'white', borderRadius: '50%', position: 'absolute', top: '2px', transition: '0.3s' },
     updateTime: { fontSize: '0.6rem', color: '#555', fontFamily: 'monospace' },
     searchBox: { position: 'relative', marginBottom: '15px', display: 'flex' },
     searchInput: { width: '100%', backgroundColor: '#111', border: '1px solid #333', padding: '8px 12px', color: '#f39c12', fontSize: '0.75rem', fontFamily: 'monospace', borderRadius: '4px', outline: 'none' },

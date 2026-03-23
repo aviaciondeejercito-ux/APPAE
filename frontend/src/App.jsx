@@ -17,15 +17,15 @@ function App() {
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-    // --- CEREBRO METEOROLÓGICO (ESTADO GLOBAL) ---
-    // Este estado controla qué capas de satélite/radar se ven en el mapa nativo
+    // --- CEREBRO METEOROLÓGICO Y MAPA (ESTADO GLOBAL) ---
+    const [mapBase, setMapBase] = useState('sat'); // 'sat' o 'map'
     const [capasMet, setCapasMet] = useState({
         radar: false,
         nubes: false,
         viento: false
     });
 
-    // Escucha cambios de tamaño de pantalla para responsividad
+    // Escucha cambios de tamaño de pantalla
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
@@ -42,7 +42,7 @@ function App() {
         }
     }, [auth]);
 
-    // 3. GESTIÓN DE CIERRE DE SESIÓN SEGURO
+    // 3. GESTIÓN DE CIERRE DE SESIÓN
     const handleLogout = () => {
         localStorage.clear();
         setAuth(false);
@@ -51,7 +51,7 @@ function App() {
     };
 
     /**
-     * LÓGICA DE PERMISOS UNIFICADA (MATRIZ DE ACCESO AE)
+     * LÓGICA DE PERMISOS UNIFICADA
      */
     const puedeGestionarMaterial = role === 'admin' || role === 'S4' || role === 'S4_UNIDAD';
     const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'S4' || role === 'S4_UNIDAD' || role === 'boss';
@@ -61,7 +61,7 @@ function App() {
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
             
-            {/* HEADER INSTITUCIONAL - BARRA DE MANDO */}
+            {/* HEADER INSTITUCIONAL */}
             <nav style={{
                 ...styles.navbar,
                 flexDirection: isMobile ? 'column' : 'row',
@@ -71,7 +71,6 @@ function App() {
                 <div 
                     style={styles.logo} 
                     onClick={() => setView('calendar')}
-                    title="Volver al Monitor Principal"
                 >
                     {isMobile ? '🦅 GESTIÓN AE' : '🦅 OPERACIONES AVIACION DE EJERCITO'}
                 </div>
@@ -199,7 +198,7 @@ function App() {
                 </div>
             </nav>
 
-            {/* ÁREA DE CONTENIDO DINÁMICO */}
+            {/* ÁREA DE CONTENIDO */}
             <main style={(view === 'mapa' || view === 'stats' || view === 'material' || view === 'estado' || view === 'despacho') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
@@ -208,16 +207,21 @@ function App() {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
                         
-                        // --- INTEGRACIÓN DE MAPA TÁCTICO Y METEOROLOGÍA ---
                         if (view === 'mapa' && puedeVerMapa) return (
                             <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-                                {/* El mapa recibe el estado de las capas meteorológicas */}
+                                {/* Pasamos capasMet y el nuevo mapBase al Mapa */}
                                 <OperacionesMapa 
                                     capasMet={capasMet} 
-                                    setCapasMet={setCapasMet} 
+                                    mapBase={mapBase}
                                 />
-                                {/* Panel de METAR/TAF superpuesto */}
-                                <MeteorologiaPanel />
+                                
+                                {/* Pasamos estados y setters al Panel lateral */}
+                                <MeteorologiaPanel 
+                                    capasMet={capasMet} 
+                                    setCapasMet={setCapasMet} 
+                                    mapBase={mapBase}
+                                    setMapBase={setMapBase}
+                                />
                             </div>
                         );
 
@@ -230,7 +234,7 @@ function App() {
                 )}
             </main>
 
-            {/* FOOTER - OCULTO EN VISTA MAPA PARA MAXIMIZAR VISIBILIDAD */}
+            {/* FOOTER */}
             {(view !== 'mapa' && view !== 'stats') && (
                 <footer style={styles.footer}>
                     © 2026 Aviación de Ejército - Sistema de Comando y Control
@@ -241,64 +245,15 @@ function App() {
 }
 
 const styles = {
-    navbar: {
-        backgroundColor: '#1b3a57',
-        color: 'white',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 3000,
-        transition: 'all 0.3s ease'
-    },
+    navbar: { backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', position: 'sticky', top: 0, zIndex: 3000, transition: 'all 0.3s ease' },
     logo: { fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '0.5px' },
     navActions: { display: 'flex', alignItems: 'center', gap: '6px' },
     userInfo: { display: 'flex', alignItems: 'center', gap: '10px' },
-    btnNav: {
-        color: 'white',
-        border: 'none',
-        padding: '8px 14px',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontWeight: '600',
-        fontSize: '0.75rem',
-        transition: '0.2s'
-    },
-    btnLogout: {
-        backgroundColor: '#c0392b',
-        color: 'white',
-        border: 'none',
-        padding: '5px 12px',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '0.7rem',
-        fontWeight: 'bold'
-    },
-    container: { 
-        maxWidth: '1400px', 
-        margin: '15px auto', 
-        padding: '0 15px',
-        flex: 1
-    },
-    containerFull: {
-        width: '100%',
-        margin: '0',
-        padding: '0',
-        flex: 1,
-        position: 'relative',
-        overflow: 'hidden',
-        height: 'calc(100vh - 65px)' 
-    },
-    footer: { 
-        textAlign: 'center', 
-        padding: '12px', 
-        color: '#7f8c8d', 
-        fontSize: '0.65rem',
-        borderTop: '1px solid #ddd',
-        backgroundColor: '#f8f9fa'
-    }
+    btnNav: { color: 'white', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '0.75rem', transition: '0.2s' },
+    btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
+    container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
+    containerFull: { width: '100%', margin: '0', padding: '0', flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 65px)' },
+    footer: { textAlign: 'center', padding: '12px', color: '#7f8c8d', fontSize: '0.65rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' }
 };
 
 export default App;
