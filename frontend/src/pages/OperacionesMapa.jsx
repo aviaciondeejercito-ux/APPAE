@@ -6,10 +6,10 @@ import { getActiveOperations, getWeatherData } from '../services/api';
 
 const { BaseLayer } = LayersControl;
 
-/** * SIMBOLOGÍA TÁCTICA AE REVISADA
+/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD
  */
 
-// Icono: Triángulo Azul (Aviones)
+// Icono: Triángulo (AVIÓN)
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -19,12 +19,12 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-// Icono: Cruz Azul (Helicópteros)
+// Icono: Cruz (HELICÓPTERO)
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
             <circle cx="50" cy="50" r="40" fill="#0044ff" stroke="#ffffff" stroke-width="6"/>
-            <path d="M50 20 L50 80 M20 50 L80 50" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+            <path d="M50 20 L50 80 M20 50 L80 50" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
            </svg>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
@@ -134,13 +134,10 @@ const OperacionesMapa = () => {
         return () => clearInterval(interval);
     }, []);
 
-    // Lógica de clasificación exacta según tu lista
     const getIcon = (mision) => {
         const t = (mision?.aeronave || "").toUpperCase();
-        // Aviones según tu lista: C-212, C-208, C-550, DA-62, DHC-6, CESSNA, T-202, B-200
-        const esAvion = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'CESSNA', 'T-202', 'B-200'].some(mod => t.includes(mod));
-        
-        // Si no es avión, asumimos helicóptero (UH-1H, BELL 212, AS-332, AB206, LAMA, 407)
+        // Clasificación estricta: Aviones vs Helicópteros
+        const esAvion = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'CESSNA', 'T-202', 'B-200', 'DIAMOND'].some(mod => t.includes(mod));
         return esAvion ? planeIcon : heloIcon;
     };
 
@@ -182,17 +179,21 @@ const OperacionesMapa = () => {
                     <BaseLayer name="🛰️ Satelital">
                         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                     </BaseLayer>
+                    <BaseLayer name="🗺️ Político">
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    </BaseLayer>
+                    <BaseLayer name="⛰️ Relieve">
+                        <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" />
+                    </BaseLayer>
                 </LayersControl>
 
                 {misiones.map((m) => (
                     <Marker key={m._id} position={[parseFloat(m.ubicacion?.lat), parseFloat(m.ubicacion?.lng)]} icon={getIcon(m)}>
                         <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
-                            {/* Mostramos AERONAVE (ej. UH-1H) en el cuadradito azul de la derecha */}
-                            <div style={styles.labelBoxDark}>{m.aeronave || "S/D"}</div>
+                            <div style={styles.labelBoxDark}>{m.aeronave || "AE-???"}</div>
                         </Tooltip>
                         <Popup>
                             <div style={styles.popupContainer}>
-                                {/* Corrección: El encabezado del popup ahora muestra Título y Aeronave correctamente */}
                                 <div style={styles.popupHeader}>{m.title || "OPERACIÓN"}</div>
                                 <div style={styles.popupBody}>
                                     <strong>EQUIPO:</strong> {m.aeronave} - {m.matricula}<br/>
@@ -234,7 +235,7 @@ const styles = {
     loadingScreen: { backgroundColor: '#050505', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
     header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px' },
     subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #444', paddingTop: '4px' },
-    labelBoxDark: { background: 'rgba(0, 15, 30, 0.9)', color: '#00ffff', border: '1px solid #00ffff', padding: '2px 8px', borderRadius: '2px', fontSize: '0.8rem', fontWeight: 'bold' },
+    labelBoxDark: { background: 'rgba(0, 15, 30, 0.9)', color: '#00ffff', border: '1px solid #00ffff', padding: '2px 8px', borderRadius: '2px', fontSize: '0.8rem', fontWeight: 'bold', fontFamily: 'monospace' },
     popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center', fontSize: '0.85rem' },
     popupBody: { padding: '12px', fontSize: '0.8rem', background: '#1a1a1a', borderTop: '1px solid #333' }
 };
