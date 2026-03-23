@@ -4,55 +4,66 @@ const axios = require('axios');
 
 /**
  * MÓDULO METEOROLÓGICO OPERATIVO - AVIACIÓN DE EJÉRCITO
- * Fuente: OPMET Internacional (vía NOAA/Aviation Weather)
- * Cubre: Estaciones SMN y Aeródromos Militares/Civiles AR
+ * Fuente: OPMET Internacional (vía NOAA / Aviation Weather API)
+ * Estándar de Seguridad: Sincro Joker - Verificación de Integridad de Datos
  */
+
 router.get('/data', async (req, res) => {
     try {
-        // 1. Listado de estaciones por defecto (Aviación de Ejército)
+        // 1. LISTADO DE AERÓDROMOS PREDETERMINADOS (AVIACIÓN DE EJÉRCITO)
         const estacionesDefault = "SAZR,SAHZ,SAZS,SAVC,SAZB,SACO,SAZA,SAZF,SADP,SAAR,SAME,SACA,SARE,SAAP,SANT,SAWU,SAST,SARF,SAZN,SAAV,SAOC,SANE,SACE,SADO,SABE,SAVM,SAWD,SAVE,SAVT,SATM,SARP,SAWG,SADF,SAZM,SAWE,SAZY,SASA,SANU,SATU,SAEM,SARS,SRDR,SAAI,SATR,SASJ,SAWL";
         
-        // 2. Tomar IDs de la consulta o usar los de por defecto
+        // 2. FILTRADO DINÁMICO
+        // Si el frontend envía ?ids=SADP, usamos ese. Si no, cargamos toda la red operativa.
         const ids = req.query.ids || estacionesDefault;
         
-        console.log(`📡 Sincronizando METAR/TAF para estaciones: ${ids}`);
+        console.log(`📡 SOLICITUD OPMET: Sincronizando METAR/TAF para: ${ids}`);
 
-        // 3. Petición a la red OPMET internacional
+        /**
+         * 3. PETICIÓN A RED INTERNACIONAL (NOAA API v2)
+         * - ids: Estaciones OACI
+         * - format: json para procesamiento directo
+         * - taf: true para incluir pronóstico de terminal
+         */
         const url = `https://www.aviationweather.gov/api/data/metar?ids=${ids}&format=json&taf=true`;
 
         const response = await axios.get(url, {
             headers: { 
-                'User-Agent': 'Sistema-Gestion-AE-Server/1.0',
+                'User-Agent': 'Sistema-C2AE-Argentina/1.1',
                 'Accept': 'application/json'
             },
-            timeout: 15000 
+            timeout: 12000 // Tiempo límite de espera para evitar bloqueos del server
         });
         
-        // 4. VALIDACIÓN CRÍTICA: Asegurar que siempre devolvemos un ARRAY
-        // A veces NOAA devuelve un objeto directo si es una sola estación.
         let dataFinal = response.data;
 
-        if (!dataFinal) {
+        // 4. PROTOCOLO DE INTEGRACIÓN DE DATOS
+        // Si no hay datos, enviamos array vacío para no romper el .map() del frontend
+        if (!dataFinal || dataFinal.length === 0) {
+            console.warn(`⚠️ AVISO: No se encontraron reportes activos para: ${ids}`);
             return res.status(200).json([]);
         }
 
+        // VALIDACIÓN CRÍTICA: NOAA a veces devuelve un objeto {} en lugar de [] si es una sola estación.
+        // Forzamos que siempre sea un Array para que el Frontend no falle.
         if (!Array.isArray(dataFinal)) {
             dataFinal = [dataFinal];
         }
 
-        console.log(`✅ Datos sincronizados: ${dataFinal.length} informes listos.`);
+        console.log(`✅ SINCRONIZACIÓN EXITOSA: ${dataFinal.length} reportes procesados.`);
 
-        // 5. Envío de datos al Frontend
+        // 5. ENVÍO DE DATOS AL FRONTEND
         res.json(dataFinal);
 
     } catch (error) {
-        console.error("❌ Error METAR AE:", error.message);
+        // Log detallado para el administrador en consola
+        console.error("❌ ERROR CRÍTICO METAR AE:", error.message);
         
-        // Si hay error de conexión, devolvemos un error 500 pero con formato JSON
+        // Respuesta de seguridad JSON
         res.status(500).json({ 
             success: false, 
-            message: "Error de conexión con red OPMET",
-            details: error.message 
+            message: "Error de enlace con la red meteorológica internacional.",
+            details: process.env.NODE_ENV === 'development' ? error.message : "Falla de conexión externa"
         });
     }
 });

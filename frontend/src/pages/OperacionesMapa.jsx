@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl } from 'react-leaflet';
 import L from 'leaflet';
+import axios from 'axios';
 import 'leaflet/dist/leaflet.css';
 import EventService from '../services/EventService';
-import MeteorologiaPanel from './MeteorologiaPanel';
 
 const { BaseLayer } = LayersControl;
 
-// --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA REAL ---
+// --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA ---
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -17,7 +17,6 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-// Icono circular azul con cruz blanca (Helicópteros)
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -28,20 +27,117 @@ const heloIcon = L.divIcon({
     iconAnchor: [14, 14],
 });
 
+// --- LISTA DE AERÓDROMOS PREDETERMINADOS ---
+const AERODROMOS_LIST = [
+    "SAZR", "SAHZ", "SAZS", "SAVC", "SAZB", "SACO", "SAZA", "SAZF", "SADP", "SAAR", 
+    "SAME", "SACA", "SARE", "SAAP", "SANT", "SAWU", "SAST", "SARF", "SAZN", "SAAV", 
+    "SAOC", "SANE", "SACE", "SADO", "SABE", "SAVM", "SAWD", "SAVE", "SAVT", "SATM", 
+    "SARP", "SAWG", "SADF", "SAZM", "SAWE", "SAZY", "SASA", "SANU", "SATU", "SAEM", 
+    "SARS", "SRDR", "SAAI", "SATR", "SASJ", "SAWL"
+];
+
+// --- COMPONENTE INTERNO: PANEL METAR/TAF CON BUSCADOR ---
+const MetarWidget = () => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedStation, setSelectedStation] = useState('SADP');
+    const [weatherData, setWeatherData] = useState({ metar: null, taf: null });
+    const [loading, setLoading] = useState(false);
+
+    const fetchWeatherData = async (icao) => {
+        setLoading(true);
+        try {
+            // Buscamos METAR y TAF en paralelo
+            const [metarRes, tafRes] = await Promise.all([
+                axios.get(`https://avwx.rest/api/metar/${icao}`),
+                axios.get(`https://avwx.rest/api/taf/${icao}`)
+            ]);
+            setWeatherData({
+                metar: metarRes.data,
+                taf: tafRes.data
+            });
+        } catch (err) {
+            console.error("Error meteorológico:", err);
+            setWeatherData({ metar: null, taf: null });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchWeatherData(selectedStation);
+    }, [selectedStation]);
+
+    const filteredStations = AERODROMOS_LIST.filter(s => 
+        s.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <div style={styles.metarBox}>
+            <div style={styles.metarHeader}>SISTEMA METEOROLÓGICO C2AE</div>
+            
+            {/* Buscador */}
+            <input 
+                type="text" 
+                placeholder="Buscar OACI..." 
+                style={styles.metarSearch}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
+            />
+
+            {/* Lista Filtrada */}
+            <div style={styles.stationList}>
+                {filteredStations.map(icao => (
+                    <button 
+                        key={icao} 
+                        onClick={() => setSelectedStation(icao)}
+                        style={{
+                            ...styles.stationBtn,
+                            backgroundColor: selectedStation === icao ? '#f39c12' : '#222',
+                            color: selectedStation === icao ? 'black' : '#ccc'
+                        }}
+                    >
+                        {icao}
+                    </button>
+                ))}
+            </div>
+
+            <hr style={{borderColor: '#333', margin: '10px 0'}} />
+
+            {/* Resultados */}
+            {loading ? (
+                <div style={{color: '#f39c12', fontSize: '11px'}}>SOLICITANDO DATOS...</div>
+            ) : (
+                <div style={styles.weatherResults}>
+                    <div style={{color: '#00ffff', fontWeight: 'bold', marginBottom: '5px'}}>{selectedStation}</div>
+                    
+                    <div style={styles.metarSection}>
+                        <span style={styles.metarLabel}>METAR:</span>
+                        <div style={styles.metarRaw}>{weatherData.metar?.raw || "No disponible"}</div>
+                    </div>
+
+                    <div style={styles.metarSection}>
+                        <span style={styles.metarLabel}>TAF:</span>
+                        <div style={styles.metarRaw}>{weatherData.taf?.raw || "No disponible"}</div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- COMPONENTE PRINCIPAL ---
 const OperacionesMapa = () => {
     const [misiones, setMisiones] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showMetar, setShowMetar] = useState(true); 
+    const [showMetar, setShowMetar] = useState(false);
     const [mapView] = useState({ center: [-34.528, -58.641], zoom: 5 });
 
     const cargarSituacionTactica = async () => {
         try {
             const data = await EventService.getActiveOperations();
-            if (Array.isArray(data)) {
+            if (data && Array.isArray(data)) {
                 const activas = data.filter(m => 
-                    m.isRealTime && 
-                    m.ubicacion?.lat != null && 
-                    m.ubicacion?.lng != null
+                    m?.isRealTime && m?.ubicacion?.lat != null && m?.ubicacion?.lng != null
                 );
                 setMisiones(activas);
             }
@@ -59,8 +155,7 @@ const OperacionesMapa = () => {
     }, []);
 
     const getIcon = (mision) => {
-        const t = (mision.aeronave || "").toUpperCase();
-        // Lógica de distinción según modelo
+        const t = (mision?.aeronave || "").toUpperCase();
         const esAvion = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'CESSNA', 'AVION', 'B-200', 'T-202'].some(mod => t.includes(mod));
         return esAvion ? planeIcon : heloIcon;
     };
@@ -74,32 +169,29 @@ const OperacionesMapa = () => {
 
     return (
         <div style={styles.mapWrapper}>
-            {/* 1. PANEL DE METEOROLOGÍA (Capa Superior Izquierda) */}
+            {/* PANEL DE METEOROLOGÍA DESPLEGABLE */}
             <div style={{
                 ...styles.metarContainer,
                 transform: showMetar ? 'translateX(0)' : 'translateX(-302px)' 
             }}>
                 <div style={styles.metarContent}>
-                    <MeteorologiaPanel />
+                    <MetarWidget />
                 </div>
                 <button 
                     onClick={() => setShowMetar(!showMetar)} 
                     style={styles.toggleBtn}
                 >
-                    {showMetar ? '◀' : '▶'}
+                    {showMetar ? '◀' : '☁️'}
                 </button>
             </div>
 
-            {/* 2. HEADER CENTRAL */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>MONITOR DE OPERACIONES</div>
                 <div style={styles.subHeader}>AVIACIÓN DE EJÉRCITO ARGENTINO</div>
             </div>
 
-            {/* 3. MAPA (Fondo) */}
             <MapContainer 
-                center={mapView.center} 
-                zoom={mapView.zoom} 
+                center={mapView.center} zoom={mapView.zoom} 
                 style={{ height: '100%', width: '100%', zIndex: 1 }}
                 zoomControl={false}
             >
@@ -110,29 +202,19 @@ const OperacionesMapa = () => {
                     <BaseLayer name="🛰️ Satelital">
                         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                     </BaseLayer>
-                    <BaseLayer name="🗺️ Mapa Político">
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                    </BaseLayer>
                 </LayersControl>
 
                 {misiones.map((m) => (
-                    <Marker 
-                        key={m._id} 
-                        position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
-                        icon={getIcon(m)}
-                    >
+                    <Marker key={m._id} position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} icon={getIcon(m)}>
                         <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
                             <div style={styles.labelBoxDark}>{m.aeronave || "N/A"}</div>
                         </Tooltip>
-                        
                         <Popup>
                             <div style={styles.popupContainer}>
                                 <div style={styles.popupHeader}>{m.aeronave} - {m.matricula}</div>
                                 <div style={styles.popupBody}>
                                     <strong>OP:</strong> {m.title}<br/>
-                                    <strong>LOC:</strong> {m.ubicacion.nombre}<br/>
-                                    <hr style={{margin: '8px 0', borderColor: '#444'}}/>
-                                    <center style={{color: '#f39c12', fontSize: '0.65rem'}}>SISTEMA C2AE</center>
+                                    <strong>LOC:</strong> {m.ubicacion.nombre}
                                 </div>
                             </div>
                         </Popup>
@@ -153,51 +235,25 @@ const OperacionesMapa = () => {
 };
 
 const styles = {
-    mapWrapper: { 
-        width: '100%', 
-        height: 'calc(100vh - 60px)', 
-        position: 'relative', 
-        backgroundColor: '#050505',
-        overflow: 'hidden'
-    },
-    metarContainer: {
-        position: 'absolute',
-        top: '100px',
-        left: '0',
-        zIndex: 2000, // Por encima de todo
-        display: 'flex',
-        alignItems: 'flex-start',
-        transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-    },
-    metarContent: {
-        background: 'rgba(10, 10, 10, 0.95)',
-        border: '1px solid #f39c12',
-        borderLeft: 'none',
-        borderRadius: '0 4px 4px 0',
-        padding: '10px',
-        width: '300px',
-        maxHeight: '75vh',
-        overflowY: 'auto',
-        boxShadow: '5px 0 15px rgba(0,0,0,0.5)'
-    },
-    toggleBtn: {
-        background: '#f39c12',
-        border: 'none',
-        color: 'black',
-        padding: '20px 8px',
-        cursor: 'pointer',
-        borderRadius: '0 4px 4px 0',
-        fontWeight: 'bold',
-        fontSize: '14px',
-        boxShadow: '2px 0 5px rgba(0,0,0,0.3)',
-        marginLeft: '-1px'
-    },
+    mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },
+    metarContainer: { position: 'absolute', top: '80px', left: '0', zIndex: 2000, display: 'flex', alignItems: 'flex-start', transition: 'transform 0.4s ease' },
+    metarContent: { background: 'rgba(10, 10, 10, 0.95)', border: '1px solid #f39c12', borderLeft: 'none', borderRadius: '0 4px 4px 0', padding: '12px', width: '300px', maxHeight: '80vh', overflowY: 'auto' },
+    metarBox: { fontFamily: 'monospace' },
+    metarHeader: { color: '#f39c12', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center' },
+    metarSearch: { width: '100%', background: '#222', border: '1px solid #444', color: 'white', padding: '6px', fontSize: '12px', marginBottom: '10px', borderRadius: '4px', outline: 'none' },
+    stationList: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px', maxHeight: '120px', overflowY: 'auto', marginBottom: '10px', paddingRight: '5px' },
+    stationBtn: { border: 'none', padding: '4px 2px', fontSize: '10px', cursor: 'pointer', borderRadius: '2px', fontWeight: 'bold' },
+    weatherResults: { textAlign: 'left' },
+    metarSection: { marginBottom: '12px' },
+    metarLabel: { color: '#f39c12', fontSize: '10px', fontWeight: 'bold', display: 'block', marginBottom: '3px' },
+    metarRaw: { color: '#ecf0f1', fontSize: '11px', lineHeight: '1.3', background: '#111', padding: '6px', borderRadius: '4px', border: '1px solid #333' },
+    toggleBtn: { background: '#f39c12', border: 'none', color: 'black', padding: '15px 10px', cursor: 'pointer', borderRadius: '0 4px 4px 0', fontWeight: 'bold' },
     loadingScreen: { backgroundColor: '#050505', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
-    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px', width: 'auto', minWidth: '320px', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' },
-    subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #444', paddingTop: '4px', letterSpacing: '1px' },
-    labelBoxDark: { background: 'rgba(0, 15, 30, 0.9)', color: '#00ffff', border: '1px solid #00ffff', padding: '2px 8px', borderRadius: '2px', fontSize: '0.8rem', fontWeight: 'bold', fontFamily: 'monospace', textShadow: '0 0 5px #00ffff' },
-    popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center', fontSize: '0.85rem' },
-    popupBody: { padding: '12px', fontSize: '0.8rem', background: '#1a1a1a', lineHeight: '1.4' }
+    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px' },
+    subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #444', paddingTop: '4px' },
+    labelBoxDark: { background: 'rgba(0, 15, 30, 0.9)', color: '#00ffff', border: '1px solid #00ffff', padding: '2px 8px', borderRadius: '2px', fontSize: '0.8rem', fontWeight: 'bold' },
+    popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center' },
+    popupBody: { padding: '12px', fontSize: '0.8rem', background: '#1a1a1a' }
 };
 
 export default OperacionesMapa;

@@ -36,6 +36,7 @@ API.interceptors.response.use(
     (error) => {
         if (error.response && error.response.status === 401) {
             // Si el token expiró o es inválido, limpiamos y redirigimos
+            console.warn("⚠️ SESIÓN EXPIRADA O INVÁLIDA - REDIRIGIENDO A LOGIN");
             localStorage.clear(); 
             window.location.href = '/login';
         }
@@ -53,6 +54,13 @@ export const register = (userData) => API.post('/auth/register', userData);
  * SERVICIOS DE EVENTOS (CALENDARIO Y MAPA TÁCTICO)
  */
 export const getEvents = () => API.get('/events');
+
+// Para el mapa táctico, este servicio filtra las operaciones activas en tiempo real
+export const getActiveOperations = async () => {
+    const res = await API.get('/events');
+    // Filtramos en cliente solo lo que tiene coordenadas y está marcado como RealTime
+    return res.data.filter(e => e.isRealTime && e.ubicacion?.lat != null);
+};
 
 export const createEvent = (eventData) => {
     const userElemento = localStorage.getItem('elemento');
@@ -147,8 +155,20 @@ export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/pa
  * Conexión con el Proxy del Backend para evitar errores CORS.
  */
 export const getWeatherData = (ids = "") => {
+    // Si ids viene como string "SADP,SACO", lo pasamos como parámetro de consulta
     const config = ids ? { params: { ids } } : {};
     return API.get('/weather/data', config);
 };
 
+// Exportamos también como objeto de servicio para compatibilidad con componentes anteriores
+const EventService = {
+    getEvents,
+    getActiveOperations,
+    createEvent,
+    updateEvent,
+    deleteEvent,
+    getWeatherData
+};
+
+export { EventService };
 export default API;
