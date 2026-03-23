@@ -6,7 +6,6 @@ import EventService from '../services/EventService';
 
 // --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA ---
 
-// Triángulo Azul - Aviones
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -16,7 +15,6 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-// Cruz Azul - Helicópteros
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -63,6 +61,14 @@ const OperacionesMapa = () => {
         return esAvion ? planeIcon : heloIcon;
     };
 
+    // Función robusta para extraer la matrícula (ej: AE-451, G-601)
+    const extraerMatricula = (title) => {
+        const regex = /[A-Z]+-[0-9]+/i;
+        const match = title.match(regex);
+        // Si encuentra el patrón AE-123 lo devuelve, si no, devuelve el primer segmento
+        return match ? match[0].toUpperCase() : title.split(' ')[0];
+    };
+
     if (loading) return (
         <div style={styles.loadingScreen}>
             <div className="radar-loader"></div>
@@ -101,7 +107,6 @@ const OperacionesMapa = () => {
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
                         icon={getIcon(m.title)}
                     >
-                        {/* Tooltip con el cuadradito sutil para la matrícula */}
                         <Tooltip 
                             direction="right" 
                             offset={[15, 0]} 
@@ -110,7 +115,7 @@ const OperacionesMapa = () => {
                             className="label-tactica-custom"
                         >
                             <div style={darkMode ? styles.labelBoxDark : styles.labelBoxLight}>
-                                {m.title.split('-')[0].trim()}
+                                {extraerMatricula(m.title)}
                             </div>
                         </Tooltip>
 
@@ -159,9 +164,8 @@ const styles = {
     header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center' },
     mapToggle: { position: 'absolute', top: '15px', right: '15px', zIndex: 1000, background: '#f39c12', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace' },
     
-    // El cuadradito sutil para la matrícula
     labelBoxDark: {
-        background: 'rgba(0, 20, 40, 0.8)',
+        background: 'rgba(0, 20, 40, 0.85)',
         color: '#00ffff',
         border: '1px solid #00ffff',
         padding: '2px 6px',
