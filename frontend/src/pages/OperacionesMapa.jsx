@@ -36,6 +36,7 @@ const OperacionesMapa = () => {
         try {
             const data = await EventService.getActiveOperations(); 
             if (data && Array.isArray(data)) {
+                // Filtrar solo misiones con ubicación válida
                 const validas = data.filter(m => m.isRealTime && m.ubicacion?.lat && m.ubicacion?.lng);
                 setMisiones(validas);
             }
@@ -66,18 +67,20 @@ const OperacionesMapa = () => {
     if (loading) return (
         <div style={styles.loadingScreen}>
             <div className="radar-loader"></div>
-            <p style={{marginTop: '20px', letterSpacing: '3px'}}>📡 SINCRONIZANDO REDAR TÁCTICO...</p>
+            <p style={{marginTop: '20px', letterSpacing: '3px'}}>📡 SINCRONIZANDO RADAR TÁCTICO...</p>
         </div>
     );
 
     return (
         <div style={styles.mapWrapper}>
             
+            {/* Cabecera Táctica */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '4px' }}>MONITOR DE OPERACIONES</div>
                 <div style={{ fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px' }}>AVIACIÓN DE EJÉRCITO</div>
             </div>
 
+            {/* Selector de Capa */}
             <button onClick={() => setDarkMode(!darkMode)} style={styles.mapToggle}>
                 {darkMode ? '🛰️ VISTA ESTÁNDAR' : '🕶️ VISTA TÁCTICA'}
             </button>
@@ -101,22 +104,24 @@ const OperacionesMapa = () => {
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
                         icon={getIcon(m.title)}
                     >
+                        {/* Etiqueta de Matrícula: Solo texto limpio */}
                         <Tooltip 
                             direction="right" 
-                            offset={[15, 0]} 
+                            offset={[12, 0]} 
                             opacity={1} 
                             permanent 
-                            className="custom-label-tactica"
+                            className="label-matricula-limpia"
                         >
-                            <div style={darkMode ? styles.labelBoxDark : styles.labelBoxLight}>
+                            <span style={darkMode ? styles.textMatriculaDark : styles.textMatriculaLight}>
                                 {m.title.split('-')[0].trim()}
-                            </div>
+                            </span>
                         </Tooltip>
 
+                        {/* Popup de Información al hacer clic */}
                         <Popup>
                             <div style={styles.popupContainer}>
                                 <div style={styles.popupHeader}>{m.title}</div>
-                                <div style={{ fontSize: '0.85rem' }}>
+                                <div style={{ fontSize: '0.85rem', padding: '5px' }}>
                                     <strong>UNIDAD:</strong> {m.elemento}<br/>
                                     <strong>UBICACIÓN:</strong> {m.ubicacion.nombre}
                                 </div>
@@ -126,15 +131,28 @@ const OperacionesMapa = () => {
                 ))}
             </MapContainer>
 
+            {/* Limpieza de estilos Leaflet para dejar solo el texto */}
             <style>{`
-                .leaflet-tooltip.custom-label-tactica {
+                .leaflet-tooltip.label-matricula-limpia {
                     background: transparent !important;
                     border: none !important;
                     box-shadow: none !important;
                     padding: 0 !important;
+                    background-color: transparent !important;
                 }
-                .leaflet-tooltip-right.custom-label-tactica::before {
+                .leaflet-tooltip-right.label-matricula-limpia::before {
                     display: none !important;
+                }
+                .radar-loader {
+                    width: 50px;
+                    height: 50px;
+                    border: 3px solid rgba(243, 156, 18, 0.3);
+                    border-radius: 50%;
+                    border-top-color: #f39c12;
+                    animation: spin 1s ease-in-out infinite;
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
                 }
             `}</style>
         </div>
@@ -147,30 +165,26 @@ const styles = {
     header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center' },
     mapToggle: { position: 'absolute', top: '15px', right: '15px', zIndex: 1000, background: '#f39c12', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace' },
     
-    labelBoxDark: {
-        background: 'rgba(0, 20, 40, 0.85)',
+    // Estilo de solo texto para la matrícula
+    textMatriculaDark: {
         color: '#00ffff',
-        border: '1px solid #00ffff',
-        padding: '2px 6px',
-        borderRadius: '2px',
-        fontSize: '0.75rem',
+        fontSize: '0.8rem',
         fontWeight: 'bold',
         fontFamily: 'monospace',
-        whiteSpace: 'nowrap'
+        textShadow: '1px 1px 2px #000',
+        marginLeft: '5px'
     },
-    labelBoxLight: {
-        background: 'rgba(255, 255, 255, 0.9)',
+    textMatriculaLight: {
         color: '#0044ff',
-        border: '1px solid #0044ff',
-        padding: '2px 6px',
-        borderRadius: '2px',
-        fontSize: '0.75rem',
+        fontSize: '0.8rem',
         fontWeight: 'bold',
         fontFamily: 'monospace',
-        whiteSpace: 'nowrap'
+        textShadow: '1px 1px 1px #fff',
+        marginLeft: '5px'
     },
-    popupContainer: { minWidth: '150px', fontFamily: 'monospace' },
-    popupHeader: { background: '#f39c12', color: 'black', padding: '4px', fontWeight: 'bold', textAlign: 'center', marginBottom: '5px' }
+    
+    popupContainer: { minWidth: '180px', fontFamily: 'monospace' },
+    popupHeader: { background: '#f39c12', color: 'black', padding: '6px', fontWeight: 'bold', textAlign: 'center' }
 };
 
 export default OperacionesMapa;
