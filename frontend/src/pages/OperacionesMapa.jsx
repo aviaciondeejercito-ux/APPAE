@@ -3,11 +3,11 @@ import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl } from '
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import EventService from '../services/EventService';
-import MeteorologiaPanel from './MeteorologiaPanel'; // Importamos el panel existente
+import MeteorologiaPanel from './MeteorologiaPanel';
 
 const { BaseLayer } = LayersControl;
 
-// --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA ---
+// --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA REAL ---
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -17,20 +17,21 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
+// Icono circular azul con cruz blanca (Helicópteros)
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
-    html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <path d="M10 50 L90 50 M50 10 L50 90" stroke="#0044ff" stroke-width="18" stroke-linecap="square"/>
-            <path d="M10 50 L90 50 M50 10 L50 90" stroke="#ffffff" stroke-width="6" stroke-linecap="square"/>
+    html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="40" fill="#0044ff" stroke="#ffffff" stroke-width="6"/>
+            <path d="M50 20 L50 80 M20 50 L80 50" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
            </svg>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
 });
 
 const OperacionesMapa = () => {
     const [misiones, setMisiones] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showMetar, setShowMetar] = useState(true); // Control para ocultar/mostrar METAR
+    const [showMetar, setShowMetar] = useState(true); 
     const [mapView] = useState({ center: [-34.528, -58.641], zoom: 5 });
 
     const cargarSituacionTactica = async () => {
@@ -59,6 +60,7 @@ const OperacionesMapa = () => {
 
     const getIcon = (mision) => {
         const t = (mision.aeronave || "").toUpperCase();
+        // Lógica de distinción según modelo
         const esAvion = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'CESSNA', 'AVION', 'B-200', 'T-202'].some(mod => t.includes(mod));
         return esAvion ? planeIcon : heloIcon;
     };
@@ -72,10 +74,10 @@ const OperacionesMapa = () => {
 
     return (
         <div style={styles.mapWrapper}>
-            {/* PANEL DE METEOROLOGÍA (IZQUIERDA) */}
+            {/* 1. PANEL DE METEOROLOGÍA (Capa Superior Izquierda) */}
             <div style={{
                 ...styles.metarContainer,
-                transform: showMetar ? 'translateX(0)' : 'translateX(-90%)'
+                transform: showMetar ? 'translateX(0)' : 'translateX(-302px)' 
             }}>
                 <div style={styles.metarContent}>
                     <MeteorologiaPanel />
@@ -88,31 +90,28 @@ const OperacionesMapa = () => {
                 </button>
             </div>
 
-            {/* HEADER FIJO */}
+            {/* 2. HEADER CENTRAL */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>MONITOR DE OPERACIONES</div>
                 <div style={styles.subHeader}>AVIACIÓN DE EJÉRCITO ARGENTINO</div>
             </div>
 
-            {/* CONTENEDOR DEL MAPA */}
+            {/* 3. MAPA (Fondo) */}
             <MapContainer 
                 center={mapView.center} 
                 zoom={mapView.zoom} 
-                style={{ height: '100%', width: '100%', background: '#0a0a0a' }}
+                style={{ height: '100%', width: '100%', zIndex: 1 }}
                 zoomControl={false}
             >
                 <LayersControl position="topright">
-                    <BaseLayer checked name="🗺️ Mapa Político">
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
-                    </BaseLayer>
-                    <BaseLayer name="⛰️ Mapa Físico">
-                        <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='&copy; OpenTopoMap' />
+                    <BaseLayer checked name="🌑 Modo Oscuro">
+                        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
                     </BaseLayer>
                     <BaseLayer name="🛰️ Satelital">
-                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
+                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                     </BaseLayer>
-                    <BaseLayer name="🌑 Modo Oscuro">
-                        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='&copy; CartoDB' />
+                    <BaseLayer name="🗺️ Mapa Político">
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                     </BaseLayer>
                 </LayersControl>
 
@@ -122,7 +121,7 @@ const OperacionesMapa = () => {
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
                         icon={getIcon(m)}
                     >
-                        <Tooltip direction="right" offset={[12, 0]} permanent className="label-tactica-custom">
+                        <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
                             <div style={styles.labelBoxDark}>{m.aeronave || "N/A"}</div>
                         </Tooltip>
                         
@@ -142,13 +141,12 @@ const OperacionesMapa = () => {
             </MapContainer>
 
             <style>{`
-                .leaflet-container { height: 100%; width: 100%; }
                 .label-tactica-custom { background: transparent !important; border: none !important; box-shadow: none !important; }
                 .radar-loader { width: 50px; height: 50px; border: 3px solid #f39c12; border-radius: 50%; border-top-color: transparent; animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .leaflet-popup-content-wrapper { padding: 0; background: #1a1a1a; color: white; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
                 .leaflet-popup-content { margin: 0; width: 200px !important; }
-                .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; font-size: 0.7rem; }
+                .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; }
             `}</style>
         </div>
     );
@@ -164,13 +162,12 @@ const styles = {
     },
     metarContainer: {
         position: 'absolute',
-        top: '80px',
+        top: '100px',
         left: '0',
-        zIndex: 1100,
+        zIndex: 2000, // Por encima de todo
         display: 'flex',
         alignItems: 'flex-start',
-        transition: 'transform 0.4s ease-in-out',
-        maxHeight: '70vh'
+        transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
     },
     metarContent: {
         background: 'rgba(10, 10, 10, 0.95)',
@@ -179,26 +176,28 @@ const styles = {
         borderRadius: '0 4px 4px 0',
         padding: '10px',
         width: '300px',
+        maxHeight: '75vh',
+        overflowY: 'auto',
         boxShadow: '5px 0 15px rgba(0,0,0,0.5)'
     },
     toggleBtn: {
         background: '#f39c12',
         border: 'none',
         color: 'black',
-        padding: '15px 5px',
+        padding: '20px 8px',
         cursor: 'pointer',
         borderRadius: '0 4px 4px 0',
         fontWeight: 'bold',
-        fontSize: '12px',
-        boxShadow: '2px 0 5px rgba(0,0,0,0.3)'
+        fontSize: '14px',
+        boxShadow: '2px 0 5px rgba(0,0,0,0.3)',
+        marginLeft: '-1px'
     },
     loadingScreen: { backgroundColor: '#050505', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
-    header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '8px 20px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px', pointerEvents: 'none', width: 'auto', minWidth: '300px' },
-    subHeader: { fontSize: '0.6rem', color: '#bdc3c7', marginTop: '3px', borderTop: '1px solid #333', paddingTop: '3px' },
+    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px', width: 'auto', minWidth: '320px', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' },
+    subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #444', paddingTop: '4px', letterSpacing: '1px' },
     labelBoxDark: { background: 'rgba(0, 15, 30, 0.9)', color: '#00ffff', border: '1px solid #00ffff', padding: '2px 8px', borderRadius: '2px', fontSize: '0.8rem', fontWeight: 'bold', fontFamily: 'monospace', textShadow: '0 0 5px #00ffff' },
-    popupContainer: { fontFamily: 'monospace' },
-    popupHeader: { background: '#f39c12', color: 'black', padding: '6px', fontWeight: 'bold', textAlign: 'center', fontSize: '0.8rem' },
-    popupBody: { padding: '10px', fontSize: '0.75rem', background: '#1a1a1a' }
+    popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center', fontSize: '0.85rem' },
+    popupBody: { padding: '12px', fontSize: '0.8rem', background: '#1a1a1a', lineHeight: '1.4' }
 };
 
 export default OperacionesMapa;
