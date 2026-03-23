@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import EventService from '../services/EventService';
@@ -24,21 +24,31 @@ const heloIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-/**
- * MONITOR DE OPERACIONES - AVIACIÓN DE EJÉRCITO
- */
-const OperacionesMapa = ({ capasMet, setCapasMet }) => {
+// Componente para capturar el movimiento del mapa y sincronizar la "filmina"
+const SincronizadorBus = ({ onMove }) => {
+    useMapEvents({
+        move: (e) => onMove(e.target.getCenter(), e.target.getZoom()),
+        zoomend: (e) => onMove(e.target.getCenter(), e.target.getZoom()),
+    });
+    return null;
+};
+
+const OperacionesMapa = () => {
     const [misiones, setMisiones] = useState([]); 
     const [loading, setLoading] = useState(true);
-    const [darkMode, setDarkMode] = useState(true);
+    const [modoMapa, setModoMapa] = useState('windy'); // 'windy' o 'fisico'
     
-    // Refresh de capas cada 10 min para evitar caché
-    const [metTimestamp] = useState(Math.floor(Date.now() / 600000));
+    // Estado de la cámara (compartido por ambos mapas)
+    const [mapView, setMapView] = useState({
+        center: [-34.528, -58.641],
+        zoom: 5
+    });
 
     const cargarSituacionTactica = async () => {
         try {
             const data = await EventService.getActiveOperations(); 
             if (data && Array.isArray(data)) {
+                // Mantenemos tu filtro original isRealTime
                 const validas = data.filter(m => m.isRealTime && m.ubicacion?.lat && m.ubicacion?.lng);
                 setMisiones(validas);
             }
@@ -55,186 +65,130 @@ const OperacionesMapa = ({ capasMet, setCapasMet }) => {
         return () => clearInterval(interval);
     }, []);
 
-    // FUNCIÓN CORREGIDA: Usa el callback de estado para asegurar reactividad
-    const toggleCapa = (capa) => {
-        setCapasMet(prevCapas => ({
-            ...prevCapas,
-            [capa]: !prevCapas[capa]
-        }));
-    };
-
     const getIcon = (mision) => {
         const t = (mision.aeronave || mision.title || "").toUpperCase();
-        const esAvion = 
-            t.includes('C-212') || t.includes('C-208') || t.includes('C-550') || 
-            t.includes('DA-62') || t.includes('DHC-6') || t.includes('C-182') || 
-            t.includes('CESSNA') || t.includes('T-20')  || t.includes('MERLIN') ||
-            t.includes('AVION');
-        
+        const esAvion = t.includes('C-212') || t.includes('C-208') || t.includes('C-550') || 
+                        t.includes('DA-62') || t.includes('DHC-6') || t.includes('C-182') || 
+                        t.includes('CESSNA') || t.includes('T-20')  || t.includes('MERLIN') ||
+                        t.includes('AVION');
         return esAvion ? planeIcon : heloIcon;
     };
 
     if (loading) return (
         <div style={styles.loadingScreen}>
             <div className="radar-loader"></div>
-            <p style={{marginTop: '20px', letterSpacing: '3px'}}>📡 SINCRONIZANDO RADAR TÁCTICO...</p>
+            <p style={{marginTop: '20px', letterSpacing: '3px'}}>📡 SINCRONIZANDO SISTEMA TÁCTICO...</p>
         </div>
     );
 
     return (
         <div style={styles.mapWrapper}>
             
-            {/* TITULO SUPERIOR */}
+            {/* TITULO SUPERIOR (CAPA 3) */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '4px' }}>MONITOR DE OPERACIONES</div>
                 <div style={{ fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px' }}>AVIACIÓN DE EJÉRCITO</div>
             </div>
 
-            {/* BOTÓN VISTA TÁCTICA / SATELITE */}
-            <button onClick={() => setDarkMode(!darkMode)} style={styles.mapToggle}>
-                {darkMode ? '🛰️ VISTA SATELITAL' : '🕶️ VISTA TÁCTICA'}
-            </button>
-
-            {/* SELECTOR DE CAPAS MET (DERECHA) */}
-            <div style={styles.selectorMet}>
-                <div style={styles.selectorTitle}>METEOROLOGÍA</div>
-                <label style={styles.checkLabel}>
-                    <input type="checkbox" checked={!!capasMet?.radar} onChange={() => toggleCapa('radar')} />
-                    <span>📡 Radar Lluvia</span>
-                </label>
-                <label style={styles.checkLabel}>
-                    <input type="checkbox" checked={!!capasMet?.nubes} onChange={() => toggleCapa('nubes')} />
-                    <span>☁️ Nubosidad</span>
-                </label>
-                <label style={styles.checkLabel}>
-                    <input type="checkbox" checked={!!capasMet?.viento} onChange={() => toggleCapa('viento')} />
-                    <span>💨 Viento</span>
-                </label>
+            {/* SELECTOR DE MODO (CAPA 3) */}
+            <div style={styles.selectorModo}>
+                <button 
+                    onClick={() => setModoMapa('windy')} 
+                    style={{...styles.btnModo, borderBottom: modoMapa === 'windy' ? '3px solid #f39c12' : 'none'}}
+                >
+                    🛰️ WINDY SAT
+                </button>
+                <button 
+                    onClick={() => setModoMapa('fisico')} 
+                    style={{...styles.btnModo, borderBottom: modoMapa === 'fisico' ? '3px solid #f39c12' : 'none'}}
+                >
+                    🗺️ FÍSICO/POLÍTICO
+                </button>
             </div>
 
-            {/* LEYENDA DE INTENSIDAD */}
-            {capasMet?.radar && (
-                <div style={styles.legendContainer}>
-                    <div style={{fontSize: '0.6rem', marginBottom: '5px', color: '#f39c12', fontWeight: 'bold'}}>INTENSIDAD (dBZ)</div>
-                    <div style={styles.gradientBar}></div>
-                    <div style={styles.legendText}>
-                        <span>Ligera</span>
-                        <span>Moderada</span>
-                        <span>Severa</span>
-                    </div>
-                </div>
-            )}
-
-            <MapContainer 
-                center={[-34.528, -58.641]} 
-                zoom={5} 
-                style={{ height: '100%', width: '100%' }}
-                zoomControl={false}
-            >
-                {/* CAPA BASE */}
-                <TileLayer 
-                    url={darkMode 
-                        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                        : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                    } 
-                    attribution={darkMode ? '&copy; CartoDB' : '&copy; ESRI'}
-                />
-
-                {/* --- CAPAS METEOROLÓGICAS ORDENADAS --- */}
-                {capasMet?.viento && (
-                    <TileLayer 
-                        url={`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b`} 
-                        opacity={0.4}
-                        zIndex={80}
+            {/* --- CAPA 1: FONDO (EL MAPA QUE CAMBIA) --- */}
+            <div style={styles.baseLayer}>
+                {modoMapa === 'windy' ? (
+                    <iframe 
+                        src={`https://www.windy.com/overlay?satellite,${mapView.center[0] || mapView.center.lat},${mapView.center[1] || mapView.center.lng},${Math.round(mapView.zoom)}`}
+                        style={{ width: '100%', height: '100%', border: 'none' }}
+                        title="Windy Base"
                     />
-                )}
-
-                {capasMet?.nubes && (
-                    <TileLayer 
-                        url={`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b`} 
-                        opacity={0.5}
-                        zIndex={90}
-                    />
-                )}
-
-                {capasMet?.radar && (
-                    <TileLayer 
-                        url={`https://tilecache.rainviewer.com/v2/radar/default/256/{z}/{x}/{y}/2/1_1.png?now=${metTimestamp}`}
-                        opacity={0.7}
-                        zIndex={100}
-                    />
-                )}
-                
-                {/* --- MARCADORES TÁCTICOS --- */}
-                {misiones.map((m) => (
-                    <Marker 
-                        key={m._id} 
-                        position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
-                        icon={getIcon(m)}
+                ) : (
+                    <MapContainer 
+                        center={mapView.center} 
+                        zoom={mapView.zoom} 
+                        style={{ height: '100%', width: '100%' }}
+                        zoomControl={false}
                     >
-                        <Tooltip 
-                            direction="right" 
-                            offset={[15, 0]} 
-                            opacity={1} 
-                            permanent 
-                            className="label-tactica-custom"
-                        >
-                            <div style={darkMode ? styles.labelBoxDark : styles.labelBoxLight}>
-                                {m.matricula || (m.title && m.title.split(' ')[0])}
-                            </div>
-                        </Tooltip>
+                        <TileLayer 
+                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+                            attribution="ESRI"
+                        />
+                        <TileLayer 
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                            opacity={0.4} // Superposición política sobre relieve
+                        />
+                        <SincronizadorBus onMove={(c, z) => setMapView({center: c, zoom: z})} />
+                    </MapContainer>
+                )}
+            </div>
 
-                        <Popup>
-                            <div style={styles.popupContainer}>
-                                <div style={styles.popupHeader}>
-                                    {m.aeronave ? `${m.aeronave} ${m.matricula}` : m.title}
+            {/* --- CAPA 2: LA FILMINA (ICONOS FLOTANTES) --- */}
+            {/* Esta capa siempre es un MapContainer de Leaflet pero TRANSPARENTE */}
+            <div style={{...styles.overlayLayer, pointerEvents: modoMapa === 'windy' ? 'none' : 'auto'}}>
+                <MapContainer 
+                    center={mapView.center} 
+                    zoom={mapView.zoom} 
+                    zoomControl={false}
+                    dragging={modoMapa !== 'windy'} 
+                    scrollWheelZoom={modoMapa !== 'windy'}
+                    style={{ height: '100%', width: '100%', background: 'transparent' }}
+                >
+                    {/* Sincronizamos si el usuario mueve esta capa */}
+                    <SincronizadorBus onMove={(c, z) => setMapView({center: c, zoom: z})} />
+                    
+                    {misiones.map((m) => (
+                        <Marker 
+                            key={m._id} 
+                            position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
+                            icon={getIcon(m)}
+                        >
+                            <Tooltip 
+                                direction="right" 
+                                offset={[15, 0]} 
+                                permanent 
+                                className="label-tactica-custom"
+                            >
+                                <div style={styles.labelBoxDark}>
+                                    {m.matricula || (m.title && m.title.split(' ')[0])}
                                 </div>
-                                <div style={{ fontSize: '0.85rem', padding: '10px', color: '#ecf0f1', background: '#2c3e50' }}>
-                                    <strong>MISIÓN:</strong> {m.title}<br/>
-                                    <strong>UNIDAD:</strong> {m.elemento}<br/>
-                                    <strong>UBICACIÓN:</strong> {m.ubicacion.nombre}<br/>
-                                    <hr style={{borderColor: '#7f8c8d', margin: '8px 0'}}/>
-                                    <small style={{color: '#f39c12'}}>REPORTE EN TIEMPO REAL</small>
+                            </Tooltip>
+
+                            <Popup>
+                                <div style={styles.popupContainer}>
+                                    <div style={styles.popupHeader}>
+                                        {m.aeronave ? `${m.aeronave} ${m.matricula}` : m.title}
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem', padding: '10px', color: '#ecf0f1', background: '#2c3e50' }}>
+                                        <strong>MISIÓN:</strong> {m.title}<br/>
+                                        <strong>UNIDAD:</strong> {m.elemento}<br/>
+                                        <hr style={{borderColor: '#7f8c8d', margin: '8px 0'}}/>
+                                        <small style={{color: '#f39c12'}}>REPORTE EN TIEMPO REAL</small>
+                                    </div>
                                 </div>
-                            </div>
-                        </Popup>
-                    </Marker>
-                ))}
-            </MapContainer>
+                            </Popup>
+                        </Marker>
+                    ))}
+                </MapContainer>
+            </div>
 
             <style>{`
-                .leaflet-tooltip.label-tactica-custom {
-                    background: transparent !important;
-                    border: none !important;
-                    box-shadow: none !important;
-                    padding: 0 !important;
-                }
-                .leaflet-tooltip-right.label-tactica-custom::before {
-                    display: none !important;
-                }
-                .radar-loader {
-                    width: 50px;
-                    height: 50px;
-                    border: 3px solid rgba(243, 156, 18, 0.3);
-                    border-radius: 50%;
-                    border-top-color: #f39c12;
-                    animation: spin 1s ease-in-out infinite;
-                }
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-                .leaflet-popup-content-wrapper {
-                    padding: 0;
-                    overflow: hidden;
-                    background: #2c3e50;
-                }
-                .leaflet-popup-content {
-                    margin: 0;
-                    width: 220px !important;
-                }
-                .leaflet-popup-tip {
-                    background: #2c3e50;
-                }
+                .label-tactica-custom { background: transparent !important; border: none !important; box-shadow: none !important; }
+                .radar-loader { width: 50px; height: 50px; border: 3px solid rgba(243, 156, 18, 0.3); border-radius: 50%; border-top-color: #f39c12; animation: spin 1s ease-in-out infinite; }
+                @keyframes spin { to { transform: rotate(360deg); } }
+                .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; background: #2c3e50; }
+                .leaflet-popup-content { margin: 0; width: 220px !important; }
             `}</style>
         </div>
     );
@@ -244,40 +198,26 @@ const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#000' },
     loadingScreen: { backgroundColor: '#0a0a0a', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
     header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center', pointerEvents: 'none' },
-    mapToggle: { position: 'absolute', top: '15px', right: '15px', zIndex: 1000, background: '#f39c12', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '0.7rem' },
     
-    selectorMet: {
-        position: 'absolute', top: '70px', right: '15px', zIndex: 1000,
-        backgroundColor: 'rgba(10, 10, 10, 0.9)', padding: '12px', borderRadius: '6px',
-        border: '1px solid #f39c12', color: 'white', display: 'flex', flexDirection: 'column', gap: '8px',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
-    },
-    selectorTitle: { fontSize: '0.65rem', color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #333', paddingBottom: '5px', marginBottom: '5px' },
-    checkLabel: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'monospace' },
+    // Capas de profundidad
+    baseLayer: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 },
+    overlayLayer: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2, background: 'transparent' },
 
-    legendContainer: {
-        position: 'absolute', bottom: '30px', left: '15px', zIndex: 1000,
-        backgroundColor: 'rgba(10, 10, 10, 0.8)', padding: '10px', borderRadius: '4px',
-        border: '1px solid #f39c12', width: '180px', fontFamily: 'monospace'
+    selectorModo: {
+        position: 'absolute', top: '15px', right: '15px', zIndex: 1000,
+        display: 'flex', gap: '5px', background: 'rgba(0,0,0,0.8)', padding: '5px', borderRadius: '4px'
     },
-    gradientBar: {
-        height: '10px', width: '100%',
-        background: 'linear-gradient(to right, #72ff72, #ffff00, #ff0000, #ff00ff)',
-        borderRadius: '2px', marginBottom: '5px'
+    btnModo: {
+        background: 'transparent', color: '#fff', border: 'none', padding: '8px 12px', 
+        cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '0.7rem'
     },
-    legendText: { display: 'flex', justifyContent: 'space-between', fontSize: '0.55rem', color: '#fff' },
-
+    
     labelBoxDark: {
         background: 'rgba(0, 20, 40, 0.85)', color: '#00ffff', border: '1px solid #00ffff',
-        padding: '2px 6px', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 'bold', fontFamily: 'monospace', whiteSpace: 'nowrap'
+        padding: '2px 6px', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 'bold', fontFamily: 'monospace'
     },
-    labelBoxLight: {
-        background: 'rgba(255, 255, 255, 0.9)', color: '#0044ff', border: '1px solid #0044ff',
-        padding: '2px 6px', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 'bold', fontFamily: 'monospace', whiteSpace: 'nowrap', boxShadow: '1px 1px 3px rgba(0,0,0,0.2)'
-    },
-    
     popupContainer: { minWidth: '200px', fontFamily: 'monospace' },
-    popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center', letterSpacing: '1px' }
+    popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center' }
 };
 
 export default OperacionesMapa;
