@@ -3,41 +3,40 @@ import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl } from '
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import EventService from '../services/EventService';
+import MeteorologiaPanel from './MeteorologiaPanel'; // Importamos el panel existente
 
 const { BaseLayer } = LayersControl;
 
 // --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA ---
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
-    html: `<svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <path d="M50 5 L90 85 L50 70 L10 85 Z" fill="#0044ff" stroke="#ffffff" stroke-width="4"/>
-            <path d="M20 50 L80 50" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+    html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path d="M50 10 L90 85 L10 85 Z" fill="#0044ff" stroke="#ffffff" stroke-width="6"/>
            </svg>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
 });
 
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
-    html: `<svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50" cy="50" r="30" fill="#0044ff" stroke="#ffffff" stroke-width="4"/>
-            <path d="M10 50 L90 50 M50 10 L50 90" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
-            <circle cx="50" cy="50" r="5" fill="#ffffff"/>
+    html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 50 L90 50 M50 10 L50 90" stroke="#0044ff" stroke-width="18" stroke-linecap="square"/>
+            <path d="M10 50 L90 50 M50 10 L50 90" stroke="#ffffff" stroke-width="6" stroke-linecap="square"/>
            </svg>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
 });
 
 const OperacionesMapa = () => {
     const [misiones, setMisiones] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showMetar, setShowMetar] = useState(true); // Control para ocultar/mostrar METAR
     const [mapView] = useState({ center: [-34.528, -58.641], zoom: 5 });
 
     const cargarSituacionTactica = async () => {
         try {
             const data = await EventService.getActiveOperations();
             if (Array.isArray(data)) {
-                // Filtrado estricto para evitar errores de renderizado
                 const activas = data.filter(m => 
                     m.isRealTime && 
                     m.ubicacion?.lat != null && 
@@ -73,13 +72,29 @@ const OperacionesMapa = () => {
 
     return (
         <div style={styles.mapWrapper}>
-            {/* TÍTULO SUPERIOR */}
+            {/* PANEL DE METEOROLOGÍA (IZQUIERDA) */}
+            <div style={{
+                ...styles.metarContainer,
+                transform: showMetar ? 'translateX(0)' : 'translateX(-90%)'
+            }}>
+                <div style={styles.metarContent}>
+                    <MeteorologiaPanel />
+                </div>
+                <button 
+                    onClick={() => setShowMetar(!showMetar)} 
+                    style={styles.toggleBtn}
+                >
+                    {showMetar ? '◀' : '▶'}
+                </button>
+            </div>
+
+            {/* HEADER FIJO */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>MONITOR DE OPERACIONES</div>
                 <div style={styles.subHeader}>AVIACIÓN DE EJÉRCITO ARGENTINO</div>
             </div>
 
-            {/* CONTENEDOR DEL MAPA - IMPORTANTE: Altura 100% */}
+            {/* CONTENEDOR DEL MAPA */}
             <MapContainer 
                 center={mapView.center} 
                 zoom={mapView.zoom} 
@@ -88,31 +103,16 @@ const OperacionesMapa = () => {
             >
                 <LayersControl position="topright">
                     <BaseLayer checked name="🗺️ Mapa Político">
-                        <TileLayer 
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution='&copy; OSM'
-                        />
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
                     </BaseLayer>
-
                     <BaseLayer name="⛰️ Mapa Físico">
-                        <TileLayer 
-                            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
-                            attribution='&copy; OpenTopoMap'
-                        />
+                        <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='&copy; OpenTopoMap' />
                     </BaseLayer>
-
                     <BaseLayer name="🛰️ Satelital">
-                        <TileLayer 
-                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                            attribution='&copy; Esri'
-                        />
+                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />
                     </BaseLayer>
-
                     <BaseLayer name="🌑 Modo Oscuro">
-                        <TileLayer 
-                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                            attribution='&copy; CartoDB'
-                        />
+                        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='&copy; CartoDB' />
                     </BaseLayer>
                 </LayersControl>
 
@@ -122,8 +122,8 @@ const OperacionesMapa = () => {
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
                         icon={getIcon(m)}
                     >
-                        <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
-                            <div style={styles.labelBoxDark}>{m.matricula || "S/M"}</div>
+                        <Tooltip direction="right" offset={[12, 0]} permanent className="label-tactica-custom">
+                            <div style={styles.labelBoxDark}>{m.aeronave || "N/A"}</div>
                         </Tooltip>
                         
                         <Popup>
@@ -142,13 +142,10 @@ const OperacionesMapa = () => {
             </MapContainer>
 
             <style>{`
-                /* Fix para que el mapa ocupe todo el espacio disponible */
                 .leaflet-container { height: 100%; width: 100%; }
-                
                 .label-tactica-custom { background: transparent !important; border: none !important; box-shadow: none !important; }
                 .radar-loader { width: 50px; height: 50px; border: 3px solid #f39c12; border-radius: 50%; border-top-color: transparent; animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
-                
                 .leaflet-popup-content-wrapper { padding: 0; background: #1a1a1a; color: white; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
                 .leaflet-popup-content { margin: 0; width: 200px !important; }
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; font-size: 0.7rem; }
@@ -160,14 +157,45 @@ const OperacionesMapa = () => {
 const styles = {
     mapWrapper: { 
         width: '100%', 
-        height: 'calc(100vh - 60px)', // Ajuste para que no se pierda bajo el navbar
+        height: 'calc(100vh - 60px)', 
         position: 'relative', 
-        backgroundColor: '#050505' 
+        backgroundColor: '#050505',
+        overflow: 'hidden'
+    },
+    metarContainer: {
+        position: 'absolute',
+        top: '80px',
+        left: '0',
+        zIndex: 1100,
+        display: 'flex',
+        alignItems: 'flex-start',
+        transition: 'transform 0.4s ease-in-out',
+        maxHeight: '70vh'
+    },
+    metarContent: {
+        background: 'rgba(10, 10, 10, 0.95)',
+        border: '1px solid #f39c12',
+        borderLeft: 'none',
+        borderRadius: '0 4px 4px 0',
+        padding: '10px',
+        width: '300px',
+        boxShadow: '5px 0 15px rgba(0,0,0,0.5)'
+    },
+    toggleBtn: {
+        background: '#f39c12',
+        border: 'none',
+        color: 'black',
+        padding: '15px 5px',
+        cursor: 'pointer',
+        borderRadius: '0 4px 4px 0',
+        fontWeight: 'bold',
+        fontSize: '12px',
+        boxShadow: '2px 0 5px rgba(0,0,0,0.3)'
     },
     loadingScreen: { backgroundColor: '#050505', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
-    header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '8px 20px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px', pointerEvents: 'none' },
+    header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '8px 20px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px', pointerEvents: 'none', width: 'auto', minWidth: '300px' },
     subHeader: { fontSize: '0.6rem', color: '#bdc3c7', marginTop: '3px', borderTop: '1px solid #333', paddingTop: '3px' },
-    labelBoxDark: { background: 'rgba(0, 15, 30, 0.9)', color: '#00ffff', border: '1px solid #00ffff', padding: '1px 6px', borderRadius: '2px', fontSize: '0.75rem', fontWeight: 'bold', fontFamily: 'monospace' },
+    labelBoxDark: { background: 'rgba(0, 15, 30, 0.9)', color: '#00ffff', border: '1px solid #00ffff', padding: '2px 8px', borderRadius: '2px', fontSize: '0.8rem', fontWeight: 'bold', fontFamily: 'monospace', textShadow: '0 0 5px #00ffff' },
     popupContainer: { fontFamily: 'monospace' },
     popupHeader: { background: '#f39c12', color: 'black', padding: '6px', fontWeight: 'bold', textAlign: 'center', fontSize: '0.8rem' },
     popupBody: { padding: '10px', fontSize: '0.75rem', background: '#1a1a1a' }
