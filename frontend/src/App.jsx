@@ -7,7 +7,8 @@ import Operaciones from './pages/Operaciones';
 import EstadoAeronaves from './pages/EstadoAeronaves';
 import Material from './pages/Material'; 
 import OperacionesMapa from './pages/OperacionesMapa';
-import CargaTactica from './pages/CargaTactica'; // <--- NUEVO COMPONENTE
+import CargaTactica from './pages/CargaTactica';
+import MeteorologiaPanel from './pages/MeteorologiaPanel'; // Importamos el nuevo panel
 
 function App() {
     // 1. Estados de Autenticación y Navegación
@@ -16,7 +17,14 @@ function App() {
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-    // Escucha cambios de tamaño de pantalla para ajuste dinámico
+    // --- CEREBRO METEOROLÓGICO (ESTADO GLOBAL) ---
+    const [capasMet, setCapasMet] = useState({
+        radar: false,
+        nubes: false,
+        viento: false
+    });
+
+    // Escucha cambios de tamaño de pantalla
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
@@ -75,7 +83,6 @@ function App() {
                 }}>
                     {auth ? (
                         <>
-                            {/* BOTÓN MONITOR */}
                             <button 
                                 onClick={() => setView('calendar')}
                                 style={{
@@ -87,7 +94,6 @@ function App() {
                                 📅 Calendario
                             </button>
 
-                            {/* BOTÓN MAPA TÁCTICO */}
                             {puedeVerMapa && (
                                 <button 
                                     onClick={() => setView('mapa')}
@@ -97,11 +103,10 @@ function App() {
                                         border: view === 'mapa' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    📍 En Desarrollo
+                                    📍 Mapa Táctico
                                 </button>
                             )}
 
-                            {/* BOTÓN DESPACHO TÁCTICO (NUEVO FORMULARIO) */}
                             {puedeCargarOperaciones && (
                                 <button 
                                     onClick={() => setView('despacho')}
@@ -115,7 +120,6 @@ function App() {
                                 </button>
                             )}
 
-                            {/* BOTÓN ESTADO GENERAL */}
                             <button 
                                 onClick={() => setView('estado')}
                                 style={{
@@ -127,7 +131,6 @@ function App() {
                                 🚁 Estado del Material
                             </button>
 
-                            {/* BOTÓN GESTIÓN MATERIAL */}
                             {puedeGestionarMaterial && (
                                 <button 
                                     onClick={() => setView('material')}
@@ -141,7 +144,6 @@ function App() {
                                 </button>
                             )}
 
-                            {/* BOTÓN ESTADÍSTICAS */}
                             {puedeVerStats && (
                                 <button 
                                     onClick={() => setView('stats')}
@@ -155,7 +157,6 @@ function App() {
                                 </button>
                             )}
 
-                            {/* BOTÓN CARGA ADMINISTRATIVA (FORMULARIO ORIGINAL) */}
                             {puedeCargarOperaciones && (
                                 <button 
                                     onClick={() => setView('operaciones')}
@@ -169,7 +170,6 @@ function App() {
                                 </button>
                             )}
 
-                            {/* ACCESO A PANEL ADMIN */}
                             {role === 'admin' && (
                                 <button 
                                     onClick={() => setView('admin')}
@@ -206,7 +206,18 @@ function App() {
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
-                        if (view === 'mapa' && puedeVerMapa) return <OperacionesMapa />;
+                        
+                        // INTEGRACIÓN MAPA + PANEL METEOROLÓGICO
+                        if (view === 'mapa' && puedeVerMapa) return (
+                            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                                <OperacionesMapa 
+                                    capasMet={capasMet} 
+                                    setCapasMet={setCapasMet} 
+                                />
+                                <MeteorologiaPanel />
+                            </div>
+                        );
+
                         if (view === 'despacho' && puedeCargarOperaciones) return <CargaTactica />;
                         if (view === 'operaciones') return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
@@ -269,7 +280,9 @@ const styles = {
         width: '100%',
         margin: '0',
         padding: '0',
-        minHeight: 'calc(100vh - 160px)'
+        height: 'calc(100vh - 60px)', // Ajustado para que el mapa ocupe el resto de la pantalla
+        position: 'relative',
+        overflow: 'hidden'
     },
     footer: { 
         textAlign: 'center', 

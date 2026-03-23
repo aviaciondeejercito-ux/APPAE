@@ -25,7 +25,7 @@ const heloIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-const OperacionesMapa = () => {
+const OperacionesMapa = ({ capasMet, setCapasMet }) => {
     const [misiones, setMisiones] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [darkMode, setDarkMode] = useState(true);
@@ -34,7 +34,6 @@ const OperacionesMapa = () => {
         try {
             const data = await EventService.getActiveOperations(); 
             if (data && Array.isArray(data)) {
-                // Filtramos misiones válidas que tengan coordenadas
                 const validas = data.filter(m => m.isRealTime && m.ubicacion?.lat && m.ubicacion?.lng);
                 setMisiones(validas);
             }
@@ -51,7 +50,10 @@ const OperacionesMapa = () => {
         return () => clearInterval(interval);
     }, []);
 
-    // Lógica de iconos basada en el nuevo campo 'aeronave' o el título como respaldo
+    const toggleCapa = (capa) => {
+        setCapasMet({ ...capasMet, [capa]: !capasMet[capa] });
+    };
+
     const getIcon = (mision) => {
         const t = (mision.aeronave || mision.title).toUpperCase();
         const esAvion = 
@@ -73,14 +75,36 @@ const OperacionesMapa = () => {
     return (
         <div style={styles.mapWrapper}>
             
+            {/* TITULO SUPERIOR */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '4px' }}>MONITOR DE OPERACIONES</div>
                 <div style={{ fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px' }}>AVIACIÓN DE EJÉRCITO</div>
             </div>
 
+            {/* BOTÓN VISTA TÁCTICA / SATELITE */}
             <button onClick={() => setDarkMode(!darkMode)} style={styles.mapToggle}>
-                {darkMode ? '🛰️ VISTA ESTÁNDAR' : '🕶️ VISTA TÁCTICA'}
+                {darkMode ? '🛰️ VISTA SATELITAL' : '🕶️ VISTA TÁCTICA'}
             </button>
+
+            {/* SELECTOR DE CAPAS MET (DERECHA) */}
+            <div style={styles.selectorMet}>
+                <div style={styles.selectorTitle}>METEOROLOGÍA</div>
+                <label style={styles.checkLabel}>
+                    <input type="checkbox" checked={capasMet.radar} onChange={() => toggleCapa('radar')} />
+                    <span>📡 Radar Lluvia</span>
+                </label>
+                <label style={styles.checkLabel}>
+                    <input type="checkbox" checked={capasMet.nubes} onChange={() => toggleCapa('nubes')} />
+                    <span>☁️ Nubosidad</span>
+                </label>
+                <label style={styles.checkLabel}>
+                    <input type="checkbox" checked={capasMet.viento} onChange={() => toggleCapa('viento')} />
+                    <span>💨 Viento</span>
+                </label>
+            </div>
+
+            {/* ESPACIO PARA PANEL METAR/TAF (IZQUIERDA) - Se inyectará aquí en el próximo paso */}
+            <div id="metar-panel-anchor"></div>
 
             <MapContainer 
                 center={[-34.528, -58.641]} 
@@ -91,10 +115,36 @@ const OperacionesMapa = () => {
                 <TileLayer 
                     url={darkMode 
                         ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                     } 
                 />
+
+                {/* --- CAPAS METEOROLÓGICAS ANIMADAS --- */}
+                {capasMet.radar && (
+                    <TileLayer 
+                        url="https://tilecache.rainviewer.com/v2/radar/default/256/{z}/{x}/{y}/2/1_1.png"
+                        opacity={0.6}
+                        zIndex={100}
+                    />
+                )}
+
+                {capasMet.nubes && (
+                    <TileLayer 
+                        url="https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b" 
+                        opacity={0.5}
+                        zIndex={90}
+                    />
+                )}
+
+                {capasMet.viento && (
+                    <TileLayer 
+                        url="https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b" 
+                        opacity={0.4}
+                        zIndex={80}
+                    />
+                )}
                 
+                {/* --- MARCADORES TÁCTICOS (MISIONES) --- */}
                 {misiones.map((m) => (
                     <Marker 
                         key={m._id} 
@@ -109,7 +159,6 @@ const OperacionesMapa = () => {
                             className="label-tactica-custom"
                         >
                             <div style={darkMode ? styles.labelBoxDark : styles.labelBoxLight}>
-                                {/* LECTURA DIRECTA DE MATRÍCULA SEPARADA */}
                                 {m.matricula || m.title.split(' ')[0]}
                             </div>
                         </Tooltip>
@@ -153,7 +202,6 @@ const OperacionesMapa = () => {
                 @keyframes spin {
                     to { transform: rotate(360deg); }
                 }
-                /* Ajuste de estilos para el Popup de Leaflet */
                 .leaflet-popup-content-wrapper {
                     padding: 0;
                     overflow: hidden;
@@ -174,9 +222,17 @@ const OperacionesMapa = () => {
 const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#000' },
     loadingScreen: { backgroundColor: '#0a0a0a', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
-    header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center' },
-    mapToggle: { position: 'absolute', top: '15px', right: '15px', zIndex: 1000, background: '#f39c12', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace' },
+    header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center', pointerEvents: 'none' },
+    mapToggle: { position: 'absolute', top: '15px', right: '15px', zIndex: 1000, background: '#f39c12', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '0.7rem' },
     
+    selectorMet: {
+        position: 'absolute', top: '70px', right: '15px', zIndex: 1000,
+        backgroundColor: 'rgba(10, 10, 10, 0.9)', padding: '12px', borderRadius: '6px',
+        border: '1px solid #f39c12', color: 'white', display: 'flex', flexDirection: 'column', gap: '8px'
+    },
+    selectorTitle: { fontSize: '0.65rem', color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #333', paddingBottom: '5px', marginBottom: '5px' },
+    checkLabel: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'monospace' },
+
     labelBoxDark: {
         background: 'rgba(0, 20, 40, 0.85)',
         color: '#00ffff',
