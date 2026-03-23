@@ -8,31 +8,31 @@ import EstadoAeronaves from './pages/EstadoAeronaves';
 import Material from './pages/Material'; 
 import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
-import MeteorologiaPanel from './pages/MeteorologiaPanel'; // Nuevo panel integrado
+import MeteorologiaPanel from './pages/MeteorologiaPanel';
 
 function App() {
-    // 1. Estados de Autenticación y Navegación
+    // 1. ESTADOS DE AUTENTICACIÓN Y NAVEGACIÓN
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
     const [role, setRole] = useState(localStorage.getItem('role'));
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
     // --- CEREBRO METEOROLÓGICO (ESTADO GLOBAL) ---
-    // Este estado se pasa a OperacionesMapa para controlar los TileLayers
+    // Este estado controla qué capas de satélite/radar se ven en el mapa nativo
     const [capasMet, setCapasMet] = useState({
         radar: false,
         nubes: false,
         viento: false
     });
 
-    // Escucha cambios de tamaño de pantalla
+    // Escucha cambios de tamaño de pantalla para responsividad
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // 2. Efecto de sincronización de seguridad
+    // 2. EFECTO DE SINCRONIZACIÓN DE SEGURIDAD
     useEffect(() => {
         const token = localStorage.getItem('token');
         const savedRole = localStorage.getItem('role');
@@ -42,7 +42,7 @@ function App() {
         }
     }, [auth]);
 
-    // 3. Gestión de Cierre de Sesión Seguro
+    // 3. GESTIÓN DE CIERRE DE SESIÓN SEGURO
     const handleLogout = () => {
         localStorage.clear();
         setAuth(false);
@@ -51,7 +51,7 @@ function App() {
     };
 
     /**
-     * LÓGICA DE PERMISOS UNIFICADA
+     * LÓGICA DE PERMISOS UNIFICADA (MATRIZ DE ACCESO AE)
      */
     const puedeGestionarMaterial = role === 'admin' || role === 'S4' || role === 'S4_UNIDAD';
     const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'S4' || role === 'S4_UNIDAD' || role === 'boss';
@@ -59,14 +59,14 @@ function App() {
     const puedeVerMapa = role === 'admin' || role === 'boss';
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
             
             {/* HEADER INSTITUCIONAL - BARRA DE MANDO */}
             <nav style={{
                 ...styles.navbar,
                 flexDirection: isMobile ? 'column' : 'row',
-                padding: isMobile ? '10px' : '12px 40px',
-                height: isMobile ? 'auto' : '60px'
+                padding: isMobile ? '10px' : '0 30px',
+                height: isMobile ? 'auto' : '65px'
             }}>
                 <div 
                     style={styles.logo} 
@@ -129,7 +129,7 @@ function App() {
                                     border: view === 'estado' ? '2px solid white' : 'none'
                                 }}
                             >
-                                🚁 Estado del Material
+                                🚁 Estado Material
                             </button>
 
                             {puedeGestionarMaterial && (
@@ -154,7 +154,7 @@ function App() {
                                         border: view === 'stats' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    📊 Estadisticas
+                                    📊 Stats
                                 </button>
                             )}
 
@@ -199,8 +199,8 @@ function App() {
                 </div>
             </nav>
 
-            {/* ÁREA DE CONTENIDO */}
-            <main style={(view === 'stats' || view === 'material' || view === 'estado' || view === 'mapa' || view === 'despacho') ? styles.containerStats : styles.container}>
+            {/* ÁREA DE CONTENIDO DINÁMICO */}
+            <main style={(view === 'mapa' || view === 'stats' || view === 'material' || view === 'estado' || view === 'despacho') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
@@ -208,15 +208,15 @@ function App() {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
                         
-                        // --- VISTA INTEGRADA DE MAPA TÁCTICO ---
+                        // --- INTEGRACIÓN DE MAPA TÁCTICO Y METEOROLOGÍA ---
                         if (view === 'mapa' && puedeVerMapa) return (
-                            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                                {/* Capa de fondo del mapa */}
+                            <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                                {/* El mapa recibe el estado de las capas meteorológicas */}
                                 <OperacionesMapa 
                                     capasMet={capasMet} 
                                     setCapasMet={setCapasMet} 
                                 />
-                                {/* Panel de METAR/TAF superpuesto a la izquierda */}
+                                {/* Panel de METAR/TAF superpuesto */}
                                 <MeteorologiaPanel />
                             </div>
                         );
@@ -230,9 +230,10 @@ function App() {
                 )}
             </main>
 
-            {view !== 'mapa' && (
+            {/* FOOTER - OCULTO EN VISTA MAPA PARA MAXIMIZAR VISIBILIDAD */}
+            {(view !== 'mapa' && view !== 'stats') && (
                 <footer style={styles.footer}>
-                    © 2026 Aviación de Ejército - Sistema Operativo
+                    © 2026 Aviación de Ejército - Sistema de Comando y Control
                 </footer>
             )}
         </div>
@@ -246,56 +247,57 @@ const styles = {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
         position: 'sticky',
         top: 0,
-        zIndex: 1000,
+        zIndex: 3000,
         transition: 'all 0.3s ease'
     },
-    logo: { fontSize: '1.2rem', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '1px' },
-    navActions: { display: 'flex', alignItems: 'center', gap: '8px' },
+    logo: { fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '0.5px' },
+    navActions: { display: 'flex', alignItems: 'center', gap: '6px' },
     userInfo: { display: 'flex', alignItems: 'center', gap: '10px' },
     btnNav: {
         color: 'white',
         border: 'none',
-        padding: '6px 12px',
-        borderRadius: '6px',
+        padding: '8px 14px',
+        borderRadius: '4px',
         cursor: 'pointer',
-        fontWeight: 'bold',
-        fontSize: '0.8rem',
-        transition: '0.3s'
+        fontWeight: '600',
+        fontSize: '0.75rem',
+        transition: '0.2s'
     },
     btnLogout: {
-        backgroundColor: 'transparent',
-        color: '#ff9999',
-        border: '1px solid #ff9999',
-        padding: '4px 10px',
-        borderRadius: '6px',
+        backgroundColor: '#c0392b',
+        color: 'white',
+        border: 'none',
+        padding: '5px 12px',
+        borderRadius: '4px',
         cursor: 'pointer',
-        fontSize: '0.75rem',
+        fontSize: '0.7rem',
         fontWeight: 'bold'
     },
     container: { 
         maxWidth: '1400px', 
-        margin: '10px auto', 
-        padding: '0 10px',
-        minHeight: 'calc(100vh - 160px)' 
+        margin: '15px auto', 
+        padding: '0 15px',
+        flex: 1
     },
-    containerStats: {
+    containerFull: {
         width: '100%',
         margin: '0',
         padding: '0',
-        height: 'calc(100vh - 60px)', 
+        flex: 1,
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        height: 'calc(100vh - 65px)' 
     },
     footer: { 
         textAlign: 'center', 
-        padding: '15px', 
-        color: '#888', 
-        fontSize: '0.7rem',
+        padding: '12px', 
+        color: '#7f8c8d', 
+        fontSize: '0.65rem',
         borderTop: '1px solid #ddd',
-        marginTop: '20px'
+        backgroundColor: '#f8f9fa'
     }
 };
 

@@ -5,8 +5,9 @@ import axios from 'axios';
  * Manejo dinámico de comunicación entre Frontend y Backend.
  */
 const API = axios.create({
-    // Prioriza el .env (Render) y usa localhost como respaldo
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+    // Prioriza el .env (VITE_API_URL) y usa localhost como respaldo. 
+    // Se limpia el string para evitar problemas de formato.
+    baseURL: (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, ""),
     headers: {
         'Content-Type': 'application/json'
     }
@@ -34,6 +35,7 @@ API.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response && error.response.status === 401) {
+            // Si el token expiró o es inválido, limpiamos y redirigimos
             localStorage.clear(); 
             window.location.href = '/login';
         }
@@ -84,6 +86,7 @@ export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toLowerCase();
     const userElemento = localStorage.getItem('elemento')?.trim();
 
+    // Filtro por unidad para usuarios que no son Admin/Boss
     if (role !== 'admin' && role !== 'boss' && userElemento) {
         return API.get(`/aircraft`, { params: { unidad: userElemento } });
     }
@@ -120,7 +123,7 @@ export const updateAircraftStatus = (id, aircraftData) => {
             : undefined,
         novedades: aircraftData.novedades !== undefined 
             ? aircraftData.novedades 
-            : aircraftData.notas, 
+            : (aircraftData.notas || ""), 
         actualizadoPor: userName,
         fechaActualizacion: new Date()
     };
@@ -141,11 +144,11 @@ export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/pa
 
 /**
  * SERVICIOS DE METEOROLOGÍA OPERATIVA (METAR/TAF)
- * Conexión directa con el Proxy AE para evitar errores CORS de la NOAA.
+ * Conexión con el Proxy del Backend para evitar errores CORS.
  */
 export const getWeatherData = (ids = "") => {
-    const params = ids ? { params: { ids } } : {};
-    return API.get('/weather/data', params);
+    const config = ids ? { params: { ids } } : {};
+    return API.get('/weather/data', config);
 };
 
 export default API;

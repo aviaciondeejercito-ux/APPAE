@@ -10,18 +10,19 @@ import API from './api';
 export const getActiveOperations = async () => {
     try {
         const response = await API.get('/events/active-map');
-        return response.data;
+        // Validamos que la respuesta sea un array para evitar errores en el .map del frontend
+        return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
         console.error("❌ Error al obtener operaciones en desarrollo:", 
             error.response?.data?.message || error.message);
-        throw error;
+        return []; // Retornamos array vacío para no romper el mapa
     }
 };
 
 // --- 2. NUEVA FUNCIÓN: Obtener aeronaves E/S por unidad ---
 export const getAvailableAircraft = async (elemento) => {
     try {
-        const encodedElemento = encodeURIComponent(elemento);
+        const encodedElemento = encodeURIComponent(elemento || '');
         const response = await API.get(`/events/aircraft/${encodedElemento}`);
         return response.data;
     } catch (error) {
@@ -33,11 +34,11 @@ export const getAvailableAircraft = async (elemento) => {
 
 // --- 3. FUNCIONES DE CALENDARIO OPERATIVO ---
 
-// Obtener todos los eventos filtrados (El calendario solo mostrará los que tengan start/end válidos)
+// Obtener todos los eventos filtrados
 export const getEvents = async () => {
     try {
         const response = await API.get('/events');
-        return response.data;
+        return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
         console.error("❌ Error al obtener eventos del backend:", 
             error.response?.data?.message || error.message);
@@ -52,21 +53,20 @@ export const createEvent = async (eventData) => {
             ...eventData,
             // LOGICA DE INDEPENDENCIA: 
             // Si el evento no trae fecha (vuelo táctico puro), NO creamos fechas ISO automáticas
-            // para que el calendario no lo "enganche" en su visualización.
             start: eventData.start ? new Date(eventData.start).toISOString() : null,
             end: eventData.end ? new Date(eventData.end).toISOString() : null,
             
             // --- CAMPOS CRÍTICOS PARA EL MAPA ---
             isRealTime: eventData.isRealTime || false,
             ubicacion: {
-                nombre: eventData.ubicacion?.nombre || 'Posición No Definida',
+                nombre: (eventData.ubicacion?.nombre || 'Posición No Definida').toUpperCase(),
                 lat: parseFloat(eventData.ubicacion?.lat) || 0,
                 lng: parseFloat(eventData.ubicacion?.lng) || 0
             },
             notasMarginales: (eventData.notasMarginales || '').toUpperCase()
         };
         
-        // Limpiamos el payload de fechas nulas si es un vuelo táctico
+        // Limpiamos el payload de fechas nulas para que el calendario no lo visualice
         if (!payload.start) delete payload.start;
         if (!payload.end) delete payload.end;
 
@@ -82,22 +82,26 @@ export const createEvent = async (eventData) => {
 // Actualizar un evento (Posición táctica o datos de calendario)
 export const updateEvent = async (id, eventData) => {
     try {
-        const cleanData = { ...eventData };
+        // Clonamos para no mutar el estado original de la UI
+        const cleanData = JSON.parse(JSON.stringify(eventData));
 
-        // Sanitización de coordenadas para el radar
+        // Sanitización estricta de coordenadas para el radar
         if (cleanData.ubicacion) {
             cleanData.ubicacion = {
-                nombre: cleanData.ubicacion.nombre || 'Actualización de posición',
+                nombre: (cleanData.ubicacion.nombre || 'ACTUALIZACIÓN DE POSICIÓN').toUpperCase(),
                 lat: parseFloat(cleanData.ubicacion.lat) || 0,
                 lng: parseFloat(cleanData.ubicacion.lng) || 0
             };
         }
 
-        // Normalización militar
+        // Normalización militar de textos
         if (cleanData.title) cleanData.title = cleanData.title.toUpperCase();
         if (cleanData.notasMarginales) cleanData.notasMarginales = cleanData.notasMarginales.toUpperCase();
+        if (cleanData.aeronave) cleanData.aeronave = cleanData.aeronave.toUpperCase();
+        if (cleanData.matricula) cleanData.matricula = cleanData.matricula.toUpperCase();
 
-        // Limpieza de metadatos de MongoDB
+        // --- PROTECCIÓN DE BASE DE DATOS ---
+        // Eliminamos campos internos de MongoDB y metadatos que el backend no debe re-escribir
         const forbidden = ['_id', '__v', 'createdAt', 'updatedAt', 'createdBy', 'userName'];
         forbidden.forEach(field => delete cleanData[field]);
 

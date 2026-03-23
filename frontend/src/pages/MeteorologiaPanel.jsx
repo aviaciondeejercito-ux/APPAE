@@ -20,18 +20,17 @@ const MeteorologiaPanel = () => {
             // Usamos el servicio formal que ya maneja baseURL y Headers
             const response = await getWeatherData();
             
-            // Axios devuelve la data en .data
-            const data = response.data;
+            // Axios devuelve la data en .data. Validamos estructura.
+            const data = response && response.data ? response.data : response;
 
             if (data && Array.isArray(data)) {
                 // Ordenamos alfabéticamente por ICAO para facilitar la lectura
-                const ordenados = data.sort((a, b) => a.icaoId.localeCompare(b.icaoId));
+                const ordenados = [...data].sort((a, b) => a.icaoId.localeCompare(b.icaoId));
                 setDatos(ordenados);
                 setLastUpdate(new Date().toLocaleTimeString());
             }
         } catch (err) {
             console.error("❌ Error Meteorología AE:", err);
-            // Si falla la carga, nos aseguramos de que datos no sea null para no romper el .filter
             setDatos([]);
         } finally {
             setLoading(false);
@@ -45,10 +44,10 @@ const MeteorologiaPanel = () => {
     }, []);
 
     // Lógica de filtrado para el buscador (incluye ICAO y Nombre de estación)
-    const datosFiltrados = datos.filter(d => 
-        d.icaoId.toUpperCase().includes(filtro.toUpperCase()) || 
+    const datosFiltrados = Array.isArray(datos) ? datos.filter(d => 
+        (d.icaoId && d.icaoId.toUpperCase().includes(filtro.toUpperCase())) || 
         (d.name && d.name.toUpperCase().includes(filtro.toUpperCase()))
-    );
+    ) : [];
 
     const getFlightCategoryColor = (cat) => {
         switch (cat) {
@@ -86,6 +85,7 @@ const MeteorologiaPanel = () => {
                     {filtro && <button onClick={() => setFiltro('')} style={styles.clearBtn}>X</button>}
                 </div>
 
+                {/* AREA DE DATOS */}
                 <div className="meteorologia-scroll" style={styles.scrollArea}>
                     {datosFiltrados.length > 0 ? datosFiltrados.map(d => (
                         <div key={d.icaoId} style={styles.card}>
