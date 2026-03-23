@@ -24,7 +24,6 @@ const heloIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-// Componente para capturar el movimiento del mapa y sincronizar la "filmina"
 const SincronizadorBus = ({ onMove }) => {
     useMapEvents({
         move: (e) => onMove(e.target.getCenter(), e.target.getZoom()),
@@ -33,16 +32,14 @@ const SincronizadorBus = ({ onMove }) => {
     return null;
 };
 
-const OperacionesMapa = () => {
+const OperacionesMapa = ({ capasMet, setCapasMet }) => {
     const [misiones, setMisiones] = useState([]); 
     const [loading, setLoading] = useState(true);
-    const [modoMapa, setModoMapa] = useState('satelite'); // 'satelite' o 'fisico'
-    
-    // Estado de la cámara unificado
-    const [mapView, setMapView] = useState({
-        center: [-34.528, -58.641],
-        zoom: 5
-    });
+    const [modoMapa, setModoMapa] = useState('satelite');
+    const [mapView, setMapView] = useState({ center: [-34.528, -58.641], zoom: 5 });
+
+    // Tu API Key de OpenWeatherMap
+    const OWM_KEY = import.meta.env.VITE_OWM_KEY || '3c37f51c0830baa0dabe3848ba5d4bbf';
 
     const cargarSituacionTactica = async () => {
         try {
@@ -82,98 +79,58 @@ const OperacionesMapa = () => {
 
     return (
         <div style={styles.mapWrapper}>
-            
-            {/* TITULO SUPERIOR */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '4px' }}>MONITOR DE OPERACIONES</div>
                 <div style={{ fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px' }}>AVIACIÓN DE EJÉRCITO</div>
             </div>
 
-            {/* SELECTOR DE MODO (Sin Windy externo para evitar errores de seguridad) */}
+            {/* SELECTOR DE MODO Y METEO RÁPIDA */}
             <div style={styles.selectorModo}>
-                <button 
-                    onClick={() => setModoMapa('satelite')} 
-                    style={{...styles.btnModo, borderBottom: modoMapa === 'satelite' ? '3px solid #f39c12' : 'none'}}
-                >
-                    🛰️ VISTA SATELITAL
-                </button>
-                <button 
-                    onClick={() => setModoMapa('fisico')} 
-                    style={{...styles.btnModo, borderBottom: modoMapa === 'fisico' ? '3px solid #f39c12' : 'none'}}
-                >
-                    🗺️ FÍSICO/POLÍTICO
-                </button>
+                <button onClick={() => setModoMapa('satelite')} style={{...styles.btnModo, color: modoMapa === 'satelite' ? '#f39c12' : '#fff'}}>🛰️ SAT</button>
+                <button onClick={() => setModoMapa('fisico')} style={{...styles.btnModo, color: modoMapa === 'fisico' ? '#f39c12' : '#fff'}}>🗺️ MAP</button>
+                <div style={{width: '1px', background: '#444', margin: '0 5px'}}></div>
+                
+                {/* Botones de Capas Meteorológicas */}
+                <button onClick={() => setCapasMet(prev => ({...prev, radar: !prev.radar}))} style={{...styles.btnModo, color: capasMet.radar ? '#00ffff' : '#888'}}>🌧️ RADAR</button>
+                <button onClick={() => setCapasMet(prev => ({...prev, nubes: !prev.nubes}))} style={{...styles.btnModo, color: capasMet.nubes ? '#00ffff' : '#888'}}>☁️ NUBES</button>
+                <button onClick={() => setCapasMet(prev => ({...prev, viento: !prev.viento}))} style={{...styles.btnModo, color: capasMet.viento ? '#00ffff' : '#888'}}>💨 VIENTO</button>
             </div>
 
-            {/* --- CAPA ÚNICA INTERACTIVA --- */}
-            {/* Ahora usamos un solo MapContainer para que el movimiento sea fluido y natural */}
-            <MapContainer 
-                center={mapView.center} 
-                zoom={mapView.zoom} 
-                style={{ height: '100%', width: '100%' }}
-                zoomControl={false}
-            >
-                {/* Lógica de cambio de capas base */}
+            <MapContainer center={mapView.center} zoom={mapView.zoom} style={{ height: '100%', width: '100%' }} zoomControl={false}>
                 {modoMapa === 'satelite' ? (
-                    <>
-                        {/* Satélite ESRI de alta resolución */}
-                        <TileLayer 
-                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
-                            attribution="ESRI Satellite"
-                            zIndex={1}
-                        />
-                        {/* Capa de nubes meteorológicas (NASA GIBS) - Actualizada a hoy */}
-                        <TileLayer 
-                            url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels_15m/default/2026-03-22/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png"
-                            opacity={0.6}
-                            zIndex={2}
-                        />
-                    </>
+                    <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="ESRI Satellite" zIndex={1} />
                 ) : (
-                    <>
-                        {/* Mapa Político/Relieve */}
-                        <TileLayer 
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
-                            attribution="OpenStreetMap"
-                        />
-                        <TileLayer 
-                            url="https://stamen-tiles.a.ssl.fastly.net/terrain-labels/{z}/{x}/{y}.jpg"
-                            opacity={0.5}
-                        />
-                    </>
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="OpenStreetMap" zIndex={1} />
                 )}
 
-                {/* Sincronizador para recordar posición si cambias de pestaña */}
+                {/* --- CAPAS METEOROLÓGICAS --- */}
+                {capasMet.nubes && (
+                    <TileLayer url={`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${OWM_KEY}`} opacity={0.4} zIndex={5} />
+                )}
+                
+                {capasMet.viento && (
+                    <TileLayer url={`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${OWM_KEY}`} opacity={0.4} zIndex={6} />
+                )}
+
+                {capasMet.radar && (
+                    <TileLayer url="https://tilecache.rainviewer.com/v2/radar/nowcast_1/256/{z}/{x}/{y}/1/1_1.png" opacity={0.7} zIndex={10} />
+                )}
+
                 <SincronizadorBus onMove={(c, z) => setMapView({center: c, zoom: z})} />
                 
-                {/* --- MARCADORES TÁCTICOS (Siempre visibles y flotantes) --- */}
                 {misiones.map((m) => (
-                    <Marker 
-                        key={m._id} 
-                        position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
-                        icon={getIcon(m)}
-                    >
-                        <Tooltip 
-                            direction="right" 
-                            offset={[15, 0]} 
-                            permanent 
-                            className="label-tactica-custom"
-                        >
-                            <div style={styles.labelBoxDark}>
-                                {m.matricula || (m.title && m.title.split(' ')[0])}
-                            </div>
+                    <Marker key={m._id} position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} icon={getIcon(m)}>
+                        <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
+                            <div style={styles.labelBoxDark}>{m.matricula || "S/M"}</div>
                         </Tooltip>
-
                         <Popup>
                             <div style={styles.popupContainer}>
-                                <div style={styles.popupHeader}>
-                                    {m.aeronave ? `${m.aeronave} ${m.matricula}` : m.title}
-                                </div>
+                                <div style={styles.popupHeader}>{m.aeronave} {m.matricula}</div>
                                 <div style={{ fontSize: '0.85rem', padding: '10px', color: '#ecf0f1', background: '#2c3e50' }}>
                                     <strong>MISIÓN:</strong> {m.title}<br/>
-                                    <strong>UNIDAD:</strong> {m.elemento}<br/>
+                                    <strong>POSICIÓN:</strong> {m.ubicacion.nombre}<br/>
                                     <hr style={{borderColor: '#7f8c8d', margin: '8px 0'}}/>
-                                    <small style={{color: '#f39c12'}}>OPERACIÓN EN CURSO</small>
+                                    <small style={{color: '#f39c12'}}>SISTEMA DE SEGUIMIENTO AE</small>
                                 </div>
                             </div>
                         </Popup>
@@ -194,23 +151,15 @@ const OperacionesMapa = () => {
 };
 
 const styles = {
-    mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#000' },
+    mapWrapper: { width: '100%', height: '100%', position: 'relative', backgroundColor: '#000' },
     loadingScreen: { backgroundColor: '#0a0a0a', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
     header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center', pointerEvents: 'none', borderRadius: '2px' },
-    
     selectorModo: {
         position: 'absolute', top: '15px', right: '15px', zIndex: 1000,
-        display: 'flex', gap: '5px', background: 'rgba(0,0,0,0.8)', padding: '5px', borderRadius: '4px', border: '1px solid #444'
+        display: 'flex', gap: '5px', background: 'rgba(0,0,0,0.85)', padding: '5px', borderRadius: '4px', border: '1px solid #444'
     },
-    btnModo: {
-        background: 'transparent', color: '#fff', border: 'none', padding: '8px 12px', 
-        cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '0.7rem'
-    },
-    
-    labelBoxDark: {
-        background: 'rgba(0, 20, 40, 0.85)', color: '#00ffff', border: '1px solid #00ffff',
-        padding: '2px 6px', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 'bold', fontFamily: 'monospace', textShadow: '0 0 5px #00ffff'
-    },
+    btnModo: { background: 'transparent', border: 'none', padding: '8px 10px', cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '0.7rem' },
+    labelBoxDark: { background: 'rgba(0, 20, 40, 0.85)', color: '#00ffff', border: '1px solid #00ffff', padding: '2px 6px', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 'bold', fontFamily: 'monospace', textShadow: '0 0 5px #00ffff' },
     popupContainer: { minWidth: '200px', fontFamily: 'monospace' },
     popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center' }
 };
