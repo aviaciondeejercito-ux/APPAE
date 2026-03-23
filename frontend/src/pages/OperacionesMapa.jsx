@@ -6,10 +6,10 @@ import { getActiveOperations, getWeatherData } from '../services/api';
 
 const { BaseLayer } = LayersControl;
 
-/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD
+/** * SIMBOLOGÍA TÁCTICA AE - CORREGIDA
  */
 
-// Icono: Triángulo (AVIÓN)
+// Icono: Triángulo Azul (AVIÓN)
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -19,12 +19,14 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-// Icono: Cruz (HELICÓPTERO)
+// Icono: Cruz Azul (HELICÓPTERO)
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50" cy="50" r="40" fill="#0044ff" stroke="#ffffff" stroke-width="6"/>
-            <path d="M50 20 L50 80 M20 50 L80 50" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+            <line x1="10" y1="50" x2="90" y2="50" stroke="#0044ff" stroke-width="12" stroke-linecap="square"/>
+            <line x1="50" y1="10" x2="50" y2="90" stroke="#0044ff" stroke-width="12" stroke-linecap="square"/>
+            <line x1="10" y1="50" x2="90" y2="50" stroke="#ffffff" stroke-width="4" stroke-linecap="square"/>
+            <line x1="50" y1="10" x2="50" y2="90" stroke="#ffffff" stroke-width="4" stroke-linecap="square"/>
            </svg>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
@@ -136,7 +138,7 @@ const OperacionesMapa = () => {
 
     const getIcon = (mision) => {
         const t = (mision?.aeronave || "").toUpperCase();
-        // Clasificación estricta: Aviones vs Helicópteros
+        // Aviones confirmados
         const esAvion = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'CESSNA', 'T-202', 'B-200', 'DIAMOND'].some(mod => t.includes(mod));
         return esAvion ? planeIcon : heloIcon;
     };
@@ -190,7 +192,8 @@ const OperacionesMapa = () => {
                 {misiones.map((m) => (
                     <Marker key={m._id} position={[parseFloat(m.ubicacion?.lat), parseFloat(m.ubicacion?.lng)]} icon={getIcon(m)}>
                         <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
-                            <div style={styles.labelBoxDark}>{m.aeronave || "AE-???"}</div>
+                            {/* Mostramos el modelo de la aeronave directamente, sin procesamientos raros */}
+                            <div style={styles.labelBoxDark}>{m.aeronave}</div>
                         </Tooltip>
                         <Popup>
                             <div style={styles.popupContainer}>
