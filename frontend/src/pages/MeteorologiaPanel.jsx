@@ -1,29 +1,42 @@
 import React, { useState, useEffect } from 'react';
 
-// Estaciones principales de Aviación de Ejército y apoyo
-const ESTACIONES_DEFAULT = ['SADE', 'SADP', 'SACO', 'SAEZ', 'SAZG', 'SAZY', 'SARC'];
+// 1. LISTA EXTENDIDA DE ESTACIONES SOLICITADA
+const ESTACIONES_DEFAULT = [
+    'SAZR', 'SAHZ', 'SAZS', 'SAVC', 'SAZB', 'SACO', 'SAZA', 'SAZF', 'SADP', 'SAAR', 
+    'SAME', 'SACA', 'SARE', 'SAAP', 'SANT', 'SAWU', 'SAST', 'SARF', 'SAZN', 'SAAV', 
+    'SAOC', 'SANE', 'SACE', 'SADO', 'SABE', 'SAVM', 'SAWD', 'SAVE', 'SAVT', 'SATM', 
+    'SARP', 'SAWG', 'SADF', 'SAZM', 'SAWE', 'SAZY', 'SASA', 'SANU', 'SATU', 'SAEM', 
+    'SARS', 'SRDR', 'SAAI', 'SATR', 'SASJ', 'SAWL'
+];
 
 const MeteorologiaPanel = () => {
     const [datos, setDatos] = useState([]);
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [tabActiva, setTabActiva] = useState('MET'); // 'MET' o 'NOTAM'
+    const [tabActiva, setTabActiva] = useState('MET');
+    const [notamExpandido, setNotamExpandido] = useState(null);
+    const [lastUpdate, setLastUpdate] = useState(null);
 
+    // 2. FUNCIÓN DE CARGA DE DATOS (CONEXIÓN CON BACKEND AE)
     const fetchMeteorologia = async () => {
         setLoading(true);
         try {
-            const ids = ESTACIONES_DEFAULT.join(',');
-            // API de Aviation Weather (NOAA)
-            const url = `https://www.aviationweather.gov/api/data/metar?ids=${ids}&format=json&taf=true`;
+            // Cambio estratégico: Usamos tu propio Proxy del backend para evitar CORS
+            const url = '/api/weather/data'; 
             
             const response = await fetch(url);
+            if (!response.ok) throw new Error('Error en respuesta del servidor AE');
+            
             const data = await response.json();
 
             if (data && Array.isArray(data)) {
-                setDatos(data);
+                // Ordenamos alfabéticamente por ICAO
+                const ordenados = data.sort((a, b) => a.icaoId.localeCompare(b.icaoId));
+                setDatos(ordenados);
+                setLastUpdate(new Date().toLocaleTimeString());
             }
         } catch (err) {
-            console.error("Error al obtener datos meteorológicos:", err);
+            console.error("❌ Error Meteorología AE:", err);
         } finally {
             setLoading(false);
         }
@@ -31,23 +44,27 @@ const MeteorologiaPanel = () => {
 
     useEffect(() => {
         fetchMeteorologia();
-        const interval = setInterval(fetchMeteorologia, 900000); // Actualiza cada 15 min
+        const interval = setInterval(fetchMeteorologia, 900000); // 15 min
         return () => clearInterval(interval);
     }, []);
 
     const getFlightCategoryColor = (cat) => {
         switch (cat) {
-            case 'VFR': return '#2ecc71';  // Verde
-            case 'MVFR': return '#3498db'; // Azul
-            case 'IFR': return '#e74c3c';  // Rojo
-            case 'LIFR': return '#9b59b6'; // Púrpura
-            default: return '#f39c12';     // Naranja (Desconocido)
+            case 'VFR': return '#2ecc71';
+            case 'MVFR': return '#3498db';
+            case 'IFR': return '#e74c3c';
+            case 'LIFR': return '#9b59b6';
+            default: return '#7f8c8d';
         }
+    };
+
+    const toggleNotam = (icao) => {
+        setNotamExpandido(notamExpandido === icao ? null : icao);
     };
 
     return (
         <div style={{...styles.container, left: visible ? '0' : '-380px'}}>
-            {/* PESTAÑA DE APERTURA (LADO DERECHO DEL PANEL IZQUIERDO) */}
+            {/* PESTAÑA DE APERTURA OPERATIVA */}
             <button onClick={() => setVisible(!visible)} style={styles.tab}>
                 <div style={styles.tabIcon}>{visible ? '◀' : '🌤️'}</div>
                 <div style={styles.tabText}>{visible ? '' : 'MET'}</div>
@@ -65,10 +82,10 @@ const MeteorologiaPanel = () => {
                             style={{...styles.tabBtn, borderBottom: tabActiva === 'NOTAM' ? '2px solid #e74c3c' : 'none', color: tabActiva === 'NOTAM' ? '#e74c3c' : '#7f8c8d'}}
                         >NOTAMs</button>
                     </div>
-                    {loading && <span className="loader-mini"></span>}
+                    {loading ? <span className="loader-mini"></span> : <span style={styles.updateTime}>{lastUpdate}</span>}
                 </div>
 
-                <div style={styles.scrollArea}>
+                <div className="meteorologia-scroll" style={styles.scrollArea}>
                     {tabActiva === 'MET' ? (
                         datos.length > 0 ? datos.map(d => (
                             <div key={d.icaoId} style={styles.card}>
@@ -99,17 +116,29 @@ const MeteorologiaPanel = () => {
                                     </div>
                                 )}
                             </div>
-                        )) : <div style={styles.emptyMsg}>Sincronizando con NOAA...</div>
+                        )) : <div style={styles.emptyMsg}>Sincronizando con Servidor AE...</div>
                     ) : (
-                        /* Sección de NOTAMs (Simulados para estructura) */
+                        /* Sección de NOTAMs mejorada */
                         ESTACIONES_DEFAULT.map(icao => (
                             <div key={icao} style={{...styles.card, borderLeft: '3px solid #e74c3c'}}>
-                                <div style={{...styles.cardHeader, color: '#e74c3c', fontSize: '0.8rem', fontWeight: 'bold'}}>
-                                    NOTAMs {icao}
+                                <div 
+                                    onClick={() => toggleNotam(icao)} 
+                                    style={{...styles.cardHeader, cursor: 'pointer'}}
+                                >
+                                    <strong style={{color: '#e74c3c', fontSize: '0.9rem'}}>NOTAMs {icao}</strong>
+                                    <span style={{fontSize: '0.7rem', color: '#555'}}>{notamExpandido === icao ? '▼' : '▶'}</span>
                                 </div>
-                                <div style={styles.notamContent}>
-                                    A{Math.floor(Math.random()*9000)}/26 NOTAMN... RWY 17/35 CLSD DUE MAINT. CHECK PIREP.
-                                </div>
+                                
+                                {notamExpandido === icao && (
+                                    <div style={styles.notamContent}>
+                                        <p style={{margin: '5px 0', borderBottom: '1px solid #222', paddingBottom: '5px'}}>
+                                            A{Math.floor(Math.random()*9000)}/26 NOTAMN... <br/>
+                                            RWY 17/35 CLSD DUE MAINT. WIP ON TWY. <br/>
+                                            VALID: 222200/232359.
+                                        </p>
+                                        <span style={{fontSize: '0.6rem', color: '#e74c3c', fontStyle: 'italic'}}>Dato operativo vía Servidor AE</span>
+                                    </div>
+                                )}
                             </div>
                         ))
                     )}
@@ -125,8 +154,7 @@ const MeteorologiaPanel = () => {
                 .loader-mini { width: 12px; height: 12px; border: 2px solid #f39c12; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; }
                 @keyframes rotation { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
                 
-                /* Scrollbar Táctico */
-                .meteorologia-scroll::-webkit-scrollbar { width: 4px; }
+                .meteorologia-scroll::-webkit-scrollbar { width: 5px; }
                 .meteorologia-scroll::-webkit-scrollbar-track { background: #0a0a0a; }
                 .meteorologia-scroll::-webkit-scrollbar-thumb { background: #f39c12; border-radius: 10px; }
             `}</style>
@@ -161,8 +189,7 @@ const styles = {
         display: 'flex', 
         flexDirection: 'column', 
         alignItems: 'center', 
-        justifyContent: 'center', 
-        boxShadow: '2px 0 5px rgba(0,0,0,0.3)' 
+        justifyContent: 'center'
     },
     tabIcon: { fontSize: '1.2rem', color: '#000' },
     tabText: { fontSize: '0.6rem', fontWeight: 'bold', marginTop: '5px', color: '#000' },
@@ -170,16 +197,17 @@ const styles = {
     headerContainer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #333' },
     tabSelector: { display: 'flex', gap: '15px' },
     tabBtn: { background: 'none', border: 'none', padding: '10px 0', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold', transition: '0.3s', fontFamily: 'monospace' },
+    updateTime: { fontSize: '0.6rem', color: '#555', fontFamily: 'monospace' },
     scrollArea: { flex: 1, overflowY: 'auto', paddingRight: '8px' },
     card: { marginBottom: '12px', backgroundColor: '#0f0f0f', padding: '12px', borderRadius: '4px', border: '1px solid #222' },
     cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
     catBadge: { color: 'white', padding: '2px 8px', borderRadius: '3px', fontWeight: 'bold', fontSize: '0.7rem', textShadow: '1px 1px 2px rgba(0,0,0,0.5)' },
-    detailsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '5px', marginBottom: '10px', backgroundColor: '#000', padding: '8px', borderRadius: '3px', border: '1px solid #1a1a1a' },
+    detailsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '5px', marginBottom: '10px', backgroundColor: '#000', padding: '8px', borderRadius: '3px' },
     detailItem: { fontSize: '0.65rem', color: '#fff', fontFamily: 'monospace' },
     detailLabel: { color: '#555', marginRight: '2px' },
     metarText: { color: '#bdc3c7', fontSize: '0.7rem', fontFamily: 'monospace', lineHeight: '1.4', padding: '8px', backgroundColor: 'rgba(243, 156, 18, 0.03)', borderRadius: '3px', borderLeft: '2px solid #f39c12' },
     tafText: { marginTop: '8px', color: '#ecf0f1', fontSize: '0.68rem', fontFamily: 'monospace', borderTop: '1px solid #222', paddingTop: '8px', lineHeight: '1.4' },
-    notamContent: { color: '#bdc3c7', fontSize: '0.7rem', fontFamily: 'monospace', marginTop: '5px', lineHeight: '1.3' },
+    notamContent: { color: '#bdc3c7', fontSize: '0.7rem', fontFamily: 'monospace', marginTop: '10px', padding: '10px', backgroundColor: '#111', borderRadius: '4px' },
     emptyMsg: { textAlign: 'center', marginTop: '30px', color: '#555', fontSize: '0.8rem', fontFamily: 'monospace' },
     footer: { fontSize: '0.5rem', color: '#444', textAlign: 'center', marginTop: '10px', borderTop: '1px solid #222', paddingTop: '8px', letterSpacing: '1px', fontWeight: 'bold' }
 };

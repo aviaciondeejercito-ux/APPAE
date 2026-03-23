@@ -5,7 +5,6 @@ import 'leaflet/dist/leaflet.css';
 import EventService from '../services/EventService';
 
 // --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA ---
-
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -103,9 +102,6 @@ const OperacionesMapa = ({ capasMet, setCapasMet }) => {
                 </label>
             </div>
 
-            {/* ESPACIO PARA PANEL METAR/TAF (IZQUIERDA) - Se inyectará aquí en el próximo paso */}
-            <div id="metar-panel-anchor"></div>
-
             <MapContainer 
                 center={[-34.528, -58.641]} 
                 zoom={5} 
@@ -119,32 +115,35 @@ const OperacionesMapa = ({ capasMet, setCapasMet }) => {
                     } 
                 />
 
-                {/* --- CAPAS METEOROLÓGICAS ANIMADAS --- */}
+                {/* --- CAPAS METEOROLÓGICAS --- */}
+                {/* Radar: Rainviewer es más estable para Argentina */}
                 {capasMet.radar && (
                     <TileLayer 
                         url="https://tilecache.rainviewer.com/v2/radar/default/256/{z}/{x}/{y}/2/1_1.png"
-                        opacity={0.6}
+                        opacity={0.65}
                         zIndex={100}
                     />
                 )}
 
+                {/* Nubes: OpenWeatherMap */}
                 {capasMet.nubes && (
                     <TileLayer 
-                        url="https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b" 
+                        url={`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b`} 
                         opacity={0.5}
                         zIndex={90}
                     />
                 )}
 
+                {/* Viento: OpenWeatherMap */}
                 {capasMet.viento && (
                     <TileLayer 
-                        url="https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b" 
+                        url={`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b`} 
                         opacity={0.4}
                         zIndex={80}
                     />
                 )}
                 
-                {/* --- MARCADORES TÁCTICOS (MISIONES) --- */}
+                {/* --- MARCADORES TÁCTICOS --- */}
                 {misiones.map((m) => (
                     <Marker 
                         key={m._id} 

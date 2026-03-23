@@ -8,7 +8,7 @@ import EstadoAeronaves from './pages/EstadoAeronaves';
 import Material from './pages/Material'; 
 import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
-import MeteorologiaPanel from './pages/MeteorologiaPanel'; // Importamos el nuevo panel
+import MeteorologiaPanel from './pages/MeteorologiaPanel'; // Nuevo panel integrado
 
 function App() {
     // 1. Estados de Autenticación y Navegación
@@ -18,6 +18,7 @@ function App() {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
     // --- CEREBRO METEOROLÓGICO (ESTADO GLOBAL) ---
+    // Este estado se pasa a OperacionesMapa para controlar los TileLayers
     const [capasMet, setCapasMet] = useState({
         radar: false,
         nubes: false,
@@ -207,13 +208,15 @@ function App() {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
                         
-                        // INTEGRACIÓN MAPA + PANEL METEOROLÓGICO
+                        // --- VISTA INTEGRADA DE MAPA TÁCTICO ---
                         if (view === 'mapa' && puedeVerMapa) return (
                             <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                                {/* Capa de fondo del mapa */}
                                 <OperacionesMapa 
                                     capasMet={capasMet} 
                                     setCapasMet={setCapasMet} 
                                 />
+                                {/* Panel de METAR/TAF superpuesto a la izquierda */}
                                 <MeteorologiaPanel />
                             </div>
                         );
@@ -227,9 +230,11 @@ function App() {
                 )}
             </main>
 
-            <footer style={styles.footer}>
-                © 2026 Aviación de Ejército - Sistema Operativo
-            </footer>
+            {view !== 'mapa' && (
+                <footer style={styles.footer}>
+                    © 2026 Aviación de Ejército - Sistema Operativo
+                </footer>
+            )}
         </div>
     );
 }
@@ -280,7 +285,7 @@ const styles = {
         width: '100%',
         margin: '0',
         padding: '0',
-        height: 'calc(100vh - 60px)', // Ajustado para que el mapa ocupe el resto de la pantalla
+        height: 'calc(100vh - 60px)', 
         position: 'relative',
         overflow: 'hidden'
     },
