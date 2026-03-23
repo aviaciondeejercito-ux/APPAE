@@ -34,6 +34,7 @@ const OperacionesMapa = () => {
         try {
             const data = await EventService.getActiveOperations(); 
             if (data && Array.isArray(data)) {
+                // Filtramos misiones válidas que tengan coordenadas
                 const validas = data.filter(m => m.isRealTime && m.ubicacion?.lat && m.ubicacion?.lng);
                 setMisiones(validas);
             }
@@ -50,8 +51,9 @@ const OperacionesMapa = () => {
         return () => clearInterval(interval);
     }, []);
 
-    const getIcon = (title) => {
-        const t = title.toUpperCase();
+    // Lógica de iconos basada en el nuevo campo 'aeronave' o el título como respaldo
+    const getIcon = (mision) => {
+        const t = (mision.aeronave || mision.title).toUpperCase();
         const esAvion = 
             t.includes('C-212') || t.includes('C-208') || t.includes('C-550') || 
             t.includes('DA-62') || t.includes('DHC-6') || t.includes('C-182') || 
@@ -59,14 +61,6 @@ const OperacionesMapa = () => {
             t.includes('AVION');
         
         return esAvion ? planeIcon : heloIcon;
-    };
-
-    // Función robusta para extraer la matrícula (ej: AE-451, G-601)
-    const extraerMatricula = (title) => {
-        const regex = /[A-Z]+-[0-9]+/i;
-        const match = title.match(regex);
-        // Si encuentra el patrón AE-123 lo devuelve, si no, devuelve el primer segmento
-        return match ? match[0].toUpperCase() : title.split(' ')[0];
     };
 
     if (loading) return (
@@ -105,7 +99,7 @@ const OperacionesMapa = () => {
                     <Marker 
                         key={m._id} 
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
-                        icon={getIcon(m.title)}
+                        icon={getIcon(m)}
                     >
                         <Tooltip 
                             direction="right" 
@@ -115,16 +109,22 @@ const OperacionesMapa = () => {
                             className="label-tactica-custom"
                         >
                             <div style={darkMode ? styles.labelBoxDark : styles.labelBoxLight}>
-                                {extraerMatricula(m.title)}
+                                {/* LECTURA DIRECTA DE MATRÍCULA SEPARADA */}
+                                {m.matricula || m.title.split(' ')[0]}
                             </div>
                         </Tooltip>
 
                         <Popup>
                             <div style={styles.popupContainer}>
-                                <div style={styles.popupHeader}>{m.title}</div>
-                                <div style={{ fontSize: '0.85rem', padding: '5px' }}>
+                                <div style={styles.popupHeader}>
+                                    {m.aeronave ? `${m.aeronave} ${m.matricula}` : m.title}
+                                </div>
+                                <div style={{ fontSize: '0.85rem', padding: '10px', color: '#ecf0f1', background: '#2c3e50' }}>
+                                    <strong>MISIÓN:</strong> {m.title}<br/>
                                     <strong>UNIDAD:</strong> {m.elemento}<br/>
-                                    <strong>UBICACIÓN:</strong> {m.ubicacion.nombre}
+                                    <strong>UBICACIÓN:</strong> {m.ubicacion.nombre}<br/>
+                                    <hr style={{borderColor: '#7f8c8d', margin: '8px 0'}}/>
+                                    <small style={{color: '#f39c12'}}>REPORTE EN TIEMPO REAL</small>
                                 </div>
                             </div>
                         </Popup>
@@ -152,6 +152,19 @@ const OperacionesMapa = () => {
                 }
                 @keyframes spin {
                     to { transform: rotate(360deg); }
+                }
+                /* Ajuste de estilos para el Popup de Leaflet */
+                .leaflet-popup-content-wrapper {
+                    padding: 0;
+                    overflow: hidden;
+                    background: #2c3e50;
+                }
+                .leaflet-popup-content {
+                    margin: 0;
+                    width: 220px !important;
+                }
+                .leaflet-popup-tip {
+                    background: #2c3e50;
                 }
             `}</style>
         </div>
@@ -188,8 +201,8 @@ const styles = {
         boxShadow: '1px 1px 3px rgba(0,0,0,0.2)'
     },
     
-    popupContainer: { minWidth: '180px', fontFamily: 'monospace' },
-    popupHeader: { background: '#f39c12', color: 'black', padding: '6px', fontWeight: 'bold', textAlign: 'center' }
+    popupContainer: { minWidth: '200px', fontFamily: 'monospace' },
+    popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center', letterSpacing: '1px' }
 };
 
 export default OperacionesMapa;
