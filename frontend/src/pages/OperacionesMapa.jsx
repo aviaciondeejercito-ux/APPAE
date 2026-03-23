@@ -26,14 +26,13 @@ const heloIcon = L.divIcon({
 
 /**
  * MONITOR DE OPERACIONES - AVIACIÓN DE EJÉRCITO
- * Integración de Radar Meteorológico y Situación Táctica en Tiempo Real.
  */
 const OperacionesMapa = ({ capasMet, setCapasMet }) => {
     const [misiones, setMisiones] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [darkMode, setDarkMode] = useState(true);
     
-    // Refresh de capas cada 10 min
+    // Refresh de capas cada 10 min para evitar caché
     const [metTimestamp] = useState(Math.floor(Date.now() / 600000));
 
     const cargarSituacionTactica = async () => {
@@ -56,8 +55,12 @@ const OperacionesMapa = ({ capasMet, setCapasMet }) => {
         return () => clearInterval(interval);
     }, []);
 
+    // FUNCIÓN CORREGIDA: Usa el callback de estado para asegurar reactividad
     const toggleCapa = (capa) => {
-        setCapasMet({ ...capasMet, [capa]: !capasMet[capa] });
+        setCapasMet(prevCapas => ({
+            ...prevCapas,
+            [capa]: !prevCapas[capa]
+        }));
     };
 
     const getIcon = (mision) => {
@@ -96,21 +99,21 @@ const OperacionesMapa = ({ capasMet, setCapasMet }) => {
             <div style={styles.selectorMet}>
                 <div style={styles.selectorTitle}>METEOROLOGÍA</div>
                 <label style={styles.checkLabel}>
-                    <input type="checkbox" checked={!!capasMet.radar} onChange={() => toggleCapa('radar')} />
+                    <input type="checkbox" checked={!!capasMet?.radar} onChange={() => toggleCapa('radar')} />
                     <span>📡 Radar Lluvia</span>
                 </label>
                 <label style={styles.checkLabel}>
-                    <input type="checkbox" checked={!!capasMet.nubes} onChange={() => toggleCapa('nubes')} />
+                    <input type="checkbox" checked={!!capasMet?.nubes} onChange={() => toggleCapa('nubes')} />
                     <span>☁️ Nubosidad</span>
                 </label>
                 <label style={styles.checkLabel}>
-                    <input type="checkbox" checked={!!capasMet.viento} onChange={() => toggleCapa('viento')} />
+                    <input type="checkbox" checked={!!capasMet?.viento} onChange={() => toggleCapa('viento')} />
                     <span>💨 Viento</span>
                 </label>
             </div>
 
-            {/* LEYENDA DE INTENSIDAD (Solo visible si el radar está activo) */}
-            {capasMet.radar && (
+            {/* LEYENDA DE INTENSIDAD */}
+            {capasMet?.radar && (
                 <div style={styles.legendContainer}>
                     <div style={{fontSize: '0.6rem', marginBottom: '5px', color: '#f39c12', fontWeight: 'bold'}}>INTENSIDAD (dBZ)</div>
                     <div style={styles.gradientBar}></div>
@@ -128,6 +131,7 @@ const OperacionesMapa = ({ capasMet, setCapasMet }) => {
                 style={{ height: '100%', width: '100%' }}
                 zoomControl={false}
             >
+                {/* CAPA BASE */}
                 <TileLayer 
                     url={darkMode 
                         ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -136,16 +140,16 @@ const OperacionesMapa = ({ capasMet, setCapasMet }) => {
                     attribution={darkMode ? '&copy; CartoDB' : '&copy; ESRI'}
                 />
 
-                {/* --- CAPAS METEOROLÓGICAS --- */}
-                {capasMet.radar && (
+                {/* --- CAPAS METEOROLÓGICAS ORDENADAS --- */}
+                {capasMet?.viento && (
                     <TileLayer 
-                        url={`https://tilecache.rainviewer.com/v2/radar/default/256/{z}/{x}/{y}/2/1_1.png?now=${metTimestamp}`}
-                        opacity={0.7}
-                        zIndex={100}
+                        url={`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b`} 
+                        opacity={0.4}
+                        zIndex={80}
                     />
                 )}
 
-                {capasMet.nubes && (
+                {capasMet?.nubes && (
                     <TileLayer 
                         url={`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b`} 
                         opacity={0.5}
@@ -153,11 +157,11 @@ const OperacionesMapa = ({ capasMet, setCapasMet }) => {
                     />
                 )}
 
-                {capasMet.viento && (
+                {capasMet?.radar && (
                     <TileLayer 
-                        url={`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=40561571216d649d682df7b0a793139b`} 
-                        opacity={0.4}
-                        zIndex={80}
+                        url={`https://tilecache.rainviewer.com/v2/radar/default/256/{z}/{x}/{y}/2/1_1.png?now=${metTimestamp}`}
+                        opacity={0.7}
+                        zIndex={100}
                     />
                 )}
                 
