@@ -5,16 +5,17 @@ import axios from 'axios';
  * Manejo dinámico de comunicación entre Frontend y Backend.
  */
 const API = axios.create({
-    // Prioriza el .env (VITE_API_URL) y usa localhost como respaldo. 
-    // Se limpia el string para evitar problemas de formato.
-    baseURL: (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, ""),
+    // Prioriza el .env (VITE_API_URL). 
+    // Limpieza estricta: elimina espacios y barras finales para evitar URLs como ...com//api
+    baseURL: (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').trim().replace(/\/$/, ""),
     headers: {
         'Content-Type': 'application/json'
-    }
+    },
+    timeout: 15000 // Tiempo límite de espera para misiones con baja señal
 });
 
 /**
- * INTERCEPTOR DE SEGURIDAD JWT
+ * INTERCEPTOR DE SEGURIDAD JWT (Peticiones)
  * Adjunta automáticamente el token de sesión a cada petición.
  */
 API.interceptors.request.use(
@@ -29,17 +30,23 @@ API.interceptors.request.use(
 );
 
 /**
- * INTERCEPTOR DE RESPUESTA (MANEJO DE SESIÓN EXPIRADA)
+ * INTERCEPTOR DE RESPUESTA (Manejo de errores y sesión)
  */
 API.interceptors.response.use(
     (response) => response,
     (error) => {
+        // Error 401: Sesión expirada o token inválido
         if (error.response && error.response.status === 401) {
-            // Si el token expiró o es inválido, limpiamos y redirigimos
             console.warn("⚠️ SESIÓN EXPIRADA O INVÁLIDA - REDIRIGIENDO A LOGIN");
             localStorage.clear(); 
             window.location.href = '/login';
         }
+
+        // Error de Red (Network Error) como el visto en consola
+        if (!error.response) {
+            console.error("❌ ERROR DE RED: No se puede alcanzar el servidor AE en " + API.defaults.baseURL);
+        }
+
         return Promise.reject(error);
     }
 );
@@ -51,15 +58,19 @@ export const login = (credentials) => API.post('/auth/login', credentials);
 export const register = (userData) => API.post('/auth/register', userData);
 
 /**
- * SERVICIOS DE EVENTOS (CALENDARIO Y MAPA TÁCTICO)
+ * SERVICIOS DE EVENTOS Y OPERACIONES (MAPA TÁCTICO)
  */
 export const getEvents = () => API.get('/events');
 
-// Para el mapa táctico, este servicio filtra las operaciones activas en tiempo real
+// Filtro operativo para el Mapa en tiempo real
 export const getActiveOperations = async () => {
-    const res = await API.get('/events');
-    // Filtramos en cliente solo lo que tiene coordenadas y está marcado como RealTime
-    return res.data.filter(e => e.isRealTime && e.ubicacion?.lat != null);
+    try {
+        const res = await API.get('/events');
+        return res.data.filter(e => e.isRealTime && e.ubicacion?.lat != null);
+    } catch (error) {
+        console.error("❌ Fallo al recuperar operaciones activas");
+        return [];
+    }
 };
 
 export const createEvent = (eventData) => {
@@ -94,7 +105,6 @@ export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toLowerCase();
     const userElemento = localStorage.getItem('elemento')?.trim();
 
-    // Filtro por unidad para usuarios que no son Admin/Boss
     if (role !== 'admin' && role !== 'boss' && userElemento) {
         return API.get(`/aircraft`, { params: { unidad: userElemento } });
     }
@@ -107,7 +117,7 @@ export const createAircraft = (aircraftData) => {
     const userName = localStorage.getItem('username') || 'Usuario';
 
     const dataNormalized = {
-        ...aircraftData,
+        ...aircraftsData,
         matricula: aircraftData.matricula?.toUpperCase().trim(),
         sda: aircraftData.sda?.toUpperCase().trim(),
         unidad: (userRole !== 'admin' && userRole !== 'boss') 
@@ -152,15 +162,13 @@ export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/pa
 
 /**
  * SERVICIOS DE METEOROLOGÍA OPERATIVA (METAR/TAF)
- * Conexión con el Proxy del Backend para evitar errores CORS.
  */
 export const getWeatherData = (ids = "") => {
-    // Si ids viene como string "SADP,SACO", lo pasamos como parámetro de consulta
     const config = ids ? { params: { ids } } : {};
     return API.get('/weather/data', config);
 };
 
-// Exportamos también como objeto de servicio para compatibilidad con componentes anteriores
+// Objeto de servicio para exportación única
 const EventService = {
     getEvents,
     getActiveOperations,
