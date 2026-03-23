@@ -82,10 +82,6 @@ const OperacionesMapa = () => {
                 {darkMode ? '🛰️ VISTA ESTÁNDAR' : '🕶️ VISTA TÁCTICA'}
             </button>
 
-            <div style={styles.counter}>
-                <span style={{color: '#f39c12', fontWeight: 'bold'}}>MEDIOS:</span> {misiones.length}
-            </div>
-
             <MapContainer 
                 center={[-34.528, -58.641]} 
                 zoom={5} 
@@ -97,7 +93,6 @@ const OperacionesMapa = () => {
                         ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                         : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     } 
-                    attribution='&copy; AE'
                 />
                 
                 {misiones.map((m) => (
@@ -106,7 +101,6 @@ const OperacionesMapa = () => {
                         position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} 
                         icon={getIcon(m.title)}
                     >
-                        {/* Tooltip con recuadro sutil y matrícula visible */}
                         <Tooltip 
                             direction="right" 
                             offset={[15, 0]} 
@@ -122,12 +116,9 @@ const OperacionesMapa = () => {
                         <Popup>
                             <div style={styles.popupContainer}>
                                 <div style={styles.popupHeader}>{m.title}</div>
-                                <div style={{ fontSize: '0.85rem', marginBottom: '8px' }}>
+                                <div style={{ fontSize: '0.85rem' }}>
                                     <strong>UNIDAD:</strong> {m.elemento}<br/>
                                     <strong>UBICACIÓN:</strong> {m.ubicacion.nombre}
-                                </div>
-                                <div style={styles.popupMarginal}>
-                                    {m.notasMarginales || "SIN NOVEDAD"}
                                 </div>
                             </div>
                         </Popup>
@@ -136,7 +127,6 @@ const OperacionesMapa = () => {
             </MapContainer>
 
             <style>{`
-                /* Eliminamos CUALQUIER rastro del diseño por defecto de Leaflet */
                 .leaflet-tooltip.custom-label-tactica {
                     background: transparent !important;
                     border: none !important;
@@ -154,21 +144,18 @@ const OperacionesMapa = () => {
 const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#000' },
     loadingScreen: { backgroundColor: '#0a0a0a', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
-    header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', borderRadius: '2px', border: '1px solid #f39c12', textAlign: 'center', backdropFilter: 'blur(5px)' },
-    mapToggle: { position: 'absolute', top: '15px', right: '15px', zIndex: 1000, background: '#f39c12', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', fontFamily: 'monospace' },
-    counter: { position: 'absolute', bottom: '20px', left: '15px', zIndex: 1000, background: 'rgba(0,0,0,0.85)', color: 'white', padding: '8px 12px', borderRadius: '2px', fontSize: '0.8rem', borderLeft: '4px solid #f39c12', fontFamily: 'monospace' },
+    header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(20, 20, 20, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center' },
+    mapToggle: { position: 'absolute', top: '15px', right: '15px', zIndex: 1000, background: '#f39c12', color: '#000', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontFamily: 'monospace' },
     
-    // Diseño del recuadro de la matrícula
     labelBoxDark: {
-        background: 'rgba(0, 40, 0, 0.8)',
-        color: '#00ff00',
-        border: '1px solid #00ff00',
+        background: 'rgba(0, 20, 40, 0.85)',
+        color: '#00ffff',
+        border: '1px solid #00ffff',
         padding: '2px 6px',
-        borderRadius: '3px',
-        fontSize: '0.8rem',
+        borderRadius: '2px',
+        fontSize: '0.75rem',
         fontWeight: 'bold',
         fontFamily: 'monospace',
-        textShadow: '1px 1px 2px #000',
         whiteSpace: 'nowrap'
     },
     labelBoxLight: {
@@ -176,17 +163,14 @@ const styles = {
         color: '#0044ff',
         border: '1px solid #0044ff',
         padding: '2px 6px',
-        borderRadius: '3px',
-        fontSize: '0.8rem',
+        borderRadius: '2px',
+        fontSize: '0.75rem',
         fontWeight: 'bold',
         fontFamily: 'monospace',
-        boxShadow: '2px 2px 5px rgba(0,0,0,0.2)',
         whiteSpace: 'nowrap'
     },
-
-    popupContainer: { minWidth: '180px', fontFamily: 'monospace' },
-    popupHeader: { background: '#f39c12', color: 'black', padding: '4px', fontWeight: 'bold', textAlign: 'center' },
-    popupMarginal: { background: '#2f3542', color: '#ffffff', padding: '8px', fontSize: '0.75rem' }
+    popupContainer: { minWidth: '150px', fontFamily: 'monospace' },
+    popupHeader: { background: '#f39c12', color: 'black', padding: '4px', fontWeight: 'bold', textAlign: 'center', marginBottom: '5px' }
 };
 
 export default OperacionesMapa;
