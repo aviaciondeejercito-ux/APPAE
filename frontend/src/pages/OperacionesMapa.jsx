@@ -2,14 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-// Importamos el servicio centralizado para evitar errores 401/CORS
 import { getActiveOperations, getWeatherData } from '../services/api';
 
 const { BaseLayer } = LayersControl;
 
-/**
- * CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA AE
- * Azul: Fuerzas Propias.
+/** * SIMBOLOGÍA TÁCTICA AE REVISADA
  */
 
 // Icono: Triángulo Azul (Aviones)
@@ -41,7 +38,6 @@ const AERODROMOS_LIST = [
     "SARS", "SRDR", "SAAI", "SATR", "SASJ", "SAWL"
 ];
 
-// --- COMPONENTE INTERNO: PANEL METAR/TAF ---
 const MetarWidget = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedStation, setSelectedStation] = useState('SADP');
@@ -51,11 +47,10 @@ const MetarWidget = () => {
     const fetchWeatherData = async (icao) => {
         setLoading(true);
         try {
-            // ✅ CORRECCIÓN CRÍTICA: Usamos el proxy del backend para evitar el 401
             const response = await getWeatherData(icao);
             setWeatherData({
                 metar: response.data,
-                taf: response.data?.taf || null // Ajustado según estructura de AVWX
+                taf: response.data?.taf || null 
             });
         } catch (err) {
             console.error("❌ Error meteorológico en Red AE:", err);
@@ -114,7 +109,6 @@ const MetarWidget = () => {
     );
 };
 
-// --- COMPONENTE PRINCIPAL ---
 const OperacionesMapa = () => {
     const [misiones, setMisiones] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -140,10 +134,13 @@ const OperacionesMapa = () => {
         return () => clearInterval(interval);
     }, []);
 
+    // Lógica de clasificación exacta según tu lista
     const getIcon = (mision) => {
         const t = (mision?.aeronave || "").toUpperCase();
-        // Lógica de clasificación: Aviones vs Helicópteros
-        const esAvion = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'CESSNA', 'AVION', 'B-200', 'T-202'].some(mod => t.includes(mod));
+        // Aviones según tu lista: C-212, C-208, C-550, DA-62, DHC-6, CESSNA, T-202, B-200
+        const esAvion = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'CESSNA', 'T-202', 'B-200'].some(mod => t.includes(mod));
+        
+        // Si no es avión, asumimos helicóptero (UH-1H, BELL 212, AS-332, AB206, LAMA, 407)
         return esAvion ? planeIcon : heloIcon;
     };
 
@@ -190,14 +187,16 @@ const OperacionesMapa = () => {
                 {misiones.map((m) => (
                     <Marker key={m._id} position={[parseFloat(m.ubicacion?.lat), parseFloat(m.ubicacion?.lng)]} icon={getIcon(m)}>
                         <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
-                            <div style={styles.labelBoxDark}>{m.aeronave || "N/A"}</div>
+                            {/* Mostramos AERONAVE (ej. UH-1H) en el cuadradito azul de la derecha */}
+                            <div style={styles.labelBoxDark}>{m.aeronave || "S/D"}</div>
                         </Tooltip>
                         <Popup>
                             <div style={styles.popupContainer}>
-                                <div style={styles.popupHeader}>{m.aeronave} - {m.matricula}</div>
+                                {/* Corrección: El encabezado del popup ahora muestra Título y Aeronave correctamente */}
+                                <div style={styles.popupHeader}>{m.title || "OPERACIÓN"}</div>
                                 <div style={styles.popupBody}>
-                                    <strong>OP:</strong> {m.title}<br/>
-                                    <strong>LOC:</strong> {m.ubicacion?.nombre}
+                                    <strong>EQUIPO:</strong> {m.aeronave} - {m.matricula}<br/>
+                                    <strong>LOC:</strong> {m.ubicacion?.nombre || "No especificada"}
                                 </div>
                             </div>
                         </Popup>
@@ -210,14 +209,14 @@ const OperacionesMapa = () => {
                 .radar-loader { width: 50px; height: 50px; border: 3px solid #f39c12; border-radius: 50%; border-top-color: transparent; animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .leaflet-popup-content-wrapper { padding: 0; background: #1a1a1a; color: white; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
-                .leaflet-popup-content { margin: 0; width: 200px !important; }
+                .leaflet-popup-content { margin: 0; width: 220px !important; }
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; }
+                .leaflet-popup-tip { background: #f39c12; }
             `}</style>
         </div>
     );
 };
 
-// Estilos mantenidos según el estándar visual previo
 const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },
     metarContainer: { position: 'absolute', top: '80px', left: '0', zIndex: 2000, display: 'flex', alignItems: 'flex-start', transition: 'transform 0.4s ease' },
@@ -236,8 +235,8 @@ const styles = {
     header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px' },
     subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #444', paddingTop: '4px' },
     labelBoxDark: { background: 'rgba(0, 15, 30, 0.9)', color: '#00ffff', border: '1px solid #00ffff', padding: '2px 8px', borderRadius: '2px', fontSize: '0.8rem', fontWeight: 'bold' },
-    popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center' },
-    popupBody: { padding: '12px', fontSize: '0.8rem', background: '#1a1a1a' }
+    popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center', fontSize: '0.85rem' },
+    popupBody: { padding: '12px', fontSize: '0.8rem', background: '#1a1a1a', borderTop: '1px solid #333' }
 };
 
 export default OperacionesMapa;
