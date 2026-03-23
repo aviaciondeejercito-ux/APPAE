@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+// IMPORTANTE: Asegúrate de tener instalado leaflet y cargar su CSS
+import 'leaflet/dist/leaflet.css'; 
+
 import CalendarPage from './pages/CalendarPage';
 import Login from './pages/Login';
 import AdminPanel from './pages/AdminPanel';
@@ -8,7 +11,7 @@ import EstadoAeronaves from './pages/EstadoAeronaves';
 import Material from './pages/Material'; 
 import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
-import MeteorologiaPanel from './pages/MeteorologiaPanel';
+// MeteorologiaPanel ya no se importa aquí porque está dentro de OperacionesMapa
 
 function App() {
     // 1. ESTADOS DE AUTENTICACIÓN Y NAVEGACIÓN
@@ -17,13 +20,7 @@ function App() {
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-    // --- CEREBRO METEOROLÓGICO Y MAPA (ESTADO GLOBAL) ---
-    const [mapBase, setMapBase] = useState('sat'); // 'sat' o 'map'
-    const [capasMet, setCapasMet] = useState({
-        radar: false,
-        nubes: false,
-        viento: false
-    });
+    // --- LIMPIEZA: Se eliminaron mapBase y capasMet de aquí porque ahora son internos de OperacionesMapa ---
 
     // Escucha cambios de tamaño de pantalla
     useEffect(() => {
@@ -208,20 +205,12 @@ function App() {
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
                         
                         if (view === 'mapa' && puedeVerMapa) return (
-                            <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-                                {/* Pasamos capasMet y el nuevo mapBase al Mapa */}
-                                <OperacionesMapa 
-                                    capasMet={capasMet} 
-                                    mapBase={mapBase}
-                                />
-                                
-                                {/* Pasamos estados y setters al Panel lateral */}
-                                <MeteorologiaPanel 
-                                    capasMet={capasMet} 
-                                    setCapasMet={setCapasMet} 
-                                    mapBase={mapBase}
-                                    setMapBase={setMapBase}
-                                />
+                            <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#000' }}>
+                                {/* DESCONEXIÓN EXITOSA: 
+                                    OperacionesMapa ya no recibe props de clima, 
+                                    él maneja su propia meteorología internamente.
+                                */}
+                                <OperacionesMapa />
                             </div>
                         );
 
