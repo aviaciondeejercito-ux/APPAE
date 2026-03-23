@@ -49,7 +49,6 @@ export const register = (userData) => API.post('/auth/register', userData);
 
 /**
  * SERVICIOS DE EVENTOS (CALENDARIO Y MAPA TÁCTICO)
- * Aquí integramos las 'notasMarginales' para el Boss.
  */
 export const getEvents = () => API.get('/events');
 
@@ -60,9 +59,7 @@ export const createEvent = (eventData) => {
         title: eventData.title?.trim(),
         elemento: eventData.elemento || userElemento,
         esGlobal: eventData.esGlobal || false,
-        // Aseguramos que las notas marginales (Trip/Carga/Comb) viajen al backend
         notasMarginales: eventData.notasMarginales || "",
-        // Mapeo de ubicación para el Mapa Leaflet
         ubicacion: eventData.ubicacion || { nombre: "", lat: null, lng: null },
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
     };
@@ -141,5 +138,14 @@ export const getUsers = () => API.get('/admin/users');
 export const deleteUser = (id) => API.delete('/admin/users/' + id);
 export const updateUserRole = (id, role) => API.put(`/admin/users/${id}/role`, { role });
 export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/password`, { newPassword });
+
+/**
+ * SERVICIOS DE METEOROLOGÍA OPERATIVA (METAR/TAF)
+ * Conexión directa con el Proxy AE para evitar errores CORS de la NOAA.
+ */
+export const getWeatherData = (ids = "") => {
+    const params = ids ? { params: { ids } } : {};
+    return API.get('/weather/data', params);
+};
 
 export default API;

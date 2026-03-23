@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+// Importamos el servicio formal del API.js
+import { getWeatherData } from '../services/api';
 
 /**
  * PANEL METEOROLÓGICO OPERATIVO - AVIACIÓN DE EJÉRCITO
@@ -11,15 +13,15 @@ const MeteorologiaPanel = () => {
     const [loading, setLoading] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(null);
 
-    // FUNCIÓN DE CARGA DE DATOS (CONEXIÓN CON BACKEND AE)
+    // FUNCIÓN DE CARGA DE DATOS (CONEXIÓN CON BACKEND AE VIA SERVICIO)
     const fetchMeteorologia = async () => {
         setLoading(true);
         try {
-            // El backend ya tiene la lista de estaciones por defecto
-            const response = await fetch('/api/weather/data');
-            if (!response.ok) throw new Error('Error en respuesta del servidor AE');
+            // Usamos el servicio formal que ya maneja baseURL y Headers
+            const response = await getWeatherData();
             
-            const data = await response.json();
+            // Axios devuelve la data en .data
+            const data = response.data;
 
             if (data && Array.isArray(data)) {
                 // Ordenamos alfabéticamente por ICAO para facilitar la lectura
@@ -29,6 +31,8 @@ const MeteorologiaPanel = () => {
             }
         } catch (err) {
             console.error("❌ Error Meteorología AE:", err);
+            // Si falla la carga, nos aseguramos de que datos no sea null para no romper el .filter
+            setDatos([]);
         } finally {
             setLoading(false);
         }
@@ -40,10 +44,10 @@ const MeteorologiaPanel = () => {
         return () => clearInterval(interval);
     }, []);
 
-    // Lógica de filtrado para el buscador
+    // Lógica de filtrado para el buscador (incluye ICAO y Nombre de estación)
     const datosFiltrados = datos.filter(d => 
-        d.icaoId.toLowerCase().includes(filtro.toLowerCase()) || 
-        (d.name && d.name.toLowerCase().includes(filtro.toLowerCase()))
+        d.icaoId.toUpperCase().includes(filtro.toUpperCase()) || 
+        (d.name && d.name.toUpperCase().includes(filtro.toUpperCase()))
     );
 
     const getFlightCategoryColor = (cat) => {
