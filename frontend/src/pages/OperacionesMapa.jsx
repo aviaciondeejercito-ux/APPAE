@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl } from 'react-leaflet';
 import L from 'leaflet';
-import axios from 'axios';
 import 'leaflet/dist/leaflet.css';
-import EventService from '../services/EventService';
+// Importamos el servicio centralizado para evitar errores 401/CORS
+import { getActiveOperations, getWeatherData } from '../services/api';
 
 const { BaseLayer } = LayersControl;
 
-// --- CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA ---
+/**
+ * CONFIGURACIÓN DE SIMBOLOGÍA TÁCTICA AE
+ * Azul: Fuerzas Propias.
+ */
+
+// Icono: Triángulo Azul (Aviones)
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -17,6 +22,7 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
+// Icono: Cruz Azul (Helicópteros)
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -27,7 +33,6 @@ const heloIcon = L.divIcon({
     iconAnchor: [14, 14],
 });
 
-// --- LISTA DE AERÓDROMOS PREDETERMINADOS ---
 const AERODROMOS_LIST = [
     "SAZR", "SAHZ", "SAZS", "SAVC", "SAZB", "SACO", "SAZA", "SAZF", "SADP", "SAAR", 
     "SAME", "SACA", "SARE", "SAAP", "SANT", "SAWU", "SAST", "SARF", "SAZN", "SAAV", 
@@ -36,7 +41,7 @@ const AERODROMOS_LIST = [
     "SARS", "SRDR", "SAAI", "SATR", "SASJ", "SAWL"
 ];
 
-// --- COMPONENTE INTERNO: PANEL METAR/TAF CON BUSCADOR ---
+// --- COMPONENTE INTERNO: PANEL METAR/TAF ---
 const MetarWidget = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedStation, setSelectedStation] = useState('SADP');
@@ -46,17 +51,14 @@ const MetarWidget = () => {
     const fetchWeatherData = async (icao) => {
         setLoading(true);
         try {
-            // Buscamos METAR y TAF en paralelo
-            const [metarRes, tafRes] = await Promise.all([
-                axios.get(`https://avwx.rest/api/metar/${icao}`),
-                axios.get(`https://avwx.rest/api/taf/${icao}`)
-            ]);
+            // ✅ CORRECCIÓN CRÍTICA: Usamos el proxy del backend para evitar el 401
+            const response = await getWeatherData(icao);
             setWeatherData({
-                metar: metarRes.data,
-                taf: tafRes.data
+                metar: response.data,
+                taf: response.data?.taf || null // Ajustado según estructura de AVWX
             });
         } catch (err) {
-            console.error("Error meteorológico:", err);
+            console.error("❌ Error meteorológico en Red AE:", err);
             setWeatherData({ metar: null, taf: null });
         } finally {
             setLoading(false);
@@ -74,8 +76,6 @@ const MetarWidget = () => {
     return (
         <div style={styles.metarBox}>
             <div style={styles.metarHeader}>SISTEMA METEOROLÓGICO C2AE</div>
-            
-            {/* Buscador */}
             <input 
                 type="text" 
                 placeholder="Buscar OACI..." 
@@ -83,8 +83,6 @@ const MetarWidget = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
             />
-
-            {/* Lista Filtrada */}
             <div style={styles.stationList}>
                 {filteredStations.map(icao => (
                     <button 
@@ -100,24 +98,15 @@ const MetarWidget = () => {
                     </button>
                 ))}
             </div>
-
             <hr style={{borderColor: '#333', margin: '10px 0'}} />
-
-            {/* Resultados */}
             {loading ? (
                 <div style={{color: '#f39c12', fontSize: '11px'}}>SOLICITANDO DATOS...</div>
             ) : (
                 <div style={styles.weatherResults}>
                     <div style={{color: '#00ffff', fontWeight: 'bold', marginBottom: '5px'}}>{selectedStation}</div>
-                    
                     <div style={styles.metarSection}>
                         <span style={styles.metarLabel}>METAR:</span>
-                        <div style={styles.metarRaw}>{weatherData.metar?.raw || "No disponible"}</div>
-                    </div>
-
-                    <div style={styles.metarSection}>
-                        <span style={styles.metarLabel}>TAF:</span>
-                        <div style={styles.metarRaw}>{weatherData.taf?.raw || "No disponible"}</div>
+                        <div style={styles.metarRaw}>{weatherData.metar?.raw || "No disponible en zona"}</div>
                     </div>
                 </div>
             )}
@@ -134,12 +123,9 @@ const OperacionesMapa = () => {
 
     const cargarSituacionTactica = async () => {
         try {
-            const data = await EventService.getActiveOperations();
+            const data = await getActiveOperations();
             if (data && Array.isArray(data)) {
-                const activas = data.filter(m => 
-                    m?.isRealTime && m?.ubicacion?.lat != null && m?.ubicacion?.lng != null
-                );
-                setMisiones(activas);
+                setMisiones(data);
             }
         } catch (err) { 
             console.error("❌ Error en Sincronización Táctica:", err); 
@@ -156,6 +142,7 @@ const OperacionesMapa = () => {
 
     const getIcon = (mision) => {
         const t = (mision?.aeronave || "").toUpperCase();
+        // Lógica de clasificación: Aviones vs Helicópteros
         const esAvion = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'CESSNA', 'AVION', 'B-200', 'T-202'].some(mod => t.includes(mod));
         return esAvion ? planeIcon : heloIcon;
     };
@@ -169,7 +156,6 @@ const OperacionesMapa = () => {
 
     return (
         <div style={styles.mapWrapper}>
-            {/* PANEL DE METEOROLOGÍA DESPLEGABLE */}
             <div style={{
                 ...styles.metarContainer,
                 transform: showMetar ? 'translateX(0)' : 'translateX(-302px)' 
@@ -177,10 +163,7 @@ const OperacionesMapa = () => {
                 <div style={styles.metarContent}>
                     <MetarWidget />
                 </div>
-                <button 
-                    onClick={() => setShowMetar(!showMetar)} 
-                    style={styles.toggleBtn}
-                >
+                <button onClick={() => setShowMetar(!showMetar)} style={styles.toggleBtn}>
                     {showMetar ? '◀' : '☁️'}
                 </button>
             </div>
@@ -205,7 +188,7 @@ const OperacionesMapa = () => {
                 </LayersControl>
 
                 {misiones.map((m) => (
-                    <Marker key={m._id} position={[parseFloat(m.ubicacion.lat), parseFloat(m.ubicacion.lng)]} icon={getIcon(m)}>
+                    <Marker key={m._id} position={[parseFloat(m.ubicacion?.lat), parseFloat(m.ubicacion?.lng)]} icon={getIcon(m)}>
                         <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
                             <div style={styles.labelBoxDark}>{m.aeronave || "N/A"}</div>
                         </Tooltip>
@@ -214,7 +197,7 @@ const OperacionesMapa = () => {
                                 <div style={styles.popupHeader}>{m.aeronave} - {m.matricula}</div>
                                 <div style={styles.popupBody}>
                                     <strong>OP:</strong> {m.title}<br/>
-                                    <strong>LOC:</strong> {m.ubicacion.nombre}
+                                    <strong>LOC:</strong> {m.ubicacion?.nombre}
                                 </div>
                             </div>
                         </Popup>
@@ -234,6 +217,7 @@ const OperacionesMapa = () => {
     );
 };
 
+// Estilos mantenidos según el estándar visual previo
 const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },
     metarContainer: { position: 'absolute', top: '80px', left: '0', zIndex: 2000, display: 'flex', alignItems: 'flex-start', transition: 'transform 0.4s ease' },
