@@ -39,7 +39,7 @@ const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
 const adminRoutes = require('./routes/admin'); 
 const aircraftRoutes = require('./routes/aircraft'); 
-// Ajustamos aquí: Importamos el archivo metar.js que ya tienes
+// Importamos el controlador de meteorología
 const weatherRoutes = require('./routes/metar'); 
 
 // --- DEFINICIÓN DE RUTAS API ---
@@ -60,7 +60,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
 app.use('/api/admin', adminRoutes); 
 app.use('/api/aircraft', aircraftRoutes); 
-// Registramos la meteorología bajo la ruta /api/weather
+
+// IMPORTANTE: Registramos la meteorología bajo el prefijo /api/weather
+// Esto hace que la ruta final sea: /api/weather/data
 app.use('/api/weather', weatherRoutes); 
 
 // --- MANEJO DE RUTAS NO ENCONTRADAS ---
