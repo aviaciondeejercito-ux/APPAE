@@ -37,8 +37,13 @@ const OperacionesMapa = () => {
         try {
             const data = await EventService.getActiveOperations();
             if (Array.isArray(data)) {
-                // Filtramos solo misiones con coordenadas válidas
-                setMisiones(data.filter(m => m.isRealTime && m.ubicacion?.lat && m.ubicacion?.lng));
+                // Filtrado estricto para evitar errores de renderizado
+                const activas = data.filter(m => 
+                    m.isRealTime && 
+                    m.ubicacion?.lat != null && 
+                    m.ubicacion?.lng != null
+                );
+                setMisiones(activas);
             }
         } catch (err) { 
             console.error("❌ Error en Sincronización Táctica:", err); 
@@ -62,47 +67,55 @@ const OperacionesMapa = () => {
     if (loading) return (
         <div style={styles.loadingScreen}>
             <div className="radar-loader"></div>
-            <p style={{marginTop: '20px'}}>📡 INICIALIZANDO MAPA TÁCTICO...</p>
+            <p style={{marginTop: '20px'}}>📡 ACCEDIENDO A RED TÁCTICA...</p>
         </div>
     );
 
     return (
         <div style={styles.mapWrapper}>
-            {/* HEADER FIJO */}
+            {/* TÍTULO SUPERIOR */}
             <div style={styles.header}>
                 <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>MONITOR DE OPERACIONES</div>
                 <div style={styles.subHeader}>AVIACIÓN DE EJÉRCITO ARGENTINO</div>
             </div>
 
+            {/* CONTENEDOR DEL MAPA - IMPORTANTE: Altura 100% */}
             <MapContainer 
                 center={mapView.center} 
                 zoom={mapView.zoom} 
-                style={{ height: '100%', width: '100%' }}
-                zoomControl={true}
+                style={{ height: '100%', width: '100%', background: '#0a0a0a' }}
+                zoomControl={false}
             >
                 <LayersControl position="topright">
-                    {/* 1. MODO POLÍTICO (Estándar) */}
                     <BaseLayer checked name="🗺️ Mapa Político">
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                        <TileLayer 
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; OSM'
+                        />
                     </BaseLayer>
 
-                    {/* 2. MODO FÍSICO (Topográfico) */}
                     <BaseLayer name="⛰️ Mapa Físico">
-                        <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" />
+                        <TileLayer 
+                            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; OpenTopoMap'
+                        />
                     </BaseLayer>
 
-                    {/* 3. MODO SATELITAL */}
                     <BaseLayer name="🛰️ Satelital">
-                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+                        <TileLayer 
+                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            attribution='&copy; Esri'
+                        />
                     </BaseLayer>
 
-                    {/* 4. MODO OSCURO (Noche/Táctico) */}
                     <BaseLayer name="🌑 Modo Oscuro">
-                        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+                        <TileLayer 
+                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                            attribution='&copy; CartoDB'
+                        />
                     </BaseLayer>
                 </LayersControl>
 
-                {/* RENDERIZADO DE ICONOS TÁCTICOS */}
                 {misiones.map((m) => (
                     <Marker 
                         key={m._id} 
@@ -117,8 +130,8 @@ const OperacionesMapa = () => {
                             <div style={styles.popupContainer}>
                                 <div style={styles.popupHeader}>{m.aeronave} - {m.matricula}</div>
                                 <div style={styles.popupBody}>
-                                    <strong>MISIÓN:</strong> {m.title}<br/>
-                                    <strong>UBICACIÓN:</strong> {m.ubicacion.nombre}<br/>
+                                    <strong>OP:</strong> {m.title}<br/>
+                                    <strong>LOC:</strong> {m.ubicacion.nombre}<br/>
                                     <hr style={{margin: '8px 0', borderColor: '#444'}}/>
                                     <center style={{color: '#f39c12', fontSize: '0.65rem'}}>SISTEMA C2AE</center>
                                 </div>
@@ -128,22 +141,29 @@ const OperacionesMapa = () => {
                 ))}
             </MapContainer>
 
-            {/* ESTILOS CSS INYECTADOS */}
             <style>{`
+                /* Fix para que el mapa ocupe todo el espacio disponible */
+                .leaflet-container { height: 100%; width: 100%; }
+                
                 .label-tactica-custom { background: transparent !important; border: none !important; box-shadow: none !important; }
                 .radar-loader { width: 50px; height: 50px; border: 3px solid #f39c12; border-radius: 50%; border-top-color: transparent; animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
+                
                 .leaflet-popup-content-wrapper { padding: 0; background: #1a1a1a; color: white; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
-                .leaflet-popup-content { margin: 0; width: 220px !important; }
-                .leaflet-popup-tip { background: #1a1a1a; border: 1px solid #f39c12; }
-                .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #f39c12 !important; }
+                .leaflet-popup-content { margin: 0; width: 200px !important; }
+                .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; font-size: 0.7rem; }
             `}</style>
         </div>
     );
 };
 
 const styles = {
-    mapWrapper: { width: '100%', height: '100%', position: 'relative', backgroundColor: '#050505' },
+    mapWrapper: { 
+        width: '100%', 
+        height: 'calc(100vh - 60px)', // Ajuste para que no se pierda bajo el navbar
+        position: 'relative', 
+        backgroundColor: '#050505' 
+    },
     loadingScreen: { backgroundColor: '#050505', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
     header: { position: 'absolute', top: '15px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '8px 20px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px', pointerEvents: 'none' },
     subHeader: { fontSize: '0.6rem', color: '#bdc3c7', marginTop: '3px', borderTop: '1px solid #333', paddingTop: '3px' },
