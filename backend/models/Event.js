@@ -16,7 +16,7 @@ const eventSchema = new mongoose.Schema({
         trim: true,
         default: '' 
     },
-    // MODIFICACIÓN: Se quita 'required' para permitir operaciones de Mapa Táctico sin agenda
+    // Se mantiene opcional para permitir operaciones de Mapa Táctico sin agenda cronológica
     start: { 
         type: Date,
         required: false 
@@ -39,7 +39,6 @@ const eventSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        // Se agrega 'en_desarrollo' para operaciones tácticas activas
         enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado'], 
         default: 'programado' 
     },
@@ -57,6 +56,22 @@ const eventSchema = new mongoose.Schema({
     },
 
     // --- SECCIÓN TÁCTICA (SOPORTE PARA MAPA EN TIEMPO REAL) ---
+    // Agregados para coincidir con la lógica del componente CargaTactica
+    aeronave: { 
+        type: String, 
+        trim: true,
+        uppercase: true 
+    },
+    matricula: { 
+        type: String, 
+        trim: true,
+        uppercase: true 
+    },
+    tipoIcono: { 
+        type: String, 
+        enum: ['ala_fija', 'ala_rotativa'],
+        default: 'ala_rotativa' 
+    },
     isRealTime: {
         type: Boolean,
         default: false 
@@ -124,11 +139,10 @@ const eventSchema = new mongoose.Schema({
 });
 
 /**
- * VALIDACIÓN DE SEGURIDAD ATÓMICA:
- * Solo valida cronología si AMBAS fechas están presentes.
+ * VALIDACIÓN DE SEGURIDAD ATÓMICA Y ESTANDARIZACIÓN MILITAR
  */
 eventSchema.pre('validate', function(next) {
-    // Solo validamos lógica de fechas si el evento es para el Calendario (tiene fechas)
+    // Validar cronología solo si ambas fechas existen (Calendario)
     if (this.start && this.end) {
         const dStart = new Date(this.start);
         const dEnd = new Date(this.end);
@@ -138,23 +152,25 @@ eventSchema.pre('validate', function(next) {
         }
     }
     
-    // Normalización de color
+    // Normalización de color para evitar errores de renderizado
     if (this.color && !this.color.startsWith('#')) {
         this.color = '#1b3a57';
     }
     
-    // Estandarización militar
+    // Estandarización Militar (Todo a MAYÚSCULAS)
     if (this.title) this.title = this.title.toUpperCase();
     if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
+    if (this.aeronave) this.aeronave = this.aeronave.toUpperCase();
+    if (this.matricula) this.matricula = this.matricula.toUpperCase();
     
     next();
 });
 
-// ÍNDICES PARA ALTA DISPONIBILIDAD
+// ÍNDICES PARA ALTA DISPONIBILIDAD (Crucial para el Radar en tiempo real)
 eventSchema.index({ start: 1, end: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
 eventSchema.index({ esGlobal: 1 }); 
-eventSchema.index({ isRealTime: 1, status: 1 }); 
+eventSchema.index({ isRealTime: 1, status: 1 }); // Optimiza la búsqueda de aeronaves volando
 eventSchema.index({ createdBy: 1 });
 eventSchema.index({ createdAt: -1 }); 
 

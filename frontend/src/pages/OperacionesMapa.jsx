@@ -6,7 +6,9 @@ import { getActiveOperations, getWeatherData } from '../services/api';
 
 const { BaseLayer } = LayersControl;
 
-/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD */
+/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD 
+ * Sincronizado con el Modelo de Mongoose (tipoIcono)
+ */
 
 // Icono: Triángulo Azul (AVIÓN / ALA FIJA)
 const planeIcon = L.divIcon({
@@ -136,17 +138,18 @@ const OperacionesMapa = () => {
     }, []);
 
     /**
-     * LOGICA DE ICONOS REFORZADA
-     * Comprueba tipoIcono y aeronave para asegurar el match visual.
+     * LÓGICA DE ICONOS DINÁMICA
+     * Prioriza el campo 'tipoIcono' del backend para 100% de precisión.
      */
     const getTacticIcon = (m) => {
         if (m.tipoIcono === 'ala_fija') return planeIcon;
         if (m.tipoIcono === 'ala_rotativa') return heloIcon;
         
-        // Fallback por nombre si el campo tipoIcono fallara
-        const name = m.aeronave?.toUpperCase() || "";
-        if (name.includes('C-212') || name.includes('C-208') || name.includes('DA-62')) return planeIcon;
-        
+        // Fallback inteligente basado en el nombre del SDA
+        const sda = m.aeronave?.toUpperCase() || "";
+        if (sda.includes('C-212') || sda.includes('C-208') || sda.includes('DA-62') || sda.includes('T-204')) {
+            return planeIcon;
+        }
         return heloIcon;
     };
 
@@ -191,9 +194,6 @@ const OperacionesMapa = () => {
                     <BaseLayer name="🗺️ Político">
                         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                     </BaseLayer>
-                    <BaseLayer name="⛰️ Relieve">
-                        <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" />
-                    </BaseLayer>
                 </LayersControl>
 
                 {misiones.map((m) => (
@@ -213,9 +213,10 @@ const OperacionesMapa = () => {
                                 <div style={styles.popupBody}>
                                     <p><strong>UNIDAD:</strong> {m.elemento}</p>
                                     <p><strong>POSICIÓN:</strong> {m.ubicacion.nombre}</p>
-                                    <p><strong>ESTADO:</strong> EN CURSO</p>
+                                    <p><strong>ESTADO:</strong> {m.status?.toUpperCase() || 'EN CURSO'}</p>
                                     <hr style={{borderColor: '#333'}} />
                                     <p style={{fontSize: '0.7rem', color: '#f39c12'}}>{m.notasMarginales}</p>
+                                    <p style={{fontSize: '0.6rem', color: '#777', marginTop: '5px'}}>ACTUALIZADO POR: {m.userName}</p>
                                 </div>
                             </Popup>
                         </Marker>

@@ -53,7 +53,6 @@ const getEvents = async (req, res) => {
             };
         }
 
-        // Importante: El calendario solo recibe eventos que tengan fecha de inicio definida
         const events = await Event.find(query).sort({ start: 1 });
         res.status(200).json(events);
     } catch (error) {
@@ -67,7 +66,6 @@ const getEvents = async (req, res) => {
  */
 const getActiveOperations = async (req, res) => {
     try {
-        // Ahora busca tanto 'en_curso' como 'en_desarrollo' (el nuevo estado táctico)
         const activeOps = await Event.find({ 
             isRealTime: true, 
             status: { $in: ['en_curso', 'en_desarrollo'] } 
@@ -86,12 +84,10 @@ const createEvent = async (req, res) => {
         const { 
             title, start, end, notes, color, esGlobal, 
             elemento, etapa, tipoApoyo, sdaListado,
-            isRealTime, ubicacion, notasMarginales, status 
+            isRealTime, ubicacion, notasMarginales, status,
+            aeronave, matricula, tipoIcono // NUEVOS CAMPOS TÁCTICOS
         } = req.body;
 
-        // --- CORRECCIÓN CRÍTICA PARA INDEPENDENCIA DEL CALENDARIO ---
-        // Si NO es tiempo real, exigimos fechas. 
-        // Si ES tiempo real, permitimos que start/end sean nulos.
         if (!title) {
             return res.status(400).json({ message: 'El título es obligatorio.' });
         }
@@ -104,7 +100,6 @@ const createEvent = async (req, res) => {
         
         const newEvent = new Event({ 
             title: title.toUpperCase(), 
-            // Si hay fechas se parsean, si no, quedan como null en la DB
             start: start ? new Date(start) : null, 
             end: end ? new Date(end) : null, 
             notes: notes || '', 
@@ -118,10 +113,14 @@ const createEvent = async (req, res) => {
             tipoOrigen: isMando ? 'COMANDO' : 'LOCAL',
             esGlobal: isMando ? (esGlobal || false) : false,
             
+            // CAMPOS TÁCTICOS
             isRealTime: isRealTime || false,
             ubicacion: ubicacion || { nombre: 'Punto No Definido', lat: 0, lng: 0 },
             notasMarginales: notasMarginales ? notasMarginales.toUpperCase() : '',
-            status: status || 'programado'
+            status: status || 'programado',
+            aeronave: aeronave ? aeronave.toUpperCase() : '',
+            matricula: matricula ? matricula.toUpperCase() : '',
+            tipoIcono: tipoIcono || 'ala_rotativa'
         });
 
         await newEvent.save();
@@ -147,13 +146,20 @@ const updateEvent = async (req, res) => {
 
         const updateData = { ...req.body };
         
+        // Limpieza de datos sensibles
         delete updateData._id; 
         delete updateData.__v;
         delete updateData.createdBy; 
         updateData.userName = req.user.username; 
 
+        // Normalización de fechas
         if (updateData.start) updateData.start = new Date(updateData.start);
         if (updateData.end) updateData.end = new Date(updateData.end);
+
+        // Normalización de campos de texto tácticos
+        if (updateData.aeronave) updateData.aeronave = updateData.aeronave.toUpperCase();
+        if (updateData.matricula) updateData.matricula = updateData.matricula.toUpperCase();
+        if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
 
         if (!esMando) {
             delete updateData.esGlobal;

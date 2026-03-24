@@ -111,13 +111,15 @@ const CargaTactica = () => {
 
     /**
      * LÓGICA DE CLASIFICACIÓN TÁCTICA AUTOMÁTICA
-     * Determina el tipo de icono para que el mapa no deba adivinar.
+     * Basada estrictamente en la flota de la Aviación de Ejército (imagen adjunta)
      */
     const getTipoIcono = (modelo) => {
         const m = modelo.toUpperCase();
+        // Discriminación según imagen: Aviones (Ala Fija)
         const alaFija = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6'];
         const esAlaFija = alaFija.some(tipo => m.includes(tipo));
-        return esAlaFija ? 'ala_fija' : 'rotativa';
+        // Si no está en alaFija, se asume ala_rotativa (UH-1H, BELL 212, AS-332B, AB206, SA-315, 407 GXI)
+        return esAlaFija ? 'ala_fija' : 'ala_rotativa';
     };
 
     const handleSubmit = async (e) => {
@@ -127,12 +129,9 @@ const CargaTactica = () => {
 
         const payload = {
             title: editingId ? formData.title : `${formData.aeronaveModelo} ${formData.matricula} - ${formData.title}`,
-            matricula: formData.matricula, 
-            aeronave: formData.aeronaveModelo,
-            
-            // CAMPO CLAVE PARA LA REESTRUCTURACIÓN DEL MAPA
+            aeronave: formData.aeronaveModelo.toUpperCase().trim(),
+            matricula: formData.matricula.toUpperCase().trim(),
             tipoIcono: getTipoIcono(formData.aeronaveModelo),
-            
             elemento: formData.elemento,
             isRealTime: true, 
             status: 'en_desarrollo', 
