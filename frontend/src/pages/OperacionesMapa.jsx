@@ -7,6 +7,7 @@ import { getActiveOperations, getWeatherData } from '../services/api';
 const { BaseLayer } = LayersControl;
 
 /** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD
+ * (Iconos definidos pero no renderizados en el mapa por solicitud del usuario)
  */
 
 // Icono: Triángulo Azul (AVIÓN)
@@ -19,7 +20,7 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-// Icono: Cruz Azul (HELICÓPTERO) - Reforzada para visibilidad táctica
+// Icono: Cruz Azul (HELICÓPTERO)
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -136,26 +137,6 @@ const OperacionesMapa = () => {
         return () => clearInterval(interval);
     }, []);
 
-    // LÓGICA DE SIMBOLOGÍA TÁCTICA OBLIGATORIA
-    const getIcon = (mision) => {
-        const aeronaveData = (mision?.aeronave || "").toUpperCase().trim();
-
-        // Lista estricta de Aviones (Triángulo)
-        const AVIONES = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6'];
-        
-        // Lista estricta de Helicópteros (Cruz)
-        const HELICOPTEROS = ['UH-1H', 'UH-1H/II', 'BELL 212', 'AS-332B', 'AB206B1', 'AB206B3', 'SA-315 B LAMA', '407 GXI'];
-
-        const esAvion = AVIONES.some(modelo => aeronaveData.includes(modelo));
-        const esHelicoptero = HELICOPTEROS.some(modelo => aeronaveData.includes(modelo));
-
-        if (esAvion) return planeIcon;
-        if (esHelicoptero) return heloIcon;
-
-        // Seguridad: Si no coincide pero es aeronave del ejército, default a Helicóptero
-        return heloIcon;
-    };
-
     if (loading) return (
         <div style={styles.loadingScreen}>
             <div className="radar-loader"></div>
@@ -202,22 +183,8 @@ const OperacionesMapa = () => {
                     </BaseLayer>
                 </LayersControl>
 
-                {misiones.map((m) => (
-                    <Marker key={m._id} position={[parseFloat(m.ubicacion?.lat), parseFloat(m.ubicacion?.lng)]} icon={getIcon(m)}>
-                        <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
-                            <div style={styles.labelBoxDark}>{m.aeronave || "AE-???"}</div>
-                        </Tooltip>
-                        <Popup>
-                            <div style={styles.popupContainer}>
-                                <div style={styles.popupHeader}>{m.title || "OPERACIÓN"}</div>
-                                <div style={styles.popupBody}>
-                                    <strong>EQUIPO:</strong> {m.aeronave} - {m.matricula}<br/>
-                                    <strong>LOC:</strong> {m.ubicacion?.nombre || "No especificada"}
-                                </div>
-                            </div>
-                        </Popup>
-                    </Marker>
-                ))}
+                {/* EL MAPA ESTÁ VACÍO: SE ELIMINÓ EL MAPEO DE MISIONES POR PEDIDO DEL USUARIO */}
+
             </MapContainer>
 
             <style>{`
