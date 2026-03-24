@@ -1,21 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
-// Importación corregida para evitar el error "L.terminator is not a function"
-import terminator from 'leaflet-terminator';
+// Importación estándar para que se registre en L.terminator automáticamente
+import 'leaflet-terminator'; 
 import 'leaflet/dist/leaflet.css';
 import { getActiveOperations, getWeatherData, EventService } from '../services/api';
 import NightEvolutionWidget from '../components/NightEvolutionWidget';
 
-// Vinculación manual al objeto Leaflet
-L.terminator = terminator;
-
 const { BaseLayer, Overlay } = LayersControl;
 
-/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD 
- * Sincronizado con el Modelo de Mongoose (tipoIcono)
- */
-
+/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD */
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -47,11 +41,12 @@ const AERODROMOS_LIST = [
 
 /**
  * TerminatorLayer - Manejo de sombra nocturna dinámica
+ * Asegura la limpieza del layer previo para evitar duplicados
  */
 const TerminatorLayer = ({ time }) => {
     const map = useMap();
+
     useEffect(() => {
-        // Validación de seguridad para la función del plugin
         if (typeof L.terminator === 'function') {
             const tLayer = L.terminator({
                 time: time,
@@ -59,10 +54,17 @@ const TerminatorLayer = ({ time }) => {
                 fillOpacity: 0.4,
                 color: '#2c3e50',
                 weight: 1
-            }).addTo(map);
-            return () => map.removeLayer(tLayer);
+            });
+            
+            tLayer.addTo(map);
+            return () => {
+                if (map.hasLayer(tLayer)) {
+                    map.removeLayer(tLayer);
+                }
+            };
         }
     }, [map, time]);
+
     return null;
 };
 
