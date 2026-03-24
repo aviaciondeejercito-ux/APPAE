@@ -39,9 +39,8 @@ const AERODROMOS_LIST = [
     "SARS", "SRDR", "SAAI", "SATR", "SASJ", "SAWL"
 ];
 
-const MetarWidget = () => {
+const MetarWidget = ({ selectedStation, setSelectedStation }) => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedStation, setSelectedStation] = useState('SADP');
     const [weatherData, setWeatherData] = useState({ metar: null, taf: null });
     const [loading, setLoading] = useState(false);
 
@@ -114,6 +113,7 @@ const OperacionesMapa = () => {
     const [misiones, setMisiones] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showMetar, setShowMetar] = useState(false);
+    const [selectedStation, setSelectedStation] = useState('SADP');
     const [mapView] = useState({ center: [-34.528, -58.641], zoom: 5 });
 
     const cargarSituacionTactica = async () => {
@@ -136,14 +136,17 @@ const OperacionesMapa = () => {
     }, []);
 
     /**
-     * REESTRUCTURACIÓN: LÓGICA DE ICONOS BASADA EN DATA ESTRUCTURADA
-     * Ahora utiliza el campo 'tipoIcono' definido en el componente de carga.
-     * Mantiene el default de seguridad (heloIcon) si el dato no existe.
+     * LOGICA DE ICONOS REFORZADA
+     * Comprueba tipoIcono y aeronave para asegurar el match visual.
      */
-    const renderTacticIcon = (mission) => {
-        if (mission.tipoIcono === 'ala_fija') {
-            return planeIcon;
-        }
+    const getTacticIcon = (m) => {
+        if (m.tipoIcono === 'ala_fija') return planeIcon;
+        if (m.tipoIcono === 'ala_rotativa') return heloIcon;
+        
+        // Fallback por nombre si el campo tipoIcono fallara
+        const name = m.aeronave?.toUpperCase() || "";
+        if (name.includes('C-212') || name.includes('C-208') || name.includes('DA-62')) return planeIcon;
+        
         return heloIcon;
     };
 
@@ -161,7 +164,7 @@ const OperacionesMapa = () => {
                 transform: showMetar ? 'translateX(0)' : 'translateX(-302px)' 
             }}>
                 <div style={styles.metarContent}>
-                    <MetarWidget />
+                    <MetarWidget selectedStation={selectedStation} setSelectedStation={setSelectedStation} />
                 </div>
                 <button onClick={() => setShowMetar(!showMetar)} style={styles.toggleBtn}>
                     {showMetar ? '◀' : '☁️'}
@@ -198,7 +201,7 @@ const OperacionesMapa = () => {
                         <Marker 
                             key={m._id} 
                             position={[m.ubicacion.lat, m.ubicacion.lng]}
-                            icon={renderTacticIcon(m)}
+                            icon={getTacticIcon(m)}
                         >
                             <Tooltip permanent direction="top" offset={[0, -10]} className="label-tactica-custom">
                                 <div style={styles.labelBoxDark}>
@@ -218,7 +221,6 @@ const OperacionesMapa = () => {
                         </Marker>
                     )
                 ))}
-
             </MapContainer>
 
             <style>{`

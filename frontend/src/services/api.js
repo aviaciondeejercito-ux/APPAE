@@ -5,18 +5,15 @@ import axios from 'axios';
  * Manejo dinámico de comunicación entre Frontend y Backend.
  */
 const API = axios.create({
-    // Prioriza el .env (VITE_API_URL). 
-    // Limpieza estricta: elimina espacios y barras finales para evitar URLs como ...com//api
     baseURL: (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').trim().replace(/\/$/, ""),
     headers: {
         'Content-Type': 'application/json'
     },
-    timeout: 15000 // Tiempo límite de espera para misiones con baja señal
+    timeout: 15000 
 });
 
 /**
  * INTERCEPTOR DE SEGURIDAD JWT (Peticiones)
- * Adjunta automáticamente el token de sesión a cada petición.
  */
 API.interceptors.request.use(
     (config) => {
@@ -30,23 +27,19 @@ API.interceptors.request.use(
 );
 
 /**
- * INTERCEPTOR DE RESPUESTA (Manejo de errores y sesión)
+ * INTERCEPTOR DE RESPUESTA
  */
 API.interceptors.response.use(
     (response) => response,
     (error) => {
-        // Error 401: Sesión expirada o token inválido
         if (error.response && error.response.status === 401) {
-            console.warn("⚠️ SESIÓN EXPIRADA O INVÁLIDA - REDIRIGIENDO A LOGIN");
+            console.warn("⚠️ SESIÓN EXPIRADA - REDIRIGIENDO A LOGIN");
             localStorage.clear(); 
             window.location.href = '/login';
         }
-
-        // Error de Red (Network Error) como el visto en consola
         if (!error.response) {
-            console.error("❌ ERROR DE RED: No se puede alcanzar el servidor AE en " + API.defaults.baseURL);
+            console.error("❌ ERROR DE RED: Servidor AE inalcanzable en " + API.defaults.baseURL);
         }
-
         return Promise.reject(error);
     }
 );
@@ -62,10 +55,11 @@ export const register = (userData) => API.post('/auth/register', userData);
  */
 export const getEvents = () => API.get('/events');
 
-// Filtro operativo para el Mapa en tiempo real
+// Filtro operativo para el Mapa en tiempo real con validación de iconos
 export const getActiveOperations = async () => {
     try {
         const res = await API.get('/events');
+        // Filtramos misiones en tiempo real con coordenadas válidas
         return res.data.filter(e => e.isRealTime && e.ubicacion?.lat != null);
     } catch (error) {
         console.error("❌ Fallo al recuperar operaciones activas");
@@ -80,6 +74,7 @@ export const createEvent = (eventData) => {
         title: eventData.title?.trim(),
         elemento: eventData.elemento || userElemento,
         esGlobal: eventData.esGlobal || false,
+        tipoIcono: eventData.tipoIcono || 'ala_rotativa', // Estándar por defecto
         notasMarginales: eventData.notasMarginales || "",
         ubicacion: eventData.ubicacion || { nombre: "", lat: null, lng: null },
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
@@ -117,7 +112,7 @@ export const createAircraft = (aircraftData) => {
     const userName = localStorage.getItem('username') || 'Usuario';
 
     const dataNormalized = {
-        ...aircraftsData,
+        ...aircraftData, // Corregido de aircraftsData a aircraftData
         matricula: aircraftData.matricula?.toUpperCase().trim(),
         sda: aircraftData.sda?.toUpperCase().trim(),
         unidad: (userRole !== 'admin' && userRole !== 'boss') 
