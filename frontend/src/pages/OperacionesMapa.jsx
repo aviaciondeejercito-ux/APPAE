@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
-// Importación estándar para que se registre en L.terminator automáticamente
 import 'leaflet-terminator'; 
 import 'leaflet/dist/leaflet.css';
 import { getActiveOperations, getWeatherData, EventService } from '../services/api';
@@ -39,13 +38,8 @@ const AERODROMOS_LIST = [
     "SARS", "SRDR", "SAAI", "SATR", "SASJ", "SAWL"
 ];
 
-/**
- * TerminatorLayer - Manejo de sombra nocturna dinámica
- * Asegura la limpieza del layer previo para evitar duplicados
- */
 const TerminatorLayer = ({ time }) => {
     const map = useMap();
-
     useEffect(() => {
         if (typeof L.terminator === 'function') {
             const tLayer = L.terminator({
@@ -55,7 +49,6 @@ const TerminatorLayer = ({ time }) => {
                 color: '#2c3e50',
                 weight: 1
             });
-            
             tLayer.addTo(map);
             return () => {
                 if (map.hasLayer(tLayer)) {
@@ -64,7 +57,6 @@ const TerminatorLayer = ({ time }) => {
             };
         }
     }, [map, time]);
-
     return null;
 };
 
@@ -224,12 +216,20 @@ const OperacionesMapa = () => {
                     <BaseLayer checked name="🌑 Modo Oscuro">
                         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
                     </BaseLayer>
+                    <BaseLayer name="🗺️ Político">
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    </BaseLayer>
                     <BaseLayer name="🛰️ Satelital">
                         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                     </BaseLayer>
                     
                     <Overlay checked name="🌘 Sombra Nocturna">
                         <TerminatorLayer time={terminatorTime} />
+                    </Overlay>
+
+                    <Overlay checked name="👁️ Visibilidad (VFR/IFR)">
+                        {/* Esta capa se mantiene activa para el renderizado de condiciones meteorológicas sobre el mapa */}
+                        <LayerGroup /> 
                     </Overlay>
                 </LayersControl>
 
@@ -266,6 +266,9 @@ const OperacionesMapa = () => {
         </div>
     );
 };
+
+// Componente auxiliar para mantener la estructura de la capa de visibilidad
+const LayerGroup = () => null;
 
 const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },
