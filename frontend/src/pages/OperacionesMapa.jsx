@@ -47,16 +47,18 @@ const MetarWidget = ({ selectedStation, setSelectedStation }) => {
     const [loading, setLoading] = useState(false);
 
     const fetchWeatherData = async (icao) => {
+        if (!icao) return;
         setLoading(true);
         try {
             const response = await getWeatherData(icao);
+            // Adaptado a la nueva estructura de api.js (allorigins/avwx)
             setWeatherData({
-                metar: response.data,
-                taf: response.data?.taf || null 
+                metar: response.data.raw,
+                taf: response.data.taf
             });
         } catch (err) {
             console.error("❌ Error meteorológico en Red AE:", err);
-            setWeatherData({ metar: null, taf: null });
+            setWeatherData({ metar: "ERROR DE CONEXIÓN", taf: null });
         } finally {
             setLoading(false);
         }
@@ -97,13 +99,27 @@ const MetarWidget = ({ selectedStation, setSelectedStation }) => {
             </div>
             <hr style={{borderColor: '#333', margin: '10px 0'}} />
             {loading ? (
-                <div style={{color: '#f39c12', fontSize: '11px'}}>SOLICITANDO DATOS...</div>
+                <div style={{color: '#f39c12', fontSize: '11px', textAlign: 'center', padding: '10px'}}>
+                    📡 SOLICITANDO DATOS OACI...
+                </div>
             ) : (
                 <div style={styles.weatherResults}>
-                    <div style={{color: '#00ffff', fontWeight: 'bold', marginBottom: '5px'}}>{selectedStation}</div>
+                    <div style={{color: '#00ffff', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid #333'}}>{selectedStation}</div>
+                    
+                    {/* SECCIÓN METAR */}
                     <div style={styles.metarSection}>
-                        <span style={styles.metarLabel}>METAR:</span>
-                        <div style={styles.metarRaw}>{weatherData.metar?.raw || "No disponible en zona"}</div>
+                        <span style={styles.metarLabel}>METAR (REAL-TIME):</span>
+                        <div style={styles.metarRaw}>
+                            {weatherData.metar || "No disponible en zona"}
+                        </div>
+                    </div>
+
+                    {/* SECCIÓN TAF */}
+                    <div style={styles.metarSection}>
+                        <span style={{...styles.metarLabel, color: '#3498db'}}>TAF (PRONÓSTICO):</span>
+                        <div style={{...styles.metarRaw, borderColor: '#3498db', fontSize: '10px'}}>
+                            {weatherData.taf || "No disponible para esta estación"}
+                        </div>
                     </div>
                 </div>
             )}
@@ -133,20 +149,14 @@ const OperacionesMapa = () => {
 
     useEffect(() => {
         cargarSituacionTactica();
-        // Intervalo de refresco para radar en tiempo real
         const interval = setInterval(cargarSituacionTactica, 15000);
         return () => clearInterval(interval);
     }, []);
 
-    /**
-     * LÓGICA DE ICONOS DINÁMICA
-     * Prioriza el campo 'tipoIcono' del backend para 100% de precisión.
-     */
     const getTacticIcon = (m) => {
         if (m.tipoIcono === 'ala_fija') return planeIcon;
         if (m.tipoIcono === 'ala_rotativa') return heloIcon;
         
-        // Fallback inteligente basado en el nombre del SDA (T-204 eliminado)
         const sda = m.aeronave?.toUpperCase() || "";
         if (sda.includes('C-212') || sda.includes('C-208') || sda.includes('DA-62') || sda.includes('B-200')) {
             return planeIcon;
@@ -250,7 +260,7 @@ const styles = {
     weatherResults: { textAlign: 'left' },
     metarSection: { marginBottom: '12px' },
     metarLabel: { color: '#f39c12', fontSize: '10px', fontWeight: 'bold', display: 'block', marginBottom: '3px' },
-    metarRaw: { color: '#ecf0f1', fontSize: '11px', lineHeight: '1.3', background: '#111', padding: '6px', borderRadius: '4px', border: '1px solid #333' },
+    metarRaw: { color: '#ecf0f1', fontSize: '11px', lineHeight: '1.3', background: '#111', padding: '6px', borderRadius: '4px', border: '1px solid #333', whiteSpace: 'pre-wrap', wordBreak: 'break-all' },
     toggleBtn: { background: '#f39c12', border: 'none', color: 'black', padding: '15px 10px', cursor: 'pointer', borderRadius: '0 4px 4px 0', fontWeight: 'bold' },
     loadingScreen: { backgroundColor: '#050505', color: '#f39c12', height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
     header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#f39c12', padding: '10px 25px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px' },

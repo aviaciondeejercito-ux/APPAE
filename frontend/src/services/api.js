@@ -74,7 +74,7 @@ export const createEvent = (eventData) => {
         title: eventData.title?.trim(),
         elemento: eventData.elemento || userElemento,
         esGlobal: eventData.esGlobal || false,
-        tipoIcono: eventData.tipoIcono || 'ala_rotativa', // Estándar por defecto
+        tipoIcono: eventData.tipoIcono || 'ala_rotativa', 
         notasMarginales: eventData.notasMarginales || "",
         ubicacion: eventData.ubicacion || { nombre: "", lat: null, lng: null },
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
@@ -112,7 +112,7 @@ export const createAircraft = (aircraftData) => {
     const userName = localStorage.getItem('username') || 'Usuario';
 
     const dataNormalized = {
-        ...aircraftData, // Corregido de aircraftsData a aircraftData
+        ...aircraftData, 
         matricula: aircraftData.matricula?.toUpperCase().trim(),
         sda: aircraftData.sda?.toUpperCase().trim(),
         unidad: (userRole !== 'admin' && userRole !== 'boss') 
@@ -157,10 +157,27 @@ export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/pa
 
 /**
  * SERVICIOS DE METEOROLOGÍA OPERATIVA (METAR/TAF)
+ * Implementación gratuita mediante proxy para evitar bloqueo CORS
  */
-export const getWeatherData = (ids = "") => {
-    const config = ids ? { params: { ids } } : {};
-    return API.get('/weather/data', config);
+export const getWeatherData = async (icao) => {
+    try {
+        // Usamos el proxy AllOrigins para obtener datos de AVWX (fuente OACI real)
+        const targetUrl = `https://avwx.rest/api/metar/${icao}`;
+        const response = await axios.get(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
+        
+        // Parseamos la respuesta que viene encapsulada por el proxy
+        const data = JSON.parse(response.data.contents);
+        
+        return {
+            data: {
+                raw: data.raw || "SIN DATOS METAR",
+                taf: data.taf || "TAF NO DISPONIBLE"
+            }
+        };
+    } catch (error) {
+        console.error(`❌ Error en conexión meteorológica para ${icao}:`, error);
+        throw error;
+    }
 };
 
 // Objeto de servicio para exportación única
