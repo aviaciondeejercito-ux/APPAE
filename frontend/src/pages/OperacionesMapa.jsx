@@ -6,7 +6,7 @@ import { getActiveOperations, getWeatherData } from '../services/api';
 
 const { BaseLayer } = LayersControl;
 
-/** * SIMBOLOGÍA TÁCTICA AE - CORREGIDA
+/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD
  */
 
 // Icono: Triángulo Azul (AVIÓN)
@@ -19,12 +19,12 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-// Icono: Cruz Azul (HELICÓPTERO)
+// Icono: Cruz Azul (HELICÓPTERO) - Reforzada para visibilidad táctica
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <line x1="10" y1="50" x2="90" y2="50" stroke="#0044ff" stroke-width="12" stroke-linecap="square"/>
-            <line x1="50" y1="10" x2="50" y2="90" stroke="#0044ff" stroke-width="12" stroke-linecap="square"/>
+            <line x1="10" y1="50" x2="90" y2="50" stroke="#0044ff" stroke-width="15" stroke-linecap="square"/>
+            <line x1="50" y1="10" x2="50" y2="90" stroke="#0044ff" stroke-width="15" stroke-linecap="square"/>
             <line x1="10" y1="50" x2="90" y2="50" stroke="#ffffff" stroke-width="4" stroke-linecap="square"/>
             <line x1="50" y1="10" x2="50" y2="90" stroke="#ffffff" stroke-width="4" stroke-linecap="square"/>
            </svg>`,
@@ -136,11 +136,24 @@ const OperacionesMapa = () => {
         return () => clearInterval(interval);
     }, []);
 
+    // LÓGICA DE SIMBOLOGÍA TÁCTICA OBLIGATORIA
     const getIcon = (mision) => {
-        const t = (mision?.aeronave || "").toUpperCase();
-        // Aviones confirmados
-        const esAvion = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'CESSNA', 'T-202', 'B-200', 'DIAMOND'].some(mod => t.includes(mod));
-        return esAvion ? planeIcon : heloIcon;
+        const aeronaveData = (mision?.aeronave || "").toUpperCase().trim();
+
+        // Lista estricta de Aviones (Triángulo)
+        const AVIONES = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6'];
+        
+        // Lista estricta de Helicópteros (Cruz)
+        const HELICOPTEROS = ['UH-1H', 'UH-1H/II', 'BELL 212', 'AS-332B', 'AB206B1', 'AB206B3', 'SA-315 B LAMA', '407 GXI'];
+
+        const esAvion = AVIONES.some(modelo => aeronaveData.includes(modelo));
+        const esHelicoptero = HELICOPTEROS.some(modelo => aeronaveData.includes(modelo));
+
+        if (esAvion) return planeIcon;
+        if (esHelicoptero) return heloIcon;
+
+        // Seguridad: Si no coincide pero es aeronave del ejército, default a Helicóptero
+        return heloIcon;
     };
 
     if (loading) return (
@@ -192,8 +205,7 @@ const OperacionesMapa = () => {
                 {misiones.map((m) => (
                     <Marker key={m._id} position={[parseFloat(m.ubicacion?.lat), parseFloat(m.ubicacion?.lng)]} icon={getIcon(m)}>
                         <Tooltip direction="right" offset={[15, 0]} permanent className="label-tactica-custom">
-                            {/* Mostramos el modelo de la aeronave directamente, sin procesamientos raros */}
-                            <div style={styles.labelBoxDark}>{m.aeronave}</div>
+                            <div style={styles.labelBoxDark}>{m.aeronave || "AE-???"}</div>
                         </Tooltip>
                         <Popup>
                             <div style={styles.popupContainer}>
