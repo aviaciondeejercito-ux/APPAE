@@ -14,7 +14,11 @@ const getMoonData = (date) => {
     const newMoon = new Date("1970-01-07T20:35:00Z"); // Referencia conocida
     const phase = ((now.getTime() - newMoon.getTime()) / 1000) % lp;
     const res = Math.floor((phase / lp) * 30);
-    const percent = Math.round((1 - Math.abs((phase / (lp / 2)) - 1)) * 100);
+    
+    // Cálculo de fracción de iluminación (0 a 1) para lógica de mapa
+    // 0 = Luna Nueva, 1 = Luna Llena
+    const moonFraction = (1 - Math.abs((phase / (lp / 2)) - 1));
+    const percent = Math.round(moonFraction * 100);
 
     let estado = "";
     let icono = "";
@@ -28,7 +32,13 @@ const getMoonData = (date) => {
     else if (res === 22) { estado = "CUARTO MENGUANTE"; icono = "🌗"; }
     else { estado = "LUNA MENGUANTE"; icono = "🌘"; }
 
-    return { estado, icono, iluminacion: `${percent}%`, index: res };
+    return { 
+        estado, 
+        icono, 
+        iluminacion: `${percent}%`, 
+        moon_fraction: moonFraction, // DATO CRÍTICO PARA EL MAPA (Decimal para opacidad)
+        index: res 
+    };
 };
 
 // Ruta principal para obtener datos por coordenadas (Ej: SADP, SAME)

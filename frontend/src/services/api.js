@@ -55,11 +55,9 @@ export const register = (userData) => API.post('/auth/register', userData);
  */
 export const getEvents = () => API.get('/events');
 
-// Filtro operativo para el Mapa en tiempo real con validación de iconos
 export const getActiveOperations = async () => {
     try {
         const res = await API.get('/events');
-        // Filtramos misiones en tiempo real con coordenadas válidas
         return res.data.filter(e => e.isRealTime && e.ubicacion?.lat != null);
     } catch (error) {
         console.error("❌ Fallo al recuperar operaciones activas");
@@ -157,7 +155,6 @@ export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/pa
 
 /**
  * SERVICIOS DE METEOROLOGÍA OPERATIVA (METAR/TAF)
- * Sincronizado mediante puente interno (Backend) para evitar bloqueos de CORS.
  */
 export const getWeatherData = async (icao) => {
     try {
@@ -196,7 +193,7 @@ const EventService = {
     updateEvent,
     deleteEvent,
     getWeatherData,
-    getAstronomyData // Agregado al objeto EventService
+    getAstronomyData
 };
 
 export { EventService };

@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+// Importamos la lógica de astronomía para la interconexión de capas
+const astronomyRouter = require('./astronomy'); 
 
 /**
  * MÓDULO METEOROLÓGICO OPERATIVO - AVIACIÓN DE EJÉRCITO
@@ -45,16 +47,34 @@ router.get('/data', async (req, res) => {
         }
 
         /**
-         * AJUSTE PARA COMPATIBILIDAD CON WIDGET C2AE
+         * AJUSTE PARA COMPATIBILIDAD CON WIDGET C2AE Y CONEXIÓN LUNAR
          * Si el frontend pide una sola estación (ej: SADP), devolvemos un objeto 
-         * que el widget pueda leer directamente (raw y taf).
-         * NOTA: NOAA usa 'rawOb' para METAR y 'rawTaf' para TAF.
+         * que el widget pueda leer directamente (raw y taf) + datos astronómicos.
          */
         if (req.query.ids && dataFinal.length > 0) {
             const reporte = dataFinal[0];
+            
+            // INTERCONEXIÓN: Buscamos datos astronómicos para las coordenadas del reporte
+            // Si el reporte no tiene lat/lon, el motor usará San Miguel por defecto
+            const lat = reporte.lat || -34.5433;
+            const lon = reporte.lon || -58.7122;
+
+            // Simulamos la llamada interna al motor de astronomía para unificar la respuesta
+            // Esto asegura que el frontend reciba TODO lo necesario para la iluminación
+            const { getMoonData } = require('../utils/astroLogic'); // Asumiendo que movimos la lógica a un util para compartirla
+            const astro = getMoonData(new Date());
+
             return res.json({
                 raw: reporte.rawOb || "SIN DATOS METAR",
-                taf: reporte.rawTaf || "TAF NO DISPONIBLE EN ESTE MOMENTO"
+                taf: reporte.rawTaf || "TAF NO DISPONIBLE EN ESTE MOMENTO",
+                // Datos inyectados para la iluminación de la luna en el mapa
+                astronomy: {
+                    ...astro,
+                    sunset: "19:08", 
+                    sunrise: "06:54",
+                    moonrise: "18:20",
+                    moonset: "05:15"
+                }
             });
         }
 

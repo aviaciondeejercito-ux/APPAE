@@ -127,6 +127,37 @@ export const deleteEvent = async (id) => {
 };
 
 /**
+ * SERVICIOS DE METEOROLOGÍA OPERATIVA (METAR/TAF)
+ */
+export const getWeatherData = async (icao) => {
+    try {
+        const response = await API.get('/weather/data', { params: { ids: icao } });
+        return {
+            data: {
+                raw: response.data.raw || "SIN DATOS METAR",
+                taf: response.data.taf || "TAF NO DISPONIBLE"
+            }
+        };
+    } catch (error) {
+        console.error(`❌ Error en conexión meteorológica para ${icao}:`, error.message);
+        throw error;
+    }
+};
+
+/**
+ * SERVICIOS DE ASTRONOMÍA TÁCTICA
+ */
+export const getAstronomyData = async (lat, lng) => {
+    try {
+        const response = await API.get('/astronomy/data', { params: { lat, lng } });
+        return response.data; 
+    } catch (error) {
+        console.error("❌ Error al recuperar datos astronómicos:", error.message);
+        throw error;
+    }
+};
+
+/**
  * EXPORTACIÓN UNIFICADA
  */
 const EventService = {
@@ -135,7 +166,9 @@ const EventService = {
     getAvailableAircraft,
     createEvent,
     updateEvent,
-    deleteEvent
+    deleteEvent,
+    getWeatherData,
+    getAstronomyData
 };
 
 export default EventService;

@@ -38,14 +38,18 @@ const AERODROMOS_LIST = [
     "SARS", "SRDR", "SAAI", "SATR", "SASJ", "SAWL"
 ];
 
-const TerminatorLayer = ({ time }) => {
+const TerminatorLayer = ({ time, moonFraction }) => {
     const map = useMap();
     useEffect(() => {
         if (typeof L.terminator === 'function') {
+            // Lógica de opacidad dinámica: A más luna (1.0), menos opacidad de sombra (0.3 min)
+            // A menos luna (0.0), más opacidad de sombra (0.7 max)
+            const dynamicOpacity = 0.7 - (moonFraction * 0.4);
+
             const tLayer = L.terminator({
                 time: time,
                 fillColor: '#000',
-                fillOpacity: 0.4,
+                fillOpacity: dynamicOpacity,
                 color: '#2c3e50',
                 weight: 1
             });
@@ -56,14 +60,13 @@ const TerminatorLayer = ({ time }) => {
                 }
             };
         }
-    }, [map, time]);
+    }, [map, time, moonFraction]);
     return null;
 };
 
-const MetarWidget = ({ selectedStation, setSelectedStation }) => {
+const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAstronomyData }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [weatherData, setWeatherData] = useState({ metar: null, taf: null });
-    const [astronomyData, setAstronomyData] = useState(null);
     const [loading, setLoading] = useState(false);
 
     const fetchWeatherData = async (icao) => {
@@ -150,6 +153,7 @@ const OperacionesMapa = () => {
     const [loading, setLoading] = useState(true);
     const [showMetar, setShowMetar] = useState(false);
     const [selectedStation, setSelectedStation] = useState('SADP');
+    const [astronomyData, setAstronomyData] = useState(null);
     const [terminatorTime, setTerminatorTime] = useState(new Date());
     const [mapView] = useState({ center: [-34.528, -58.641], zoom: 5 });
 
@@ -195,7 +199,12 @@ const OperacionesMapa = () => {
                 transform: showMetar ? 'translateX(0)' : 'translateX(-302px)' 
             }}>
                 <div style={styles.metarContent}>
-                    <MetarWidget selectedStation={selectedStation} setSelectedStation={setSelectedStation} />
+                    <MetarWidget 
+                        selectedStation={selectedStation} 
+                        setSelectedStation={setSelectedStation} 
+                        astronomyData={astronomyData}
+                        setAstronomyData={setAstronomyData}
+                    />
                 </div>
                 <button onClick={() => setShowMetar(!showMetar)} style={styles.toggleBtn}>
                     {showMetar ? '◀' : '☁️'}
@@ -224,11 +233,13 @@ const OperacionesMapa = () => {
                     </BaseLayer>
                     
                     <Overlay checked name="🌘 Sombra Nocturna">
-                        <TerminatorLayer time={terminatorTime} />
+                        <TerminatorLayer 
+                            time={terminatorTime} 
+                            moonFraction={astronomyData?.moon_fraction || 0} 
+                        />
                     </Overlay>
 
                     <Overlay checked name="👁️ Visibilidad (VFR/IFR)">
-                        {/* Esta capa se mantiene activa para el renderizado de condiciones meteorológicas sobre el mapa */}
                         <LayerGroup /> 
                     </Overlay>
                 </LayersControl>
@@ -267,7 +278,6 @@ const OperacionesMapa = () => {
     );
 };
 
-// Componente auxiliar para mantener la estructura de la capa de visibilidad
 const LayerGroup = () => null;
 
 const styles = {

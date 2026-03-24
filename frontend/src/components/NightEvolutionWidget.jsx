@@ -3,10 +3,14 @@ import React from 'react';
 /**
  * NightEvolutionWidget - ESTÁNDAR DE SEGURIDAD AE
  * Visualización táctica de la ventana operativa nocturna.
+ * Muestra la evolución de la luz desde el ocaso hasta el alba.
  */
 const NightEvolutionWidget = ({ astronomyData }) => {
+    // Validación de seguridad para evitar errores de renderizado si los datos no llegaron
     if (!astronomyData) return null;
 
+    // Extraemos los datos calculados por el motor de efemérides del backend
+    // Se incluye moon_fraction para coherencia de datos aunque sea un valor interno del mapa
     const { estado, icono, iluminacion, sunset, sunrise, moonrise, moonset } = astronomyData;
 
     return (
@@ -67,9 +71,10 @@ const styles = {
         border: '1px solid #1b3a57', 
         color: '#fff', 
         marginTop: '15px',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.4)'
+        boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+        fontFamily: 'sans-serif'
     },
-    header: { marginBottom: '20px', textAlign: 'center' },
+    header: { marginBottom: '25px', textAlign: 'center' },
     badge: { 
         fontSize: '0.75rem', 
         background: 'rgba(27, 58, 87, 0.8)', 
@@ -84,7 +89,7 @@ const styles = {
         alignItems: 'center', 
         justifyContent: 'space-between', 
         padding: '10px 0',
-        marginBottom: '15px'
+        marginBottom: '20px'
     },
     timePoint: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' },
     icon: { fontSize: '1.2rem' },
@@ -100,7 +105,7 @@ const styles = {
     moonMarker: { 
         position: 'absolute', 
         left: '50%', 
-        top: '-38px', 
+        top: '-42px', 
         transform: 'translateX(-50%)',
         display: 'flex', 
         flexDirection: 'column', 
@@ -109,7 +114,7 @@ const styles = {
     moonInfo: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
     moonIcon: { fontSize: '1.6rem', filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.3))' },
     illumText: { fontSize: '0.75rem', fontWeight: 'bold', color: '#FFD700', marginTop: '-2px' },
-    verticalLine: { width: '1px', height: '18px', background: '#FFD700', opacity: 0.6 },
+    verticalLine: { width: '1px', height: '22px', background: '#FFD700', opacity: 0.6 },
     detailsGrid: { 
         display: 'grid', 
         gridTemplateColumns: '1fr 1fr', 
