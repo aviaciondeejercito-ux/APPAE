@@ -48,12 +48,13 @@ router.get('/data', async (req, res) => {
          * AJUSTE PARA COMPATIBILIDAD CON WIDGET C2AE
          * Si el frontend pide una sola estación (ej: SADP), devolvemos un objeto 
          * que el widget pueda leer directamente (raw y taf).
+         * NOTA: NOAA usa 'rawOb' para METAR y 'rawTaf' para TAF.
          */
         if (req.query.ids && dataFinal.length > 0) {
             const reporte = dataFinal[0];
             return res.json({
                 raw: reporte.rawOb || "SIN DATOS METAR",
-                taf: reporte.tafRaw || "TAF NO DISPONIBLE"
+                taf: reporte.rawTaf || "TAF NO DISPONIBLE EN ESTE MOMENTO"
             });
         }
 
