@@ -157,25 +157,22 @@ export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/pa
 
 /**
  * SERVICIOS DE METEOROLOGÍA OPERATIVA (METAR/TAF)
- * Implementación gratuita mediante proxy para evitar bloqueo CORS
+ * Sincronizado mediante puente interno (Backend) para evitar bloqueos de CORS.
  */
 export const getWeatherData = async (icao) => {
     try {
-        // Usamos el proxy AllOrigins para obtener datos de AVWX (fuente OACI real)
-        const targetUrl = `https://avwx.rest/api/metar/${icao}`;
-        const response = await axios.get(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
+        // Consultamos a NUESTRO backend, enviando el OACI como parámetro 'ids'
+        const response = await API.get('/weather/data', { params: { ids: icao } });
         
-        // Parseamos la respuesta que viene encapsulada por el proxy
-        const data = JSON.parse(response.data.contents);
-        
+        // El backend ya nos devuelve el objeto con { raw, taf }
         return {
             data: {
-                raw: data.raw || "SIN DATOS METAR",
-                taf: data.taf || "TAF NO DISPONIBLE"
+                raw: response.data.raw || "SIN DATOS METAR",
+                taf: response.data.taf || "TAF NO DISPONIBLE"
             }
         };
     } catch (error) {
-        console.error(`❌ Error en conexión meteorológica para ${icao}:`, error);
+        console.error(`❌ Error en conexión meteorológica local para ${icao}:`, error);
         throw error;
     }
 };
