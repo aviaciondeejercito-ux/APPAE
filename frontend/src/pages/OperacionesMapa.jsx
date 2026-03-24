@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet-terminator';
+// Importación corregida para evitar el error "L.terminator is not a function"
+import terminator from 'leaflet-terminator';
 import 'leaflet/dist/leaflet.css';
 import { getActiveOperations, getWeatherData, EventService } from '../services/api';
 import NightEvolutionWidget from '../components/NightEvolutionWidget';
+
+// Vinculación manual al objeto Leaflet
+L.terminator = terminator;
 
 const { BaseLayer, Overlay } = LayersControl;
 
@@ -47,14 +51,17 @@ const AERODROMOS_LIST = [
 const TerminatorLayer = ({ time }) => {
     const map = useMap();
     useEffect(() => {
-        const terminator = L.terminator({
-            time: time,
-            fillColor: '#000',
-            fillOpacity: 0.4,
-            color: '#2c3e50',
-            weight: 1
-        }).addTo(map);
-        return () => map.removeLayer(terminator);
+        // Validación de seguridad para la función del plugin
+        if (typeof L.terminator === 'function') {
+            const tLayer = L.terminator({
+                time: time,
+                fillColor: '#000',
+                fillOpacity: 0.4,
+                color: '#2c3e50',
+                weight: 1
+            }).addTo(map);
+            return () => map.removeLayer(tLayer);
+        }
     }, [map, time]);
     return null;
 };
