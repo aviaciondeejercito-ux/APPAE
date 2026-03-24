@@ -6,11 +6,9 @@ import { getActiveOperations, getWeatherData } from '../services/api';
 
 const { BaseLayer } = LayersControl;
 
-/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD
- * (Iconos definidos pero no renderizados en el mapa por solicitud del usuario)
- */
+/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD */
 
-// Icono: Triángulo Azul (AVIÓN)
+// Icono: Triángulo Azul (AVIÓN / ALA FIJA)
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -20,7 +18,7 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-// Icono: Cruz Azul (HELICÓPTERO)
+// Icono: Cruz Azul (HELICÓPTERO / ALA ROTATIVA)
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -137,6 +135,40 @@ const OperacionesMapa = () => {
         return () => clearInterval(interval);
     }, []);
 
+    /**
+     * LÓGICA DE ICONOS BASADA EN AERONAVES CARGADAS (STC-AE)
+     * No se agregan aeronaves externas para evitar errores de categorización.
+     */
+    const getTacticIcon = (modelo) => {
+        if (!modelo) return heloIcon; 
+        const m = modelo.toUpperCase();
+
+        // CATEGORÍA: HELICÓPTEROS (Ala Rotativa)
+        if (
+            m.includes('UH-1H') || 
+            m.includes('BELL 212') || 
+            m.includes('AS-332B') || 
+            m.includes('AB206') || 
+            m.includes('LAMA') || 
+            m.includes('407 GXI')
+        ) {
+            return heloIcon;
+        }
+
+        // CATEGORÍA: AVIONES (Ala Fija)
+        if (
+            m.includes('C-212') || 
+            m.includes('C-208') || 
+            m.includes('C-550') || 
+            m.includes('DA-62') || 
+            m.includes('DHC-6')
+        ) {
+            return planeIcon;
+        }
+
+        return heloIcon; // Default de seguridad
+    };
+
     if (loading) return (
         <div style={styles.loadingScreen}>
             <div className="radar-loader"></div>
@@ -183,7 +215,31 @@ const OperacionesMapa = () => {
                     </BaseLayer>
                 </LayersControl>
 
-                {/* EL MAPA ESTÁ VACÍO: SE ELIMINÓ EL MAPEO DE MISIONES POR PEDIDO DEL USUARIO */}
+                {misiones.map((m) => (
+                    m.ubicacion?.lat && m.ubicacion?.lng && (
+                        <Marker 
+                            key={m._id} 
+                            position={[m.ubicacion.lat, m.ubicacion.lng]}
+                            icon={getTacticIcon(m.aeronave)}
+                        >
+                            <Tooltip permanent direction="top" offset={[0, -10]} className="label-tactica-custom">
+                                <div style={styles.labelBoxDark}>
+                                    {m.aeronave} {m.matricula}
+                                </div>
+                            </Tooltip>
+                            <Popup>
+                                <div style={styles.popupHeader}>{m.title}</div>
+                                <div style={styles.popupBody}>
+                                    <p><strong>UNIDAD:</strong> {m.elemento}</p>
+                                    <p><strong>POSICIÓN:</strong> {m.ubicacion.nombre}</p>
+                                    <p><strong>ESTADO:</strong> EN CURSO</p>
+                                    <hr style={{borderColor: '#333'}} />
+                                    <p style={{fontSize: '0.7rem', color: '#f39c12'}}>{m.notasMarginales}</p>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    )
+                ))}
 
             </MapContainer>
 
