@@ -122,7 +122,9 @@ const CalendarPage = () => {
                             sdaListado: ev.sdaListado 
                         }
                     }))}
-                    height="75vh"
+                    height="auto"
+                    contentHeight="auto"
+                    expandRows={true}
                     editable={false}
                     eventClick={handleEventClick}
                     eventDidMount={eventDidMount} 
@@ -132,7 +134,7 @@ const CalendarPage = () => {
                         right: isMobile ? 'timeGridDay,dayGridMonth' : 'dayGridMonth,timeGridWeek,timeGridDay'
                     }}
                     eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
-                    dayMaxEvents={isMobile ? 2 : 5}
+                    dayMaxEvents={isMobile ? 2 : 6}
                     nowIndicator={true}
                     timeZone="local" 
                 />
@@ -204,12 +206,12 @@ const CalendarPage = () => {
 };
 
 const styles = {
-    pageContainer: { padding: '10px', backgroundColor: '#f4f7f6', minHeight: '85vh' },
-    mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', marginBottom: '20px' },
+    pageContainer: { padding: '5px', backgroundColor: '#f4f7f6', minHeight: '100vh' },
+    mainCard: { background: '#fff', padding: '15px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', marginBottom: '10px' },
     headerMonitor: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' },
-    title: { color: '#1b3a57', margin: 0, fontSize: '1.2rem' },
-    unidadBadge: { fontSize: '0.75rem', background: '#e9ecef', color: '#1b3a57', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
-    modeBadge: { fontSize: '0.7rem', background: '#1b3a57', color: 'white', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold' },
+    title: { color: '#1b3a57', margin: 0, fontSize: '1.3rem', fontWeight: 'bold' },
+    unidadBadge: { fontSize: '0.85rem', background: '#e9ecef', color: '#1b3a57', padding: '5px 12px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
+    modeBadge: { fontSize: '0.8rem', background: '#1b3a57', color: 'white', padding: '5px 12px', borderRadius: '4px', fontWeight: 'bold' },
     etapaBanner: { padding: '8px', borderRadius: '6px', color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: '0.85rem', marginBottom: '15px' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: '20px' },
     modalContent: { background: 'white', borderRadius: '12px', width: '100%', maxWidth: '500px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' },
