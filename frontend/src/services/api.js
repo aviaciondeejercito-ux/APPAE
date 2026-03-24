@@ -161,10 +161,7 @@ export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/pa
  */
 export const getWeatherData = async (icao) => {
     try {
-        // Consultamos a NUESTRO backend, enviando el OACI como parámetro 'ids'
         const response = await API.get('/weather/data', { params: { ids: icao } });
-        
-        // El backend ya nos devuelve el objeto con { raw, taf }
         return {
             data: {
                 raw: response.data.raw || "SIN DATOS METAR",
@@ -177,6 +174,20 @@ export const getWeatherData = async (icao) => {
     }
 };
 
+/**
+ * SERVICIOS DE ASTRONOMÍA TÁCTICA
+ * Cálculo de Fase Lunar y Efemérides (Salida/Puesta Sol y Luna).
+ */
+export const getAstronomyData = async (lat, lng) => {
+    try {
+        const response = await API.get('/astronomy/data', { params: { lat, lng } });
+        return response.data;
+    } catch (error) {
+        console.error("❌ Error al recuperar datos astronómicos operativos:", error);
+        throw error;
+    }
+};
+
 // Objeto de servicio para exportación única
 const EventService = {
     getEvents,
@@ -184,7 +195,8 @@ const EventService = {
     createEvent,
     updateEvent,
     deleteEvent,
-    getWeatherData
+    getWeatherData,
+    getAstronomyData // Agregado al objeto EventService
 };
 
 export { EventService };

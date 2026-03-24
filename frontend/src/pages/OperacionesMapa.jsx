@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet-terminator';
 import 'leaflet/dist/leaflet.css';
-import { getActiveOperations, getWeatherData } from '../services/api';
+import { getActiveOperations, getWeatherData, EventService } from '../services/api';
+import NightEvolutionWidget from '../components/NightEvolutionWidget';
 
-const { BaseLayer } = LayersControl;
+const { BaseLayer, Overlay } = LayersControl;
 
 /** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD 
  * Sincronizado con el Modelo de Mongoose (tipoIcono)
  */
 
-// Icono: Triángulo Azul (AVIÓN / ALA FIJA)
 const planeIcon = L.divIcon({
     className: 'tactic-icon-plane',
     html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -20,7 +21,6 @@ const planeIcon = L.divIcon({
     iconAnchor: [13, 13],
 });
 
-// Icono: Cruz Azul (HELICÓPTERO / ALA ROTATIVA)
 const heloIcon = L.divIcon({
     className: 'tactic-icon-helo',
     html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -41,23 +41,45 @@ const AERODROMOS_LIST = [
     "SARS", "SRDR", "SAAI", "SATR", "SASJ", "SAWL"
 ];
 
+/**
+ * TerminatorLayer - Manejo de sombra nocturna dinámica
+ */
+const TerminatorLayer = ({ time }) => {
+    const map = useMap();
+    useEffect(() => {
+        const terminator = L.terminator({
+            time: time,
+            fillColor: '#000',
+            fillOpacity: 0.4,
+            color: '#2c3e50',
+            weight: 1
+        }).addTo(map);
+        return () => map.removeLayer(terminator);
+    }, [map, time]);
+    return null;
+};
+
 const MetarWidget = ({ selectedStation, setSelectedStation }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [weatherData, setWeatherData] = useState({ metar: null, taf: null });
+    const [astronomyData, setAstronomyData] = useState(null);
     const [loading, setLoading] = useState(false);
 
     const fetchWeatherData = async (icao) => {
         if (!icao) return;
         setLoading(true);
         try {
-            const response = await getWeatherData(icao);
-            // Adaptado a la nueva estructura de api.js (allorigins/avwx)
+            const [weatherResponse, astroResponse] = await Promise.all([
+                getWeatherData(icao),
+                EventService.getAstronomyData()
+            ]);
             setWeatherData({
-                metar: response.data.raw,
-                taf: response.data.taf
+                metar: weatherResponse.data.raw,
+                taf: weatherResponse.data.taf
             });
+            if (astroResponse.success) setAstronomyData(astroResponse.data);
         } catch (err) {
-            console.error("❌ Error meteorológico en Red AE:", err);
+            console.error("❌ Error en Red AE:", err);
             setWeatherData({ metar: "ERROR DE CONEXIÓN", taf: null });
         } finally {
             setLoading(false);
@@ -105,22 +127,17 @@ const MetarWidget = ({ selectedStation, setSelectedStation }) => {
             ) : (
                 <div style={styles.weatherResults}>
                     <div style={{color: '#00ffff', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid #333'}}>{selectedStation}</div>
-                    
-                    {/* SECCIÓN METAR */}
                     <div style={styles.metarSection}>
                         <span style={styles.metarLabel}>METAR (REAL-TIME):</span>
-                        <div style={styles.metarRaw}>
-                            {weatherData.metar || "No disponible en zona"}
-                        </div>
+                        <div style={styles.metarRaw}>{weatherData.metar || "No disponible"}</div>
                     </div>
-
-                    {/* SECCIÓN TAF */}
                     <div style={styles.metarSection}>
                         <span style={{...styles.metarLabel, color: '#3498db'}}>TAF (PRONÓSTICO):</span>
                         <div style={{...styles.metarRaw, borderColor: '#3498db', fontSize: '10px'}}>
-                            {weatherData.taf || "No disponible para esta estación"}
+                            {weatherData.taf || "No disponible"}
                         </div>
                     </div>
+                    <NightEvolutionWidget astronomyData={astronomyData} />
                 </div>
             )}
         </div>
@@ -132,14 +149,13 @@ const OperacionesMapa = () => {
     const [loading, setLoading] = useState(true);
     const [showMetar, setShowMetar] = useState(false);
     const [selectedStation, setSelectedStation] = useState('SADP');
+    const [terminatorTime, setTerminatorTime] = useState(new Date());
     const [mapView] = useState({ center: [-34.528, -58.641], zoom: 5 });
 
     const cargarSituacionTactica = async () => {
         try {
             const data = await getActiveOperations();
-            if (data && Array.isArray(data)) {
-                setMisiones(data);
-            }
+            if (data && Array.isArray(data)) setMisiones(data);
         } catch (err) { 
             console.error("❌ Error en Sincronización Táctica:", err); 
         } finally { 
@@ -149,19 +165,19 @@ const OperacionesMapa = () => {
 
     useEffect(() => {
         cargarSituacionTactica();
-        const interval = setInterval(cargarSituacionTactica, 15000);
-        return () => clearInterval(interval);
+        const intervalMisiones = setInterval(cargarSituacionTactica, 15000);
+        const intervalTerminator = setInterval(() => setTerminatorTime(new Date()), 60000);
+        return () => {
+            clearInterval(intervalMisiones);
+            clearInterval(intervalTerminator);
+        };
     }, []);
 
     const getTacticIcon = (m) => {
         if (m.tipoIcono === 'ala_fija') return planeIcon;
         if (m.tipoIcono === 'ala_rotativa') return heloIcon;
-        
         const sda = m.aeronave?.toUpperCase() || "";
-        if (sda.includes('C-212') || sda.includes('C-208') || sda.includes('DA-62') || sda.includes('B-200')) {
-            return planeIcon;
-        }
-        return heloIcon;
+        return (sda.includes('C-212') || sda.includes('C-208') || sda.includes('DA-62') || sda.includes('B-200')) ? planeIcon : heloIcon;
     };
 
     if (loading) return (
@@ -202,22 +218,17 @@ const OperacionesMapa = () => {
                     <BaseLayer name="🛰️ Satelital">
                         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                     </BaseLayer>
-                    <BaseLayer name="🗺️ Político">
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                    </BaseLayer>
+                    
+                    <Overlay checked name="🌘 Sombra Nocturna">
+                        <TerminatorLayer time={terminatorTime} />
+                    </Overlay>
                 </LayersControl>
 
                 {misiones.map((m) => (
                     m.ubicacion?.lat !== undefined && m.ubicacion?.lng !== undefined && (
-                        <Marker 
-                            key={m._id} 
-                            position={[m.ubicacion.lat, m.ubicacion.lng]}
-                            icon={getTacticIcon(m)}
-                        >
+                        <Marker key={m._id} position={[m.ubicacion.lat, m.ubicacion.lng]} icon={getTacticIcon(m)}>
                             <Tooltip permanent direction="top" offset={[0, -10]} className="label-tactica-custom">
-                                <div style={styles.labelBoxDark}>
-                                    {m.aeronave} {m.matricula}
-                                </div>
+                                <div style={styles.labelBoxDark}>{m.aeronave} {m.matricula}</div>
                             </Tooltip>
                             <Popup>
                                 <div style={styles.popupHeader}>{m.title}</div>
@@ -227,7 +238,6 @@ const OperacionesMapa = () => {
                                     <p><strong>ESTADO:</strong> {m.status?.toUpperCase().replace('_', ' ') || 'EN CURSO'}</p>
                                     <hr style={{borderColor: '#333'}} />
                                     <p style={{fontSize: '0.7rem', color: '#f39c12'}}>{m.notasMarginales}</p>
-                                    <p style={{fontSize: '0.6rem', color: '#777', marginTop: '5px'}}>ACTUALIZADO POR: {m.userName}</p>
                                 </div>
                             </Popup>
                         </Marker>
