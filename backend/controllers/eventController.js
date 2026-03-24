@@ -66,6 +66,7 @@ const getEvents = async (req, res) => {
  */
 const getActiveOperations = async (req, res) => {
     try {
+        // Se asegura de traer solo lo que debe estar en el radar
         const activeOps = await Event.find({ 
             isRealTime: true, 
             status: { $in: ['en_curso', 'en_desarrollo'] } 
@@ -85,7 +86,7 @@ const createEvent = async (req, res) => {
             title, start, end, notes, color, esGlobal, 
             elemento, etapa, tipoApoyo, sdaListado,
             isRealTime, ubicacion, notasMarginales, status,
-            aeronave, matricula, tipoIcono // NUEVOS CAMPOS TÁCTICOS
+            aeronave, matricula, tipoIcono 
         } = req.body;
 
         if (!title) {
@@ -118,8 +119,8 @@ const createEvent = async (req, res) => {
             ubicacion: ubicacion || { nombre: 'Punto No Definido', lat: 0, lng: 0 },
             notasMarginales: notasMarginales ? notasMarginales.toUpperCase() : '',
             status: status || 'programado',
-            aeronave: aeronave ? aeronave.toUpperCase() : '',
-            matricula: matricula ? matricula.toUpperCase() : '',
+            aeronave: (aeronave || '').toUpperCase(),
+            matricula: (matricula || '').toUpperCase(),
             tipoIcono: tipoIcono || 'ala_rotativa'
         });
 
@@ -146,20 +147,26 @@ const updateEvent = async (req, res) => {
 
         const updateData = { ...req.body };
         
-        // Limpieza de datos sensibles
+        // Limpieza de datos y trazabilidad
         delete updateData._id; 
         delete updateData.__v;
         delete updateData.createdBy; 
+        updateData.updatedBy = req.user._id; // Auditoría
         updateData.userName = req.user.username; 
 
-        // Normalización de fechas
-        if (updateData.start) updateData.start = new Date(updateData.start);
-        if (updateData.end) updateData.end = new Date(updateData.end);
-
-        // Normalización de campos de texto tácticos
+        // Normalización de campos de texto
+        if (updateData.title) updateData.title = updateData.title.toUpperCase();
         if (updateData.aeronave) updateData.aeronave = updateData.aeronave.toUpperCase();
         if (updateData.matricula) updateData.matricula = updateData.matricula.toUpperCase();
         if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
+
+        // Manejo especial de ubicación para evitar sobrescritura parcial del objeto
+        if (updateData.ubicacion) {
+            updateData['ubicacion.lat'] = updateData.ubicacion.lat;
+            updateData['ubicacion.lng'] = updateData.ubicacion.lng;
+            updateData['ubicacion.nombre'] = updateData.ubicacion.nombre;
+            delete updateData.ubicacion;
+        }
 
         if (!esMando) {
             delete updateData.esGlobal;

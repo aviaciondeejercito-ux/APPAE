@@ -133,6 +133,7 @@ const OperacionesMapa = () => {
 
     useEffect(() => {
         cargarSituacionTactica();
+        // Intervalo de refresco para radar en tiempo real
         const interval = setInterval(cargarSituacionTactica, 15000);
         return () => clearInterval(interval);
     }, []);
@@ -145,9 +146,9 @@ const OperacionesMapa = () => {
         if (m.tipoIcono === 'ala_fija') return planeIcon;
         if (m.tipoIcono === 'ala_rotativa') return heloIcon;
         
-        // Fallback inteligente basado en el nombre del SDA
+        // Fallback inteligente basado en el nombre del SDA (T-204 eliminado)
         const sda = m.aeronave?.toUpperCase() || "";
-        if (sda.includes('C-212') || sda.includes('C-208') || sda.includes('DA-62') || sda.includes('T-204')) {
+        if (sda.includes('C-212') || sda.includes('C-208') || sda.includes('DA-62') || sda.includes('B-200')) {
             return planeIcon;
         }
         return heloIcon;
@@ -197,7 +198,7 @@ const OperacionesMapa = () => {
                 </LayersControl>
 
                 {misiones.map((m) => (
-                    m.ubicacion?.lat && m.ubicacion?.lng && (
+                    m.ubicacion?.lat !== undefined && m.ubicacion?.lng !== undefined && (
                         <Marker 
                             key={m._id} 
                             position={[m.ubicacion.lat, m.ubicacion.lng]}
@@ -213,7 +214,7 @@ const OperacionesMapa = () => {
                                 <div style={styles.popupBody}>
                                     <p><strong>UNIDAD:</strong> {m.elemento}</p>
                                     <p><strong>POSICIÓN:</strong> {m.ubicacion.nombre}</p>
-                                    <p><strong>ESTADO:</strong> {m.status?.toUpperCase() || 'EN CURSO'}</p>
+                                    <p><strong>ESTADO:</strong> {m.status?.toUpperCase().replace('_', ' ') || 'EN CURSO'}</p>
                                     <hr style={{borderColor: '#333'}} />
                                     <p style={{fontSize: '0.7rem', color: '#f39c12'}}>{m.notasMarginales}</p>
                                     <p style={{fontSize: '0.6rem', color: '#777', marginTop: '5px'}}>ACTUALIZADO POR: {m.userName}</p>

@@ -39,6 +39,7 @@ const eventSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
+        // Corregido: Se agregaron los estados 'en_desarrollo' y 'en_curso' para total compatibilidad
         enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado'], 
         default: 'programado' 
     },
@@ -56,7 +57,6 @@ const eventSchema = new mongoose.Schema({
     },
 
     // --- SECCIÓN TÁCTICA (SOPORTE PARA MAPA EN TIEMPO REAL) ---
-    // Agregados para coincidir con la lógica del componente CargaTactica
     aeronave: { 
         type: String, 
         trim: true,
