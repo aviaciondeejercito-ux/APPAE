@@ -136,37 +136,15 @@ const OperacionesMapa = () => {
     }, []);
 
     /**
-     * LÓGICA DE ICONOS BASADA EN AERONAVES CARGADAS (STC-AE)
-     * No se agregan aeronaves externas para evitar errores de categorización.
+     * REESTRUCTURACIÓN: LÓGICA DE ICONOS BASADA EN DATA ESTRUCTURADA
+     * Ahora utiliza el campo 'tipoIcono' definido en el componente de carga.
+     * Mantiene el default de seguridad (heloIcon) si el dato no existe.
      */
-    const getTacticIcon = (modelo) => {
-        if (!modelo) return heloIcon; 
-        const m = modelo.toUpperCase();
-
-        // CATEGORÍA: HELICÓPTEROS (Ala Rotativa)
-        if (
-            m.includes('UH-1H') || 
-            m.includes('BELL 212') || 
-            m.includes('AS-332B') || 
-            m.includes('AB206') || 
-            m.includes('LAMA') || 
-            m.includes('407 GXI')
-        ) {
-            return heloIcon;
-        }
-
-        // CATEGORÍA: AVIONES (Ala Fija)
-        if (
-            m.includes('C-212') || 
-            m.includes('C-208') || 
-            m.includes('C-550') || 
-            m.includes('DA-62') || 
-            m.includes('DHC-6')
-        ) {
+    const renderTacticIcon = (mission) => {
+        if (mission.tipoIcono === 'ala_fija') {
             return planeIcon;
         }
-
-        return heloIcon; // Default de seguridad
+        return heloIcon;
     };
 
     if (loading) return (
@@ -220,7 +198,7 @@ const OperacionesMapa = () => {
                         <Marker 
                             key={m._id} 
                             position={[m.ubicacion.lat, m.ubicacion.lng]}
-                            icon={getTacticIcon(m.aeronave)}
+                            icon={renderTacticIcon(m)}
                         >
                             <Tooltip permanent direction="top" offset={[0, -10]} className="label-tactica-custom">
                                 <div style={styles.labelBoxDark}>

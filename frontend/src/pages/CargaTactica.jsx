@@ -44,7 +44,7 @@ const CargaTactica = () => {
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState({
         title: '', elemento: '', notasMarginales: '', 
-        aeronaveModelo: '', matricula: '', // Campos separados
+        aeronaveModelo: '', matricula: '', 
         latG: 34, latM: 31, latS: 40, latDir: 'S',
         lngG: 58, lngM: 38, lngS: 29, lngDir: 'W',
         locNombre: ''
@@ -99,15 +99,25 @@ const CargaTactica = () => {
         }
     };
 
-    // Manejador inteligente de selección de aeronave
     const handleAeronaveSelect = (e) => {
-        const value = e.target.value; // Viene como "MODELO|MATRICULA"
-        if (!value) {
+        const value = e.target.value;
+        if (!value || value === "|") {
             setFormData({ ...formData, aeronaveModelo: '', matricula: '' });
             return;
         }
         const [modelo, matricula] = value.split('|');
         setFormData({ ...formData, aeronaveModelo: modelo, matricula: matricula });
+    };
+
+    /**
+     * LÓGICA DE CLASIFICACIÓN TÁCTICA AUTOMÁTICA
+     * Determina el tipo de icono para que el mapa no deba adivinar.
+     */
+    const getTipoIcono = (modelo) => {
+        const m = modelo.toUpperCase();
+        const alaFija = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6'];
+        const esAlaFija = alaFija.some(tipo => m.includes(tipo));
+        return esAlaFija ? 'ala_fija' : 'rotativa';
     };
 
     const handleSubmit = async (e) => {
@@ -116,13 +126,12 @@ const CargaTactica = () => {
         const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
 
         const payload = {
-            // El título principal para el log administrativo
             title: editingId ? formData.title : `${formData.aeronaveModelo} ${formData.matricula} - ${formData.title}`,
-            
-            // CAMPOS SEPARADOS PARA EL MAPA (Se guardan en notas o campos extendidos según tu backend)
-            // Usamos notasMarginales para enviar la estructura limpia que el mapa leerá
             matricula: formData.matricula, 
             aeronave: formData.aeronaveModelo,
+            
+            // CAMPO CLAVE PARA LA REESTRUCTURACIÓN DEL MAPA
+            tipoIcono: getTipoIcono(formData.aeronaveModelo),
             
             elemento: formData.elemento,
             isRealTime: true, 
@@ -185,7 +194,6 @@ const CargaTactica = () => {
     return (
         <div style={styles.page}>
             <div style={styles.container}>
-                {/* COLUMNA IZQUIERDA: FORMULARIO */}
                 <div style={styles.card}>
                     <h2 style={styles.title}>{editingId ? '📍 ACTUALIZAR POSICIÓN' : '⚡ NUEVO VUELO'}</h2>
                     <p style={styles.subtitle}>SISTEMA DE GESTIÓN TÁCTICA DE AVIACIÓN</p>
@@ -255,7 +263,6 @@ const CargaTactica = () => {
                     </form>
                 </div>
 
-                {/* COLUMNA DERECHA: LOG DE OPERACIONES */}
                 <div style={styles.logCard}>
                     <h3 style={{ color: '#f39c12', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>🛰️ OPERACIONES EN DESARROLLO</h3>
                     <div style={styles.scrollArea}>
