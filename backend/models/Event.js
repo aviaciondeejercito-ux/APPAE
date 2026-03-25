@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
  * Seguridad: Trazabilidad completa con logs de usuario integrados.
  * Independencia: Soporte híbrido para Calendario Operativo y Mapa Táctico.
+ * Estándar: Segregación de Vuelos mediante etapa 'operativo'.
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -39,7 +40,6 @@ const eventSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        // Corregido: Se agregaron los estados 'en_desarrollo' y 'en_curso' para total compatibilidad
         enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado'], 
         default: 'programado' 
     },
@@ -48,7 +48,7 @@ const eventSchema = new mongoose.Schema({
     tipoApoyo: {
         type: String,
         trim: true,
-        default: '' 
+        default: 'GESTION' // Valor por defecto para diferenciar de 'VUELO'
     },
     
     sdaListado: {
@@ -104,7 +104,8 @@ const eventSchema = new mongoose.Schema({
     },
     etapa: {
         type: String,
-        enum: ['recepcion', 'revision', 'ordenada', 'solicitud'],
+        // Agregado 'operativo' para los vuelos del mapa que no deben ir al Log/Calendario
+        enum: ['recepcion', 'revision', 'ordenada', 'solicitud', 'operativo'],
         default: 'recepcion',
         required: true,
         index: true
@@ -162,6 +163,7 @@ eventSchema.pre('validate', function(next) {
     if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
     if (this.aeronave) this.aeronave = this.aeronave.toUpperCase();
     if (this.matricula) this.matricula = this.matricula.toUpperCase();
+    if (this.tipoApoyo) this.tipoApoyo = this.tipoApoyo.toUpperCase();
     
     next();
 });

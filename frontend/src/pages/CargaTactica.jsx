@@ -109,16 +109,10 @@ const CargaTactica = () => {
         setFormData({ ...formData, aeronaveModelo: modelo, matricula: matricula });
     };
 
-    /**
-     * LÓGICA DE CLASIFICACIÓN TÁCTICA AUTOMÁTICA
-     * Basada estrictamente en la flota de la Aviación de Ejército (imagen adjunta)
-     */
     const getTipoIcono = (modelo) => {
         const m = modelo.toUpperCase();
-        // Discriminación según imagen: Aviones (Ala Fija)
         const alaFija = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6'];
         const esAlaFija = alaFija.some(tipo => m.includes(tipo));
-        // Si no está en alaFija, se asume ala_rotativa (UH-1H, BELL 212, AS-332B, AB206, SA-315, 407 GXI)
         return esAlaFija ? 'ala_fija' : 'ala_rotativa';
     };
 
@@ -127,6 +121,11 @@ const CargaTactica = () => {
         const latDec = toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir);
         const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
 
+        /**
+         * LÓGICA DE INDEPENDENCIA:
+         * Se inyecta 'etapa: operativo' y 'tipoApoyo: VUELO' para que 
+         * el controlador filtre este registro y NO lo envíe al Log ni al Calendario.
+         */
         const payload = {
             title: editingId ? formData.title : `${formData.aeronaveModelo} ${formData.matricula} - ${formData.title}`,
             aeronave: formData.aeronaveModelo.toUpperCase().trim(),
@@ -134,6 +133,8 @@ const CargaTactica = () => {
             tipoIcono: getTipoIcono(formData.aeronaveModelo),
             elemento: formData.elemento,
             isRealTime: true, 
+            tipoApoyo: 'VUELO', // Crucial para exclusión de Log
+            etapa: 'operativo',  // Crucial para exclusión de Calendario
             status: 'en_desarrollo', 
             ubicacion: {
                 nombre: formData.locNombre || 'Posición por Coordenadas',
@@ -180,9 +181,12 @@ const CargaTactica = () => {
     const handleFinalizar = async (id) => {
         if (!window.confirm("¿Remover del Monitor de Operaciones?")) return;
         try {
+            // Se asegura de mantener la independencia al finalizar
             await EventService.updateEvent(id, { 
                 status: 'finalizado', 
-                isRealTime: false 
+                isRealTime: false,
+                etapa: 'operativo',
+                tipoApoyo: 'VUELO'
             });
             cargarDatos();
         } catch (error) {
@@ -304,7 +308,7 @@ const styles = {
     btnCancel: { width: '100%', padding: '10px', backgroundColor: 'transparent', color: '#bdc3c7', border: 'none', cursor: 'pointer', marginTop: '5px' },
     btnRow: { display: 'flex', gap: '10px', marginTop: '10px' },
     btnSmall: { padding: '5px 10px', backgroundColor: '#2980b9', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' },
-    btnSmallRed: { padding: '5px 10px', backgroundColor: '#c0392b', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }
+    btnSmallRed: { padding: '5px 10px', backgroundColor: '#c0393b', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }
 };
 
 export default CargaTactica;
