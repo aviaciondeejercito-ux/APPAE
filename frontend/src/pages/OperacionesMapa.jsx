@@ -42,10 +42,7 @@ const TerminatorLayer = ({ time, moonFraction }) => {
     const map = useMap();
     useEffect(() => {
         if (typeof L.terminator === 'function') {
-            // Lógica de opacidad dinámica: A más luna (1.0), menos opacidad de sombra (0.3 min)
-            // A menos luna (0.0), más opacidad de sombra (0.7 max)
             const dynamicOpacity = 0.7 - (moonFraction * 0.4);
-
             const tLayer = L.terminator({
                 time: time,
                 fillColor: '#000',
@@ -73,15 +70,27 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
         if (!icao) return;
         setLoading(true);
         try {
-            const [weatherResponse, astroResponse] = await Promise.all([
-                getWeatherData(icao),
-                EventService.getAstronomyData()
-            ]);
-            setWeatherData({
-                metar: weatherResponse.data.raw,
-                taf: weatherResponse.data.taf
-            });
-            if (astroResponse.success) setAstronomyData(astroResponse.data);
+            // SINCRO JOKER: Intentamos obtener clima y astronomía en paralelo para redundancia
+            const weatherResponse = await getWeatherData(icao);
+            
+            // Reparación: Verificamos si la astronomía viene inyectada en la respuesta del METAR
+            if (weatherResponse.data && weatherResponse.data.astronomy) {
+                setAstronomyData(weatherResponse.data.astronomy);
+                setWeatherData({
+                    metar: weatherResponse.data.raw,
+                    taf: weatherResponse.data.taf
+                });
+            } else {
+                // Fallback: Si no viene inyectada, usamos el servicio independiente
+                const astroResponse = await EventService.getAstronomyData();
+                setWeatherData({
+                    metar: weatherResponse.data?.raw || weatherResponse.raw || "SIN DATOS",
+                    taf: weatherResponse.data?.taf || weatherResponse.taf || null
+                });
+                if (astroResponse && astroResponse.success) {
+                    setAstronomyData(astroResponse.data || astroResponse);
+                }
+            }
         } catch (err) {
             console.error("❌ Error en Red AE:", err);
             setWeatherData({ metar: "ERROR DE CONEXIÓN", taf: null });
@@ -141,6 +150,7 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
                             {weatherData.taf || "No disponible"}
                         </div>
                     </div>
+                    {/* Reparación: Pasamos los datos al visor de la luna */}
                     <NightEvolutionWidget astronomyData={astronomyData} />
                 </div>
             )}
