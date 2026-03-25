@@ -110,8 +110,9 @@ const CargaTactica = () => {
     };
 
     const getTipoIcono = (modelo) => {
+        if (!modelo) return 'ala_rotativa';
         const m = modelo.toUpperCase();
-        const alaFija = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6'];
+        const alaFija = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'T-202'];
         const esAlaFija = alaFija.some(tipo => m.includes(tipo));
         return esAlaFija ? 'ala_fija' : 'ala_rotativa';
     };
@@ -121,11 +122,6 @@ const CargaTactica = () => {
         const latDec = toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir);
         const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
 
-        /**
-         * LÓGICA DE INDEPENDENCIA:
-         * Se inyecta 'etapa: operativo' y 'tipoApoyo: VUELO' para que 
-         * el controlador filtre este registro y NO lo envíe al Log ni al Calendario.
-         */
         const payload = {
             title: editingId ? formData.title : `${formData.aeronaveModelo} ${formData.matricula} - ${formData.title}`,
             aeronave: formData.aeronaveModelo.toUpperCase().trim(),
@@ -133,8 +129,8 @@ const CargaTactica = () => {
             tipoIcono: getTipoIcono(formData.aeronaveModelo),
             elemento: formData.elemento,
             isRealTime: true, 
-            tipoApoyo: 'VUELO', // Crucial para exclusión de Log
-            etapa: 'operativo',  // Crucial para exclusión de Calendario
+            tipoApoyo: 'VUELO',
+            etapa: 'operativo', 
             status: 'en_desarrollo', 
             ubicacion: {
                 nombre: formData.locNombre || 'Posición por Coordenadas',
@@ -156,8 +152,8 @@ const CargaTactica = () => {
             setFormData({ title: '', elemento: '', notasMarginales: '', aeronaveModelo: '', matricula: '', latG: 34, latM: 31, latS: 40, latDir: 'S', lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', locNombre: '' });
             cargarDatos();
         } catch (error) {
-            console.error(error);
-            alert("Error en la operación táctica.");
+            console.error("Error en la operación táctica:", error);
+            alert("Error en la operación táctica. Verifique la conexión con el servidor.");
         }
     };
 
@@ -181,7 +177,6 @@ const CargaTactica = () => {
     const handleFinalizar = async (id) => {
         if (!window.confirm("¿Remover del Monitor de Operaciones?")) return;
         try {
-            // Se asegura de mantener la independencia al finalizar
             await EventService.updateEvent(id, { 
                 status: 'finalizado', 
                 isRealTime: false,
@@ -202,24 +197,23 @@ const CargaTactica = () => {
                     <p style={styles.subtitle}>SISTEMA DE GESTIÓN TÁCTICA DE AVIACIÓN</p>
                     
                     <form onSubmit={handleSubmit}>
-                        {!editingId && (
-                            <>
-                                <label style={styles.label}>Aeronave (SDA y Matrícula):</label>
-                                <select 
-                                    style={styles.input} 
-                                    required 
-                                    value={`${formData.aeronaveModelo}|${formData.matricula}`} 
-                                    onChange={handleAeronaveSelect}
-                                >
-                                    <option value="|">Seleccione Aeronave...</option>
-                                    {aeronavesDisponibles.map(a => (
-                                        <option key={a._id} value={`${a.sda}|${a.matricula}`}>
-                                            {a.sda} - {a.matricula} ({a.unidad})
-                                        </option>
-                                    ))}
-                                </select>
-                            </>
-                        )}
+                        {/* Mantenemos aeronaveModelo y matricula incluso en edición para asegurar el payload */}
+                        <div style={{display: editingId ? 'none' : 'block'}}>
+                            <label style={styles.label}>Aeronave (SDA y Matrícula):</label>
+                            <select 
+                                style={styles.input} 
+                                required={!editingId} 
+                                value={`${formData.aeronaveModelo}|${formData.matricula}`} 
+                                onChange={handleAeronaveSelect}
+                            >
+                                <option value="|">Seleccione Aeronave...</option>
+                                {aeronavesDisponibles.map(a => (
+                                    <option key={a._id} value={`${a.sda}|${a.matricula}`}>
+                                        {a.sda} - {a.matricula} ({a.unidad})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
                         <label style={styles.label}>Indicativo de Vuelo / Misión:</label>
                         <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value.toUpperCase()})} required placeholder="Ej: ASALTO AEREO / SANITARIO" />
@@ -239,17 +233,17 @@ const CargaTactica = () => {
                             
                             <label style={styles.label}>Coordenadas Actuales (GMS):</label>
                             <div style={styles.row}>
-                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latG: e.target.value})} value={formData.latG}/>
-                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latM: e.target.value})} value={formData.latM}/>
-                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latS: e.target.value})} value={formData.latS}/>
+                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latG: e.target.value})} value={formData.latG}/>
+                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latM: e.target.value})} value={formData.latM}/>
+                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latS: e.target.value})} value={formData.latS}/>
                                 <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, latDir: e.target.value})} value={formData.latDir}>
                                     <option value="S">S</option><option value="N">N</option>
                                 </select>
                             </div>
                             <div style={styles.row}>
-                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngG: e.target.value})} value={formData.lngG}/>
-                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngM: e.target.value})} value={formData.lngM}/>
-                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngS: e.target.value})} value={formData.lngS}/>
+                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngG: e.target.value})} value={formData.lngG}/>
+                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngM: e.target.value})} value={formData.lngM}/>
+                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngS: e.target.value})} value={formData.lngS}/>
                                 <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, lngDir: e.target.value})} value={formData.lngDir}>
                                     <option value="W">W</option><option value="E">E</option>
                                 </select>
@@ -262,7 +256,7 @@ const CargaTactica = () => {
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
                             {editingId ? '💾 ACTUALIZAR POSICIÓN' : '🚀 LANZAR VUELO'}
                         </button>
-                        {editingId && <button type="button" onClick={() => setEditingId(null)} style={styles.btnCancel}>CANCELAR</button>}
+                        {editingId && <button type="button" onClick={() => { setEditingId(null); setFormData({ title: '', elemento: '', notasMarginales: '', aeronaveModelo: '', matricula: '', latG: 34, latM: 31, latS: 40, latDir: 'S', lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', locNombre: '' }); }} style={styles.btnCancel}>CANCELAR</button>}
                     </form>
                 </div>
 

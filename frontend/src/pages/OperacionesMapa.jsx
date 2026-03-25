@@ -70,10 +70,7 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
         if (!icao) return;
         setLoading(true);
         try {
-            // SINCRO JOKER: Intentamos obtener clima y astronomía en paralelo para redundancia
             const weatherResponse = await getWeatherData(icao);
-            
-            // Reparación: Verificamos si la astronomía viene inyectada en la respuesta del METAR
             if (weatherResponse.data && weatherResponse.data.astronomy) {
                 setAstronomyData(weatherResponse.data.astronomy);
                 setWeatherData({
@@ -81,7 +78,6 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
                     taf: weatherResponse.data.taf
                 });
             } else {
-                // Fallback: Si no viene inyectada, usamos el servicio independiente
                 const astroResponse = await EventService.getAstronomyData();
                 setWeatherData({
                     metar: weatherResponse.data?.raw || weatherResponse.raw || "SIN DATOS",
@@ -150,7 +146,6 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
                             {weatherData.taf || "No disponible"}
                         </div>
                     </div>
-                    {/* Reparación: Pasamos los datos al visor de la luna */}
                     <NightEvolutionWidget astronomyData={astronomyData} />
                 </div>
             )}
@@ -169,8 +164,13 @@ const OperacionesMapa = () => {
 
     const cargarSituacionTactica = async () => {
         try {
+            // SINCRO JOKER: Obtenemos operaciones activas
             const data = await getActiveOperations();
-            if (data && Array.isArray(data)) setMisiones(data);
+            if (data && Array.isArray(data)) {
+                // Filtramos solo los que tienen coordenadas válidas para evitar errores de Leaflet
+                const validas = data.filter(m => m.ubicacion && typeof m.ubicacion.lat === 'number');
+                setMisiones(validas);
+            }
         } catch (err) { 
             console.error("❌ Error en Sincronización Táctica:", err); 
         } finally { 
@@ -180,7 +180,7 @@ const OperacionesMapa = () => {
 
     useEffect(() => {
         cargarSituacionTactica();
-        const intervalMisiones = setInterval(cargarSituacionTactica, 15000);
+        const intervalMisiones = setInterval(cargarSituacionTactica, 10000); // Reducido a 10s para mayor fluidez
         const intervalTerminator = setInterval(() => setTerminatorTime(new Date()), 60000);
         return () => {
             clearInterval(intervalMisiones);
@@ -191,8 +191,10 @@ const OperacionesMapa = () => {
     const getTacticIcon = (m) => {
         if (m.tipoIcono === 'ala_fija') return planeIcon;
         if (m.tipoIcono === 'ala_rotativa') return heloIcon;
+        // Fallback dinámico por modelo
         const sda = m.aeronave?.toUpperCase() || "";
-        return (sda.includes('C-212') || sda.includes('C-208') || sda.includes('DA-62') || sda.includes('B-200')) ? planeIcon : heloIcon;
+        const alaFija = ['C-212', 'C-208', 'DA-62', 'B-200', 'C-550', 'T-202'];
+        return alaFija.some(tipo => sda.includes(tipo)) ? planeIcon : heloIcon;
     };
 
     if (loading) return (
@@ -248,10 +250,6 @@ const OperacionesMapa = () => {
                             moonFraction={astronomyData?.moon_fraction || 0} 
                         />
                     </Overlay>
-
-                    <Overlay checked name="👁️ Visibilidad (VFR/IFR)">
-                        <LayerGroup /> 
-                    </Overlay>
                 </LayersControl>
 
                 {misiones.map((m) => (
@@ -287,8 +285,6 @@ const OperacionesMapa = () => {
         </div>
     );
 };
-
-const LayerGroup = () => null;
 
 const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },

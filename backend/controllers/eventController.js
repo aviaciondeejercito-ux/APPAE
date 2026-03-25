@@ -74,10 +74,12 @@ const getEvents = async (req, res) => {
 // @desc    Obtener operaciones para el MAPA (Único canal comunicado con vuelos)
 const getActiveOperations = async (req, res) => {
     try {
-        // El Mapa SÍ lee los vuelos en tiempo real
+        // SINCRO JOKER: Ajuste de filtros para asegurar visibilidad en el mapa
+        // El Mapa SÍ lee los vuelos en tiempo real. 
+        // Agregamos 'operativo' y 'en_desarrollo' para cubrir todos los estados de CargaTactica.
         const activeOps = await Event.find({ 
             isRealTime: true,
-            status: { $in: ['en_curso', 'en_desarrollo', 'programado'] } 
+            status: { $in: ['en_curso', 'en_desarrollo', 'programado', 'operativo'] } 
         }).sort({ updatedAt: -1 });
 
         res.status(200).json(activeOps);
