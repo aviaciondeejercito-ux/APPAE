@@ -41,6 +41,7 @@ const eventSchema = new mongoose.Schema({
     status: { 
         type: String, 
         // SINCRO JOKER: Se agregan 'operativo' y 'disponible' para compatibilidad con el Mapa Táctico
+        // Esto previene el Error 400 cuando el frontend envía estados de vuelo.
         enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado', 'operativo', 'disponible'], 
         default: 'programado' 
     },

@@ -8,27 +8,22 @@ import NightEvolutionWidget from '../components/NightEvolutionWidget';
 
 const { BaseLayer, Overlay } = LayersControl;
 
-/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD */
-const planeIcon = L.divIcon({
-    className: 'tactic-icon-plane',
-    html: `<svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <path d="M50 10 L90 85 L10 85 Z" fill="#0044ff" stroke="#ffffff" stroke-width="6"/>
-           </svg>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
-});
+/** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD SINCRO JOKER */
+const crearIconoTactico = (tipo) => {
+    // Azul para ala fija, Naranja para ala rotativa (estándar operativo)
+    const color = tipo === 'ala_fija' ? '#3498db' : '#e67e22';
+    
+    const svg = tipo === 'ala_fija' 
+        ? `<polygon points="50,15 90,85 50,70 10,85" fill="${color}" stroke="white" stroke-width="5"/>`
+        : `<circle cx="50" cy="50" r="35" fill="${color}" stroke="white" stroke-width="5"/><line x1="10" y1="50" x2="90" y2="50" stroke="white" stroke-width="8"/><line x1="50" y1="10" x2="50" y2="90" stroke="white" stroke-width="8"/>`;
 
-const heloIcon = L.divIcon({
-    className: 'tactic-icon-helo',
-    html: `<svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <line x1="10" y1="50" x2="90" y2="50" stroke="#0044ff" stroke-width="15" stroke-linecap="square"/>
-            <line x1="50" y1="10" x2="50" y2="90" stroke="#0044ff" stroke-width="15" stroke-linecap="square"/>
-            <line x1="10" y1="50" x2="90" y2="50" stroke="#ffffff" stroke-width="4" stroke-linecap="square"/>
-            <line x1="50" y1="10" x2="50" y2="90" stroke="#ffffff" stroke-width="4" stroke-linecap="square"/>
-           </svg>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-});
+    return L.divIcon({
+        className: 'custom-tactic-icon',
+        html: `<svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">${svg}</svg>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
+    });
+};
 
 const AERODROMOS_LIST = [
     "SAZR", "SAHZ", "SAZS", "SAVC", "SAZB", "SACO", "SAZA", "SAZF", "SADP", "SAAR", 
@@ -201,14 +196,15 @@ const OperacionesMapa = () => {
     }, []);
 
     const getTacticIcon = (m) => {
-        if (m.tipoIcono === 'ala_fija') return planeIcon;
-        if (m.tipoIcono === 'ala_rotativa') return heloIcon;
+        // Prioridad 1: Tipo definido en BD (Sincro Joker)
+        if (m.tipoIcono) return crearIconoTactico(m.tipoIcono);
 
+        // Prioridad 2: Fallback por modelo de aeronave
         const sda = (m.aeronave || "").toUpperCase();
         const alaFijaModelos = ['C-212', 'C-208', 'DA-62', 'B-200', 'C-550', 'T-202', 'CESSNA', 'DIAMOND', 'BEECH'];
         const esAlaFija = alaFijaModelos.some(tipo => sda.includes(tipo));
         
-        return esAlaFija ? planeIcon : heloIcon;
+        return esAlaFija ? crearIconoTactico('ala_fija') : crearIconoTactico('ala_rotativa');
     };
 
     if (loading) return (
@@ -280,14 +276,20 @@ const OperacionesMapa = () => {
                         <Popup>
                             <div style={styles.popupHeader}>{m.title}</div>
                             <div style={styles.popupBody}>
-                                <p><strong>AERONAVE:</strong> {m.aeronave} ({m.matricula})</p>
                                 <p><strong>UNIDAD:</strong> {m.elemento}</p>
+                                <p><strong>AERONAVE:</strong> {m.aeronave} ({m.matricula})</p>
                                 <p><strong>POSICIÓN:</strong> {m.ubicacion.nombre}</p>
                                 <p><strong>ESTADO:</strong> {m.status?.toUpperCase().replace('_', ' ') || 'EN CURSO'}</p>
                                 <hr style={{borderColor: '#333'}} />
-                                <p style={{fontSize: '0.7rem', color: '#f39c12', whiteSpace: 'pre-wrap'}}>
-                                    {m.notasMarginales}
-                                </p>
+                                <div style={styles.popNotesContainer}>
+                                    <strong style={{fontSize: '0.65rem', color: '#f39c12'}}>INFORMACIÓN MARGINAL:</strong>
+                                    <p style={styles.popNotesText}>
+                                        {m.notasMarginales || 'SIN NOVEDAD'}
+                                    </p>
+                                </div>
+                                <div style={styles.popFooter}>
+                                    ACTUALIZADO: {new Date(m.updatedAt).toLocaleTimeString()}
+                                </div>
                             </div>
                         </Popup>
                     </Marker>
@@ -326,7 +328,10 @@ const styles = {
     subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #444', paddingTop: '4px' },
     labelBoxDark: { background: 'rgba(0, 15, 30, 0.9)', color: '#00ffff', border: '1px solid #00ffff', padding: '2px 8px', borderRadius: '2px', fontSize: '0.8rem', fontWeight: 'bold', fontFamily: 'monospace' },
     popupHeader: { background: '#f39c12', color: 'black', padding: '8px', fontWeight: 'bold', textAlign: 'center', fontSize: '0.85rem' },
-    popupBody: { padding: '12px', fontSize: '0.8rem', background: '#1a1a1a', borderTop: '1px solid #333' }
+    popupBody: { padding: '12px', fontSize: '0.8rem', background: '#1a1a1a', borderTop: '1px solid #333' },
+    popNotesContainer: { marginTop: '5px', padding: '8px', backgroundColor: '#000', borderRadius: '4px', borderLeft: '2px solid #f39c12' },
+    popNotesText: { fontSize: '0.7rem', color: '#ecf0f1', whiteSpace: 'pre-wrap', margin: '5px 0 0 0', fontFamily: 'monospace' },
+    popFooter: { marginTop: '10px', fontSize: '0.6rem', color: '#7f8c8d', textAlign: 'right' }
 };
 
 export default OperacionesMapa;

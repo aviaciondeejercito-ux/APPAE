@@ -76,11 +76,11 @@ const getActiveOperations = async (req, res) => {
     try {
         /**
          * SINCRO JOKER: Ajuste de filtros para asegurar visibilidad en el mapa.
-         * Se asegura que traiga solo lo que tiene coordenadas válidas.
+         * Se incluyen todos los estados operativos definidos en el Modelo.
          */
         const activeOps = await Event.find({ 
             isRealTime: true,
-            status: { $in: ['en_curso', 'en_desarrollo', 'programado', 'operativo'] } 
+            status: { $in: ['en_curso', 'en_desarrollo', 'programado', 'operativo', 'disponible'] } 
         }).sort({ updatedAt: -1 });
 
         res.status(200).json(activeOps);
@@ -170,8 +170,8 @@ const updateEvent = async (req, res) => {
 
         /**
          * SINCRO JOKER - ACTUALIZACIÓN ATÓMICA DE UBICACIÓN
-         * Si viene el objeto ubicacion, lo procesamos para asegurar que lat/lng sean números
-         * y usamos la notación de punto para no sobrescribir el objeto entero si faltan campos.
+         * Si viene el objeto ubicacion, usamos la notación de punto para no sobrescribir 
+         * el objeto entero en MongoDB, evitando perder datos parciales.
          */
         if (updateData.ubicacion && typeof updateData.ubicacion === 'object') {
             const { lat, lng, nombre } = updateData.ubicacion;
@@ -180,7 +180,7 @@ const updateEvent = async (req, res) => {
             if (lng !== undefined) updateData['ubicacion.lng'] = parseFloat(lng);
             if (nombre !== undefined) updateData['ubicacion.nombre'] = nombre;
             
-            // Eliminamos el objeto raíz para que $set use las rutas específicas arriba
+            // Eliminamos el objeto raíz para usar los campos planos definidos arriba
             delete updateData.ubicacion;
         }
 
@@ -193,7 +193,7 @@ const updateEvent = async (req, res) => {
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error al actualizar el registro operativo. Verifique el formato de datos.' });
+        res.status(400).json({ message: 'Error al actualizar el registro operativo. Verifique el formato.' });
     }
 };
 

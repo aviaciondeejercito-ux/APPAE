@@ -125,7 +125,7 @@ const CargaTactica = () => {
         const modeloLimpio = (formData.aeronaveModelo || '').toUpperCase().trim();
         const matriculaLimpia = (formData.matricula || '').toUpperCase().trim();
 
-        // PAYLOAD BLINDADO: Solo campos permitidos
+        // PAYLOAD BLINDADO: SINCRO JOKER - No enviar campos prohibidos al backend
         const payload = {
             title: editingId ? formData.title : `${modeloLimpio} ${matriculaLimpia} - ${formData.title}`,
             aeronave: modeloLimpio,
@@ -138,27 +138,25 @@ const CargaTactica = () => {
             status: 'en_desarrollo', 
             ubicacion: {
                 nombre: formData.locNombre || 'Posición por Coordenadas',
-                lat: latDec, lng: lngDec
+                lat: latDec, 
+                lng: lngDec
             },
-            notasMarginales: formData.notasMarginales,
+            notasMarginales: formData.notasMarginales.toUpperCase(),
             color: '#e67e22' 
         };
 
         try {
             if (editingId) {
-                // Se envía solo el payload limpio sin _id interno
                 await EventService.updateEvent(editingId, payload);
-                alert("📍 POSICIÓN ACTUALIZADA EN RADAR");
             } else {
                 await EventService.createEvent(payload);
-                alert("🚀 OPERACIÓN LANZADA AL MONITOR");
             }
             setEditingId(null);
             setFormData({ title: '', elemento: '', notasMarginales: '', aeronaveModelo: '', matricula: '', latG: 34, latM: 31, latS: 40, latDir: 'S', lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', locNombre: '' });
             cargarDatos();
         } catch (error) {
             console.error("Error en la operación táctica:", error);
-            alert("Error en la operación táctica. Verifique la conexión con el servidor.");
+            alert("Error en la persistencia. Verifique el formato de datos.");
         }
     };
 
@@ -245,17 +243,17 @@ const CargaTactica = () => {
                             
                             <label style={styles.label}>Coordenadas Actuales (GMS):</label>
                             <div style={styles.row}>
-                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latG: e.target.value})} value={formData.latG}/>
-                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latM: e.target.value})} value={formData.latM}/>
-                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latS: e.target.value})} value={formData.latS}/>
+                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latG: e.target.value})} value={formData.latG}/>
+                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latM: e.target.value})} value={formData.latM}/>
+                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latS: e.target.value})} value={formData.latS}/>
                                 <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, latDir: e.target.value})} value={formData.latDir}>
                                     <option value="S">S</option><option value="N">N</option>
                                 </select>
                             </div>
                             <div style={styles.row}>
-                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngG: e.target.value})} value={formData.lngG}/>
-                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngM: e.target.value})} value={formData.lngM}/>
-                                <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngS: e.target.value})} value={formData.lngS}/>
+                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngG: e.target.value})} value={formData.lngG}/>
+                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngM: e.target.value})} value={formData.lngM}/>
+                                <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngS: e.target.value})} value={formData.lngS}/>
                                 <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, lngDir: e.target.value})} value={formData.lngDir}>
                                     <option value="W">W</option><option value="E">E</option>
                                 </select>
