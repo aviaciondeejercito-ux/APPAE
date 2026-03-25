@@ -40,7 +40,8 @@ const eventSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado'], 
+        // SINCRO JOKER: Se agregan 'operativo' y 'disponible' para compatibilidad con el Mapa Táctico
+        enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado', 'operativo', 'disponible'], 
         default: 'programado' 
     },
 
@@ -163,6 +164,8 @@ eventSchema.pre('validate', function(next) {
     if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
     if (this.aeronave) this.aeronave = this.aeronave.toUpperCase();
     if (this.matricula) this.matricula = this.matricula.toUpperCase();
+    
+    // SINCRO JOKER: Normalización de tipoApoyo solo si no es nulo
     if (this.tipoApoyo) this.tipoApoyo = this.tipoApoyo.toUpperCase();
     
     next();

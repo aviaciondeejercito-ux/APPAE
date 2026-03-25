@@ -76,6 +76,7 @@ const getActiveOperations = async (req, res) => {
     try {
         /**
          * SINCRO JOKER: Ajuste de filtros para asegurar visibilidad en el mapa.
+         * Se asegura que traiga solo lo que tiene coordenadas válidas.
          */
         const activeOps = await Event.find({ 
             isRealTime: true,
@@ -120,7 +121,11 @@ const createEvent = async (req, res) => {
                 start: null,
                 end: null,
                 etapa: 'operativo',
-                ubicacion: ubicacion || { nombre: 'Punto No Definido', lat: 0, lng: 0 },
+                ubicacion: {
+                    nombre: ubicacion?.nombre || 'Punto No Definido',
+                    lat: ubicacion?.lat ? parseFloat(ubicacion.lat) : 0,
+                    lng: ubicacion?.lng ? parseFloat(ubicacion.lng) : 0
+                },
                 notasMarginales: notasMarginales ? notasMarginales.toUpperCase() : '',
                 aeronave: (aeronave || '').toUpperCase(),
                 matricula: (matricula || '').toUpperCase(),
@@ -148,7 +153,7 @@ const createEvent = async (req, res) => {
     }
 };
 
-// @desc    Actualizar registro (Blindado contra Error 400)
+// @desc    Actualizar registro (Blindado contra Error 400 y Desplazamiento de Coordenadas)
 const updateEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
@@ -156,22 +161,26 @@ const updateEvent = async (req, res) => {
 
         const updateData = { ...req.body };
         
-        /**
-         * LIMPIEZA CRÍTICA: MongoDB no permite modificar el campo _id.
-         * Si el frontend lo envía en el body, genera un error 400.
-         */
+        // SEGURIDAD: Nunca modificar el _id ni el creador original
         delete updateData._id; 
+        delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        // Si el título viene, asegurar mayúsculas
         if (updateData.title) updateData.title = updateData.title.toUpperCase();
 
-        // SINCRO JOKER: Manejo de ubicación para evitar conflictos de objetos
+        /**
+         * SINCRO JOKER - ACTUALIZACIÓN ATÓMICA DE UBICACIÓN
+         * Si viene el objeto ubicacion, lo procesamos para asegurar que lat/lng sean números
+         * y usamos la notación de punto para no sobrescribir el objeto entero si faltan campos.
+         */
         if (updateData.ubicacion && typeof updateData.ubicacion === 'object') {
             const { lat, lng, nombre } = updateData.ubicacion;
-            if (lat !== undefined) updateData['ubicacion.lat'] = lat;
-            if (lng !== undefined) updateData['ubicacion.lng'] = lng;
+            
+            if (lat !== undefined) updateData['ubicacion.lat'] = parseFloat(lat);
+            if (lng !== undefined) updateData['ubicacion.lng'] = parseFloat(lng);
             if (nombre !== undefined) updateData['ubicacion.nombre'] = nombre;
+            
+            // Eliminamos el objeto raíz para que $set use las rutas específicas arriba
             delete updateData.ubicacion;
         }
 
@@ -184,7 +193,7 @@ const updateEvent = async (req, res) => {
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error al actualizar el registro operativo.' });
+        res.status(400).json({ message: 'Error al actualizar el registro operativo. Verifique el formato de datos.' });
     }
 };
 
