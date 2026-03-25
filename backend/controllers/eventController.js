@@ -74,9 +74,11 @@ const getEvents = async (req, res) => {
 // @desc    Obtener operaciones para el MAPA (Único canal comunicado con vuelos)
 const getActiveOperations = async (req, res) => {
     try {
-        // SINCRO JOKER: Ajuste de filtros para asegurar visibilidad en el mapa
-        // El Mapa SÍ lee los vuelos en tiempo real. 
-        // Agregamos 'operativo' y 'en_desarrollo' para cubrir todos los estados de CargaTactica.
+        /**
+         * SINCRO JOKER: Ajuste de filtros para asegurar visibilidad en el mapa.
+         * El Mapa SÍ lee los vuelos en tiempo real. 
+         * Los estados cubren todo el ciclo de vida en CargaTactica.
+         */
         const activeOps = await Event.find({ 
             isRealTime: true,
             status: { $in: ['en_curso', 'en_desarrollo', 'programado', 'operativo'] } 
@@ -118,8 +120,8 @@ const createEvent = async (req, res) => {
         if (isRealTime) {
             Object.assign(eventData, {
                 isRealTime: true,
-                tipoApoyo: 'VUELO', // Tag de exclusión
-                start: null, // Vuelos no ensucian la agenda temporal
+                tipoApoyo: 'VUELO', // Tag de exclusión crítica para el Log
+                start: null, // Evita que aparezcan en la agenda temporal
                 end: null,
                 etapa: 'operativo',
                 ubicacion: ubicacion || { nombre: 'Punto No Definido', lat: 0, lng: 0 },
@@ -163,12 +165,20 @@ const updateEvent = async (req, res) => {
         delete updateData._id; 
         updateData.updatedBy = req.user._id; 
 
-        // Si es actualización de posición desde el mapa, no tocamos campos de gestión
+        // SINCRO JOKER: Actualización atómica de ubicación para el mapa
         if (updateData.ubicacion) {
-            updateData['ubicacion.lat'] = updateData.ubicacion.lat;
-            updateData['ubicacion.lng'] = updateData.ubicacion.lng;
-            updateData['ubicacion.nombre'] = updateData.ubicacion.nombre;
-            delete updateData.ubicacion;
+            const { lat, lng, nombre } = updateData.ubicacion;
+            const updates = {};
+            if (lat !== undefined) updates['ubicacion.lat'] = lat;
+            if (lng !== undefined) updates['ubicacion.lng'] = lng;
+            if (nombre !== undefined) updates['ubicacion.nombre'] = nombre;
+            
+            const updatedEvent = await Event.findByIdAndUpdate(
+                req.params.id,
+                { $set: { ...updateData, ...updates } }, 
+                { new: true, runValidators: true }
+            );
+            return res.status(200).json(updatedEvent);
         }
 
         const updatedEvent = await Event.findByIdAndUpdate(
@@ -190,7 +200,7 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
 
-        // Solo el creador o niveles superiores pueden borrar
+        // Seguridad: Solo el dueño o niveles superiores pueden borrar
         const esDuenio = event.createdBy && event.createdBy.toString() === req.user._id.toString();
         const esMando = req.user.role === 'admin' || req.user.role === 'boss';
 
@@ -201,6 +211,7 @@ const deleteEvent = async (req, res) => {
         await event.deleteOne();
         res.status(200).json({ message: 'Eliminado correctamente.' });
     } catch (error) {
+        console.error(`❌ Error en deleteEvent: ${error.message}`);
         res.status(500).json({ message: 'Error al eliminar.' });
     }
 };

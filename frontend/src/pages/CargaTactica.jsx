@@ -122,11 +122,15 @@ const CargaTactica = () => {
         const latDec = toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir);
         const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
 
+        // Limpieza de campos para evitar "undefined"
+        const modeloLimpio = (formData.aeronaveModelo || '').toUpperCase().trim();
+        const matriculaLimpia = (formData.matricula || '').toUpperCase().trim();
+
         const payload = {
-            title: editingId ? formData.title : `${formData.aeronaveModelo} ${formData.matricula} - ${formData.title}`,
-            aeronave: formData.aeronaveModelo.toUpperCase().trim(),
-            matricula: formData.matricula.toUpperCase().trim(),
-            tipoIcono: getTipoIcono(formData.aeronaveModelo),
+            title: editingId ? formData.title : `${modeloLimpio} ${matriculaLimpia} - ${formData.title}`,
+            aeronave: modeloLimpio,
+            matricula: matriculaLimpia,
+            tipoIcono: getTipoIcono(modeloLimpio),
             elemento: formData.elemento,
             isRealTime: true, 
             tipoApoyo: 'VUELO',
@@ -197,7 +201,6 @@ const CargaTactica = () => {
                     <p style={styles.subtitle}>SISTEMA DE GESTIÓN TÁCTICA DE AVIACIÓN</p>
                     
                     <form onSubmit={handleSubmit}>
-                        {/* Mantenemos aeronaveModelo y matricula incluso en edición para asegurar el payload */}
                         <div style={{display: editingId ? 'none' : 'block'}}>
                             <label style={styles.label}>Aeronave (SDA y Matrícula):</label>
                             <select 
@@ -214,6 +217,12 @@ const CargaTactica = () => {
                                 ))}
                             </select>
                         </div>
+
+                        {editingId && (
+                            <div style={styles.infoBox}>
+                                <strong>AERONAVE FIJADA:</strong> {formData.aeronaveModelo} - {formData.matricula}
+                            </div>
+                        )}
 
                         <label style={styles.label}>Indicativo de Vuelo / Misión:</label>
                         <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value.toUpperCase()})} required placeholder="Ej: ASALTO AEREO / SANITARIO" />
@@ -267,7 +276,7 @@ const CargaTactica = () => {
                         misionesActivas.map(m => (
                             <div key={m._id} style={styles.misionItem}>
                                 <div style={{fontWeight: 'bold', color: '#ecf0f1'}}>{m.title}</div>
-                                <div style={{fontSize: '0.75rem', color: '#bdc3c7'}}>{m.elemento} | {m.ubicacion.nombre}</div>
+                                <div style={{fontSize: '0.75rem', color: '#bdc3c7'}}>{m.elemento} | {m.ubicacion?.nombre || 'S/D'}</div>
                                 <div style={styles.btnRow}>
                                     <button onClick={() => handlePrepareUpdate(m)} style={styles.btnSmall}>ACTUALIZAR</button>
                                     <button onClick={() => handleFinalizar(m._id)} style={styles.btnSmallRed}>FINALIZAR</button>
@@ -291,6 +300,7 @@ const styles = {
     title: { color: '#f39c12', margin: '0', textAlign: 'center', fontSize: '1.5rem', letterSpacing: '2px' },
     subtitle: { textAlign: 'center', fontSize: '0.75rem', marginBottom: '20px', letterSpacing: '2px', color: '#7f8c8d' },
     label: { display: 'block', marginBottom: '5px', fontSize: '0.8rem', fontWeight: 'bold', color: '#bdc3c7' },
+    infoBox: { backgroundColor: '#34495e', padding: '10px', borderRadius: '4px', marginBottom: '15px', fontSize: '0.8rem', borderLeft: '4px solid #3498db' },
     input: { width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '4px', border: 'none', backgroundColor: '#2f3542', color: 'white', fontFamily: 'monospace' },
     inputTriple: { width: '23%', padding: '8px', marginBottom: '5px', borderRadius: '4px', border: 'none', backgroundColor: '#3d4451', color: 'white', textAlign: 'center' },
     inputShort: { width: '20%', padding: '8px', marginBottom: '5px', borderRadius: '4px', border: 'none', backgroundColor: '#f39c12', color: 'black', fontWeight: 'bold' },

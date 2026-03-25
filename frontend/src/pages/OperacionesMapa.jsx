@@ -164,11 +164,16 @@ const OperacionesMapa = () => {
 
     const cargarSituacionTactica = async () => {
         try {
-            // SINCRO JOKER: Obtenemos operaciones activas
             const data = await getActiveOperations();
             if (data && Array.isArray(data)) {
-                // Filtramos solo los que tienen coordenadas válidas para evitar errores de Leaflet
-                const validas = data.filter(m => m.ubicacion && typeof m.ubicacion.lat === 'number');
+                // Filtro riguroso de coordenadas para estabilidad del mapa
+                const validas = data.filter(m => 
+                    m.ubicacion && 
+                    typeof m.ubicacion.lat === 'number' && 
+                    !isNaN(m.ubicacion.lat) &&
+                    typeof m.ubicacion.lng === 'number' &&
+                    !isNaN(m.ubicacion.lng)
+                );
                 setMisiones(validas);
             }
         } catch (err) { 
@@ -180,7 +185,7 @@ const OperacionesMapa = () => {
 
     useEffect(() => {
         cargarSituacionTactica();
-        const intervalMisiones = setInterval(cargarSituacionTactica, 10000); // Reducido a 10s para mayor fluidez
+        const intervalMisiones = setInterval(cargarSituacionTactica, 10000); 
         const intervalTerminator = setInterval(() => setTerminatorTime(new Date()), 60000);
         return () => {
             clearInterval(intervalMisiones);
@@ -189,12 +194,16 @@ const OperacionesMapa = () => {
     }, []);
 
     const getTacticIcon = (m) => {
+        // Prioridad 1: Atributo tipoIcono explícito del backend
         if (m.tipoIcono === 'ala_fija') return planeIcon;
         if (m.tipoIcono === 'ala_rotativa') return heloIcon;
-        // Fallback dinámico por modelo
-        const sda = m.aeronave?.toUpperCase() || "";
-        const alaFija = ['C-212', 'C-208', 'DA-62', 'B-200', 'C-550', 'T-202'];
-        return alaFija.some(tipo => sda.includes(tipo)) ? planeIcon : heloIcon;
+
+        // Prioridad 2: Inferencia por modelo de aeronave
+        const sda = (m.aeronave || "").toUpperCase();
+        const alaFijaModelos = ['C-212', 'C-208', 'DA-62', 'B-200', 'C-550', 'T-202', 'CESSNA', 'DIAMOND', 'BEECH'];
+        const esAlaFija = alaFijaModelos.some(tipo => sda.includes(tipo));
+        
+        return esAlaFija ? planeIcon : heloIcon;
     };
 
     if (loading) return (
@@ -253,23 +262,30 @@ const OperacionesMapa = () => {
                 </LayersControl>
 
                 {misiones.map((m) => (
-                    m.ubicacion?.lat !== undefined && m.ubicacion?.lng !== undefined && (
-                        <Marker key={m._id} position={[m.ubicacion.lat, m.ubicacion.lng]} icon={getTacticIcon(m)}>
-                            <Tooltip permanent direction="top" offset={[0, -10]} className="label-tactica-custom">
-                                <div style={styles.labelBoxDark}>{m.aeronave} {m.matricula}</div>
-                            </Tooltip>
-                            <Popup>
-                                <div style={styles.popupHeader}>{m.title}</div>
-                                <div style={styles.popupBody}>
-                                    <p><strong>UNIDAD:</strong> {m.elemento}</p>
-                                    <p><strong>POSICIÓN:</strong> {m.ubicacion.nombre}</p>
-                                    <p><strong>ESTADO:</strong> {m.status?.toUpperCase().replace('_', ' ') || 'EN CURSO'}</p>
-                                    <hr style={{borderColor: '#333'}} />
-                                    <p style={{fontSize: '0.7rem', color: '#f39c12'}}>{m.notasMarginales}</p>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    )
+                    <Marker 
+                        key={m._id} 
+                        position={[m.ubicacion.lat, m.ubicacion.lng]} 
+                        icon={getTacticIcon(m)}
+                    >
+                        <Tooltip permanent direction="top" offset={[0, -10]} className="label-tactica-custom">
+                            <div style={styles.labelBoxDark}>
+                                {m.matricula || m.aeronave || 'S/M'}
+                            </div>
+                        </Tooltip>
+                        <Popup>
+                            <div style={styles.popupHeader}>{m.title}</div>
+                            <div style={styles.popupBody}>
+                                <p><strong>AERONAVE:</strong> {m.aeronave} ({m.matricula})</p>
+                                <p><strong>UNIDAD:</strong> {m.elemento}</p>
+                                <p><strong>POSICIÓN:</strong> {m.ubicacion.nombre}</p>
+                                <p><strong>ESTADO:</strong> {m.status?.toUpperCase().replace('_', ' ') || 'EN CURSO'}</p>
+                                <hr style={{borderColor: '#333'}} />
+                                <p style={{fontSize: '0.7rem', color: '#f39c12', whiteSpace: 'pre-wrap'}}>
+                                    {m.notasMarginales}
+                                </p>
+                            </div>
+                        </Popup>
+                    </Marker>
                 ))}
             </MapContainer>
 
