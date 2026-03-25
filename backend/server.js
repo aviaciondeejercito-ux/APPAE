@@ -7,7 +7,7 @@ const conectarDB = require('./config/db');
 /**
  * ESTÁNDAR DE SEGURIDAD AE - SINCRO JOKER
  * Configuración de motor centralizado para API de Aviación de Ejército.
- * Actualización: Integración de Motor Astronómico Táctico.
+ * Actualización: Integración de Motor Astronómico Táctico y Rutas Unificadas.
  */
 
 // --- CONFIGURACIÓN DE ENTORNO ---
@@ -63,7 +63,7 @@ const eventRoutes = require('./routes/events');
 const adminRoutes = require('./routes/admin'); 
 const aircraftRoutes = require('./routes/aircraft'); 
 const weatherRoutes = require('./routes/metar'); 
-const astronomyRoutes = require('./routes/astronomy'); // Nuevo módulo astronómico
+const astronomyRoutes = require('./routes/astronomy'); // Módulo astronómico reparado
 
 // --- DEFINICIÓN DE RUTAS API ---
 
@@ -82,8 +82,13 @@ app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
 app.use('/api/admin', adminRoutes); 
 app.use('/api/aircraft', aircraftRoutes); 
+
+/**
+ * REPARACIÓN DE RUTAS TÁCTICAS
+ * Se unifican para coincidir con EventService.getWeatherData y getAstronomyData
+ */
 app.use('/api/weather', weatherRoutes); 
-app.use('/api/astronomy', astronomyRoutes); // Registro de ruta astronómica
+app.use('/api/astronomy', astronomyRoutes); 
 
 // --- MANEJO DE RUTAS NO MAPEADAS (404) ---
 app.use((req, res) => {

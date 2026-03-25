@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Función auxiliar para calcular la Fase Lunar (Algoritmo de precisión)
 const getMoonData = (date) => {
-    const lp = 2551443; // Ciclo sinódico en segundos
+    const lp = 2551442.8; // Ciclo sinódico exacto en segundos
     const now = new Date(date);
     const newMoon = new Date("1970-01-07T20:35:00Z"); // Referencia conocida
     const phase = ((now.getTime() - newMoon.getTime()) / 1000) % lp;
@@ -23,7 +23,8 @@ const getMoonData = (date) => {
     let estado = "";
     let icono = "";
 
-    if (res === 0) { estado = "LUNA NUEVA"; icono = "🌑"; }
+    // Mapeo táctico de fases
+    if (res === 0 || res === 29) { estado = "LUNA NUEVA"; icono = "🌑"; }
     else if (res < 7) { estado = "LUNA CRECIENTE"; icono = "🌒"; }
     else if (res === 7) { estado = "CUARTO CRECIENTE"; icono = "🌓"; }
     else if (res < 15) { estado = "GIBOSA CRECIENTE"; icono = "🌔"; }
@@ -55,27 +56,30 @@ router.get('/data', (req, res) => {
 
         /**
          * Lógica de Crepúsculos (Simulación de precisión para Argentina)
-         * Nota: En una fase 2 podemos integrar 'suncalc' para exactitud al segundo.
-         * Por ahora usamos promedios estacionales de zona horaria ART.
+         * Datos base para marzo en ART (UTC-3)
          */
-        const moonData = {
+        const result = {
             ...moon,
-            sunset: "19:08", // Dato base para marzo en Arg
+            sunset: "19:08", 
             sunrise: "06:54",
             moonrise: "18:20",
             moonset: "05:15",
-            coordenadas: { lat: latitude, lng: longitude }
+            coordenadas: { lat: latitude, lng: longitude },
+            timestamp: date.toISOString(),
+            success: true // Flag de control para el frontend
         };
 
-        res.json({
-            success: true,
-            data: moonData,
-            timestamp: date.toISOString()
-        });
+        // Enviamos el objeto directamente para que coincida con la lectura del frontend
+        res.json(result);
 
     } catch (error) {
         console.error("❌ ERROR ASTRONOMY AE:", error.message);
-        res.status(500).json({ success: false, error: "Falla en motor de efemérides" });
+        res.status(500).json({ 
+            success: false, 
+            error: "Falla en motor de efemérides",
+            estado: "DATOS NO DISPONIBLES",
+            moon_fraction: 0 
+        });
     }
 });
 
