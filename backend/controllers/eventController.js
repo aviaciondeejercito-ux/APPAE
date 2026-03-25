@@ -76,8 +76,6 @@ const getActiveOperations = async (req, res) => {
     try {
         /**
          * SINCRO JOKER: Ajuste de filtros para asegurar visibilidad en el mapa.
-         * El Mapa SÍ lee los vuelos en tiempo real. 
-         * Los estados cubren todo el ciclo de vida en CargaTactica.
          */
         const activeOps = await Event.find({ 
             isRealTime: true,
@@ -105,7 +103,6 @@ const createEvent = async (req, res) => {
 
         const isMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
         
-        // Creamos el objeto base
         const eventData = {
             title: title.toUpperCase(),
             notes: notes || '',
@@ -116,12 +113,11 @@ const createEvent = async (req, res) => {
             status: status || 'programado'
         };
 
-        // LÓGICA DE RAMIFICACIÓN: Si es Vuelo, aplicamos flags de invisibilidad para el Log
         if (isRealTime) {
             Object.assign(eventData, {
                 isRealTime: true,
-                tipoApoyo: 'VUELO', // Tag de exclusión crítica para el Log
-                start: null, // Evita que aparezcan en la agenda temporal
+                tipoApoyo: 'VUELO',
+                start: null,
                 end: null,
                 etapa: 'operativo',
                 ubicacion: ubicacion || { nombre: 'Punto No Definido', lat: 0, lng: 0 },
@@ -131,7 +127,6 @@ const createEvent = async (req, res) => {
                 tipoIcono: tipoIcono || 'ala_rotativa'
             });
         } else {
-            // Es una Orden de Tarea / Calendario
             Object.assign(eventData, {
                 isRealTime: false,
                 tipoApoyo: tipoApoyo || 'GESTION',
@@ -153,7 +148,7 @@ const createEvent = async (req, res) => {
     }
 };
 
-// @desc    Actualizar registro (Independiente)
+// @desc    Actualizar registro (Blindado contra Error 400)
 const updateEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
@@ -161,24 +156,23 @@ const updateEvent = async (req, res) => {
 
         const updateData = { ...req.body };
         
-        // Limpieza de auditoría
+        /**
+         * LIMPIEZA CRÍTICA: MongoDB no permite modificar el campo _id.
+         * Si el frontend lo envía en el body, genera un error 400.
+         */
         delete updateData._id; 
         updateData.updatedBy = req.user._id; 
 
-        // SINCRO JOKER: Actualización atómica de ubicación para el mapa
-        if (updateData.ubicacion) {
+        // Si el título viene, asegurar mayúsculas
+        if (updateData.title) updateData.title = updateData.title.toUpperCase();
+
+        // SINCRO JOKER: Manejo de ubicación para evitar conflictos de objetos
+        if (updateData.ubicacion && typeof updateData.ubicacion === 'object') {
             const { lat, lng, nombre } = updateData.ubicacion;
-            const updates = {};
-            if (lat !== undefined) updates['ubicacion.lat'] = lat;
-            if (lng !== undefined) updates['ubicacion.lng'] = lng;
-            if (nombre !== undefined) updates['ubicacion.nombre'] = nombre;
-            
-            const updatedEvent = await Event.findByIdAndUpdate(
-                req.params.id,
-                { $set: { ...updateData, ...updates } }, 
-                { new: true, runValidators: true }
-            );
-            return res.status(200).json(updatedEvent);
+            if (lat !== undefined) updateData['ubicacion.lat'] = lat;
+            if (lng !== undefined) updateData['ubicacion.lng'] = lng;
+            if (nombre !== undefined) updateData['ubicacion.nombre'] = nombre;
+            delete updateData.ubicacion;
         }
 
         const updatedEvent = await Event.findByIdAndUpdate(
@@ -190,7 +184,7 @@ const updateEvent = async (req, res) => {
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error al actualizar registro.' });
+        res.status(400).json({ message: 'Error al actualizar el registro operativo.' });
     }
 };
 
@@ -200,7 +194,6 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
 
-        // Seguridad: Solo el dueño o niveles superiores pueden borrar
         const esDuenio = event.createdBy && event.createdBy.toString() === req.user._id.toString();
         const esMando = req.user.role === 'admin' || req.user.role === 'boss';
 

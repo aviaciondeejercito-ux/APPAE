@@ -75,13 +75,13 @@ const CargaTactica = () => {
     };
 
     const fromDecimal = (dec, type) => {
-        const abs = Math.abs(dec);
+        const abs = Math.abs(dec || 0);
         const g = Math.floor(abs);
         const m = Math.floor((abs - g) * 60);
         const s = Math.round((abs - g - m / 60) * 3600);
         let dir = "";
-        if (type === 'lat') dir = dec < 0 ? 'S' : 'N';
-        if (type === 'lng') dir = dec < 0 ? 'W' : 'E';
+        if (type === 'lat') dir = (dec || 0) < 0 ? 'S' : 'N';
+        if (type === 'lng') dir = (dec || 0) < 0 ? 'W' : 'E';
         return { g, m, s, dir };
     };
 
@@ -122,10 +122,10 @@ const CargaTactica = () => {
         const latDec = toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir);
         const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
 
-        // Limpieza de campos para evitar "undefined"
         const modeloLimpio = (formData.aeronaveModelo || '').toUpperCase().trim();
         const matriculaLimpia = (formData.matricula || '').toUpperCase().trim();
 
+        // PAYLOAD BLINDADO: Solo campos permitidos
         const payload = {
             title: editingId ? formData.title : `${modeloLimpio} ${matriculaLimpia} - ${formData.title}`,
             aeronave: modeloLimpio,
@@ -146,6 +146,7 @@ const CargaTactica = () => {
 
         try {
             if (editingId) {
+                // Se envía solo el payload limpio sin _id interno
                 await EventService.updateEvent(editingId, payload);
                 alert("📍 POSICIÓN ACTUALIZADA EN RADAR");
             } else {
@@ -162,8 +163,8 @@ const CargaTactica = () => {
     };
 
     const handlePrepareUpdate = (m) => {
-        const latGMS = fromDecimal(m.ubicacion.lat, 'lat');
-        const lngGMS = fromDecimal(m.ubicacion.lng, 'lng');
+        const latGMS = fromDecimal(m.ubicacion?.lat, 'lat');
+        const lngGMS = fromDecimal(m.ubicacion?.lng, 'lng');
         setEditingId(m._id);
         setFormData({
             title: m.title,
@@ -173,7 +174,7 @@ const CargaTactica = () => {
             matricula: m.matricula || '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
-            locNombre: m.ubicacion.nombre
+            locNombre: m.ubicacion?.nombre || ''
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -201,22 +202,24 @@ const CargaTactica = () => {
                     <p style={styles.subtitle}>SISTEMA DE GESTIÓN TÁCTICA DE AVIACIÓN</p>
                     
                     <form onSubmit={handleSubmit}>
-                        <div style={{display: editingId ? 'none' : 'block'}}>
-                            <label style={styles.label}>Aeronave (SDA y Matrícula):</label>
-                            <select 
-                                style={styles.input} 
-                                required={!editingId} 
-                                value={`${formData.aeronaveModelo}|${formData.matricula}`} 
-                                onChange={handleAeronaveSelect}
-                            >
-                                <option value="|">Seleccione Aeronave...</option>
-                                {aeronavesDisponibles.map(a => (
-                                    <option key={a._id} value={`${a.sda}|${a.matricula}`}>
-                                        {a.sda} - {a.matricula} ({a.unidad})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                        {!editingId && (
+                            <div>
+                                <label style={styles.label}>Aeronave (SDA y Matrícula):</label>
+                                <select 
+                                    style={styles.input} 
+                                    required={!editingId} 
+                                    value={`${formData.aeronaveModelo}|${formData.matricula}`} 
+                                    onChange={handleAeronaveSelect}
+                                >
+                                    <option value="|">Seleccione Aeronave...</option>
+                                    {aeronavesDisponibles.map(a => (
+                                        <option key={a._id} value={`${a.sda}|${a.matricula}`}>
+                                            {a.sda} - {a.matricula} ({a.unidad})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         {editingId && (
                             <div style={styles.infoBox}>
