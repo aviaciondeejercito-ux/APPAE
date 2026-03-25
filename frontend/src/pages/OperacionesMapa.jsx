@@ -166,15 +166,22 @@ const OperacionesMapa = () => {
         try {
             const data = await getActiveOperations();
             if (data && Array.isArray(data)) {
-                // Filtro riguroso de coordenadas para estabilidad del mapa
-                const validas = data.filter(m => 
-                    m.ubicacion && 
-                    typeof m.ubicacion.lat === 'number' && 
-                    !isNaN(m.ubicacion.lat) &&
-                    typeof m.ubicacion.lng === 'number' &&
+                const procesadas = data.map(m => {
+                    const lat = parseFloat(m.ubicacion?.lat);
+                    const lng = parseFloat(m.ubicacion?.lng);
+                    return {
+                        ...m,
+                        ubicacion: {
+                            ...m.ubicacion,
+                            lat,
+                            lng
+                        }
+                    };
+                }).filter(m => 
+                    !isNaN(m.ubicacion.lat) && 
                     !isNaN(m.ubicacion.lng)
                 );
-                setMisiones(validas);
+                setMisiones(procesadas);
             }
         } catch (err) { 
             console.error("❌ Error en Sincronización Táctica:", err); 
@@ -194,11 +201,9 @@ const OperacionesMapa = () => {
     }, []);
 
     const getTacticIcon = (m) => {
-        // Prioridad 1: Atributo tipoIcono explícito del backend
         if (m.tipoIcono === 'ala_fija') return planeIcon;
         if (m.tipoIcono === 'ala_rotativa') return heloIcon;
 
-        // Prioridad 2: Inferencia por modelo de aeronave
         const sda = (m.aeronave || "").toUpperCase();
         const alaFijaModelos = ['C-212', 'C-208', 'DA-62', 'B-200', 'C-550', 'T-202', 'CESSNA', 'DIAMOND', 'BEECH'];
         const esAlaFija = alaFijaModelos.some(tipo => sda.includes(tipo));
