@@ -37,6 +37,7 @@ const TerminatorLayer = ({ time, moonFraction }) => {
     const map = useMap();
     useEffect(() => {
         if (typeof L.terminator === 'function') {
+            // Ajuste de opacidad dinámico basado en fase lunar (más luz de luna = sombra más tenue)
             const dynamicOpacity = 0.7 - (moonFraction * 0.4);
             const tLayer = L.terminator({
                 time: time,
@@ -73,6 +74,7 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
                     taf: weatherResponse.data.taf
                 });
             } else {
+                // Fallback de astronomía si el METAR no la incluye
                 const astroResponse = await EventService.getAstronomyData();
                 setWeatherData({
                     metar: weatherResponse.data?.raw || weatherResponse.raw || "SIN DATOS",
@@ -196,12 +198,12 @@ const OperacionesMapa = () => {
     }, []);
 
     const getTacticIcon = (m) => {
-        // Prioridad 1: Tipo definido en BD (Sincro Joker)
+        // Prioridad 1: Tipo definido en BD
         if (m.tipoIcono) return crearIconoTactico(m.tipoIcono);
 
         // Prioridad 2: Fallback por modelo de aeronave
         const sda = (m.aeronave || "").toUpperCase();
-        const alaFijaModelos = ['C-212', 'C-208', 'DA-62', 'B-200', 'C-550', 'T-202', 'CESSNA', 'DIAMOND', 'BEECH'];
+        const alaFijaModelos = ['C-212', 'C-208', 'DA-62', 'B-200', 'C-550', 'T-202', 'CESSNA', 'DIAMOND', 'BEECH', 'LEARJET'];
         const esAlaFija = alaFijaModelos.some(tipo => sda.includes(tipo));
         
         return esAlaFija ? crearIconoTactico('ala_fija') : crearIconoTactico('ala_rotativa');
