@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet-terminator'; 
 import 'leaflet/dist/leaflet.css';
 import { io } from 'socket.io-client';
 import { getActiveOperations, getWeatherData, EventService } from '../services/api';
 import NightEvolutionWidget from '../components/NightEvolutionWidget';
 
-const { BaseLayer, Overlay } = LayersControl;
+const { BaseLayer } = LayersControl;
 
 // Configuración de Socket.io (URL de producción o local según corresponda)
 const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000');
@@ -36,29 +35,6 @@ const AERODROMOS_LIST = [
     "SARP", "SAWG", "SADF", "SAZM", "SAWE", "SAZY", "SASA", "SANU", "SATU", "SAEM", 
     "SARS", "SRDR", "SAAI", "SATR", "SASJ", "SAWL"
 ];
-
-const TerminatorLayer = ({ time, moonFraction }) => {
-    const map = useMap();
-    useEffect(() => {
-        if (typeof L.terminator === 'function') {
-            const dynamicOpacity = 0.7 - (moonFraction * 0.4);
-            const tLayer = L.terminator({
-                time: time,
-                fillColor: '#000',
-                fillOpacity: dynamicOpacity,
-                color: '#2c3e50',
-                weight: 1
-            });
-            tLayer.addTo(map);
-            return () => {
-                if (map.hasLayer(tLayer)) {
-                    map.removeLayer(tLayer);
-                }
-            };
-        }
-    }, [map, time, moonFraction]);
-    return null;
-};
 
 const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAstronomyData }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -158,7 +134,6 @@ const OperacionesMapa = () => {
     const [showMetar, setShowMetar] = useState(false);
     const [selectedStation, setSelectedStation] = useState('SADP');
     const [astronomyData, setAstronomyData] = useState(null);
-    const [terminatorTime, setTerminatorTime] = useState(new Date());
     const [mapView] = useState({ center: [-34.528, -58.641], zoom: 5 });
 
     const cargarSituacionTactica = useCallback(async () => {
@@ -205,12 +180,9 @@ const OperacionesMapa = () => {
                 return [...prev, processedOp];
             });
         });
-
-        const intervalTerminator = setInterval(() => setTerminatorTime(new Date()), 60000);
         
         return () => {
             socket.off('operationUpdated');
-            clearInterval(intervalTerminator);
         };
     }, [cargarSituacionTactica]);
 
@@ -268,13 +240,6 @@ const OperacionesMapa = () => {
                     <BaseLayer name="🛰️ Satelital">
                         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                     </BaseLayer>
-                    
-                    <Overlay checked name="🌘 Sombra Nocturna">
-                        <TerminatorLayer 
-                            time={terminatorTime} 
-                            moonFraction={astronomyData?.moon_fraction || 0} 
-                        />
-                    </Overlay>
                 </LayersControl>
 
                 {misiones.map((m) => (

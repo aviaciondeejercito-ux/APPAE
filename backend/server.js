@@ -31,10 +31,12 @@ app.use(helmet({
 
 /**
  * CONFIGURACIÓN DE CORS - RECONEXIÓN OPERATIVA
- * Definimos los orígenes autorizados para evitar el bloqueo visto en consola.
+ * Definimos los orígenes autorizados. 
+ * Se incluye la URL detectada en el despliegue de Render.
  */
 const allowedOrigins = [
-    'https://sistema-ae-frontend.onrender.com', // Tu URL de producción
+    'https://appae.onrender.com',               // Tu URL de producción principal
+    'https://sistema-ae-frontend.onrender.com', // URL alternativa de producción
     'http://localhost:5173',                   // Entorno local Vite
     'http://localhost:3000'                    // Entorno local alternativo
 ];

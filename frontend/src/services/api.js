@@ -4,8 +4,17 @@ import axios from 'axios';
  * CONFIGURACIÓN DE INSTANCIA AXIOS - ESTÁNDAR DE SEGURIDAD AE
  * Manejo dinámico de comunicación entre Frontend y Backend.
  */
+const getBaseURL = () => {
+    let url = (import.meta.env.VITE_API_URL || 'http://localhost:5000').trim().replace(/\/$/, "");
+    // Si la URL no termina en /api, se lo agregamos para Axios
+    if (!url.endsWith('/api')) {
+        return `${url}/api`;
+    }
+    return url;
+};
+
 const API = axios.create({
-    baseURL: (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').trim().replace(/\/$/, ""),
+    baseURL: getBaseURL(),
     headers: {
         'Content-Type': 'application/json'
     },
@@ -159,7 +168,6 @@ export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/pa
  */
 export const getWeatherData = async (icao) => {
     try {
-        // Ajustado para coincidir con la ruta del backend /api/weather/:icao
         const response = await API.get(`/weather/${icao}`);
         return response;
     } catch (error) {
@@ -173,7 +181,6 @@ export const getWeatherData = async (icao) => {
  */
 export const getAstronomyData = async (lat, lng) => {
     try {
-        // Si no se pasan coordenadas, el backend usará las de Campo de Mayo por defecto
         const params = lat && lng ? { params: { lat, lng } } : {};
         const response = await API.get('/astronomy', params);
         return response.data;
