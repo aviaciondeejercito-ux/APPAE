@@ -61,11 +61,19 @@ app.use(express.json({ limit: '15kb' }));
 app.use(express.urlencoded({ extended: true, limit: '15kb' }));
 
 // --- 4. INICIALIZACIÓN DE SOCKET.IO (TIEMPO REAL) ---
+/**
+ * Configuración específica para el motor de Sockets.
+ * Se asegura la compatibilidad con los métodos necesarios para el apretón de manos (handshake).
+ */
 const io = new Server(server, {
-    cors: corsOptions // Reutilizamos la seguridad de CORS para los sockets
+    cors: {
+        origin: allowedOrigins,
+        methods: ["GET", "POST"],
+        credentials: true
+    }
 });
 
-// Hacemos que 'io' sea accesible desde los controladores (importante para eventController)
+// Hacemos que 'io' sea accesible desde los controladores mediante app.get('socketio')
 app.set('socketio', io);
 
 io.on('connection', (socket) => {
@@ -130,7 +138,7 @@ app.use((err, req, res, next) => {
 
 // --- 9. LANZAMIENTO DEL SERVICIO ---
 const PORT = process.env.PORT || 5000;
-// IMPORTANTE: Escuchamos con 'server', no con 'app'
+// IMPORTANTE: Escuchamos con 'server', no con 'app' para permitir WebSockets
 server.listen(PORT, () => {
     console.log(`🚀 SISTEMA OPERATIVO EN PUERTO: ${PORT}`);
     console.log(`📡 FRECUENCIAS ACTIVAS: /api/auth, /api/events, /api/admin, /api/aircraft, /api/weather, /api/astronomy`);

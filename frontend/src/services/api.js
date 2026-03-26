@@ -58,6 +58,7 @@ export const getEvents = () => API.get('/events');
 export const getActiveOperations = async () => {
     try {
         const res = await API.get('/events');
+        // Filtramos para el mapa solo operaciones marcadas para tiempo real con ubicación válida
         return res.data.filter(e => e.isRealTime && e.ubicacion?.lat != null);
     } catch (error) {
         console.error("❌ Fallo al recuperar operaciones activas");
@@ -158,13 +159,9 @@ export const resetPassword = (id, newPassword) => API.put(`/admin/users/${id}/pa
  */
 export const getWeatherData = async (icao) => {
     try {
-        const response = await API.get('/weather/data', { params: { ids: icao } });
-        return {
-            data: {
-                raw: response.data.raw || "SIN DATOS METAR",
-                taf: response.data.taf || "TAF NO DISPONIBLE"
-            }
-        };
+        // Ajustado para coincidir con la ruta del backend /api/weather/:icao
+        const response = await API.get(`/weather/${icao}`);
+        return response;
     } catch (error) {
         console.error(`❌ Error en conexión meteorológica local para ${icao}:`, error);
         throw error;
@@ -173,11 +170,12 @@ export const getWeatherData = async (icao) => {
 
 /**
  * SERVICIOS DE ASTRONOMÍA TÁCTICA
- * Cálculo de Fase Lunar y Efemérides (Salida/Puesta Sol y Luna).
  */
 export const getAstronomyData = async (lat, lng) => {
     try {
-        const response = await API.get('/astronomy/data', { params: { lat, lng } });
+        // Si no se pasan coordenadas, el backend usará las de Campo de Mayo por defecto
+        const params = lat && lng ? { params: { lat, lng } } : {};
+        const response = await API.get('/astronomy', params);
         return response.data;
     } catch (error) {
         console.error("❌ Error al recuperar datos astronómicos operativos:", error);

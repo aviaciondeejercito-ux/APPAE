@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet-terminator'; 
 import 'leaflet/dist/leaflet.css';
+import { io } from 'socket.io-client';
 import { getActiveOperations, getWeatherData, EventService } from '../services/api';
 import NightEvolutionWidget from '../components/NightEvolutionWidget';
 
 const { BaseLayer, Overlay } = LayersControl;
+
+// Configuración de Socket.io (URL de producción o local según corresponda)
+const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000');
 
 /** * SIMBOLOGÍA TÁCTICA AE - ESTÁNDAR DE SEGURIDAD SINCRO JOKER */
 const crearIconoTactico = (tipo) => {
@@ -37,7 +41,6 @@ const TerminatorLayer = ({ time, moonFraction }) => {
     const map = useMap();
     useEffect(() => {
         if (typeof L.terminator === 'function') {
-            // Ajuste de opacidad dinámico basado en fase lunar (más luz de luna = sombra más tenue)
             const dynamicOpacity = 0.7 - (moonFraction * 0.4);
             const tLayer = L.terminator({
                 time: time,
@@ -74,7 +77,6 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
                     taf: weatherResponse.data.taf
                 });
             } else {
-                // Fallback de astronomía si el METAR no la incluye
                 const astroResponse = await EventService.getAstronomyData();
                 setWeatherData({
                     metar: weatherResponse.data?.raw || weatherResponse.raw || "SIN DATOS",
@@ -159,25 +161,18 @@ const OperacionesMapa = () => {
     const [terminatorTime, setTerminatorTime] = useState(new Date());
     const [mapView] = useState({ center: [-34.528, -58.641], zoom: 5 });
 
-    const cargarSituacionTactica = async () => {
+    const cargarSituacionTactica = useCallback(async () => {
         try {
             const data = await getActiveOperations();
             if (data && Array.isArray(data)) {
-                const procesadas = data.map(m => {
-                    const lat = parseFloat(m.ubicacion?.lat);
-                    const lng = parseFloat(m.ubicacion?.lng);
-                    return {
-                        ...m,
-                        ubicacion: {
-                            ...m.ubicacion,
-                            lat,
-                            lng
-                        }
-                    };
-                }).filter(m => 
-                    !isNaN(m.ubicacion.lat) && 
-                    !isNaN(m.ubicacion.lng)
-                );
+                const procesadas = data.map(m => ({
+                    ...m,
+                    ubicacion: {
+                        ...m.ubicacion,
+                        lat: parseFloat(m.ubicacion?.lat),
+                        lng: parseFloat(m.ubicacion?.lng)
+                    }
+                })).filter(m => !isNaN(m.ubicacion.lat) && !isNaN(m.ubicacion.lng));
                 setMisiones(procesadas);
             }
         } catch (err) { 
@@ -185,27 +180,45 @@ const OperacionesMapa = () => {
         } finally { 
             setLoading(false); 
         }
-    };
+    }, []);
 
     useEffect(() => {
         cargarSituacionTactica();
-        const intervalMisiones = setInterval(cargarSituacionTactica, 10000); 
+
+        // 📡 CANAL DE TIEMPO REAL - SINCRO JOKER
+        socket.on('operationUpdated', (newOp) => {
+            setMisiones(prev => {
+                const index = prev.findIndex(m => m._id === newOp._id);
+                const processedOp = {
+                    ...newOp,
+                    ubicacion: {
+                        ...newOp.ubicacion,
+                        lat: parseFloat(newOp.ubicacion?.lat),
+                        lng: parseFloat(newOp.ubicacion?.lng)
+                    }
+                };
+                if (index !== -1) {
+                    const updated = [...prev];
+                    updated[index] = processedOp;
+                    return updated;
+                }
+                return [...prev, processedOp];
+            });
+        });
+
         const intervalTerminator = setInterval(() => setTerminatorTime(new Date()), 60000);
+        
         return () => {
-            clearInterval(intervalMisiones);
+            socket.off('operationUpdated');
             clearInterval(intervalTerminator);
         };
-    }, []);
+    }, [cargarSituacionTactica]);
 
     const getTacticIcon = (m) => {
-        // Prioridad 1: Tipo definido en BD
         if (m.tipoIcono) return crearIconoTactico(m.tipoIcono);
-
-        // Prioridad 2: Fallback por modelo de aeronave
         const sda = (m.aeronave || "").toUpperCase();
         const alaFijaModelos = ['C-212', 'C-208', 'DA-62', 'B-200', 'C-550', 'T-202', 'CESSNA', 'DIAMOND', 'BEECH', 'LEARJET'];
         const esAlaFija = alaFijaModelos.some(tipo => sda.includes(tipo));
-        
         return esAlaFija ? crearIconoTactico('ala_fija') : crearIconoTactico('ala_rotativa');
     };
 
@@ -272,21 +285,21 @@ const OperacionesMapa = () => {
                     >
                         <Tooltip permanent direction="top" offset={[0, -10]} className="label-tactica-custom">
                             <div style={styles.labelBoxDark}>
-                                {m.matricula || m.aeronave || 'S/M'}
+                                {(m.matricula || m.aeronave || 'S/M').toUpperCase()}
                             </div>
                         </Tooltip>
                         <Popup>
-                            <div style={styles.popupHeader}>{m.title}</div>
+                            <div style={styles.popupHeader}>{m.title.toUpperCase()}</div>
                             <div style={styles.popupBody}>
-                                <p><strong>UNIDAD:</strong> {m.elemento}</p>
-                                <p><strong>AERONAVE:</strong> {m.aeronave} ({m.matricula})</p>
-                                <p><strong>POSICIÓN:</strong> {m.ubicacion.nombre}</p>
+                                <p><strong>UNIDAD:</strong> {m.elemento.toUpperCase()}</p>
+                                <p><strong>AERONAVE:</strong> {m.aeronave.toUpperCase()} ({m.matricula.toUpperCase()})</p>
+                                <p><strong>POSICIÓN:</strong> {m.ubicacion.nombre.toUpperCase()}</p>
                                 <p><strong>ESTADO:</strong> {m.status?.toUpperCase().replace('_', ' ') || 'EN CURSO'}</p>
                                 <hr style={{borderColor: '#333'}} />
                                 <div style={styles.popNotesContainer}>
                                     <strong style={{fontSize: '0.65rem', color: '#f39c12'}}>INFORMACIÓN MARGINAL:</strong>
                                     <p style={styles.popNotesText}>
-                                        {m.notasMarginales || 'SIN NOVEDAD'}
+                                        {m.notasMarginales ? m.notasMarginales.toUpperCase() : 'SIN NOVEDAD'}
                                     </p>
                                 </div>
                                 <div style={styles.popFooter}>
@@ -305,7 +318,6 @@ const OperacionesMapa = () => {
                 .leaflet-popup-content-wrapper { padding: 0; background: #1a1a1a; color: white; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
                 .leaflet-popup-content { margin: 0; width: 220px !important; }
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; }
-                .leaflet-popup-tip { background: #f39c12; }
             `}</style>
         </div>
     );

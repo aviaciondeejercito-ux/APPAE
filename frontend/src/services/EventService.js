@@ -22,7 +22,7 @@ export const getActiveOperations = async () => {
 // --- 2. NUEVA FUNCIÓN: Obtener aeronaves E/S por unidad ---
 export const getAvailableAircraft = async (elemento) => {
     try {
-        const encodedElemento = encodeURIComponent(elemento || '');
+        const encodedElemento = encodeURIComponent(elemento || 'all');
         const response = await API.get(`/events/aircraft/${encodedElemento}`);
         return response.data;
     } catch (error) {
@@ -59,7 +59,7 @@ export const createEvent = async (eventData) => {
             // --- CAMPOS CRÍTICOS PARA EL MAPA ---
             isRealTime: eventData.isRealTime || false,
             ubicacion: {
-                nombre: (eventData.ubicacion?.nombre || 'Posición No Definida').toUpperCase(),
+                nombre: (eventData.ubicacion?.nombre || 'POSICIÓN NO DEFINIDA').toUpperCase(),
                 lat: parseFloat(eventData.ubicacion?.lat) || 0,
                 lng: parseFloat(eventData.ubicacion?.lng) || 0
             },

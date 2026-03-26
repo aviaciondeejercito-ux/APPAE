@@ -4,7 +4,7 @@ const Aircraft = require('../models/Aircraft');
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: Segregación total entre Gestión Administrativa y Operaciones de Vuelo.
- * Objetivo: Que los vuelos NO ensucien el Log de Órdenes ni el Calendario.
+ * Sincro Real-Time: Integración con WebSockets para actualización inmediata del Mapa Táctico.
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -13,7 +13,7 @@ const getAvailableAircraft = async (req, res) => {
         const { elemento } = req.params;
         let query = { estado: 'E/S' };
 
-        if (elemento !== 'all') {
+        if (elemento && elemento !== 'all') {
             query.unidad = { $regex: elemento, $options: 'i' };
         }
         
@@ -25,23 +25,18 @@ const getAvailableAircraft = async (req, res) => {
     }
 };
 
-// @desc    Obtener eventos para CALENDARIO Y LOG (Ignora Vuelos por completo)
+// @desc    Obtener eventos para CALENDARIO Y LOG (Ignora Vuelos en tiempo real)
 const getEvents = async (req, res) => {
     try {
         const { elemento, role } = req.user; 
         
-        /**
-         * FILTRO DE INDEPENDENCIA: 
-         * Se excluye todo lo que tenga 'isRealTime: true' (Vuelos)
-         * y todo lo que tenga categoría 'VUELO'.
-         */
         let query = { 
             isRealTime: { $ne: true },
             tipoApoyo: { $ne: 'VUELO' } 
         };
 
         if (role === 'admin' || role === 'boss' || elemento === 'DIR AE') {
-            // Acceso total a órdenes, pero sigue ignorando vuelos
+            // Acceso total a la gestión administrativa
         } 
         else {
             query = {
@@ -71,16 +66,12 @@ const getEvents = async (req, res) => {
     }
 };
 
-// @desc    Obtener operaciones para el MAPA (Único canal comunicado con vuelos)
+// @desc    Obtener operaciones activas para el MAPA TÁCTICO
 const getActiveOperations = async (req, res) => {
     try {
-        /**
-         * SINCRO JOKER: Ajuste de filtros para asegurar visibilidad en el mapa.
-         * Se incluyen todos los estados operativos definidos en el Modelo.
-         */
         const activeOps = await Event.find({ 
             isRealTime: true,
-            status: { $in: ['en_curso', 'en_desarrollo', 'programado', 'operativo', 'disponible'] } 
+            status: { $in: ['en_curso', 'en_desarrollo', 'programado', 'operativo', 'disponible', 'emergencia'] } 
         }).sort({ updatedAt: -1 });
 
         res.status(200).json(activeOps);
@@ -90,7 +81,7 @@ const getActiveOperations = async (req, res) => {
     }
 };
 
-// @desc    Crear un nuevo registro (Diferencia automáticamente Vuelo de Orden)
+// @desc    Crear un nuevo registro (Diferencia automáticamente Vuelo de Orden Administrativa)
 const createEvent = async (req, res) => {
     try {
         const { 
@@ -110,7 +101,7 @@ const createEvent = async (req, res) => {
             color: color || '#1b3a57',
             createdBy: req.user._id,
             userName: req.user.username,
-            elemento: (isMando && elemento) ? elemento : req.user.elemento,
+            elemento: ((isMando && elemento) ? elemento : req.user.elemento).toUpperCase(),
             status: status || 'programado'
         };
 
@@ -122,11 +113,11 @@ const createEvent = async (req, res) => {
                 end: null,
                 etapa: 'operativo',
                 ubicacion: {
-                    nombre: ubicacion?.nombre || 'Punto No Definido',
+                    nombre: (ubicacion?.nombre || 'POSICIÓN POR COORDENADAS').toUpperCase(),
                     lat: ubicacion?.lat ? parseFloat(ubicacion.lat) : 0,
                     lng: ubicacion?.lng ? parseFloat(ubicacion.lng) : 0
                 },
-                notasMarginales: notasMarginales ? notasMarginales.toUpperCase() : '',
+                notasMarginales: notasMarginales ? notasMarginales.toUpperCase() : 'SIN NOVEDAD',
                 aeronave: (aeronave || '').toUpperCase(),
                 matricula: (matricula || '').toUpperCase(),
                 tipoIcono: tipoIcono || 'ala_rotativa'
@@ -134,7 +125,7 @@ const createEvent = async (req, res) => {
         } else {
             Object.assign(eventData, {
                 isRealTime: false,
-                tipoApoyo: tipoApoyo || 'GESTION',
+                tipoApoyo: (tipoApoyo || 'GESTION').toUpperCase(),
                 start: start ? new Date(start) : null,
                 end: end ? new Date(end) : null,
                 etapa: etapa || 'recepcion',
@@ -146,6 +137,13 @@ const createEvent = async (req, res) => {
 
         const newEvent = new Event(eventData);
         await newEvent.save();
+
+        // EMISIÓN REAL-TIME: Notificar al radar táctico
+        const io = req.app.get('socketio');
+        if (io && newEvent.isRealTime) {
+            io.emit('newOperation', newEvent);
+        }
+
         res.status(201).json(newEvent);
     } catch (error) {
         console.error(`❌ Error en createEvent: ${error.message}`);
@@ -153,35 +151,34 @@ const createEvent = async (req, res) => {
     }
 };
 
-// @desc    Actualizar registro (Blindado contra Error 400 y Desplazamiento de Coordenadas)
+// @desc    Actualizar registro (Sincronización Atómica y Real-Time)
 const updateEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'Registro no localizado.' });
 
+        // Clonamos el cuerpo para procesar la actualización
         const updateData = { ...req.body };
         
-        // SEGURIDAD: Nunca modificar el _id ni el creador original
+        // Bloqueo de campos sensibles
         delete updateData._id; 
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
+        // Normalización militar de cadenas
         if (updateData.title) updateData.title = updateData.title.toUpperCase();
+        if (updateData.elemento) updateData.elemento = updateData.elemento.toUpperCase();
+        if (updateData.aeronave) updateData.aeronave = updateData.aeronave.toUpperCase();
+        if (updateData.matricula) updateData.matricula = updateData.matricula.toUpperCase();
+        if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
 
-        /**
-         * SINCRO JOKER - ACTUALIZACIÓN ATÓMICA DE UBICACIÓN
-         * Si viene el objeto ubicacion, usamos la notación de punto para no sobrescribir 
-         * el objeto entero en MongoDB, evitando perder datos parciales.
-         */
+        // Actualización ATÓMICA de la ubicación (Sincro Joker)
         if (updateData.ubicacion && typeof updateData.ubicacion === 'object') {
             const { lat, lng, nombre } = updateData.ubicacion;
-            
             if (lat !== undefined) updateData['ubicacion.lat'] = parseFloat(lat);
             if (lng !== undefined) updateData['ubicacion.lng'] = parseFloat(lng);
-            if (nombre !== undefined) updateData['ubicacion.nombre'] = nombre;
-            
-            // Eliminamos el objeto raíz para usar los campos planos definidos arriba
-            delete updateData.ubicacion;
+            if (nombre !== undefined) updateData['ubicacion.nombre'] = nombre.toUpperCase();
+            delete updateData.ubicacion; // Evitamos sobrescribir el objeto completo
         }
 
         const updatedEvent = await Event.findByIdAndUpdate(
@@ -190,14 +187,20 @@ const updateEvent = async (req, res) => {
             { new: true, runValidators: true }
         );
 
+        // EMISIÓN REAL-TIME: Actualización inmediata de todos los terminales en el mapa
+        const io = req.app.get('socketio');
+        if (io && updatedEvent.isRealTime) {
+            io.emit('updateOperation', updatedEvent);
+        }
+
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error al actualizar el registro operativo. Verifique el formato.' });
+        res.status(400).json({ message: 'Error al actualizar el registro operativo.' });
     }
 };
 
-// @desc    Eliminar registro (Independiente)
+// @desc    Eliminar registro y limpiar radar
 const deleteEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
@@ -210,7 +213,17 @@ const deleteEvent = async (req, res) => {
             return res.status(403).json({ message: 'Permiso denegado para borrar.' });
         }
 
+        const isRealTime = event.isRealTime;
+        const eventId = event._id;
+
         await event.deleteOne();
+
+        // EMISIÓN REAL-TIME: Remover icono del mapa de todos los clientes
+        const io = req.app.get('socketio');
+        if (io && isRealTime) {
+            io.emit('deleteOperation', eventId);
+        }
+
         res.status(200).json({ message: 'Eliminado correctamente.' });
     } catch (error) {
         console.error(`❌ Error en deleteEvent: ${error.message}`);
