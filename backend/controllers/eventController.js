@@ -6,6 +6,7 @@ const Aircraft = require('../models/Aircraft');
  * Estándar de Seguridad: SINCRO JOKER (Optimizado)
  * - Actualizaciones Atómicas en MongoDB.
  * - Sincro Real-Time: Integración con WebSockets para el Mapa Táctico.
+ * - Lógica de Permisos: Filtro por Unidad para Carga Táctica.
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -26,7 +27,7 @@ const getAvailableAircraft = async (req, res) => {
     }
 };
 
-// @desc    Obtener eventos para CALENDARIO Y LOG (Corregido para incluir Vuelos Activos)
+// @desc    Obtener eventos para CALENDARIO Y LOG
 const getEvents = async (req, res) => {
     try {
         const { elemento, role } = req.user; 
@@ -61,14 +62,23 @@ const getEvents = async (req, res) => {
     }
 };
 
-// @desc    Obtener operaciones activas para el MAPA TÁCTICO
+// @desc    Obtener operaciones activas para el MAPA TÁCTICO (Con filtro de Unidad)
 const getActiveOperations = async (req, res) => {
     try {
-        const activeOps = await Event.find({ 
+        const { elemento, role } = req.user;
+        const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
+
+        let query = { 
             isRealTime: true,
             status: { $in: ['en_curso', 'en_desarrollo', 'operativo', 'emergencia'] } 
-        }).sort({ updatedAt: -1 });
+        };
 
+        // Si no es mando, solo ve los vuelos de su unidad en el mapa
+        if (!isMando) {
+            query.elemento = { $regex: elemento, $options: 'i' };
+        }
+
+        const activeOps = await Event.find(query).sort({ updatedAt: -1 });
         res.status(200).json(activeOps);
     } catch (error) {
         console.error(`❌ Error en getActiveOperations: ${error.message}`);
@@ -89,8 +99,6 @@ const createEvent = async (req, res) => {
         if (!title) return res.status(400).json({ message: 'Título requerido.' });
 
         const isMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
-        
-        // Limpieza de notas para evitar 'undefined'
         const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
 
         const eventData = {
@@ -152,26 +160,28 @@ const createEvent = async (req, res) => {
     }
 };
 
-// @desc    Actualizar registro (Sincronización Atómica y Unificación de Notas)
+// @desc    Actualizar registro (Sincronización Atómica y Permisos de Unidad)
 const updateEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'Registro no localizado.' });
 
-        const isMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
+        const { elemento, role } = req.user;
+        const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
+        
+        // El usuario puede editar si es mando O si el evento pertenece a su unidad
+        const perteneceAUnidad = event.elemento && event.elemento.toUpperCase().includes(elemento.toUpperCase());
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
-        if (!isMando && !isOwner) {
-            return res.status(403).json({ message: 'No tiene permisos para modificar este registro.' });
+        if (!isMando && !isOwner && !perteneceAUnidad) {
+            return res.status(403).json({ message: 'No tiene permisos para modificar este vuelo.' });
         }
 
         const updateData = { ...req.body };
-        
         delete updateData._id; 
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        // Unificación de campos de texto y prevención de 'undefined' visual
         if (updateData.notasMarginales || updateData.notes) {
             const txt = (updateData.notasMarginales || updateData.notes || '').toString().toUpperCase();
             updateData.notasMarginales = txt;
@@ -180,12 +190,10 @@ const updateEvent = async (req, res) => {
 
         ['title', 'elemento', 'aeronave', 'matricula'].forEach(field => {
             if (updateData[field] !== undefined) {
-                // Solo convertimos si es un string válido para evitar la "etiqueta fea"
                 updateData[field] = (updateData[field] || '').toString().toUpperCase();
             }
         });
 
-        // PROTOCOLO ATÓMICO: Sincronización de coordenadas
         if (updateData.lat !== undefined || updateData.lng !== undefined) {
             const nLat = parseFloat(updateData.lat ?? event.lat);
             const nLng = parseFloat(updateData.lng ?? event.lng);
@@ -220,11 +228,13 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
 
-        const isMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
+        const { elemento, role } = req.user;
+        const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
+        const perteneceAUnidad = event.elemento && event.elemento.toUpperCase().includes(elemento.toUpperCase());
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
-        if (!isMando && !isOwner) {
-            return res.status(403).json({ message: 'No tiene permisos para eliminar este registro.' });
+        if (!isMando && !isOwner && !perteneceAUnidad) {
+            return res.status(403).json({ message: 'No tiene permisos para finalizar este vuelo.' });
         }
 
         const isRealTime = event.isRealTime;

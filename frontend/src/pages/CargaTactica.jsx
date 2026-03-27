@@ -40,13 +40,17 @@ const UNIDADES_AE = [
 ];
 
 const CargaTactica = () => {
+    // Obtener datos del usuario desde localStorage o context (ajustado para la lógica de permisos)
+    const user = JSON.parse(localStorage.getItem('user')) || { elemento: '', role: '' };
+    const isMando = user.role === 'admin' || user.role === 'boss' || user.elemento === 'DIR AE';
+
     const [misionesActivas, setMisionesActivas] = useState([]);
     const [flotaES, setFlotaES] = useState([]);
     const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(false);
     
     const [formData, setFormData] = useState({
-        title: '', elemento: '', notasMarginales: '', 
+        title: '', elemento: user.elemento || '', notasMarginales: '', 
         aeronaveId: '', sda: '', matricula: '', 
         latG: 34, latM: 31, latS: 40, latDir: 'S',
         lngG: 58, lngM: 38, lngS: 29, lngDir: 'W',
@@ -61,13 +65,28 @@ const CargaTactica = () => {
             const dataEvents = Array.isArray(evRes) ? evRes : (evRes.data || []);
             const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
 
-            // Filtro robusto: buscamos específicamente misiones en curso y marcadas como tiempo real
-            const activas = dataEvents.filter(ev => 
-                (ev.status === 'en_curso' || ev.isRealTime === true) && ev.tipoApoyo === 'VUELO'
-            );
+            // Filtro robusto + Lógica de Unidad:
+            // Si no es mando, solo ve los vuelos donde el elemento coincida con su unidad
+            const activas = dataEvents.filter(ev => {
+                const esVueloActivo = (ev.status === 'en_curso' || ev.isRealTime === true) && ev.tipoApoyo === 'VUELO';
+                if (!isMando) {
+                    return esVueloActivo && ev.elemento?.toUpperCase().includes(user.elemento.toUpperCase());
+                }
+                return esVueloActivo;
+            });
             
             setMisionesActivas(activas);
-            setFlotaES(dataAir.filter(a => a.estado === 'E/S'));
+            
+            // Filtrar flota disponible: si no es mando, solo ve aeronaves de su unidad
+            const flotaFiltrada = dataAir.filter(a => {
+                const enServicio = a.estado === 'E/S';
+                if (!isMando) {
+                    return enServicio && a.unidad?.toUpperCase().includes(user.elemento.toUpperCase());
+                }
+                return enServicio;
+            });
+
+            setFlotaES(flotaFiltrada);
         } catch (error) {
             console.error("Error de enlace:", error);
         } finally {
@@ -131,7 +150,7 @@ const CargaTactica = () => {
         setEditingId(mision._id);
         setFormData({
             title: mision.title,
-            elemento: mision.elemento || mision.ubicacion?.elemento || '',
+            elemento: mision.elemento || '',
             notasMarginales: mision.notes || mision.notasMarginales || '',
             sda: mision.aeronave || '',
             matricula: mision.matricula || '',
@@ -151,7 +170,7 @@ const CargaTactica = () => {
             aeronave: formData.sda.toUpperCase(),
             matricula: formData.matricula.toUpperCase(),
             elemento: formData.elemento.toUpperCase(),
-            notes: formData.notasMarginales.toUpperCase(), // Se mapea a 'notes' por compatibilidad con Event.js
+            notes: formData.notasMarginales.toUpperCase(),
             notasMarginales: formData.notasMarginales.toUpperCase(),
             isRealTime: true,
             status: 'en_curso',
@@ -179,7 +198,7 @@ const CargaTactica = () => {
             }
             
             setFormData({ 
-                title: '', elemento: '', notasMarginales: '', 
+                title: '', elemento: user.elemento || '', notasMarginales: '', 
                 aeronaveId: '', sda: '', matricula: '', 
                 latG: 34, latM: 31, latS: 40, latDir: 'S', 
                 lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', 
@@ -188,7 +207,7 @@ const CargaTactica = () => {
             setEditingId(null);
             cargarDatos();
         } catch (error) {
-            Swal.fire({ title: 'ERROR', text: 'Fallo en la comunicación con el servidor', icon: 'error', background: '#1e272e', color: '#fff' });
+            Swal.fire({ title: 'ERROR', text: 'No tiene permisos para modificar este vuelo o fallo de red', icon: 'error', background: '#1e272e', color: '#fff' });
         }
     };
 
@@ -210,7 +229,7 @@ const CargaTactica = () => {
                 await deleteEvent(id);
                 cargarDatos();
             } catch (error) {
-                Swal.fire('ERROR', 'No se pudo dar de baja', 'error');
+                Swal.fire('ERROR', 'No tiene permisos para dar de baja este vuelo', 'error');
             }
         }
     };
@@ -240,7 +259,13 @@ const CargaTactica = () => {
 
                             <div>
                                 <label style={styles.label}>UNIDAD RESPONSABLE</label>
-                                <select style={styles.input} value={formData.elemento} onChange={(e) => setFormData({...formData, elemento: e.target.value})} required>
+                                <select 
+                                    style={styles.input} 
+                                    value={formData.elemento} 
+                                    onChange={(e) => setFormData({...formData, elemento: e.target.value})} 
+                                    disabled={!isMando}
+                                    required
+                                >
                                     <option value="">-- Unidad --</option>
                                     {UNIDADES_AE.map(u => <option key={u} value={u}>{u}</option>)}
                                 </select>
@@ -276,7 +301,7 @@ const CargaTactica = () => {
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
                             {editingId ? 'GUARDAR POSICIÓN ACTUAL' : 'LANZAR OPERACIÓN'}
                         </button>
-                        {editingId && <button type="button" onClick={() => {setEditingId(null); setFormData({...formData, title: ''})}} style={styles.btnCancel}>CANCELAR EDICIÓN</button>}
+                        {editingId && <button type="button" onClick={() => {setEditingId(null); setFormData({...formData, title: '', elemento: user.elemento || ''})}} style={styles.btnCancel}>CANCELAR EDICIÓN</button>}
                     </form>
                 </div>
 
