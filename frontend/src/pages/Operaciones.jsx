@@ -69,13 +69,10 @@ const Operaciones = () => {
             const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
             
-            // FILTRADO MEJORADO: 
-            // 1. Excluimos explícitamente eventos que vengan del log de vuelos (tipo: 'VUELO')
-            // 2. Solo mostramos órdenes que tengan tipoApoyo definido (propio de Operaciones)
             const filteredData = data.filter(ev => {
-                if (ev.tipo === 'VUELO') return false; // Exclusión de vuelos
+                if (ev.isRealTime) return false; // Exclusión de vuelos en tiempo real
                 
-                const esOrdenOperativa = ev.tipoApoyo || ev.sdaListado?.length > 0;
+                const esOrdenOperativa = ev.tipoApoyo || (ev.sdaListado && ev.sdaListado.length > 0);
                 if (!esOrdenOperativa) return false;
 
                 if (esMando) return true;
@@ -110,7 +107,12 @@ const Operaciones = () => {
     };
 
     const addSda = () => {
-        if (!formData.sdaSelected || formData.sdaSelected.includes('undefined')) return;
+        // Validación estricta para evitar la "etiqueta fea"
+        if (!formData.sdaSelected || 
+            formData.sdaSelected.trim() === "" || 
+            formData.sdaSelected.toLowerCase().includes('undefined')) {
+            return;
+        }
         
         const valorLimpio = formData.sdaSelected.trim();
         const nuevoSda = `${formData.sdaCantidad}x ${valorLimpio}`;
@@ -134,25 +136,24 @@ const Operaciones = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // Mantenemos solo validación de existencia, no de lógica (permitir correcciones)
         if (!formData.start || !formData.end) {
             alert("Por favor complete las fechas de inicio y fin.");
             return;
         }
 
         const esMando = role === 'admin' || role === 'boss';
+        // Limpiamos el prefijo si ya existe para no duplicarlo en la edición
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
         const finalData = {
-            title: formData.title,
-            start: formData.start, // Enviamos directo para facilitar edición
+            title: formData.title.toUpperCase(),
+            start: formData.start,
             end: formData.end,
             color: formData.color,
-            tipoApoyo: formData.tipoApoyo,
+            tipoApoyo: formData.tipoApoyo.toUpperCase(),
             sdaListado: formData.sdaListado,
             etapa: formData.etapa,
             esGlobal: esMando ? publicarGlobal : false,
-            tipoOrigen: (esMando && publicarGlobal) ? 'COMANDO' : 'UNIDAD',
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
             elemento: (esMando && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
@@ -161,8 +162,6 @@ const Operaciones = () => {
 
         try {
             if (isEditing) {
-                // El error 400 suele ser por el formato de ID o datos faltantes. 
-                // Aseguramos que el ID esté presente.
                 await updateEvent(selectedId, finalData);
                 alert("✅ Registro actualizado correctamente.");
             } else {
@@ -173,7 +172,7 @@ const Operaciones = () => {
             fetchData();
         } catch (error) { 
             console.error("Error en Submit:", error);
-            alert("❌ Error al guardar. Verifique la conexión o si el registro fue eliminado."); 
+            alert("❌ Error al guardar. Verifique los datos."); 
         }
     };
 

@@ -30,8 +30,6 @@ const getAvailableAircraft = async (req, res) => {
 const getEvents = async (req, res) => {
     try {
         const { elemento, role } = req.user; 
-        
-        // REPARACIÓN: Eliminamos el bloqueo de isRealTime para que el Log de CargaTactica reciba datos
         let query = {}; 
 
         const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
@@ -55,7 +53,6 @@ const getEvents = async (req, res) => {
             };
         }
 
-        // Ordenamos por fecha de inicio, pero los de tiempo real (que tienen start: null) al final o por actualización
         const events = await Event.find(query).sort({ start: 1, updatedAt: -1 });
         res.status(200).json(events);
     } catch (error) {
@@ -93,11 +90,11 @@ const createEvent = async (req, res) => {
 
         const isMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
         
-        // Mapeo de notas dual para evitar campos vacíos en el Log
-        const notasProcesadas = (notasMarginales || notes || '').toUpperCase();
+        // Limpieza de notas para evitar 'undefined'
+        const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
 
         const eventData = {
-            title: title.toUpperCase(),
+            title: (title || '').toString().toUpperCase(),
             notes: notasProcesadas,
             notasMarginales: notasProcesadas,
             color: color || '#d35400',
@@ -114,7 +111,7 @@ const createEvent = async (req, res) => {
             Object.assign(eventData, {
                 isRealTime: true,
                 tipoApoyo: 'VUELO',
-                start: null, // Los vuelos activos no ocupan espacio en el calendario administrativo por fecha
+                start: null,
                 end: null,
                 etapa: 'operativo',
                 lat: parseFloat(finalLat),
@@ -124,8 +121,8 @@ const createEvent = async (req, res) => {
                     lat: parseFloat(finalLat),
                     lng: parseFloat(finalLng)
                 },
-                aeronave: (aeronave || '').toUpperCase(),
-                matricula: (matricula || '').toUpperCase(),
+                aeronave: (aeronave || '').toString().toUpperCase(),
+                matricula: (matricula || '').toString().toUpperCase(),
                 tipoIcono: tipoIcono || 'ala_rotativa'
             });
         } else {
@@ -161,21 +158,31 @@ const updateEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'Registro no localizado.' });
 
+        const isMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
+        const isOwner = event.createdBy.toString() === req.user._id.toString();
+
+        if (!isMando && !isOwner) {
+            return res.status(403).json({ message: 'No tiene permisos para modificar este registro.' });
+        }
+
         const updateData = { ...req.body };
         
         delete updateData._id; 
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        // Unificación de campos de texto
+        // Unificación de campos de texto y prevención de 'undefined' visual
         if (updateData.notasMarginales || updateData.notes) {
-            const txt = (updateData.notasMarginales || updateData.notes).toUpperCase();
+            const txt = (updateData.notasMarginales || updateData.notes || '').toString().toUpperCase();
             updateData.notasMarginales = txt;
             updateData.notes = txt;
         }
 
         ['title', 'elemento', 'aeronave', 'matricula'].forEach(field => {
-            if (updateData[field]) updateData[field] = updateData[field].toUpperCase();
+            if (updateData[field] !== undefined) {
+                // Solo convertimos si es un string válido para evitar la "etiqueta fea"
+                updateData[field] = (updateData[field] || '').toString().toUpperCase();
+            }
         });
 
         // PROTOCOLO ATÓMICO: Sincronización de coordenadas
@@ -203,7 +210,7 @@ const updateEvent = async (req, res) => {
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error al actualizar.' });
+        res.status(400).json({ message: 'Error al actualizar registro.' });
     }
 };
 
@@ -212,6 +219,13 @@ const deleteEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
+
+        const isMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
+        const isOwner = event.createdBy.toString() === req.user._id.toString();
+
+        if (!isMando && !isOwner) {
+            return res.status(403).json({ message: 'No tiene permisos para eliminar este registro.' });
+        }
 
         const isRealTime = event.isRealTime;
         const eventId = event._id;
