@@ -10,7 +10,6 @@ const Operaciones = () => {
     const [isMobile] = useState(window.innerWidth < 768);
 
     const [publicarGlobal, setPublicarGlobal] = useState(false);
-    
     const [availableAircraft, setAvailableAircraft] = useState([]);
     const [loadingAircraft, setLoadingAircraft] = useState(false);
 
@@ -40,9 +39,9 @@ const Operaciones = () => {
 
     useEffect(() => {
         const fetchAeronaves = async () => {
+            if (!userUnidad && formData.unidadesInvolucradas.length === 0) return;
             setLoadingAircraft(true);
             try {
-                // El Boss o Admin buscan aeronaves de la unidad seleccionada o de la suya propia
                 const destinoBusqueda = (formData.unidadesInvolucradas.length > 0) 
                     ? formData.unidadesInvolucradas[0] 
                     : userUnidad;
@@ -52,7 +51,7 @@ const Operaciones = () => {
                     const cleanData = data.map(a => ({
                         ...a,
                         matricula: a.matricula || 'S/M',
-                        modelo: a.sda || a.modelo || ''
+                        modelo: a.sda || a.modelo || 'S/D'
                     }));
                     setAvailableAircraft(cleanData);
                 }
@@ -70,10 +69,16 @@ const Operaciones = () => {
             const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
             
-            // FILTRADO: Admin y Boss ven TODO. Unidades ven lo suyo + Globales.
-            const filteredData = esMando 
-                ? data 
-                : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
+            // FILTRADO: 
+            // 1. Solo mostramos eventos que NO sean vuelos (evitamos los del log de vuelos)
+            // 2. Aplicamos la lógica de visibilidad por unidad o global
+            const filteredData = data.filter(ev => {
+                const esOrdenOperativa = ev.tipoApoyo || ev.sdaListado?.length > 0;
+                if (!esOrdenOperativa) return false;
+
+                if (esMando) return true;
+                return ev.elemento?.includes(userUnidad) || ev.esGlobal;
+            });
             
             setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
@@ -104,7 +109,7 @@ const Operaciones = () => {
 
     const addSda = () => {
         if (!formData.sdaSelected) return;
-        const valorLimpio = formData.sdaSelected.replace(/\s?\(undefined\)/g, '').replace(/\s?\(\)/g, '').trim();
+        const valorLimpio = formData.sdaSelected.replace(/undefined/g, '').replace(/\(\)/g, '').trim();
         const nuevoSda = `${formData.sdaCantidad}x ${valorLimpio}`;
         if (!formData.sdaListado.includes(nuevoSda)) {
             setFormData({ 
@@ -124,6 +129,11 @@ const Operaciones = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!formData.start || !formData.end) {
+            alert("Por favor complete las fechas de inicio y fin.");
+            return;
+        }
+
         const esMando = role === 'admin' || role === 'boss';
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
@@ -138,10 +148,9 @@ const Operaciones = () => {
             esGlobal: esMando ? publicarGlobal : false,
             tipoOrigen: (esMando && publicarGlobal) ? 'COMANDO' : 'UNIDAD',
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
-            // Si es mando y eligió unidades, se guardan esas. Si no, su propia unidad.
             elemento: (esMando && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
-                      : userUnidad
+                      : (isEditing ? formData.unidadesInvolucradas.join(', ') : userUnidad)
         };
 
         try {
@@ -155,7 +164,7 @@ const Operaciones = () => {
             resetForm();
             fetchData();
         } catch (error) { 
-            alert("❌ Error: Verifique que todos los campos y fechas sean correctos."); 
+            alert("❌ Error: Verifique los permisos de su unidad o la validez de las fechas."); 
         }
     };
 
@@ -171,6 +180,14 @@ const Operaciones = () => {
     };
 
     const handleEdit = (ev) => {
+        // PERMISO: Solo pueden editar si son Admin/Boss O si el evento es de su unidad
+        const puedeEditar = role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad);
+        
+        if (!puedeEditar) {
+            alert("No tiene permisos para editar órdenes de otra unidad.");
+            return;
+        }
+
         setIsEditing(true);
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
@@ -199,7 +216,14 @@ const Operaciones = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDelete = async (id) => {
+    const handleDelete = async (id, elementoEv) => {
+        const puedeEliminar = role === 'admin' || role === 'boss' || elementoEv?.includes(userUnidad);
+        
+        if (!puedeEliminar) {
+            alert("No tiene permisos para eliminar esta orden.");
+            return;
+        }
+
         if (window.confirm("¿Confirmar ELIMINACIÓN de la orden operativa?")) {
             try {
                 await deleteEvent(id);
@@ -326,28 +350,34 @@ const Operaciones = () => {
                     <h3 style={styles.title}>📜 Registro de Órdenes {role === 'admin' || role === 'boss' ? 'Generales' : `de ${userUnidad}`}</h3>
                     <div style={styles.scrollList}>
                         {events.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes registradas.</p> : 
-                        events.map(ev => (
-                            <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
-                                <div style={{flex: 1}}>
-                                    <div style={{fontWeight: 'bold', color: '#1b3a57'}}>
-                                        {ev.esGlobal && "🌐 "}{ev.title}
+                        events.map(ev => {
+                            const puedeGestionar = role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad);
+                            
+                            return (
+                                <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
+                                    <div style={{flex: 1}}>
+                                        <div style={{fontWeight: 'bold', color: '#1b3a57'}}>
+                                            {ev.esGlobal && "🌐 "}{ev.title}
+                                        </div>
+                                        <div style={{fontSize: '0.75rem', color: '#666'}}>
+                                            {ev.elemento} | {new Date(ev.start).toLocaleDateString('es-AR')}
+                                        </div>
+                                        <div style={{fontSize: '0.7rem', color: '#555', marginTop: '3px', fontWeight: '500'}}>
+                                            {ev.tipoApoyo}
+                                        </div>
+                                        <span style={{...styles.miniBadge, backgroundColor: ev.color}}>
+                                            {ev.etapa?.toUpperCase() || 'PROCESANDO'}
+                                        </span>
                                     </div>
-                                    <div style={{fontSize: '0.75rem', color: '#666'}}>
-                                        {ev.elemento} | {new Date(ev.start).toLocaleDateString('es-AR')}
-                                    </div>
-                                    <div style={{fontSize: '0.7rem', color: '#555', marginTop: '3px', fontWeight: '500'}}>
-                                        {ev.tipoApoyo}
-                                    </div>
-                                    <span style={{...styles.miniBadge, backgroundColor: ev.color}}>
-                                        {ev.etapa?.toUpperCase() || 'PROCESANDO'}
-                                    </span>
+                                    {puedeGestionar && (
+                                        <div style={styles.logActions}>
+                                            <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit} title="Editar">✏️</button>
+                                            <button onClick={() => handleDelete(ev._id, ev.elemento)} style={styles.btnIconDel} title="Eliminar">🗑️</button>
+                                        </div>
+                                    )}
                                 </div>
-                                <div style={styles.logActions}>
-                                    <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit} title="Editar">✏️</button>
-                                    <button onClick={() => handleDelete(ev._id)} style={styles.btnIconDel} title="Eliminar">🗑️</button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </div>
