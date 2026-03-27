@@ -57,14 +57,17 @@ const CargaTactica = () => {
         setLoading(true);
         try {
             const [evRes, airRes] = await Promise.all([getEvents(), getAircrafts()]);
-            const dataEvents = Array.isArray(evRes) ? evRes : evRes.data || [];
-            // Filtramos misiones que tengan el flag isRealTime (vuelos actuales)
+            
+            // Procesamiento Resiliente de Eventos
+            const dataEvents = Array.isArray(evRes) ? evRes : (evRes.data || []);
             setMisionesActivas(dataEvents.filter(ev => ev.isRealTime === true));
             
-            const dataAir = Array.isArray(airRes.data) ? airRes.data : [];
+            // Procesamiento Resiliente de Flota
+            const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
             setFlotaES(dataAir.filter(a => a.estado === 'E/S'));
+            
         } catch (error) {
-            console.error("Error en sincronización:", error);
+            console.error("Error en sincronización táctica:", error);
         } finally {
             setLoading(false);
         }
@@ -72,7 +75,7 @@ const CargaTactica = () => {
 
     useEffect(() => {
         cargarDatos();
-        const interval = setInterval(cargarDatos, 15000);
+        const interval = setInterval(cargarDatos, 10000);
         return () => clearInterval(interval);
     }, []);
 
@@ -118,24 +121,31 @@ const CargaTactica = () => {
     };
 
     const handleEdit = (mision) => {
-        const latGMS = fromDecimal(mision.ubicacion.lat, 'lat');
-        const lngGMS = fromDecimal(mision.ubicacion.lng, 'lng');
+        // Buscamos coordenadas en raíz o en objeto ubicacion
+        const latVal = mision.lat !== undefined ? mision.lat : (mision.ubicacion?.lat || 0);
+        const lngVal = mision.lng !== undefined ? mision.lng : (mision.ubicacion?.lng || 0);
+        
+        const latGMS = fromDecimal(latVal, 'lat');
+        const lngGMS = fromDecimal(lngVal, 'lng');
+        
         setEditingId(mision._id);
         setFormData({
             title: mision.title,
-            elemento: mision.elemento,
-            notasMarginales: mision.notasMarginales,
-            sda: mision.aeronave,
-            matricula: mision.matricula,
+            elemento: mision.elemento || '',
+            notasMarginales: mision.notasMarginales || '',
+            sda: mision.aeronave || '',
+            matricula: mision.matricula || '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
-            locNombre: mision.ubicacion.nombre
+            locNombre: mision.ubicacion?.nombre || mision.ubicacion || 'POSICIÓN TÁCTICA'
         });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+        const latDec = toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir);
+        const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
+
         const payload = {
             title: formData.title.toUpperCase(),
             aeronave: formData.sda.toUpperCase(),
@@ -146,10 +156,12 @@ const CargaTactica = () => {
             etapa: 'operativo',
             status: 'en_curso',
             tipoIcono: formData.sda.includes('C-') || formData.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa',
+            lat: latDec, 
+            lng: lngDec,
             ubicacion: {
                 nombre: (formData.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
-                lat: toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir),
-                lng: toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir)
+                lat: latDec,
+                lng: lngDec
             }
         };
 
@@ -200,7 +212,6 @@ const CargaTactica = () => {
     return (
         <div style={styles.page}>
             <div style={styles.container}>
-                {/* PANEL IZQUIERDO: FORMULARIO */}
                 <div style={styles.card}>
                     <h2 style={styles.title}>{editingId ? '📍 RE-POSICIONAR VECTOR' : '⚡ NUEVO VUELO'}</h2>
                     <p style={styles.subtitle}>SISTEMA DE GESTIÓN TÁCTICA - CONEXIÓN ACTIVA</p>
@@ -209,15 +220,11 @@ const CargaTactica = () => {
                         <label style={styles.label}>Indicativo de Vuelo / Misión:</label>
                         <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} required placeholder="Ej: VUELO DE INSTRUCCION" />
 
-                        <div style={styles.row}>
-                            <div style={{ width: '100%' }}>
-                                <label style={styles.label}>Seleccionar Aeronave (E/S):</label>
-                                <select style={styles.input} value={formData.aeronaveId} onChange={handleAeronaveSelect} required={!editingId}>
-                                    <option value="">-- Flota Disponible --</option>
-                                    {flotaES.map(a => <option key={a._id} value={a._id}>{a.sda} | {a.matricula} ({a.unidad})</option>)}
-                                </select>
-                            </div>
-                        </div>
+                        <label style={styles.label}>Seleccionar Aeronave (E/S):</label>
+                        <select style={styles.input} value={formData.aeronaveId} onChange={handleAeronaveSelect} required={!editingId}>
+                            <option value="">-- Flota Disponible --</option>
+                            {flotaES.map(a => <option key={a._id} value={a._id}>{a.sda} | {a.matricula} ({a.unidad})</option>)}
+                        </select>
 
                         <label style={styles.label}>Unidad Responsable:</label>
                         <select style={styles.input} value={formData.elemento} onChange={(e) => setFormData({...formData, elemento: e.target.value})} required>
@@ -237,17 +244,13 @@ const CargaTactica = () => {
                                 <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latG: e.target.value})} value={formData.latG}/>
                                 <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latM: e.target.value})} value={formData.latM}/>
                                 <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latS: e.target.value})} value={formData.latS}/>
-                                <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, latDir: e.target.value})} value={formData.latDir}>
-                                    <option value="S">S</option><option value="N">N</option>
-                                </select>
+                                <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, latDir: e.target.value})} value={formData.latDir}><option value="S">S</option><option value="N">N</option></select>
                             </div>
                             <div style={styles.row}>
                                 <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngG: e.target.value})} value={formData.lngG}/>
                                 <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngM: e.target.value})} value={formData.lngM}/>
                                 <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngS: e.target.value})} value={formData.lngS}/>
-                                <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, lngDir: e.target.value})} value={formData.lngDir}>
-                                    <option value="W">W</option><option value="E">E</option>
-                                </select>
+                                <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, lngDir: e.target.value})} value={formData.lngDir}><option value="W">W</option><option value="E">E</option></select>
                             </div>
                         </div>
 
@@ -261,13 +264,10 @@ const CargaTactica = () => {
                     </form>
                 </div>
 
-                {/* PANEL DERECHO: RADAR LOG */}
                 <div style={styles.logCard}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>
                         <h3 style={{ color: '#f39c12', margin: 0 }}>🛰️ OPERACIONES EN RADAR</h3>
-                        <button onClick={cargarDatos} style={styles.btnRefresh} disabled={loading}>
-                            {loading ? '...' : '🔄 ACTUALIZAR'}
-                        </button>
+                        <button onClick={cargarDatos} style={styles.btnRefresh} disabled={loading}>{loading ? '...' : '🔄 ACTUALIZAR'}</button>
                     </div>
                     <div style={styles.scrollArea}>
                         {misionesActivas.length === 0 ? <p style={{color: '#7f8c8d', textAlign: 'center', marginTop: '20px'}}>No hay vuelos activos.</p> : 

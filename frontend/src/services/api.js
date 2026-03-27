@@ -6,7 +6,6 @@ import axios from 'axios';
  */
 const getBaseURL = () => {
     let url = (import.meta.env.VITE_API_URL || 'http://localhost:5000').trim().replace(/\/$/, "");
-    // Si la URL no termina en /api, se lo agregamos para Axios
     if (!url.endsWith('/api')) {
         return `${url}/api`;
     }
@@ -64,7 +63,6 @@ export const register = (userData) => API.post('/auth/register', userData);
  */
 export const getEvents = () => API.get('/events');
 
-// SINCRO JOKER: Llamada directa al endpoint de radar optimizado
 export const getActiveOperations = async () => {
     try {
         const res = await API.get('/events/active-map');
@@ -77,6 +75,9 @@ export const getActiveOperations = async () => {
 
 export const createEvent = (eventData) => {
     const userElemento = localStorage.getItem('elemento');
+    const latVal = eventData.ubicacion?.lat !== undefined ? Number(eventData.ubicacion.lat) : 0;
+    const lngVal = eventData.ubicacion?.lng !== undefined ? Number(eventData.ubicacion.lng) : 0;
+
     const dataNormalized = {
         ...eventData,
         title: eventData.title?.toUpperCase().trim(),
@@ -89,10 +90,13 @@ export const createEvent = (eventData) => {
         matricula: eventData.matricula?.toUpperCase().trim() || "",
         status: eventData.status || 'programado',
         notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
+        // Duplicamos lat/lng en raíz para asegurar lectura del radar
+        lat: latVal,
+        lng: lngVal,
         ubicacion: {
             nombre: (eventData.ubicacion?.nombre || "POSICIÓN POR COORDENADAS").toUpperCase(),
-            lat: eventData.ubicacion?.lat !== undefined ? Number(eventData.ubicacion.lat) : 0,
-            lng: eventData.ubicacion?.lng !== undefined ? Number(eventData.ubicacion.lng) : 0
+            lat: latVal,
+            lng: lngVal
         },
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
     };
@@ -100,6 +104,9 @@ export const createEvent = (eventData) => {
 };
 
 export const updateEvent = (id, eventData) => {
+    const latVal = eventData.ubicacion?.lat !== undefined ? Number(eventData.ubicacion.lat) : undefined;
+    const lngVal = eventData.ubicacion?.lng !== undefined ? Number(eventData.ubicacion.lng) : undefined;
+
     const dataNormalized = {
         ...eventData,
         title: eventData.title?.toUpperCase().trim(),
@@ -107,11 +114,13 @@ export const updateEvent = (id, eventData) => {
         aeronave: eventData.aeronave?.toUpperCase().trim(),
         matricula: eventData.matricula?.toUpperCase().trim(),
         notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
-        // Normalización de ubicación para actualización atómica
+        // Sincronización de coordenadas en raíz y objeto
+        lat: latVal,
+        lng: lngVal,
         ubicacion: eventData.ubicacion ? {
             nombre: (eventData.ubicacion.nombre || "").toUpperCase(),
-            lat: eventData.ubicacion.lat !== undefined ? Number(eventData.ubicacion.lat) : undefined,
-            lng: eventData.ubicacion.lng !== undefined ? Number(eventData.ubicacion.lng) : undefined
+            lat: latVal,
+            lng: lngVal
         } : undefined,
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
     };
@@ -209,7 +218,6 @@ export const getAstronomyData = async (lat, lng) => {
     }
 };
 
-// Objeto de servicio para exportación única
 const EventService = {
     getEvents,
     getActiveOperations,
