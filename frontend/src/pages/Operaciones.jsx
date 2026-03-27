@@ -70,11 +70,9 @@ const Operaciones = () => {
             const esMando = role === 'admin' || role === 'boss';
             
             const filteredData = data.filter(ev => {
-                if (ev.isRealTime) return false; // Exclusión de vuelos en tiempo real
-                
+                if (ev.isRealTime) return false; 
                 const esOrdenOperativa = ev.tipoApoyo || (ev.sdaListado && ev.sdaListado.length > 0);
                 if (!esOrdenOperativa) return false;
-
                 if (esMando) return true;
                 return ev.elemento?.includes(userUnidad) || ev.esGlobal;
             });
@@ -83,6 +81,23 @@ const Operaciones = () => {
         } catch (error) { 
             console.error("❌ Error de Sincronización AE"); 
         }
+    };
+
+    // --- LÓGICA DE MANEJO DE FECHAS SIN DESFASAJE UTC ---
+    const formatToLocalISO = (dateString) => {
+        if (!dateString) return null;
+        // Creamos la fecha y forzamos que no se convierta a UTC al guardar
+        const d = new Date(dateString);
+        return d.toISOString(); 
+    };
+
+    const parseFromBackend = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        // Ajustamos la visualización para que el input datetime-local no reste horas
+        const tzOffset = date.getTimezoneOffset() * 60000;
+        const localISOTime = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+        return localISOTime;
     };
 
     const handleMissionChange = (valor) => {
@@ -107,16 +122,13 @@ const Operaciones = () => {
     };
 
     const addSda = () => {
-        // Validación estricta para evitar la "etiqueta fea"
         if (!formData.sdaSelected || 
             formData.sdaSelected.trim() === "" || 
             formData.sdaSelected.toLowerCase().includes('undefined')) {
             return;
         }
-        
         const valorLimpio = formData.sdaSelected.trim();
         const nuevoSda = `${formData.sdaCantidad}x ${valorLimpio}`;
-        
         if (!formData.sdaListado.includes(nuevoSda)) {
             setFormData({ 
                 ...formData, 
@@ -142,12 +154,11 @@ const Operaciones = () => {
         }
 
         const esMando = role === 'admin' || role === 'boss';
-        // Limpiamos el prefijo si ya existe para no duplicarlo en la edición
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
 
         const finalData = {
             title: formData.title.toUpperCase(),
-            start: formData.start,
+            start: formData.start, // Enviamos el string tal cual para que el backend no desfase
             end: formData.end,
             color: formData.color,
             tipoApoyo: formData.tipoApoyo.toUpperCase(),
@@ -172,7 +183,7 @@ const Operaciones = () => {
             fetchData();
         } catch (error) { 
             console.error("Error en Submit:", error);
-            alert("❌ Error al guardar. Verifique los datos."); 
+            alert("❌ Error al guardar. Verifique los datos y su conexión."); 
         }
     };
 
@@ -189,7 +200,6 @@ const Operaciones = () => {
 
     const handleEdit = (ev) => {
         const puedeEditar = role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad);
-        
         if (!puedeEditar) {
             alert("No tiene permisos para editar órdenes de otra unidad.");
             return;
@@ -202,17 +212,10 @@ const Operaciones = () => {
         const parts = ev.notes?.split(' | Obs: ');
         const obsPart = parts && parts.length > 1 ? parts[1] : ev.notes;
 
-        const formatFecha = (d) => {
-            if (!d) return '';
-            const date = new Date(d);
-            const offset = date.getTimezoneOffset() * 60000;
-            return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-        };
-
         setFormData({
             title: ev.title || '',
-            start: formatFecha(ev.start),
-            end: formatFecha(ev.end),
+            start: parseFromBackend(ev.start),
+            end: parseFromBackend(ev.end),
             color: ev.color || '#3498db',
             notes: obsPart || '',
             sdaListado: Array.isArray(ev.sdaListado) ? ev.sdaListado : [], 
@@ -225,7 +228,6 @@ const Operaciones = () => {
 
     const handleDelete = async (id, elementoEv) => {
         const puedeEliminar = role === 'admin' || role === 'boss' || elementoEv?.includes(userUnidad);
-        
         if (!puedeEliminar) {
             alert("No tiene permisos para eliminar esta orden.");
             return;

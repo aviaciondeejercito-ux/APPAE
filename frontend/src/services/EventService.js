@@ -51,10 +51,9 @@ export const createEvent = async (eventData) => {
     try {
         const payload = {
             ...eventData,
-            // LOGICA DE INDEPENDENCIA: 
-            // Si el evento no trae fecha (vuelo táctico puro), NO creamos fechas ISO automáticas
-            start: eventData.start ? new Date(eventData.start).toISOString() : null,
-            end: eventData.end ? new Date(eventData.end).toISOString() : null,
+            // CORRECCIÓN HORARIA: Se envían los strings directamente para evitar conversión a UTC/Z
+            start: eventData.start || null,
+            end: eventData.end || null,
             
             // --- CAMPOS CRÍTICOS PARA EL MAPA ---
             isRealTime: eventData.isRealTime || false,
@@ -93,6 +92,10 @@ export const updateEvent = async (id, eventData) => {
                 lng: parseFloat(cleanData.ubicacion.lng) || 0
             };
         }
+
+        // CORRECCIÓN HORARIA: Mantenemos el string local elegido por el usuario
+        if (cleanData.start) cleanData.start = eventData.start;
+        if (cleanData.end) cleanData.end = eventData.end;
 
         // Normalización militar de textos
         if (cleanData.title) cleanData.title = cleanData.title.toUpperCase();
