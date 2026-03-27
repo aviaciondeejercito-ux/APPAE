@@ -9,7 +9,7 @@ const conectarDB = require('./config/db');
 /**
  * ESTÁNDAR DE SEGURIDAD AE - SINCRO JOKER
  * Configuración de motor centralizado para API de Aviación de Ejército.
- * Actualización: Integración de WebSockets para Movimiento Táctico en Tiempo Real.
+ * ESTADO: LIMPIEZA DE LÓGICA PRE-RECONSTRUCCIÓN
  */
 
 // --- 1. CONFIGURACIÓN DE ENTORNO ---
@@ -32,7 +32,6 @@ app.use(helmet({
 /**
  * CONFIGURACIÓN DE CORS - RECONEXIÓN OPERATIVA
  * Definimos los orígenes autorizados. 
- * Se incluye la URL detectada en el despliegue de Render.
  */
 const allowedOrigins = [
     'https://appae.onrender.com',               // Tu URL de producción principal
@@ -63,10 +62,6 @@ app.use(express.json({ limit: '15kb' }));
 app.use(express.urlencoded({ extended: true, limit: '15kb' }));
 
 // --- 4. INICIALIZACIÓN DE SOCKET.IO (TIEMPO REAL) ---
-/**
- * Configuración específica para el motor de Sockets.
- * Se asegura la compatibilidad con los métodos necesarios para el apretón de manos (handshake).
- */
 const io = new Server(server, {
     cors: {
         origin: allowedOrigins,
@@ -87,6 +82,8 @@ io.on('connection', (socket) => {
 });
 
 // --- 5. IMPORTACIÓN DE MÓDULOS OPERATIVOS ---
+// NOTA: Se mantienen las importaciones para evitar errores de referencia, 
+// pero se auditarán sus contenidos en el siguiente paso.
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
 const adminRoutes = require('./routes/admin'); 
@@ -103,10 +100,11 @@ app.get('/api/health', (req, res) => {
         database: 'Connected',
         socketStatus: 'Active',
         timestamp: new Date().toISOString(),
-        version: '1.2.2-SINCRO'
+        version: '1.3.0-CLEAN_STATE'
     });
 });
 
+// MAPEADO DE RUTAS - LIMPIEZA DE INTERCONEXIÓN
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
 app.use('/api/admin', adminRoutes); 
@@ -119,7 +117,7 @@ app.use((req, res) => {
     console.warn(`⚠️ ACCESO NO AUTORIZADO / RUTA INEXISTENTE: ${req.method} ${req.originalUrl}`);
     res.status(404).json({
         success: false,
-        message: `La ruta ${req.originalUrl} no existe.`
+        message: `La ruta ${req.originalUrl} no existe o está en mantenimiento.`
     });
 });
 
@@ -140,11 +138,10 @@ app.use((err, req, res, next) => {
 
 // --- 9. LANZAMIENTO DEL SERVICIO ---
 const PORT = process.env.PORT || 5000;
-// IMPORTANTE: Escuchamos con 'server', no con 'app' para permitir WebSockets
 server.listen(PORT, () => {
     console.log(`🚀 SISTEMA OPERATIVO EN PUERTO: ${PORT}`);
     console.log(`📡 FRECUENCIAS ACTIVAS: /api/auth, /api/events, /api/admin, /api/aircraft, /api/weather, /api/astronomy`);
-    console.log(`🛰️ MOTOR SOCKET.IO: Listo para Sincro Joker`);
+    console.log(`🛰️ MOTOR SOCKET.IO: Listo para Sincro Joker - ESTADO LIMPIO`);
 });
 
 // --- 10. PROTOCOLO DE CIERRE SEGURO ---

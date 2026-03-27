@@ -64,13 +64,13 @@ export const register = (userData) => API.post('/auth/register', userData);
  */
 export const getEvents = () => API.get('/events');
 
+// SINCRO JOKER: Llamada directa al endpoint de radar optimizado
 export const getActiveOperations = async () => {
     try {
-        const res = await API.get('/events');
-        // Filtramos para el mapa solo operaciones marcadas para tiempo real con ubicación válida
-        return res.data.filter(e => e.isRealTime && e.ubicacion?.lat != null);
+        const res = await API.get('/events/active-map');
+        return res.data; 
     } catch (error) {
-        console.error("❌ Fallo al recuperar operaciones activas");
+        console.error("❌ Fallo al recuperar operaciones activas del radar");
         return [];
     }
 };
@@ -79,12 +79,21 @@ export const createEvent = (eventData) => {
     const userElemento = localStorage.getItem('elemento');
     const dataNormalized = {
         ...eventData,
-        title: eventData.title?.trim(),
-        elemento: eventData.elemento || userElemento,
+        title: eventData.title?.toUpperCase().trim(),
+        notes: eventData.notes?.toUpperCase().trim() || "",
+        elemento: (eventData.elemento || userElemento)?.toUpperCase(),
         esGlobal: eventData.esGlobal || false,
+        isRealTime: eventData.isRealTime || false,
         tipoIcono: eventData.tipoIcono || 'ala_rotativa', 
-        notasMarginales: eventData.notasMarginales || "",
-        ubicacion: eventData.ubicacion || { nombre: "", lat: null, lng: null },
+        aeronave: eventData.aeronave?.toUpperCase().trim() || "",
+        matricula: eventData.matricula?.toUpperCase().trim() || "",
+        status: eventData.status || 'programado',
+        notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
+        ubicacion: {
+            nombre: (eventData.ubicacion?.nombre || "POSICIÓN POR COORDENADAS").toUpperCase(),
+            lat: eventData.ubicacion?.lat !== undefined ? Number(eventData.ubicacion.lat) : 0,
+            lng: eventData.ubicacion?.lng !== undefined ? Number(eventData.ubicacion.lng) : 0
+        },
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
     };
     return API.post('/events', dataNormalized);
@@ -93,7 +102,17 @@ export const createEvent = (eventData) => {
 export const updateEvent = (id, eventData) => {
     const dataNormalized = {
         ...eventData,
-        notasMarginales: eventData.notasMarginales || "",
+        title: eventData.title?.toUpperCase().trim(),
+        notes: eventData.notes?.toUpperCase().trim(),
+        aeronave: eventData.aeronave?.toUpperCase().trim(),
+        matricula: eventData.matricula?.toUpperCase().trim(),
+        notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
+        // Normalización de ubicación para actualización atómica
+        ubicacion: eventData.ubicacion ? {
+            nombre: (eventData.ubicacion.nombre || "").toUpperCase(),
+            lat: eventData.ubicacion.lat !== undefined ? Number(eventData.ubicacion.lat) : undefined,
+            lng: eventData.ubicacion.lng !== undefined ? Number(eventData.ubicacion.lng) : undefined
+        } : undefined,
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
     };
     return API.put(`/events/${id}`, dataNormalized);

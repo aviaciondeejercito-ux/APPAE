@@ -170,6 +170,7 @@ eventSchema.pre('validate', function(next) {
     
     // Estandarización Militar (Todo a MAYÚSCULAS)
     if (this.title) this.title = this.title.toUpperCase();
+    if (this.notes) this.notes = this.notes.toUpperCase();
     if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
     if (this.aeronave) this.aeronave = this.aeronave.toUpperCase();
     if (this.matricula) this.matricula = this.matricula.toUpperCase();
@@ -181,8 +182,8 @@ eventSchema.pre('validate', function(next) {
             this.ubicacion.nombre = this.ubicacion.nombre.toUpperCase();
         }
         // Asegurar que lat/lng no sean nulos si el objeto existe
-        this.ubicacion.lat = this.ubicacion.lat || 0;
-        this.ubicacion.lng = this.ubicacion.lng || 0;
+        this.ubicacion.lat = (this.ubicacion.lat !== undefined && this.ubicacion.lat !== null) ? this.ubicacion.lat : 0;
+        this.ubicacion.lng = (this.ubicacion.lng !== undefined && this.ubicacion.lng !== null) ? this.ubicacion.lng : 0;
     }
     
     next();

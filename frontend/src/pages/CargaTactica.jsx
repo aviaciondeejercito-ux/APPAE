@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import EventService from '../services/EventService';
+import { getEvents, createEvent, updateEvent, deleteEvent } from '../services/api';
+import Swal from 'sweetalert2';
 
 const AEROPUERTOS_ESTANDAR = [
     { nombre: "SADO - Campo de Mayo", lat: -34.528, lng: -58.641 },
@@ -39,7 +40,6 @@ const UNIDADES_AE = [
 ];
 
 const CargaTactica = () => {
-    const [aeronavesDisponibles, setAeronavesDisponibles] = useState([]);
     const [misionesActivas, setMisionesActivas] = useState([]);
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState({
@@ -52,20 +52,18 @@ const CargaTactica = () => {
 
     const cargarDatos = async () => {
         try {
-            const [aeronaves, misiones] = await Promise.all([
-                EventService.getAvailableAircraft('all'),
-                EventService.getActiveOperations()
-            ]);
-            setAeronavesDisponibles(aeronaves || []);
-            setMisionesActivas(misiones || []);
+            const data = await getEvents();
+            // Filtrar solo las misiones operativas para el panel lateral
+            const activas = data.filter(ev => ev.etapa === 'operativo' && ev.isRealTime === true);
+            setMisionesActivas(activas);
         } catch (error) {
-            console.error("Error sincronizando situación táctica");
+            console.error("Error cargando misiones:", error);
         }
     };
 
     useEffect(() => {
         cargarDatos();
-        const interval = setInterval(cargarDatos, 15000);
+        const interval = setInterval(cargarDatos, 10000); // Polling de seguridad cada 10s
         return () => clearInterval(interval);
     }, []);
 
@@ -99,94 +97,84 @@ const CargaTactica = () => {
         }
     };
 
-    const handleAeronaveSelect = (e) => {
-        const value = e.target.value;
-        if (!value || value === "|") {
-            setFormData({ ...formData, aeronaveModelo: '', matricula: '' });
-            return;
-        }
-        const [modelo, matricula] = value.split('|');
-        setFormData({ ...formData, aeronaveModelo: modelo, matricula: matricula });
-    };
-
-    const getTipoIcono = (modelo) => {
-        if (!modelo) return 'ala_rotativa';
-        const m = modelo.toUpperCase();
-        const alaFija = ['C-212', 'C-208', 'C-550', 'DA-62', 'DHC-6', 'T-202'];
-        const esAlaFija = alaFija.some(tipo => m.includes(tipo));
-        return esAlaFija ? 'ala_fija' : 'ala_rotativa';
+    const handleEdit = (mision) => {
+        const latGMS = fromDecimal(mision.ubicacion.lat, 'lat');
+        const lngGMS = fromDecimal(mision.ubicacion.lng, 'lng');
+        setEditingId(mision._id);
+        setFormData({
+            title: mision.title,
+            elemento: mision.elemento,
+            notasMarginales: mision.notasMarginales,
+            aeronaveModelo: mision.aeronave,
+            matricula: mision.matricula,
+            latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
+            lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
+            locNombre: mision.ubicacion.nombre
+        });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const latDec = toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir);
-        const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
-
-        const modeloLimpio = (formData.aeronaveModelo || '').toUpperCase().trim();
-        const matriculaLimpia = (formData.matricula || '').toUpperCase().trim();
-
+        
         const payload = {
-            title: editingId ? formData.title : `${modeloLimpio} ${matriculaLimpia} - ${formData.title}`,
-            aeronave: modeloLimpio,
-            matricula: matriculaLimpia,
-            tipoIcono: getTipoIcono(modeloLimpio),
+            title: formData.title.toUpperCase(),
+            aeronave: formData.aeronaveModelo.toUpperCase(),
+            matricula: formData.matricula.toUpperCase(),
             elemento: formData.elemento,
-            isRealTime: true, 
-            tipoApoyo: 'VUELO',
-            etapa: 'operativo', 
-            status: 'en_desarrollo', 
-            ubicacion: {
-                nombre: formData.locNombre || 'POSICIÓN POR COORDENADAS',
-                lat: latDec, 
-                lng: lngDec
-            },
             notasMarginales: formData.notasMarginales.toUpperCase(),
-            color: '#e67e22' 
+            isRealTime: true,
+            etapa: 'operativo',
+            status: 'en_curso',
+            ubicacion: {
+                nombre: formData.locNombre || 'POSICIÓN TÁCTICA',
+                lat: toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir),
+                lng: toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir)
+            },
+            userName: localStorage.getItem('username') || 'OPERADOR_TACTICO'
         };
 
         try {
             if (editingId) {
-                await EventService.updateEvent(editingId, payload);
+                await updateEvent(editingId, payload);
+                Swal.fire('Actualizado', 'Posición actualizada en el mapa', 'success');
             } else {
-                await EventService.createEvent(payload);
+                await createEvent(payload);
+                Swal.fire('Desplegado', 'Vuelo iniciado con éxito', 'success');
             }
+            
+            setFormData({ 
+                title: '', elemento: '', notasMarginales: '', 
+                aeronaveModelo: '', matricula: '', 
+                latG: 34, latM: 31, latS: 40, latDir: 'S', 
+                lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', 
+                locNombre: '' 
+            });
             setEditingId(null);
-            setFormData({ title: '', elemento: '', notasMarginales: '', aeronaveModelo: '', matricula: '', latG: 34, latM: 31, latS: 40, latDir: 'S', lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', locNombre: '' });
             cargarDatos();
         } catch (error) {
-            console.error("Error en la operación táctica:", error);
-            alert("Error en la persistencia. Verifique el formato de datos.");
+            Swal.fire('Error', 'No se pudo sincronizar con el servidor', 'error');
         }
     };
 
-    const handlePrepareUpdate = (m) => {
-        const latGMS = fromDecimal(m.ubicacion?.lat, 'lat');
-        const lngGMS = fromDecimal(m.ubicacion?.lng, 'lng');
-        setEditingId(m._id);
-        setFormData({
-            title: m.title,
-            elemento: m.elemento,
-            notasMarginales: m.notasMarginales,
-            aeronaveModelo: m.aeronave || '', 
-            matricula: m.matricula || '',
-            latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
-            lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
-            locNombre: m.ubicacion?.nombre || ''
-        });
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
     const handleFinalizar = async (id) => {
-        if (!window.confirm("¿Remover del Monitor de Operaciones?")) return;
-        try {
-            await EventService.updateEvent(id, { 
-                status: 'finalizado', 
-                isRealTime: false,
-                tipoApoyo: 'VUELO'
-            });
-            cargarDatos();
-        } catch (error) {
-            alert("Error al remover operación");
+        const result = await Swal.fire({
+            title: '¿Finalizar Misión?',
+            text: "El vuelo dejará de verse en el mapa táctico",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'SÍ, FINALIZAR'
+        });
+
+        if (result.isConfirmed) {
+            try {
+                // Pasamos a etapa solicitud o borramos según prefieras, aquí lo borramos para limpieza total
+                await deleteEvent(id);
+                Swal.fire('Finalizado', 'Misión archivada', 'success');
+                cargarDatos();
+            } catch (error) {
+                Swal.fire('Error', 'No se pudo finalizar la misión', 'error');
+            }
         }
     };
 
@@ -195,36 +183,30 @@ const CargaTactica = () => {
             <div style={styles.container}>
                 <div style={styles.card}>
                     <h2 style={styles.title}>{editingId ? '📍 ACTUALIZAR POSICIÓN' : '⚡ NUEVO VUELO'}</h2>
-                    <p style={styles.subtitle}>SISTEMA DE GESTIÓN TÁCTICA DE AVIACIÓN</p>
+                    <p style={styles.subtitle}>SISTEMA DE GESTIÓN TÁCTICA - CONEXIÓN ACTIVA</p>
                     
                     <form onSubmit={handleSubmit}>
-                        {!editingId && (
-                            <div>
-                                <label style={styles.label}>Aeronave (SDA y Matrícula):</label>
-                                <select 
-                                    style={styles.input} 
-                                    required={!editingId} 
-                                    value={`${formData.aeronaveModelo}|${formData.matricula}`} 
-                                    onChange={handleAeronaveSelect}
-                                >
-                                    <option value="|">Seleccione Aeronave...</option>
-                                    {aeronavesDisponibles.map(a => (
-                                        <option key={a._id} value={`${a.sda}|${a.matricula}`}>
-                                            {a.sda} - {a.matricula} ({a.unidad})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-
-                        {editingId && (
-                            <div style={styles.infoBox}>
-                                <strong>AERONAVE FIJADA:</strong> {formData.aeronaveModelo} - {formData.matricula}
-                            </div>
-                        )}
+                        <div>
+                            <label style={styles.label}>SdA / Aeronave:</label>
+                            <input 
+                                style={styles.input} 
+                                value={formData.aeronaveModelo} 
+                                onChange={(e) => setFormData({...formData, aeronaveModelo: e.target.value.toUpperCase()})} 
+                                required 
+                                placeholder="Ej: BELL 206"
+                            />
+                            <label style={styles.label}>Matrícula:</label>
+                            <input 
+                                style={styles.input} 
+                                value={formData.matricula} 
+                                onChange={(e) => setFormData({...formData, matricula: e.target.value.toUpperCase()})} 
+                                required 
+                                placeholder="Ej: AE-464"
+                            />
+                        </div>
 
                         <label style={styles.label}>Indicativo de Vuelo / Misión:</label>
-                        <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value.toUpperCase()})} required placeholder="Ej: ASALTO AEREO / SANITARIO" />
+                        <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value.toUpperCase()})} required placeholder="Ej: VUELO DE INSTRUCCION" />
 
                         <label style={styles.label}>Unidad Responsable:</label>
                         <select style={styles.input} value={formData.elemento} onChange={(e) => setFormData({...formData, elemento: e.target.value})} required>
@@ -264,20 +246,20 @@ const CargaTactica = () => {
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
                             {editingId ? '💾 ACTUALIZAR POSICIÓN' : '🚀 LANZAR VUELO'}
                         </button>
-                        {editingId && <button type="button" onClick={() => { setEditingId(null); setFormData({ title: '', elemento: '', notasMarginales: '', aeronaveModelo: '', matricula: '', latG: 34, latM: 31, latS: 40, latDir: 'S', lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', locNombre: '' }); }} style={styles.btnCancel}>CANCELAR</button>}
+                        {editingId && <button type="button" onClick={() => { setEditingId(null); setFormData({title: '', elemento: '', notasMarginales: '', aeronaveModelo: '', matricula: '', latG: 34, latM: 31, latS: 40, latDir: 'S', lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', locNombre: ''}); }} style={styles.btnCancel}>CANCELAR</button>}
                     </form>
                 </div>
 
                 <div style={styles.logCard}>
-                    <h3 style={{ color: '#f39c12', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>🛰️ OPERACIONES EN DESARROLLO</h3>
+                    <h3 style={{ color: '#f39c12', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>🛰️ OPERACIONES EN RADAR</h3>
                     <div style={styles.scrollArea}>
-                        {misionesActivas.length === 0 ? <p style={{color: '#7f8c8d'}}>No hay medios reportando posición.</p> : 
+                        {misionesActivas.length === 0 ? <p style={{color: '#7f8c8d'}}>No hay vuelos activos en tiempo real.</p> : 
                         misionesActivas.map(m => (
                             <div key={m._id} style={styles.misionItem}>
-                                <div style={{fontWeight: 'bold', color: '#ecf0f1'}}>{m.title}</div>
-                                <div style={{fontSize: '0.75rem', color: '#bdc3c7'}}>{m.elemento} | {m.ubicacion?.nombre || 'S/D'}</div>
+                                <div style={{fontWeight: 'bold', color: '#ecf0f1'}}>{m.aeronave} - {m.matricula}</div>
+                                <div style={{fontSize: '0.8rem', color: '#bdc3c7'}}>{m.title}</div>
                                 <div style={styles.btnRow}>
-                                    <button onClick={() => handlePrepareUpdate(m)} style={styles.btnSmall}>ACTUALIZAR</button>
+                                    <button onClick={() => handleEdit(m)} style={styles.btnSmall}>RE-POSICIONAR</button>
                                     <button onClick={() => handleFinalizar(m._id)} style={styles.btnSmallRed}>FINALIZAR</button>
                                 </div>
                             </div>
@@ -299,7 +281,6 @@ const styles = {
     title: { color: '#f39c12', margin: '0', textAlign: 'center', fontSize: '1.5rem', letterSpacing: '2px' },
     subtitle: { textAlign: 'center', fontSize: '0.75rem', marginBottom: '20px', letterSpacing: '2px', color: '#7f8c8d' },
     label: { display: 'block', marginBottom: '5px', fontSize: '0.8rem', fontWeight: 'bold', color: '#bdc3c7' },
-    infoBox: { backgroundColor: '#34495e', padding: '10px', borderRadius: '4px', marginBottom: '15px', fontSize: '0.8rem', borderLeft: '4px solid #3498db' },
     input: { width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '4px', border: 'none', backgroundColor: '#2f3542', color: 'white', fontFamily: 'monospace' },
     inputTriple: { width: '23%', padding: '8px', marginBottom: '5px', borderRadius: '4px', border: 'none', backgroundColor: '#3d4451', color: 'white', textAlign: 'center' },
     inputShort: { width: '20%', padding: '8px', marginBottom: '5px', borderRadius: '4px', border: 'none', backgroundColor: '#f39c12', color: 'black', fontWeight: 'bold' },
