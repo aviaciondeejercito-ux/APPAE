@@ -9,7 +9,7 @@ const conectarDB = require('./config/db');
 /**
  * ESTÁNDAR DE SEGURIDAD AE - SINCRO JOKER
  * Configuración de motor centralizado para API de Aviación de Ejército.
- * ESTADO: LIMPIEZA DE LÓGICA PRE-RECONSTRUCCIÓN
+ * ESTADO: RECONEXIÓN METEOROLÓGICA Y NVG ACTIVA
  */
 
 // --- 1. CONFIGURACIÓN DE ENTORNO ---
@@ -31,7 +31,7 @@ app.use(helmet({
 
 /**
  * CONFIGURACIÓN DE CORS - RECONEXIÓN OPERATIVA
- * Definimos los orígenes autorizados. 
+ * Definimos los orígenes autorizados para evitar bloqueos en Render. 
  */
 const allowedOrigins = [
     'https://appae.onrender.com',               // Tu URL de producción principal
@@ -82,8 +82,6 @@ io.on('connection', (socket) => {
 });
 
 // --- 5. IMPORTACIÓN DE MÓDULOS OPERATIVOS ---
-// NOTA: Se mantienen las importaciones para evitar errores de referencia, 
-// pero se auditarán sus contenidos en el siguiente paso.
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
 const adminRoutes = require('./routes/admin'); 
@@ -100,15 +98,20 @@ app.get('/api/health', (req, res) => {
         database: 'Connected',
         socketStatus: 'Active',
         timestamp: new Date().toISOString(),
-        version: '1.3.0-CLEAN_STATE'
+        version: '1.4.0-OPERATIONAL'
     });
 });
 
-// MAPEADO DE RUTAS - LIMPIEZA DE INTERCONEXIÓN
+// MAPEADO DE RUTAS - ASEGURANDO COMPATIBILIDAD CON EL RADAR
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
 app.use('/api/admin', adminRoutes); 
 app.use('/api/aircraft', aircraftRoutes); 
+
+/**
+ * IMPORTANTE: Si el radar llama a /api/weather/SADP, 
+ * el router de weatherRoutes debe manejar la raíz '/' como el ID.
+ */
 app.use('/api/weather', weatherRoutes); 
 app.use('/api/astronomy', astronomyRoutes); 
 
@@ -141,7 +144,7 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`🚀 SISTEMA OPERATIVO EN PUERTO: ${PORT}`);
     console.log(`📡 FRECUENCIAS ACTIVAS: /api/auth, /api/events, /api/admin, /api/aircraft, /api/weather, /api/astronomy`);
-    console.log(`🛰️ MOTOR SOCKET.IO: Listo para Sincro Joker - ESTADO LIMPIO`);
+    console.log(`🛰️ MOTOR SOCKET.IO: Listo para Sincro Joker - ESTADO OPERATIVO`);
 });
 
 // --- 10. PROTOCOLO DE CIERRE SEGURO ---

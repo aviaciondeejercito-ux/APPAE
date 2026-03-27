@@ -3,15 +3,24 @@ import React from 'react';
 /**
  * NightEvolutionWidget - ESTÁNDAR DE SEGURIDAD AE
  * Visualización táctica de la ventana operativa nocturna.
- * Muestra la evolución de la luz desde el ocaso hasta el alba.
+ * Muestra la evolución de la luz, tránsitos lunares y el punto de Cúspide.
  */
 const NightEvolutionWidget = ({ astronomyData }) => {
     // Validación de seguridad para evitar errores de renderizado si los datos no llegaron
     if (!astronomyData) return null;
 
     // Extraemos los datos calculados por el motor de efemérides del backend
-    // Se incluye moon_fraction para coherencia de datos aunque sea un valor interno del mapa
-    const { estado, icono, iluminacion, sunset, sunrise, moonrise, moonset } = astronomyData;
+    // Añadimos 'zenith' para mostrar el horario en que la luna está arriba del todo
+    const { 
+        estado, 
+        icono, 
+        iluminacion, 
+        sunset, 
+        sunrise, 
+        moonrise, 
+        moonset, 
+        zenith 
+    } = astronomyData;
 
     return (
         <div style={styles.nightCard}>
@@ -19,7 +28,7 @@ const NightEvolutionWidget = ({ astronomyData }) => {
                 <span style={styles.badge}>VENTANA NOCTURNA OPERATIVA</span>
             </div>
             
-            {/* Línea de tiempo de Crepúsculos */}
+            {/* Línea de tiempo de Crepúsculos con Marcador de Cúspide */}
             <div style={styles.timelineContainer}>
                 <div style={styles.timePoint}>
                     <span style={styles.icon}>🌇</span>
@@ -28,12 +37,15 @@ const NightEvolutionWidget = ({ astronomyData }) => {
                 </div>
 
                 <div style={styles.evolutionLine}>
+                    {/* Marcador Central que representa la Cúspide Lunar */}
                     <div style={styles.moonMarker}>
                         <div style={styles.moonInfo}>
                             <span style={styles.moonIcon}>{icono}</span>
                             <span style={styles.illumText}>{iluminacion}</span>
+                            <span style={styles.zenithTime}>{zenith}</span>
                         </div>
                         <div style={styles.verticalLine}></div>
+                        <span style={styles.zenithLabel}>CÚSPIDE</span>
                     </div>
                 </div>
 
@@ -44,7 +56,7 @@ const NightEvolutionWidget = ({ astronomyData }) => {
                 </div>
             </div>
 
-            {/* Datos Detallados de la Luna */}
+            {/* Datos Detallados de la Luna: Salida, Puesta y Tránsito */}
             <div style={styles.detailsGrid}>
                 <div style={styles.detailItem}>
                     <span style={styles.detailLabel}>SALIDA LUNA</span>
@@ -74,7 +86,7 @@ const styles = {
         boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
         fontFamily: 'sans-serif'
     },
-    header: { marginBottom: '25px', textAlign: 'center' },
+    header: { marginBottom: '35px', textAlign: 'center' },
     badge: { 
         fontSize: '0.75rem', 
         background: 'rgba(27, 58, 87, 0.8)', 
@@ -98,23 +110,25 @@ const styles = {
     evolutionLine: { 
         flex: 1, 
         height: '2px', 
-        background: 'linear-gradient(90deg, #ff7e5f 0%, #2c3e50 50%, #feb47b 100%)', 
+        background: 'linear-gradient(90deg, #34495e 0%, #1b3a57 50%, #34495e 100%)', 
         margin: '0 15px', 
         position: 'relative' 
     },
     moonMarker: { 
         position: 'absolute', 
         left: '50%', 
-        top: '-42px', 
+        top: '-55px', 
         transform: 'translateX(-50%)',
         display: 'flex', 
         flexDirection: 'column', 
         alignItems: 'center' 
     },
-    moonInfo: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
-    moonIcon: { fontSize: '1.6rem', filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.3))' },
-    illumText: { fontSize: '0.75rem', fontWeight: 'bold', color: '#FFD700', marginTop: '-2px' },
-    verticalLine: { width: '1px', height: '22px', background: '#FFD700', opacity: 0.6 },
+    moonInfo: { display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2px' },
+    moonIcon: { fontSize: '1.6rem', filter: 'drop-shadow(0 0 8px rgba(255,215,0,0.4))' },
+    illumText: { fontSize: '0.7rem', fontWeight: 'bold', color: '#FFD700' },
+    zenithTime: { fontSize: '0.75rem', color: '#fff', fontWeight: 'bold', marginTop: '2px' },
+    verticalLine: { width: '1px', height: '15px', background: '#FFD700', opacity: 0.6 },
+    zenithLabel: { fontSize: '0.55rem', color: '#FFD700', fontWeight: 'bold', letterSpacing: '0.5px' },
     detailsGrid: { 
         display: 'grid', 
         gridTemplateColumns: '1fr 1fr', 
