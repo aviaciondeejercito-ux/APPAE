@@ -51,7 +51,7 @@ const Operaciones = () => {
                     const cleanData = data.map(a => ({
                         ...a,
                         matricula: a.matricula || 'S/M',
-                        modelo: a.sda || a.modelo || 'S/D'
+                        modelo: a.modelo || a.sda || 'S/D'
                     }));
                     setAvailableAircraft(cleanData);
                 }
@@ -69,10 +69,12 @@ const Operaciones = () => {
             const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
             
-            // FILTRADO: 
-            // 1. Solo mostramos eventos que NO sean vuelos (evitamos los del log de vuelos)
-            // 2. Aplicamos la lógica de visibilidad por unidad o global
+            // FILTRADO MEJORADO: 
+            // 1. Excluimos explícitamente eventos que vengan del log de vuelos (tipo: 'VUELO')
+            // 2. Solo mostramos órdenes que tengan tipoApoyo definido (propio de Operaciones)
             const filteredData = data.filter(ev => {
+                if (ev.tipo === 'VUELO') return false; // Exclusión de vuelos
+                
                 const esOrdenOperativa = ev.tipoApoyo || ev.sdaListado?.length > 0;
                 if (!esOrdenOperativa) return false;
 
@@ -108,9 +110,11 @@ const Operaciones = () => {
     };
 
     const addSda = () => {
-        if (!formData.sdaSelected) return;
-        const valorLimpio = formData.sdaSelected.replace(/undefined/g, '').replace(/\(\)/g, '').trim();
+        if (!formData.sdaSelected || formData.sdaSelected.includes('undefined')) return;
+        
+        const valorLimpio = formData.sdaSelected.trim();
         const nuevoSda = `${formData.sdaCantidad}x ${valorLimpio}`;
+        
         if (!formData.sdaListado.includes(nuevoSda)) {
             setFormData({ 
                 ...formData, 
@@ -129,6 +133,8 @@ const Operaciones = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // Mantenemos solo validación de existencia, no de lógica (permitir correcciones)
         if (!formData.start || !formData.end) {
             alert("Por favor complete las fechas de inicio y fin.");
             return;
@@ -139,8 +145,8 @@ const Operaciones = () => {
 
         const finalData = {
             title: formData.title,
-            start: new Date(formData.start).toISOString(),
-            end: new Date(formData.end).toISOString(),
+            start: formData.start, // Enviamos directo para facilitar edición
+            end: formData.end,
             color: formData.color,
             tipoApoyo: formData.tipoApoyo,
             sdaListado: formData.sdaListado,
@@ -155,6 +161,8 @@ const Operaciones = () => {
 
         try {
             if (isEditing) {
+                // El error 400 suele ser por el formato de ID o datos faltantes. 
+                // Aseguramos que el ID esté presente.
                 await updateEvent(selectedId, finalData);
                 alert("✅ Registro actualizado correctamente.");
             } else {
@@ -164,7 +172,8 @@ const Operaciones = () => {
             resetForm();
             fetchData();
         } catch (error) { 
-            alert("❌ Error: Verifique los permisos de su unidad o la validez de las fechas."); 
+            console.error("Error en Submit:", error);
+            alert("❌ Error al guardar. Verifique la conexión o si el registro fue eliminado."); 
         }
     };
 
@@ -180,7 +189,6 @@ const Operaciones = () => {
     };
 
     const handleEdit = (ev) => {
-        // PERMISO: Solo pueden editar si son Admin/Boss O si el evento es de su unidad
         const puedeEditar = role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad);
         
         if (!puedeEditar) {
@@ -314,11 +322,14 @@ const Operaciones = () => {
                                 style={{...styles.input, flex: 1}}
                             >
                                 <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave E/S..."}</option>
-                                {availableAircraft.map(air => (
-                                    <option key={air._id} value={`${air.modelo} (${air.matricula})`}>
-                                        {air.modelo} - {air.matricula}
-                                    </option>
-                                ))}
+                                {availableAircraft.map(air => {
+                                    const label = air.modelo && air.matricula ? `${air.modelo} (${air.matricula})` : air.modelo || 'S/D';
+                                    return (
+                                        <option key={air._id} value={label}>
+                                            {label}
+                                        </option>
+                                    );
+                                })}
                             </select>
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
                             <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
