@@ -43,6 +43,8 @@ const CargaTactica = () => {
     const [misionesActivas, setMisionesActivas] = useState([]);
     const [flotaES, setFlotaES] = useState([]);
     const [editingId, setEditingId] = useState(null);
+    const [loading, setLoading] = useState(false);
+    
     const [formData, setFormData] = useState({
         title: '', elemento: '', notasMarginales: '', 
         aeronaveId: '', sda: '', matricula: '', 
@@ -52,25 +54,25 @@ const CargaTactica = () => {
     });
 
     const cargarDatos = async () => {
+        setLoading(true);
         try {
             const [evRes, airRes] = await Promise.all([getEvents(), getAircrafts()]);
-            
-            // Logica del Radar: Misiones operativas en tiempo real
             const dataEvents = Array.isArray(evRes) ? evRes : evRes.data || [];
-            const activas = dataEvents.filter(ev => ev.isRealTime === true);
-            setMisionesActivas(activas);
-
-            // Flota: Solo Aeronaves En Servicio (E/S)
+            // Filtramos misiones que tengan el flag isRealTime (vuelos actuales)
+            setMisionesActivas(dataEvents.filter(ev => ev.isRealTime === true));
+            
             const dataAir = Array.isArray(airRes.data) ? airRes.data : [];
             setFlotaES(dataAir.filter(a => a.estado === 'E/S'));
         } catch (error) {
             console.error("Error en sincronización:", error);
+        } finally {
+            setLoading(false);
         }
     };
 
     useEffect(() => {
         cargarDatos();
-        const interval = setInterval(cargarDatos, 10000);
+        const interval = setInterval(cargarDatos, 15000);
         return () => clearInterval(interval);
     }, []);
 
@@ -198,6 +200,7 @@ const CargaTactica = () => {
     return (
         <div style={styles.page}>
             <div style={styles.container}>
+                {/* PANEL IZQUIERDO: FORMULARIO */}
                 <div style={styles.card}>
                     <h2 style={styles.title}>{editingId ? '📍 RE-POSICIONAR VECTOR' : '⚡ NUEVO VUELO'}</h2>
                     <p style={styles.subtitle}>SISTEMA DE GESTIÓN TÁCTICA - CONEXIÓN ACTIVA</p>
@@ -254,14 +257,20 @@ const CargaTactica = () => {
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
                             {editingId ? '💾 GUARDAR CAMBIOS' : '🚀 LANZAR VUELO'}
                         </button>
-                        {editingId && <button type="button" onClick={() => setEditingId(null)} style={styles.btnCancel}>CANCELAR</button>}
+                        {editingId && <button type="button" onClick={() => { setEditingId(null); cargarDatos(); }} style={styles.btnCancel}>CANCELAR</button>}
                     </form>
                 </div>
 
+                {/* PANEL DERECHO: RADAR LOG */}
                 <div style={styles.logCard}>
-                    <h3 style={{ color: '#f39c12', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>🛰️ OPERACIONES EN RADAR</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>
+                        <h3 style={{ color: '#f39c12', margin: 0 }}>🛰️ OPERACIONES EN RADAR</h3>
+                        <button onClick={cargarDatos} style={styles.btnRefresh} disabled={loading}>
+                            {loading ? '...' : '🔄 ACTUALIZAR'}
+                        </button>
+                    </div>
                     <div style={styles.scrollArea}>
-                        {misionesActivas.length === 0 ? <p style={{color: '#7f8c8d'}}>No hay vuelos activos en tiempo real.</p> : 
+                        {misionesActivas.length === 0 ? <p style={{color: '#7f8c8d', textAlign: 'center', marginTop: '20px'}}>No hay vuelos activos.</p> : 
                         misionesActivas.map(m => (
                             <div key={m._id} style={styles.misionItem}>
                                 <div style={{fontWeight: 'bold', color: '#ecf0f1'}}>{m.aeronave} - {m.matricula}</div>
@@ -284,8 +293,8 @@ const styles = {
     page: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh', fontFamily: 'monospace' },
     container: { display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '20px', maxWidth: '1400px', margin: '0 auto' },
     card: { backgroundColor: '#1e272e', color: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #f39c12' },
-    logCard: { backgroundColor: '#1e272e', color: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #7f8c8d' },
-    scrollArea: { maxHeight: '600px', overflowY: 'auto', marginTop: '15px' },
+    logCard: { backgroundColor: '#1e272e', color: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #7f8c8d', display: 'flex', flexDirection: 'column' },
+    scrollArea: { maxHeight: '650px', overflowY: 'auto', marginTop: '15px' },
     misionItem: { backgroundColor: '#2f3542', padding: '12px', borderRadius: '8px', marginBottom: '10px', borderLeft: '4px solid #f39c12' },
     title: { color: '#f39c12', margin: '0', textAlign: 'center', fontSize: '1.5rem', letterSpacing: '2px' },
     subtitle: { textAlign: 'center', fontSize: '0.75rem', marginBottom: '20px', letterSpacing: '2px', color: '#7f8c8d' },
@@ -299,6 +308,7 @@ const styles = {
     btn: { width: '100%', padding: '15px', backgroundColor: '#d35400', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '2px' },
     btnUpdate: { width: '100%', padding: '15px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' },
     btnCancel: { width: '100%', padding: '10px', backgroundColor: 'transparent', color: '#bdc3c7', border: 'none', cursor: 'pointer', marginTop: '5px' },
+    btnRefresh: { padding: '5px 12px', backgroundColor: 'transparent', color: '#f39c12', border: '1px solid #f39c12', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem' },
     btnRow: { display: 'flex', gap: '10px', marginTop: '10px' },
     btnSmall: { padding: '5px 10px', backgroundColor: '#2980b9', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' },
     btnSmallRed: { padding: '5px 10px', backgroundColor: '#c0393b', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }
