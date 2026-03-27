@@ -58,17 +58,17 @@ const CargaTactica = () => {
         try {
             const [evRes, airRes] = await Promise.all([getEvents(), getAircrafts()]);
             
-            // Extracción segura de datos
+            // Procesamiento ultra-resiliente según auditoría
             const dataEvents = Array.isArray(evRes) ? evRes : (evRes.data || []);
             const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
 
-            // FILTRADO SIMPLE: Mostramos todo lo que tenga status 'en_curso'
-            const activas = dataEvents.filter(ev => ev.status === 'en_curso' || ev.isRealTime === true);
+            // Filtro por STATUS "en_curso" (como se ve en tu MongoDB)
+            const activas = dataEvents.filter(ev => ev.status === 'en_curso');
             setMisionesActivas(activas);
             
             setFlotaES(dataAir.filter(a => a.estado === 'E/S'));
         } catch (error) {
-            console.error("Error en sincronización táctica:", error);
+            console.error("Fallo de sincronización:", error);
         } finally {
             setLoading(false);
         }
@@ -89,7 +89,7 @@ const CargaTactica = () => {
         const abs = Math.abs(dec || 0);
         const g = Math.floor(abs);
         const m = Math.floor((abs - g) * 60);
-        const s = Math.round((abs - g - m / 60) * 3600);
+        const s = Math.round((abs - g - (m / 60)) * 3600);
         let dir = type === 'lat' ? (dec < 0 ? 'S' : 'N') : (dec < 0 ? 'W' : 'E');
         return { g, m, s, dir };
     };
@@ -122,6 +122,7 @@ const CargaTactica = () => {
     };
 
     const handleEdit = (mision) => {
+        // Mapeo flexible para leer de la raíz o de 'ubicacion'
         const latVal = mision.lat ?? mision.ubicacion?.lat ?? 0;
         const lngVal = mision.lng ?? mision.ubicacion?.lng ?? 0;
         const latGMS = fromDecimal(latVal, 'lat');
@@ -130,10 +131,10 @@ const CargaTactica = () => {
         setEditingId(mision._id);
         setFormData({
             title: mision.title,
-            elemento: mision.elemento || '',
-            notasMarginales: mision.notasMarginales || '',
-            sda: mision.aeronave || '',
-            matricula: mision.matricula || '',
+            elemento: mision.elemento ?? mision.ubicacion?.elemento ?? '',
+            notasMarginales: mision.notasMarginales ?? mision.ubicacion?.notasMarginales ?? '',
+            sda: mision.aeronave ?? '',
+            matricula: mision.matricula ?? '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
             locNombre: mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA'
@@ -153,7 +154,7 @@ const CargaTactica = () => {
             notasMarginales: formData.notasMarginales.toUpperCase(),
             isRealTime: true,
             status: 'en_curso',
-            tipoIcono: formData.sda.includes('C-') || formData.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa',
+            tipoIcono: formData.sda.includes('AE') || formData.sda.includes('C-') ? 'ala_fija' : 'ala_rotativa',
             lat: latDec, 
             lng: lngDec,
             ubicacion: {
@@ -166,10 +167,10 @@ const CargaTactica = () => {
         try {
             if (editingId) {
                 await updateEvent(editingId, payload);
-                Swal.fire('OK', 'Vector Actualizado', 'success');
+                Swal.fire('ACTUALIZADO', 'Vector reposicionado', 'success');
             } else {
                 await createEvent(payload);
-                Swal.fire('OK', 'Vuelo Iniciado', 'success');
+                Swal.fire('LANZADO', 'Misión activa en radar', 'success');
             }
             
             setFormData({ 
@@ -182,16 +183,18 @@ const CargaTactica = () => {
             setEditingId(null);
             cargarDatos();
         } catch (error) {
-            Swal.fire('Error', 'Fallo de conexión', 'error');
+            Swal.fire('ERROR', 'Fallo en base de datos', 'error');
         }
     };
 
     const handleFinalizar = async (id) => {
         const result = await Swal.fire({
-            title: '¿FINALIZAR?',
+            title: '¿FINALIZAR MISIÓN?',
+            text: "Se eliminará el vector del radar activo",
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonText: 'SÍ'
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'SÍ, BORRAR'
         });
 
         if (result.isConfirmed) {
@@ -199,7 +202,7 @@ const CargaTactica = () => {
                 await deleteEvent(id);
                 cargarDatos();
             } catch (error) {
-                Swal.fire('Error', 'No se pudo borrar', 'error');
+                Swal.fire('ERROR', 'No se pudo eliminar', 'error');
             }
         }
     };
@@ -210,22 +213,23 @@ const CargaTactica = () => {
                 <div style={styles.card}>
                     <h2 style={styles.title}>{editingId ? '📍 RE-POSICIONAR' : '⚡ NUEVO VUELO'}</h2>
                     <form onSubmit={handleSubmit}>
-                        <label style={styles.label}>Indicativo:</label>
-                        <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} required />
+                        <label style={styles.label}>Misión / Indicativo:</label>
+                        <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} required placeholder="Ej: SOSTENIMIENTO" />
 
-                        <label style={styles.label}>Aeronave:</label>
+                        <label style={styles.label}>Aeronave (E/S):</label>
                         <select style={styles.input} value={formData.aeronaveId} onChange={handleAeronaveSelect} required={!editingId}>
                             <option value="">-- Seleccionar --</option>
-                            {flotaES.map(a => <option key={a._id} value={a._id}>{a.sda} | {a.matricula}</option>)}
+                            {flotaES.map(a => <option key={a._id} value={a._id}>{a.sda} | {a.matricula} ({a.unidad})</option>)}
                         </select>
 
-                        <label style={styles.label}>Unidad:</label>
+                        <label style={styles.label}>Unidad Responsable:</label>
                         <select style={styles.input} value={formData.elemento} onChange={(e) => setFormData({...formData, elemento: e.target.value})} required>
                             <option value="">-- Seleccionar --</option>
                             {UNIDADES_AE.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
 
                         <div style={styles.geoBox}>
+                            <label style={styles.label}>Referencia Posición:</label>
                             <select onChange={handleAeropuerto} style={styles.input} value={formData.locNombre}>
                                 <option value="">Aeródromo...</option>
                                 {AEROPUERTOS_ESTANDAR.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
@@ -244,22 +248,26 @@ const CargaTactica = () => {
                             </div>
                         </div>
 
-                        <label style={styles.label}>Notas:</label>
+                        <label style={styles.label}>Notas / Tripulación / Carga:</label>
                         <textarea style={styles.textarea} value={formData.notasMarginales} onChange={(e) => setFormData({...formData, notasMarginales: e.target.value})} required />
 
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
-                            {editingId ? 'GUARDAR' : 'LANZAR'}
+                            {editingId ? '💾 GUARDAR CAMBIOS' : '🚀 LANZAR VUELO'}
                         </button>
                     </form>
                 </div>
 
                 <div style={styles.logCard}>
-                    <h3 style={{ color: '#f39c12', borderBottom: '1px solid #f39c12' }}>🛰️ LOG DE VUELOS</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f39c12', paddingBottom: '10px' }}>
+                        <h3 style={{ color: '#f39c12', margin: 0 }}>🛰️ LOG DE VUELOS</h3>
+                        <button onClick={cargarDatos} style={styles.btnRefresh}>{loading ? '...' : 'ACTUALIZAR'}</button>
+                    </div>
                     <div style={styles.scrollArea}>
-                        {misionesActivas.map(m => (
+                        {misionesActivas.length === 0 ? <p style={{textAlign:'center', color:'#7f8c8d'}}>No hay vuelos activos.</p> : 
+                        misionesActivas.map(m => (
                             <div key={m._id} style={styles.misionItem}>
-                                <strong>{m.aeronave} - {m.matricula}</strong>
-                                <p style={{margin: '5px 0', fontSize: '0.8rem'}}>{m.title}</p>
+                                <div style={{fontWeight: 'bold', color: '#ecf0f1'}}>{m.aeronave} - {m.matricula}</div>
+                                <div style={{fontSize: '0.8rem', color: '#bdc3c7'}}>{m.title}</div>
                                 <div style={styles.btnRow}>
                                     <button onClick={() => handleEdit(m)} style={styles.btnSmall}>EDITAR</button>
                                     <button onClick={() => handleFinalizar(m._id)} style={styles.btnSmallRed}>FIN</button>
@@ -275,24 +283,25 @@ const CargaTactica = () => {
 
 const styles = {
     page: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh', fontFamily: 'monospace' },
-    container: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', maxWidth: '1200px', margin: '0 auto' },
+    container: { display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '20px', maxWidth: '1400px', margin: '0 auto' },
     card: { backgroundColor: '#1e272e', color: 'white', padding: '20px', borderRadius: '10px', border: '1px solid #f39c12' },
-    logCard: { backgroundColor: '#1e272e', color: 'white', padding: '20px', borderRadius: '10px' },
-    scrollArea: { maxHeight: '500px', overflowY: 'auto' },
-    misionItem: { backgroundColor: '#2f3542', padding: '10px', marginBottom: '10px', borderRadius: '5px', borderLeft: '4px solid #f39c12' },
-    title: { color: '#f39c12', textAlign: 'center' },
-    label: { display: 'block', fontSize: '0.8rem', color: '#bdc3c7' },
-    input: { width: '100%', padding: '8px', marginBottom: '10px', backgroundColor: '#2f3542', color: 'white', border: 'none' },
-    inputTriple: { width: '22%', padding: '5px', backgroundColor: '#3d4451', color: 'white', border: 'none' },
-    inputShort: { width: '20%', padding: '5px' },
+    logCard: { backgroundColor: '#1e272e', color: 'white', padding: '20px', borderRadius: '10px', border: '1px solid #7f8c8d' },
+    scrollArea: { maxHeight: '600px', overflowY: 'auto', marginTop: '15px' },
+    misionItem: { backgroundColor: '#2f3542', padding: '12px', borderRadius: '8px', marginBottom: '10px', borderLeft: '4px solid #f39c12' },
+    title: { color: '#f39c12', textAlign: 'center', marginBottom: '20px' },
+    label: { display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#bdc3c7', marginBottom: '5px' },
+    input: { width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '4px', border: 'none', backgroundColor: '#2f3542', color: 'white' },
+    inputTriple: { width: '23%', padding: '8px', borderRadius: '4px', border: 'none', backgroundColor: '#3d4451', color: 'white', textAlign: 'center' },
+    inputShort: { width: '20%', padding: '8px', borderRadius: '4px', border: 'none', backgroundColor: '#f39c12', color: 'black', fontWeight: 'bold' },
     row: { display: 'flex', justifyContent: 'space-between', marginBottom: '5px' },
-    geoBox: { padding: '10px', backgroundColor: '#3d4451', marginBottom: '10px' },
-    textarea: { width: '100%', height: '60px', backgroundColor: '#2f3542', color: 'white' },
-    btn: { width: '100%', padding: '10px', backgroundColor: '#d35400', color: 'white', border: 'none', cursor: 'pointer' },
-    btnUpdate: { width: '100%', padding: '10px', backgroundColor: '#27ae60', color: 'white', border: 'none' },
-    btnRow: { display: 'flex', gap: '10px' },
-    btnSmall: { padding: '3px 8px', backgroundColor: '#2980b9', color: 'white', border: 'none' },
-    btnSmallRed: { padding: '3px 8px', backgroundColor: '#c0393b', color: 'white', border: 'none' }
+    geoBox: { padding: '15px', backgroundColor: '#3d4451', borderRadius: '8px', marginBottom: '15px' },
+    textarea: { width: '100%', height: '80px', padding: '10px', borderRadius: '6px', backgroundColor: '#2f3542', color: 'white', border: 'none', resize: 'none', marginBottom: '15px' },
+    btn: { width: '100%', padding: '15px', backgroundColor: '#d35400', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' },
+    btnUpdate: { width: '100%', padding: '15px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' },
+    btnRefresh: { padding: '5px 10px', backgroundColor: 'transparent', color: '#f39c12', border: '1px solid #f39c12', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem' },
+    btnRow: { display: 'flex', gap: '10px', marginTop: '10px' },
+    btnSmall: { padding: '5px 10px', backgroundColor: '#2980b9', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' },
+    btnSmallRed: { padding: '5px 10px', backgroundColor: '#c0393b', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }
 };
 
 export default CargaTactica;

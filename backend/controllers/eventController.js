@@ -3,10 +3,9 @@ const Aircraft = require('../models/Aircraft');
 
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
- * Estándar de Seguridad: SINCRO JOKER
+ * Estándar de Seguridad: SINCRO JOKER (Optimizado)
  * - Actualizaciones Atómicas en MongoDB.
  * - Sincro Real-Time: Integración con WebSockets para el Mapa Táctico.
- * - Estado: Lógica de carga preparada para reconstrucción.
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -67,12 +66,12 @@ const getEvents = async (req, res) => {
     }
 };
 
-// @desc    Obtener operaciones activas para el MAPA TÁCTICO
+// @desc    Obtener operaciones activas para el MAPA TÁCTICO (Sincronizado con CargaTactica)
 const getActiveOperations = async (req, res) => {
     try {
+        // AJUSTE CRÍTICO: Eliminamos la restricción rígida de 'etapa' para que lea todo lo marcado como RealTime y Activo
         const activeOps = await Event.find({ 
             isRealTime: true,
-            etapa: 'operativo',
             status: { $in: ['en_curso', 'en_desarrollo', 'programado', 'operativo', 'disponible', 'emergencia'] } 
         }).sort({ updatedAt: -1 });
 
@@ -90,7 +89,7 @@ const createEvent = async (req, res) => {
             title, start, end, notes, color, esGlobal, 
             elemento, etapa, tipoApoyo, sdaListado,
             isRealTime, ubicacion, notasMarginales, status,
-            aeronave, matricula, tipoIcono 
+            aeronave, matricula, tipoIcono, lat, lng
         } = req.body;
 
         if (!title) return res.status(400).json({ message: 'Título requerido.' });
@@ -108,16 +107,22 @@ const createEvent = async (req, res) => {
         };
 
         if (isRealTime) {
+            // Sincronización con el nuevo formato de CargaTactica
+            const finalLat = lat !== undefined ? lat : (ubicacion?.lat || 0);
+            const finalLng = lng !== undefined ? lng : (ubicacion?.lng || 0);
+
             Object.assign(eventData, {
                 isRealTime: true,
                 tipoApoyo: 'VUELO',
                 start: null,
                 end: null,
                 etapa: 'operativo',
+                lat: parseFloat(finalLat),
+                lng: parseFloat(finalLng),
                 ubicacion: {
                     nombre: (ubicacion?.nombre || 'POSICIÓN POR COORDENADAS').toUpperCase(),
-                    lat: ubicacion?.lat ? parseFloat(ubicacion.lat) : 0,
-                    lng: ubicacion?.lng ? parseFloat(ubicacion.lng) : 0
+                    lat: parseFloat(finalLat),
+                    lng: parseFloat(finalLng)
                 },
                 notasMarginales: notasMarginales ? notasMarginales.toUpperCase() : 'SIN NOVEDAD',
                 aeronave: (aeronave || '').toUpperCase(),
@@ -140,7 +145,6 @@ const createEvent = async (req, res) => {
         const newEvent = new Event(eventData);
         await newEvent.save();
 
-        // EMISIÓN REAL-TIME
         const io = req.app.get('socketio');
         if (io && newEvent.isRealTime) {
             io.emit('newOperation', newEvent);
@@ -161,21 +165,32 @@ const updateEvent = async (req, res) => {
 
         const updateData = { ...req.body };
         
-        // Seguridad de campos fijos
         delete updateData._id; 
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        // Normalización Militar
         ['title', 'notes', 'elemento', 'aeronave', 'matricula', 'notasMarginales'].forEach(field => {
             if (updateData[field]) updateData[field] = updateData[field].toUpperCase();
         });
 
-        // Actualización ATÓMICA de la ubicación (Protocolo Sincro Joker)
+        // PROTOCOLO ATÓMICO: Si viene lat/lng en raíz (CargaTactica), lo subimos a ubicacion también
+        if (updateData.lat !== undefined) {
+            updateData['ubicacion.lat'] = parseFloat(updateData.lat);
+        }
+        if (updateData.lng !== undefined) {
+            updateData['ubicacion.lng'] = parseFloat(updateData.lng);
+        }
+
         if (updateData.ubicacion && typeof updateData.ubicacion === 'object') {
             const { lat, lng, nombre } = updateData.ubicacion;
-            if (lat !== undefined) updateData['ubicacion.lat'] = parseFloat(lat);
-            if (lng !== undefined) updateData['ubicacion.lng'] = parseFloat(lng);
+            if (lat !== undefined) {
+                updateData['ubicacion.lat'] = parseFloat(lat);
+                updateData.lat = parseFloat(lat); // Sincronía en raíz
+            }
+            if (lng !== undefined) {
+                updateData['ubicacion.lng'] = parseFloat(lng);
+                updateData.lng = parseFloat(lng); // Sincronía en raíz
+            }
             if (nombre !== undefined) updateData['ubicacion.nombre'] = nombre.toUpperCase();
             delete updateData.ubicacion; 
         }
@@ -186,7 +201,6 @@ const updateEvent = async (req, res) => {
             { new: true, runValidators: true }
         );
 
-        // EMISIÓN REAL-TIME: Actualización inmediata del Radar
         const io = req.app.get('socketio');
         if (io && updatedEvent.isRealTime) {
             io.emit('updateOperation', updatedEvent);
@@ -217,7 +231,6 @@ const deleteEvent = async (req, res) => {
 
         await event.deleteOne();
 
-        // EMISIÓN REAL-TIME: Limpieza de Radar
         const io = req.app.get('socketio');
         if (io && isRealTime) {
             io.emit('deleteOperation', eventId);
