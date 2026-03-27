@@ -6,9 +6,9 @@ import { getWeatherData, getEvents } from '../services/api';
 
 const { BaseLayer } = LayersControl;
 
-/** WIDGET DE EVOLUCIÓN NOCTURNA */
+/** WIDGET DE EVOLUCIÓN NOCTURNA - OPTIMIZADO PARA OPERACIONES NVG */
 const NightEvolutionWidget = ({ astronomyData }) => {
-    if (!astronomyData) return null;
+    if (!astronomyData) return <div style={{color: '#7f8c8d', fontSize: '10px', textAlign: 'center', marginTop: '10px'}}>ESPERANDO DATOS ASTRONÓMICOS...</div>;
 
     const moonrise = astronomyData.moonrise || "--:--";
     const moonset = astronomyData.moonset || "--:--";
@@ -16,10 +16,12 @@ const NightEvolutionWidget = ({ astronomyData }) => {
     const illumination = astronomyData.moon_illumination || "0";
 
     const calculateCulmination = (rise, set) => {
-        if (rise === "--:--" || set === "--:--") return "S/D";
+        if (rise === "--:--" || set === "--:--" || !rise || !set) return "S/D";
         try {
             const parseTime = (t) => {
-                const [time, modifier] = t.split(' ');
+                const parts = t.split(' ');
+                if (parts.length < 2) return 0;
+                const [time, modifier] = parts;
                 let [hours, minutes] = time.split(':');
                 if (hours === '12') hours = '00';
                 if (modifier === 'PM') hours = parseInt(hours, 10) + 12;
@@ -39,10 +41,10 @@ const NightEvolutionWidget = ({ astronomyData }) => {
 
     return (
         <div style={styles.nightWidget}>
-            <div style={styles.nightTitle}>PLANIFICACIÓN LUNAR</div>
+            <div style={styles.nightTitle}>PLANIFICACIÓN LUNAR (NVG)</div>
             <div style={styles.moonPhaseRow}>
-                <span>Fase: {phase}</span>
-                <span style={{color: '#f1c40f'}}>{illumination}% Ilum.</span>
+                <span>Fase: <strong>{phase}</strong></span>
+                <span style={{color: '#f1c40f'}}><strong>{illumination}%</strong> Ilum.</span>
             </div>
             <div style={styles.arcContainer}>
                 <div style={styles.moonArc}></div>
@@ -65,7 +67,6 @@ const NightEvolutionWidget = ({ astronomyData }) => {
 
 /** SIMBOLOGÍA TÁCTICA REAL */
 const crearIconoTactico = (tipo) => {
-    // Si es ala_fija (Avión) azul, si es ala_rotativa (Helo) naranja
     const color = tipo === 'ala_fija' ? '#3498db' : '#e67e22';
     const svg = tipo === 'ala_fija' 
         ? `<polygon points="50,15 90,85 50,70 10,85" fill="${color}" stroke="white" stroke-width="5"/>`
@@ -92,13 +93,15 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
         try {
             const response = await getWeatherData(icao);
             if (response.data) {
+                // Sincronización de datos meteorológicos y astronómicos
                 setAstronomyData(response.data.astronomy || null);
                 setWeatherData({
-                    metar: response.data.raw || "SIN DATOS",
-                    taf: response.data.taf || "NO DISPONIBLE"
+                    metar: response.data.raw || "SIN DATOS METAR",
+                    taf: response.data.taf || "TAF NO DISPONIBLE"
                 });
             }
         } catch (err) {
+            console.error("Error meteorológico:", err);
             setWeatherData({ metar: "ERROR DE CONEXIÓN", taf: null });
         } finally {
             setLoading(false);
@@ -167,7 +170,7 @@ const OperacionesMapa = () => {
         try {
             const data = await getEvents();
             const dataArray = Array.isArray(data) ? data : data.data || [];
-            // Filtro exacto para Radar en Tiempo Real
+            // Filtro para mostrar lo que está en operativo y marcado como RealTime
             const activas = dataArray.filter(ev => ev.isRealTime === true && ev.etapa === 'operativo');
             setMisiones(activas);
         } catch (error) {
@@ -211,6 +214,9 @@ const OperacionesMapa = () => {
                     <BaseLayer checked name="🌑 Modo Oscuro">
                         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
                     </BaseLayer>
+                    <BaseLayer name="📡 Satelital (Esri)">
+                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+                    </BaseLayer>
                     <BaseLayer name="🗺️ Político">
                         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                     </BaseLayer>
@@ -226,22 +232,22 @@ const OperacionesMapa = () => {
                             <span style={{color: '#f39c12', fontWeight: 'bold'}}>{m.matricula}</span>
                         </Tooltip>
                         <Popup>
-                            <div style={{padding: '10px', minWidth: '200px', backgroundColor: '#1a1a1a', color: 'white'}}>
+                            <div style={{padding: '10px', minWidth: '220px', backgroundColor: '#1a1a1a', color: 'white'}}>
                                 <div style={{color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #f39c12', marginBottom: '8px', paddingBottom: '4px'}}>
                                     {m.aeronave} | {m.matricula}
                                 </div>
-                                <div style={{fontSize: '11px', marginBottom: '5px'}}>
+                                <div style={styles.popupRow}>
                                     <strong style={{color: '#bdc3c7'}}>OPERACIÓN:</strong> {m.title}
                                 </div>
-                                <div style={{fontSize: '11px', marginBottom: '5px'}}>
+                                <div style={styles.popupRow}>
                                     <strong style={{color: '#bdc3c7'}}>UNIDAD:</strong> {m.elemento}
                                 </div>
-                                <div style={{fontSize: '11px', marginBottom: '5px'}}>
+                                <div style={styles.popupRow}>
                                     <strong style={{color: '#bdc3c7'}}>POSICIÓN:</strong> {m.ubicacion.nombre}
                                 </div>
-                                <div style={{fontSize: '10px', color: '#ecf0f1', background: '#333', padding: '6px', borderRadius: '4px', marginTop: '8px'}}>
-                                    <strong>INFORMACIÓN ADICIONAL:</strong><br/>
-                                    {m.notasMarginales || "SIN NOVEDAD"}
+                                <div style={styles.popupNoteBox}>
+                                    <strong style={{color: '#f39c12', fontSize: '9px'}}>INFORMACIÓN ADICIONAL:</strong><br/>
+                                    {m.notasMarginales || m.notes || "SIN NOVEDAD"}
                                 </div>
                                 <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>
                                     ACTUALIZADO: {new Date(m.updatedAt).toLocaleTimeString()}
@@ -286,7 +292,9 @@ const styles = {
     moonArc: { position: 'absolute', top: '0', left: '10%', right: '10%', bottom: '-1px', border: '1.5px solid #444', borderBottom: 'none', borderRadius: '50% 50% 0 0' },
     arcPoint: { position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' },
     pointLabel: { fontSize: '8px', color: '#7f8c8d', fontWeight: 'bold' },
-    pointTime: { fontSize: '10px', color: '#fff', fontWeight: 'bold' }
+    pointTime: { fontSize: '10px', color: '#fff', fontWeight: 'bold' },
+    popupRow: { fontSize: '11px', marginBottom: '5px' },
+    popupNoteBox: { fontSize: '10px', color: '#ecf0f1', background: '#333', padding: '8px', borderRadius: '4px', marginTop: '8px', whiteSpace: 'pre-wrap', borderLeft: '3px solid #f39c12' }
 };
 
 export default OperacionesMapa;
