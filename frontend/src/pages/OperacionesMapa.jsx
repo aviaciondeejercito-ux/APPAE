@@ -65,6 +65,7 @@ const NightEvolutionWidget = ({ astronomyData }) => {
 
 /** SIMBOLOGÍA TÁCTICA REAL */
 const crearIconoTactico = (tipo) => {
+    // Si es ala_fija (Avión) azul, si es ala_rotativa (Helo) naranja
     const color = tipo === 'ala_fija' ? '#3498db' : '#e67e22';
     const svg = tipo === 'ala_fija' 
         ? `<polygon points="50,15 90,85 50,70 10,85" fill="${color}" stroke="white" stroke-width="5"/>`
@@ -165,8 +166,9 @@ const OperacionesMapa = () => {
     const fetchMisiones = async () => {
         try {
             const data = await getEvents();
-            // Solo proyectamos lo marcado como operativo y tiempo real en CargaTactica
-            const activas = data.filter(ev => ev.etapa === 'operativo' && ev.isRealTime === true);
+            const dataArray = Array.isArray(data) ? data : data.data || [];
+            // Filtro exacto para Radar en Tiempo Real
+            const activas = dataArray.filter(ev => ev.isRealTime === true && ev.etapa === 'operativo');
             setMisiones(activas);
         } catch (error) {
             console.error("Error en radar:", error);
@@ -175,7 +177,7 @@ const OperacionesMapa = () => {
 
     useEffect(() => {
         fetchMisiones();
-        const timer = setInterval(fetchMisiones, 10000); // Refresco cada 10 seg
+        const timer = setInterval(fetchMisiones, 10000);
         return () => clearInterval(timer);
     }, []);
 
@@ -224,15 +226,24 @@ const OperacionesMapa = () => {
                             <span style={{color: '#f39c12', fontWeight: 'bold'}}>{m.matricula}</span>
                         </Tooltip>
                         <Popup>
-                            <div style={{padding: '10px', minWidth: '180px'}}>
-                                <div style={{color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #444', marginBottom: '5px'}}>
-                                    {m.aeronave} - {m.matricula}
+                            <div style={{padding: '10px', minWidth: '200px', backgroundColor: '#1a1a1a', color: 'white'}}>
+                                <div style={{color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #f39c12', marginBottom: '8px', paddingBottom: '4px'}}>
+                                    {m.aeronave} | {m.matricula}
                                 </div>
-                                <div style={{fontSize: '11px', color: '#fff', marginBottom: '5px'}}><strong>MISIÓN:</strong> {m.title}</div>
-                                <div style={{fontSize: '10px', color: '#bdc3c7', whiteSpace: 'pre-wrap'}}>
-                                    <strong>A BORDO:</strong><br/>{m.notasMarginales}
+                                <div style={{fontSize: '11px', marginBottom: '5px'}}>
+                                    <strong style={{color: '#bdc3c7'}}>OPERACIÓN:</strong> {m.title}
                                 </div>
-                                <div style={{fontSize: '9px', marginTop: '8px', color: '#27ae60', textAlign: 'right'}}>
+                                <div style={{fontSize: '11px', marginBottom: '5px'}}>
+                                    <strong style={{color: '#bdc3c7'}}>UNIDAD:</strong> {m.elemento}
+                                </div>
+                                <div style={{fontSize: '11px', marginBottom: '5px'}}>
+                                    <strong style={{color: '#bdc3c7'}}>POSICIÓN:</strong> {m.ubicacion.nombre}
+                                </div>
+                                <div style={{fontSize: '10px', color: '#ecf0f1', background: '#333', padding: '6px', borderRadius: '4px', marginTop: '8px'}}>
+                                    <strong>INFORMACIÓN ADICIONAL:</strong><br/>
+                                    {m.notasMarginales || "SIN NOVEDAD"}
+                                </div>
+                                <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>
                                     ACTUALIZADO: {new Date(m.updatedAt).toLocaleTimeString()}
                                 </div>
                             </div>
@@ -243,9 +254,10 @@ const OperacionesMapa = () => {
 
             <style>{`
                 .label-tactica-custom { background: transparent !important; border: none !important; box-shadow: none !important; }
-                .leaflet-popup-content-wrapper { padding: 0; background: #1a1a1a; color: white; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
+                .leaflet-popup-content-wrapper { padding: 0; background: #1a1a1a !important; color: white !important; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
                 .leaflet-popup-tip { background: #f39c12; }
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; }
+                .leaflet-popup-content { margin: 0 !important; }
             `}</style>
         </div>
     );
