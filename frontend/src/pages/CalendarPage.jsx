@@ -22,7 +22,6 @@ const CalendarPage = () => {
             const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
             
-            // Filtrado estricto por Unidad o Eventos Globales
             const filteredData = esMando 
                 ? data 
                 : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
@@ -33,49 +32,64 @@ const CalendarPage = () => {
         }
     };
 
+    // Lógica de colores según Tipo de Apoyo
+    const getEventColor = (tipo) => {
+        const t = tipo?.toUpperCase();
+        if (t?.includes('SOSTENIMIENTO')) return '#007bff'; // Azul
+        if (t?.includes('FUERZA OPERATIVA')) return '#28a745'; // Verde
+        if (t?.includes('EDUCACION')) return '#800000'; // Bordó
+        return '#ffffff'; // Otros / Blanco
+    };
+
     const handleEventClick = (info) => {
         const { event } = info;
+        // Limpiamos las notas para que no dupliquen el SDA si ya viene en el array
+        let cleanNotes = event.extendedProps.notes || '';
+        const sdas = event.extendedProps.sdaListado || [];
+        
+        sdas.forEach(sda => {
+            const regex = new RegExp(`SDA:\\s*${sda}`, 'gi');
+            cleanNotes = cleanNotes.replace(regex, '').replace(/\|\s*\|/g, '|').trim();
+        });
+
         setSelectedEvent({
             id: event.id,
             title: event.title,
             start: event.start,
             end: event.end,
             color: event.backgroundColor,
-            notes: event.extendedProps.notes,
+            notes: cleanNotes,
             user: event.extendedProps.user,
             origen: event.extendedProps.tipoOrigen,
             elemento: event.extendedProps.elemento,
             etapa: event.extendedProps.etapa,
             tipoApoyo: event.extendedProps.tipoApoyo,
             esGlobal: event.extendedProps.esGlobal,
-            sdaListado: event.extendedProps.sdaListado || []
+            sdaListado: sdas
         });
     };
 
     const closeModal = () => setSelectedEvent(null);
 
     const eventDidMount = (info) => {
-        const { tipoOrigen, esGlobal, etapa } = info.event.extendedProps;
+        const { tipoOrigen, esGlobal, etapa, elemento } = info.event.extendedProps;
         
-        // Borde Dorado para Órdenes de Comando o Globales (Alta Prioridad)
-        if (tipoOrigen === 'COMANDO' || esGlobal) {
-            info.el.style.border = '2px solid #FFD700'; 
-            info.el.style.boxShadow = '0 0 5px rgba(255, 215, 0, 0.5)';
-            info.el.style.fontWeight = 'bold';
+        // Actividades Internas: Reborde Negro
+        if (elemento === userUnidad && !esGlobal && tipoOrigen !== 'COMANDO') {
+            info.el.style.border = '2px solid #000000';
         }
 
-        // Estilos visuales por Etapa de Gestión
+        // Estilos por Etapa (Tildes Visuales en el título se manejan en el map de eventos)
         if (etapa === 'recepcion') {
-            info.el.style.opacity = '0.7'; 
+            info.el.style.opacity = '0.8'; 
             info.el.style.borderStyle = 'dashed';
-        } else if (etapa === 'revision') {
-            info.el.style.opacity = '0.9';
         }
 
-        // Corrección de contraste para eventos con fondo negro
-        if (info.event.backgroundColor === '#000000') {
+        // Contraste para eventos blancos
+        if (info.event.backgroundColor === '#ffffff' || info.event.backgroundColor === '#FFFFFF') {
             const titleEl = info.el.querySelector('.fc-event-title');
-            if (titleEl) titleEl.style.color = '#FFFFFF';
+            if (titleEl) titleEl.style.color = '#000000';
+            info.el.style.border = '1px solid #ddd';
         }
     };
 
@@ -90,64 +104,90 @@ const CalendarPage = () => {
 
     return (
         <div style={styles.pageContainer}>
-            <div style={styles.mainCard}>
-                <div style={styles.headerMonitor}>
-                    <h2 style={styles.title}>🗓️ Monitor de Actividades Operativas</h2>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <span style={styles.unidadBadge}>{userUnidad || "SIN UNIDAD"}</span>
-                        <span style={styles.modeBadge}>
-                            {role === 'boss' || role === 'admin' ? `MODO: COMANDO (${role.toUpperCase()})` : 'MODO: UNIDAD (S4)'}
-                        </span>
+            <div style={styles.layout}>
+                <div style={styles.mainCard}>
+                    <div style={styles.headerMonitor}>
+                        <h2 style={styles.title}>🗓️ Monitor de Actividades Operativas</h2>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <span style={styles.unidadBadge}>{userUnidad || "SIN UNIDAD"}</span>
+                            <span style={styles.modeBadge}>
+                                {role === 'boss' || role === 'admin' ? `MODO: COMANDO` : 'MODO: UNIDAD'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <FullCalendar
+                        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                        initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
+                        locale={esLocale}
+                        events={events.map(ev => {
+                            const colorBase = getEventColor(ev.tipoApoyo);
+                            let tilde = '';
+                            if (ev.etapa === 'recepcion') tilde = '🟡 ';
+                            if (ev.etapa === 'revision') tilde = '🔵 ';
+                            if (ev.etapa === 'ordenada') tilde = '🟢 ';
+
+                            return {
+                                id: ev._id,
+                                title: `${tilde}${ev.esGlobal ? '🌐 ' : ''}${ev.title}`,
+                                start: ev.start,
+                                end: ev.end,
+                                backgroundColor: colorBase, 
+                                borderColor: 'transparent',
+                                extendedProps: { 
+                                    notes: ev.notes, 
+                                    user: ev.userName,
+                                    tipoOrigen: ev.tipoOrigen,
+                                    elemento: ev.elemento,
+                                    esGlobal: ev.esGlobal,
+                                    etapa: ev.etapa,
+                                    tipoApoyo: ev.tipoApoyo,
+                                    sdaListado: ev.sdaListado 
+                                }
+                            };
+                        })}
+                        height="auto"
+                        eventClick={handleEventClick}
+                        eventDidMount={eventDidMount} 
+                        headerToolbar={{ 
+                            left: 'prev,next today', 
+                            center: 'title', 
+                            right: isMobile ? 'timeGridDay,dayGridMonth' : 'dayGridMonth,timeGridWeek'
+                        }}
+                        eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+                        timeZone="UTC" 
+                    />
+                </div>
+
+                {/* LEYENDA TÁCTICA APB */}
+                <div style={styles.legendCard}>
+                    <h4 style={styles.legendTitle}>REFERENCIAS</h4>
+                    <div style={styles.legendSection}>
+                        <p style={styles.legendSub}>Tipos de Misión</p>
+                        <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sostenimiento</div>
+                        <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Operativa</div>
+                        <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Educación</div>
+                        <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#ffffff', border:'1px solid #ccc'}}></span> Otros</div>
+                    </div>
+                    <div style={styles.legendSection}>
+                        <p style={styles.legendSub}>Estados</p>
+                        <div style={styles.legendItem}>🟡 Recepción</div>
+                        <div style={styles.legendItem}>🔵 Revisión</div>
+                        <div style={styles.legendItem}>🟢 Ordenada</div>
+                    </div>
+                    <div style={styles.legendSection}>
+                        <p style={styles.legendSub}>Origen</p>
+                        <div style={styles.legendItem}><span style={{...styles.colorBox, border:'2px solid #000', background:'none'}}></span> Actividad Interna</div>
+                        <div style={styles.legendItem}>🌐 Evento Global</div>
                     </div>
                 </div>
-                
-                <FullCalendar
-                    plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                    initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
-                    locale={esLocale}
-                    events={events.map(ev => ({
-                        id: ev._id,
-                        title: `${ev.esGlobal ? '🌐 ' : ''}${ev.tipoApoyo ? `[${ev.tipoApoyo}] ` : ''}${ev.title}`,
-                        start: ev.start,
-                        end: ev.end,
-                        backgroundColor: ev.color || '#1b3a57', 
-                        borderColor: 'transparent',
-                        extendedProps: { 
-                            notes: ev.notes, 
-                            user: ev.userName,
-                            tipoOrigen: ev.tipoOrigen,
-                            elemento: ev.elemento,
-                            esGlobal: ev.esGlobal,
-                            etapa: ev.etapa,
-                            tipoApoyo: ev.tipoApoyo,
-                            sdaListado: ev.sdaListado 
-                        }
-                    }))}
-                    height="auto"
-                    contentHeight="auto"
-                    expandRows={true}
-                    editable={false}
-                    eventClick={handleEventClick}
-                    eventDidMount={eventDidMount} 
-                    headerToolbar={{ 
-                        left: 'prev,next today', 
-                        center: 'title', 
-                        right: isMobile ? 'timeGridDay,dayGridMonth' : 'dayGridMonth,timeGridWeek,timeGridDay'
-                    }}
-                    eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
-                    dayMaxEvents={isMobile ? 2 : 6}
-                    nowIndicator={true}
-                    timeZone="UTC" 
-                />
             </div>
 
             {selectedEvent && (
                 <div style={styles.modalOverlay} onClick={closeModal}>
                     <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
                         <div style={{...styles.modalHeader, backgroundColor: selectedEvent.color || '#1b3a57'}}>
-                            <h3 style={styles.modalTitle}>
-                                {selectedEvent.esGlobal ? `🌐 [GLOBAL] ${selectedEvent.title}` : selectedEvent.title}
-                            </h3>
+                            <h3 style={styles.modalTitle}>{selectedEvent.title}</h3>
                             <button onClick={closeModal} style={styles.btnClose}>×</button>
                         </div>
                         
@@ -177,27 +217,17 @@ const CalendarPage = () => {
 
                             <div style={styles.infoRow}>
                                 <strong>⏱️ Horario Operativo (UTC):</strong> 
-                                <span>
-                                    {new Date(selectedEvent.start).toISOString().slice(0, 16).replace('T', ' ')} hs - 
-                                    {new Date(selectedEvent.end).toISOString().slice(0, 16).replace('T', ' ')} hs
-                                </span>
-                            </div>
-                            <hr style={styles.divider} />
-                            
-                            <div style={styles.infoRow}>
-                                <strong>👤 Responsable Registro:</strong> 
-                                <span style={styles.badge}>{selectedEvent.user || 'Sistema AE'}</span>
+                                <span>{new Date(selectedEvent.start).toISOString().slice(0, 16).replace('T', ' ')} hs</span>
                             </div>
                             <hr style={styles.divider} />
                             
                             <div style={styles.notesBox}>
                                 <strong>📝 Detalle de la Misión:</strong>
-                                <p style={styles.notesText}>{selectedEvent.notes || 'Sin observaciones adicionales.'}</p>
+                                <p style={styles.notesText}>{selectedEvent.notes || 'Sin observaciones.'}</p>
                             </div>
                         </div>
-
                         <div style={styles.modalFooter}>
-                            <button onClick={closeModal} style={styles.btnOk}>Cerrar Monitor</button>
+                            <button onClick={closeModal} style={styles.btnOk}>Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -207,28 +237,34 @@ const CalendarPage = () => {
 };
 
 const styles = {
-    pageContainer: { padding: '5px', backgroundColor: '#f4f7f6', minHeight: '100vh' },
-    mainCard: { background: '#fff', padding: '15px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', marginBottom: '10px' },
-    headerMonitor: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' },
-    title: { color: '#1b3a57', margin: 0, fontSize: '1.3rem', fontWeight: 'bold' },
-    unidadBadge: { fontSize: '0.85rem', background: '#e9ecef', color: '#1b3a57', padding: '5px 12px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
-    modeBadge: { fontSize: '0.8rem', background: '#1b3a57', color: 'white', padding: '5px 12px', borderRadius: '4px', fontWeight: 'bold' },
-    etapaBanner: { padding: '8px', borderRadius: '6px', color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: '0.85rem', marginBottom: '15px' },
-    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: '20px' },
-    modalContent: { background: 'white', borderRadius: '12px', width: '100%', maxWidth: '500px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' },
-    modalHeader: { padding: '15px 20px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    modalTitle: { margin: 0, fontSize: '1.1rem' },
-    btnClose: { background: 'transparent', border: 'none', color: 'white', fontSize: '1.8rem', cursor: 'pointer' },
+    pageContainer: { padding: '10px', backgroundColor: '#f4f7f6', minHeight: '100vh' },
+    layout: { display: 'flex', gap: '15px', flexWrap: 'wrap' },
+    mainCard: { flex: '1 1 800px', background: '#fff', padding: '15px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' },
+    legendCard: { flex: '1 1 200px', background: '#fff', padding: '15px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', height: 'fit-content' },
+    legendTitle: { margin: '0 0 10px 0', fontSize: '0.9rem', borderBottom: '2px solid #1b3a57', color: '#1b3a57', paddingBottom: '5px' },
+    legendSection: { marginBottom: '15px' },
+    legendSub: { fontSize: '0.75rem', fontWeight: 'bold', color: '#666', margin: '5px 0' },
+    legendItem: { fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' },
+    colorBox: { width: '12px', height: '12px', borderRadius: '2px' },
+    headerMonitor: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
+    title: { color: '#1b3a57', margin: 0, fontSize: '1.2rem', fontWeight: 'bold' },
+    unidadBadge: { fontSize: '0.75rem', background: '#e9ecef', color: '#1b3a57', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold' },
+    modeBadge: { fontSize: '0.75rem', background: '#1b3a57', color: 'white', padding: '4px 10px', borderRadius: '4px' },
+    etapaBanner: { padding: '8px', borderRadius: '6px', color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: '0.8rem', marginBottom: '15px' },
+    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
+    modalContent: { background: 'white', borderRadius: '12px', width: '95%', maxWidth: '500px', overflow: 'hidden' },
+    modalHeader: { padding: '15px', color: 'white', display: 'flex', justifyContent: 'space-between' },
+    modalTitle: { margin: 0, fontSize: '1rem' },
+    btnClose: { background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' },
     modalBody: { padding: '20px' },
-    infoRow: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.95rem' },
-    divider: { border: 'none', borderBottom: '1px solid #eee', margin: '12px 0' },
-    badge: { background: '#e9ecef', padding: '4px 12px', borderRadius: '15px', fontSize: '0.8rem', width: 'fit-content' },
-    sdaContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '8px' },
-    sdaBadge: { background: '#f1f4f8', color: '#1b3a57', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid #d1d9e6' },
+    infoRow: { display: 'flex', flexDirection: 'column', fontSize: '0.9rem' },
+    divider: { border: 'none', borderBottom: '1px solid #eee', margin: '10px 0' },
+    sdaContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' },
+    sdaBadge: { background: '#f1f4f8', color: '#1b3a57', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', border: '1px solid #d1d9e6' },
     notesBox: { marginTop: '10px' },
-    notesText: { background: '#f8f9fa', padding: '10px', borderRadius: '8px', fontSize: '0.9rem', color: '#444', whiteSpace: 'pre-line' },
-    modalFooter: { padding: '15px 20px', borderTop: '1px solid #eee', textAlign: 'right' },
-    btnOk: { background: '#1b3a57', color: 'white', border: 'none', padding: '10px 25px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }
+    notesText: { background: '#f8f9fa', padding: '10px', borderRadius: '8px', fontSize: '0.85rem', whiteSpace: 'pre-line' },
+    modalFooter: { padding: '10px', textAlign: 'right' },
+    btnOk: { background: '#1b3a57', color: 'white', border: 'none', padding: '8px 20px', borderRadius: '4px', cursor: 'pointer' }
 };
 
 export default CalendarPage;
