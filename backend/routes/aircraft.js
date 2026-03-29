@@ -21,20 +21,20 @@ router.get('/', aircraftController.getAircrafts);
 
 /**
  * 3. Crear nueva aeronave
- * Permitido para Admin, Boss, roles de S4 y la nueva OFICINA_TECNICA.
+ * Permitido para Admin, Boss, roles de S4, S4_UNIDAD y OFICINA_TECNICA.
  */
 router.post('/', authorize('admin', 'boss', 's4', 'S4_UNIDAD', 'OFICINA_TECNICA'), aircraftController.createAircraft);
 
 /**
  * 4. Actualizar Estado/Horas/Novedades (EL PUNTO CRÍTICO)
- * Habilita a OFICINA_TECNICA para gestionar el mantenimiento y novedades.
+ * Habilita a S4_UNIDAD y OFICINA_TECNICA para gestionar el mantenimiento y novedades.
  */
 router.put('/:id', authorize('admin', 'boss', 's4', 'S4_UNIDAD', 'OFICINA_TECNICA'), aircraftController.updateAircraftStatus);
 
 /**
  * 5. Eliminar aeronave del sistema (Acción crítica)
- * Se habilita a OFICINA_TECNICA para dar de baja registros de su unidad.
+ * Se habilita a S4_UNIDAD junto con Admin y OFICINA_TECNICA para dar de baja registros.
  */
-router.delete('/:id', authorize('admin', 'OFICINA_TECNICA'), aircraftController.deleteAircraft);
+router.delete('/:id', authorize('admin', 'OFICINA_TECNICA', 'S4_UNIDAD'), aircraftController.deleteAircraft);
 
 module.exports = router;
