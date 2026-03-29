@@ -40,9 +40,11 @@ const UNIDADES_AE = [
 ];
 
 const CargaTactica = () => {
-    // Obtener datos del usuario desde localStorage o context (ajustado para la lógica de permisos)
+    // Obtener datos del usuario desde localStorage
     const user = JSON.parse(localStorage.getItem('user')) || { elemento: '', role: '' };
-    const isMando = user.role === 'admin' || user.role === 'boss' || user.elemento === 'DIR AE';
+    
+    // SEGURIDAD: Ni OTO ni Director ven todo. Solo 'admin' tiene visibilidad total.
+    const isMandoTotal = user.role === 'admin';
 
     const [misionesActivas, setMisionesActivas] = useState([]);
     const [flotaES, setFlotaES] = useState([]);
@@ -66,10 +68,10 @@ const CargaTactica = () => {
             const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
 
             // Filtro robusto + Lógica de Unidad:
-            // Si no es mando, solo ve los vuelos donde el elemento coincida con su unidad
+            // Si no es admin (mando total), solo ve los vuelos de su unidad
             const activas = dataEvents.filter(ev => {
                 const esVueloActivo = (ev.status === 'en_curso' || ev.isRealTime === true) && ev.tipoApoyo === 'VUELO';
-                if (!isMando) {
+                if (!isMandoTotal) {
                     return esVueloActivo && ev.elemento?.toUpperCase().includes(user.elemento.toUpperCase());
                 }
                 return esVueloActivo;
@@ -77,10 +79,10 @@ const CargaTactica = () => {
             
             setMisionesActivas(activas);
             
-            // Filtrar flota disponible: si no es mando, solo ve aeronaves de su unidad
+            // Filtrar flota disponible: si no es admin, solo ve aeronaves de su unidad
             const flotaFiltrada = dataAir.filter(a => {
                 const enServicio = a.estado === 'E/S';
-                if (!isMando) {
+                if (!isMandoTotal) {
                     return enServicio && a.unidad?.toUpperCase().includes(user.elemento.toUpperCase());
                 }
                 return enServicio;
@@ -240,7 +242,7 @@ const CargaTactica = () => {
                 {/* PANEL DE CARGA */}
                 <div style={styles.card}>
                     <h2 style={styles.headerTitle}>
-                        {editingId ? '📍 RE-POSICIONAR VECTOR' : '⚡ NUEVA OPERACIÓN EN TIEMPO REAL'}
+                        {editingId ? '📍 RE-POSICIONAR AERONAVE' : '⚡ NUEVA OPERACIÓN EN TIEMPO REAL'}
                     </h2>
                     <form onSubmit={handleSubmit}>
                         <div style={styles.formGrid}>
@@ -263,7 +265,7 @@ const CargaTactica = () => {
                                     style={styles.input} 
                                     value={formData.elemento} 
                                     onChange={(e) => setFormData({...formData, elemento: e.target.value})} 
-                                    disabled={!isMando}
+                                    disabled={!isMandoTotal}
                                     required
                                 >
                                     <option value="">-- Unidad --</option>
@@ -313,7 +315,7 @@ const CargaTactica = () => {
                     </div>
                     <div style={styles.scrollArea}>
                         {misionesActivas.length === 0 ? (
-                            <div style={styles.emptyMsg}>NO SE DETECTAN VECTORES ACTIVOS</div>
+                            <div style={styles.emptyMsg}>NO SE DETECTAN AERONAVES ACTIVOS</div>
                         ) : (
                             misionesActivas.map(m => (
                                 <div key={m._id} style={styles.misionItem}>

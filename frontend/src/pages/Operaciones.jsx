@@ -54,7 +54,6 @@ const Operaciones = () => {
         setFilteredEvents(results);
     }, [searchTerm, events]);
 
-    // Carga aeronaves basadas en la unidad seleccionada o la unidad del usuario
     useEffect(() => {
         const fetchAeronaves = async () => {
             const unidadABuscar = (formData.unidadesInvolucradas.length > 0) 
@@ -165,6 +164,7 @@ const Operaciones = () => {
         }
 
         const esMando = role === 'admin' || role === 'boss';
+        // Limpiamos el prefijo anterior para evitar duplicaciones al editar
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
         
         const finalElemento = (esMando && formData.unidadesInvolucradas.length > 0)
@@ -254,7 +254,6 @@ const Operaciones = () => {
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
-                {/* FORMULARIO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
                     
@@ -331,7 +330,6 @@ const Operaciones = () => {
                     </form>
                 </div>
 
-                {/* REGISTRO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Órdenes</h3>
                     <input type="text" placeholder="🔍 Buscar por misión, unidad o tipo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />

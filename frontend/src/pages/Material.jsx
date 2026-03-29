@@ -72,7 +72,6 @@ const Material = () => {
         }
     };
 
-    // CORRECCIÓN: Aseguramos que el objeto enviado mantenga todas las propiedades para evitar (undefined)
     const handleUpdateField = async (id, updatedFields) => {
         try {
             const targetAir = aircrafts.find(a => a._id === id);
@@ -82,7 +81,6 @@ const Material = () => {
                 return alert("Seguridad: No tiene permisos sobre esta unidad.");
             }
 
-            // Construimos el objeto completo para el backend y el estado local
             const fullUpdatedObject = {
                 ...targetAir,
                 ...updatedFields
@@ -92,10 +90,7 @@ const Material = () => {
                 fullUpdatedObject.horasRemanentes = Number(fullUpdatedObject.horasRemanentes);
             }
             
-            // Enviamos el objeto completo para que otros módulos no reciban datos parciales
             await updateAircraftStatus(id, fullUpdatedObject);
-            
-            // Actualización local
             setAircrafts(prev => prev.map(a => a._id === id ? fullUpdatedObject : a));
         } catch (error) {
             console.error("Error al actualizar:", error);
@@ -124,31 +119,40 @@ const Material = () => {
     return (
         <div style={styles.container}>
             <div style={styles.grid}>
-                <div style={styles.card}>
-                    <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
-                    <form onSubmit={handleCreate} style={styles.form}>
-                        <div style={styles.field}>
-                            <label style={styles.label}>Matrícula (AE-XXX)</label>
-                            <input type="text" value={newAir.matricula} onChange={e => setNewAir({...newAir, matricula: e.target.value})} style={styles.input} required />
-                        </div>
-                        <div style={styles.field}>
-                            <label style={styles.label}>Sistema de Armas</label>
-                            <select value={newAir.sda} onChange={e => setNewAir({...newAir, sda: e.target.value})} style={styles.input} required>
-                                <option value="">Seleccione SdA...</option>
-                                {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </div>
-                        <div style={styles.field}>
-                            <label style={styles.label}>Horas Remanentes</label>
-                            <input type="number" value={newAir.horasRemanentes} onChange={e => setNewAir({...newAir, horasRemanentes: e.target.value})} style={styles.input} />
-                        </div>
-                        <div style={styles.field}>
-                            <label style={styles.label}>Novedades Iniciales</label>
-                            <textarea value={newAir.novedades} onChange={e => setNewAir({...newAir, novedades: e.target.value})} style={{...styles.input, height: '60px', resize: 'none'}} placeholder="Ej: Próxima inspección de 100hs..." />
-                        </div>
-                        <button type="submit" style={styles.btnPrimary}>Registrar en {userElemento}</button>
-                    </form>
-                </div>
+                {/* Lógica de Seguridad: Solo admin puede crear material */}
+                {role === 'admin' ? (
+                    <div style={styles.card}>
+                        <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
+                        <form onSubmit={handleCreate} style={styles.form}>
+                            <div style={styles.field}>
+                                <label style={styles.label}>Matrícula (AE-XXX)</label>
+                                <input type="text" value={newAir.matricula} onChange={e => setNewAir({...newAir, matricula: e.target.value})} style={styles.input} required />
+                            </div>
+                            <div style={styles.field}>
+                                <label style={styles.label}>Sistema de Armas</label>
+                                <select value={newAir.sda} onChange={e => setNewAir({...newAir, sda: e.target.value})} style={styles.input} required>
+                                    <option value="">Seleccione SdA...</option>
+                                    {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <div style={styles.field}>
+                                <label style={styles.label}>Horas Remanentes</label>
+                                <input type="number" value={newAir.horasRemanentes} onChange={e => setNewAir({...newAir, horasRemanentes: e.target.value})} style={styles.input} />
+                            </div>
+                            <div style={styles.field}>
+                                <label style={styles.label}>Novedades Iniciales</label>
+                                <textarea value={newAir.novedades} onChange={e => setNewAir({...newAir, novedades: e.target.value})} style={{...styles.input, height: '60px', resize: 'none'}} placeholder="Ej: Próxima inspección de 100hs..." />
+                            </div>
+                            <button type="submit" style={styles.btnPrimary}>Registrar en {userElemento}</button>
+                        </form>
+                    </div>
+                ) : (
+                    <div style={styles.card}>
+                        <h3 style={styles.title}>📋 Información de Unidad</h3>
+                        <p style={{fontSize: '0.9rem', color: '#666'}}>Usted está operando en: <strong>{userElemento}</strong></p>
+                        <p style={{fontSize: '0.8rem', color: '#888'}}>El alta de nuevas aeronaves está reservada para el nivel Administrador.</p>
+                    </div>
+                )}
 
                 <div style={styles.card}>
                     <h3 style={styles.title}>🛠️ Gestión y Novedades</h3>

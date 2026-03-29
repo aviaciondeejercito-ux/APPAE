@@ -20,7 +20,7 @@ const getMoonIcon = (phase) => {
     return '🌙';
 };
 
-/** WIDGET DE EVOLUCIÓN NOCTURNA - UPGRADE VISUAL */
+/** WIDGET DE EVOLUCIÓN NOCTURNA */
 const NightEvolutionWidget = ({ astronomyData }) => {
     if (!astronomyData) return <div style={{color: '#7f8c8d', fontSize: '10px', textAlign: 'center', marginTop: '10px'}}>ESPERANDO DATOS ASTRONÓMICOS...</div>;
 
@@ -89,7 +89,7 @@ const NightEvolutionWidget = ({ astronomyData }) => {
     );
 };
 
-/** SIMBOLOGÍA TÁCTICA REAL */
+/** SIMBOLOGÍA TÁCTICA */
 const crearIconoTactico = (tipo) => {
     const color = tipo === 'ala_fija' ? '#3498db' : '#e67e22';
     const svg = tipo === 'ala_fija' 
@@ -267,10 +267,10 @@ const OperacionesMapa = () => {
 
             <style>{`
                 .label-tactica-custom { background: transparent !important; border: none !important; }
-                .leaflet-popup-content-wrapper { padding: 0; background: #1a1a1a !important; color: white !important; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
+                .leaflet-popup-content-wrapper { padding: 0 !important; background: #1a1a1a !important; color: white !important; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
                 .leaflet-popup-tip { background: #f39c12; }
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; }
-                .leaflet-popup-content { margin: 0 !important; }
+                .leaflet-popup-content { margin: 0 !important; width: auto !important; }
             `}</style>
         </div>
     );
@@ -288,7 +288,7 @@ const styles = {
     stationList: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px', maxHeight: '120px', overflowY: 'auto', marginBottom: '15px', paddingRight: '5px' },
     stationBtn: { border: '1px solid', padding: '6px 0', fontSize: '9px', cursor: 'pointer', borderRadius: '3px', fontWeight: 'bold', transition: 'all 0.2s' },
     loaderBox: { color: '#f39c12', fontSize: '10px', textAlign: 'center', padding: '20px', border: '1px dashed #f39c12', borderRadius: '4px' },
-    weatherResults: { textAlign: 'left', animation: 'fadeIn 0.5s ease' },
+    weatherResults: { textAlign: 'left' },
     stationBadge: { background: '#222', color: '#00ffff', fontSize: '11px', fontWeight: 'bold', padding: '6px 10px', borderRadius: '4px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #333' },
     dotActive: { width: '8px', height: '8px', background: '#27ae60', borderRadius: '50%', boxShadow: '0 0 5px #27ae60' },
     metarSection: { marginBottom: '15px' },

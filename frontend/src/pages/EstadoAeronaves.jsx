@@ -20,8 +20,10 @@ const EstadoAeronaves = () => {
         try {
             const { data } = await getAircrafts();
             
-            // Filtrado robusto: Maneja casos de unidad undefined o nula
-            const filtrados = (role === 'admin' || role === 'boss') 
+            // LÓGICA DE FILTRADO JERÁRQUICO ACTUALIZADA
+            // Admin, Boss, Director y OTO: Ven TODO el material de la Aviación de Ejército.
+            // Oficina Técnica y User: Ven solo el material de su UNIDAD/ELEMENTO.
+            const filtrados = (role === 'admin' || role === 'boss' || role === 'director' || role === 'oto') 
                 ? data 
                 : data.filter(a => 
                     a.unidad && 
@@ -65,7 +67,7 @@ const EstadoAeronaves = () => {
             <div style={styles.grid}>
                 {unidades.length === 0 ? (
                     <div style={styles.noData}>
-                        <p>No hay aeronaves registradas bajo su jurisdicción.</p>
+                        <p>No hay aeronaves registradas bajo su jurisdicción o elemento.</p>
                     </div>
                 ) : (
                     unidades.map(unidad => (

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// IMPORTANTE: Asegúrate de tener instalado leaflet y cargar su CSS
 import 'leaflet/dist/leaflet.css'; 
 
 import CalendarPage from './pages/CalendarPage';
@@ -11,7 +10,6 @@ import EstadoAeronaves from './pages/EstadoAeronaves';
 import Material from './pages/Material'; 
 import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
-// MeteorologiaPanel ya no se importa aquí porque está dentro de OperacionesMapa
 
 function App() {
     // 1. ESTADOS DE AUTENTICACIÓN Y NAVEGACIÓN
@@ -19,8 +17,6 @@ function App() {
     const [role, setRole] = useState(localStorage.getItem('role'));
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
-    // --- LIMPIEZA: Se eliminaron mapBase y capasMet de aquí porque ahora son internos de OperacionesMapa ---
 
     // Escucha cambios de tamaño de pantalla
     useEffect(() => {
@@ -48,12 +44,12 @@ function App() {
     };
 
     /**
-     * LÓGICA DE PERMISOS UNIFICADA
+     * LÓGICA DE PERMISOS ACTUALIZADA (ESTÁNDAR DE SEGURIDAD 2026)
      */
-    const puedeGestionarMaterial = role === 'admin' || role === 'S4' || role === 'S4_UNIDAD';
-    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'S4' || role === 'S4_UNIDAD' || role === 'boss';
-    const puedeVerStats = role === 'admin' || role === 'boss';
-    const puedeVerMapa = role === 'admin' || role === 'boss';
+    const puedeGestionarMaterial = role === 'admin' || role === 'oficina_tecnica';
+    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'oto' || role === 'oficina_tecnica';
+    const puedeVerStats = role === 'admin' || role === 'boss' || role === 'director';
+    const puedeVerMapa = role === 'admin' || role === 'boss' || role === 'director' || role === 'oto' || role === 'user';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -104,7 +100,7 @@ function App() {
                                 </button>
                             )}
 
-                            {puedeCargarOperaciones && (
+                            {(role === 'admin' || role === 'oto' || role === 'user') && (
                                 <button 
                                     onClick={() => setView('despacho')}
                                     style={{
@@ -203,19 +199,13 @@ function App() {
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
-                        
                         if (view === 'mapa' && puedeVerMapa) return (
                             <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#000' }}>
-                                {/* DESCONEXIÓN EXITOSA: 
-                                    OperacionesMapa ya no recibe props de clima, 
-                                    él maneja su propia meteorología internamente.
-                                */}
                                 <OperacionesMapa />
                             </div>
                         );
-
                         if (view === 'despacho' && puedeCargarOperaciones) return <CargaTactica />;
-                        if (view === 'operaciones') return <Operaciones />; 
+                        if (view === 'operaciones' && puedeCargarOperaciones) return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
                         if (view === 'material' && puedeGestionarMaterial) return <Material />;
                         return <CalendarPage />;

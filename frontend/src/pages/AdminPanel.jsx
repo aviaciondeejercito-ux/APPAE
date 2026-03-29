@@ -153,10 +153,12 @@ const AdminPanel = () => {
                             onChange={e => setNewUser({...newUser, role: e.target.value})}
                             style={styles.select}
                         >
-                            <option value="user">Usuario (Consulta)</option>
-                            <option value="S4_UNIDAD">S4 Unidad (Carga Material)</option>
-                            <option value="boss">Boss (Comando)</option>
-                            <option value="admin">Admin (Total)</option>
+                            <option value="user">USER (Consulta)</option>
+                            <option value="S4_UNIDAD">S4 UNIDAD (Carga)</option>
+                            <option value="oto">OTO (Oficial Técnico)</option>
+                            <option value="boss">BOSS (Comando)</option>
+                            <option value="director">DIRECTOR (Dirección)</option>
+                            <option value="admin">ADMIN (Total)</option>
                         </select>
                     </div>
                     <button type="submit" style={styles.btnRegister}>Dar de Alta</button>
@@ -194,13 +196,15 @@ const AdminPanel = () => {
                                                 onChange={(e) => handleRoleChange(user._id, e.target.value)}
                                                 style={{
                                                     ...styles.roleSelect,
-                                                    color: user.role === 'admin' ? '#d9534f' : 
-                                                           user.role === 'S4_UNIDAD' ? '#2980b9' : '#333'
+                                                    color: (user.role === 'admin' || user.role === 'director') ? '#d9534f' : 
+                                                           (user.role === 'oto' || user.role === 'S4_UNIDAD') ? '#2980b9' : '#333'
                                                 }}
                                             >
                                                 <option value="user">USER</option>
                                                 <option value="S4_UNIDAD">S4 UNIDAD</option>
+                                                <option value="oto">OTO</option>
                                                 <option value="boss">BOSS</option>
+                                                <option value="director">DIRECTOR</option>
                                                 <option value="admin">ADMIN</option>
                                             </select>
                                         </td>

@@ -1,7 +1,8 @@
 /**
  * MIDDLEWARE DE AUTORIZACIÓN JERÁRQUICA - SISTEMA AE
  * Restringe el acceso a rutas específicas y valida propiedad de recursos.
- * @param {...string} rolesPermitidos - Lista de roles autorizados (ej: 'admin', 'boss', 'user', 's4', 's4_unidad')
+ * Actualización: Integración de nuevos niveles (Director, OTO, Oficina Técnica).
+ * @param {...string} rolesPermitidos - Lista de roles autorizados
  */
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
@@ -19,7 +20,7 @@ const authorize = (...rolesPermitidos) => {
         const userRole = req.user.role.toUpperCase();
         const allowedRoles = rolesPermitidos.map(r => r.toUpperCase());
 
-        // Comprobamos si el rol actual del usuario está dentro de la matriz de permisos permitidos
+        // Comprobamos si el rol actual del usuario está dentro de la matriz de permisos autorizados
         if (!allowedRoles.includes(userRole)) {
             console.warn(`[BLOQUEO CRÍTICO] Acceso Denegado: Usuario ${req.user.username || 'N/A'} (Rol: ${userRole}) intentó acceder a una ruta restringida.`);
             
@@ -30,19 +31,20 @@ const authorize = (...rolesPermitidos) => {
         }
 
         /**
-         * 3. LÓGICA DE MANDO (ADD-ON BOSS/ADMIN)
-         * Si el usuario es BOSS o ADMIN, inyectamos una propiedad en 'req' 
-         * para que los controladores sepan que tiene "Poder Total" de edición
-         * sobre cualquier unidad/elemento.
+         * 3. LÓGICA DE MANDO (ADMIN / BOSS / DIRECTOR)
+         * Inyectamos propiedad en 'req' para que los controladores sepan que tienen 
+         * visión o poder sobre múltiples unidades/elementos.
          */
-        req.isMando = (userRole === 'ADMIN' || userRole === 'BOSS');
+        req.isMando = (userRole === 'ADMIN' || userRole === 'BOSS' || userRole === 'DIRECTOR');
 
         /**
-         * 4. COMPROBACIÓN DE ROL S4 / S4_UNIDAD
-         * Inyectamos flags adicionales para facilitar la lógica en los controladores
-         * si es necesario diferenciar gestión de unidad vs gestión global.
+         * 4. COMPROBACIÓN DE GESTIÓN TÉCNICA Y OPERATIVA (OTO / OFICINA_TECNICA)
+         * Inyectamos flags para facilitar la lógica de carga y mantenimiento por unidad.
          */
-        req.isS4 = (userRole === 'S4' || userRole === 'S4_UNIDAD');
+        req.isGestionUnidad = (userRole === 'OFICINA_TECNICA' || userRole === 'USER' || userRole === 'OTO');
+        
+        // Flag específico para Oficina Técnica (reemplaza lógica S4 anterior)
+        req.isOficinaTecnica = (userRole === 'OFICINA_TECNICA');
 
         // Registro de Auditoría interna de accesos exitosos.
         console.log(`[AUTORIZADO] Acceso concedido a ${req.user.username || 'Sistema'} (Rol: ${userRole}) ${req.isMando ? '[MODO MANDO ACTIVO]' : ''}`);

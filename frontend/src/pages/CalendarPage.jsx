@@ -8,7 +8,7 @@ import { getEvents } from '../services/EventService';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
-    // SEGURIDAD: Valores por defecto para evitar errores de renderizado
+    // SEGURIDAD: Valores por defecto y normalización de roles
     const [role] = useState(localStorage.getItem('role')?.toLowerCase() || 'guest');
     const [userUnidad] = useState(localStorage.getItem('elemento')?.toUpperCase() || ''); 
     const [selectedEvent, setSelectedEvent] = useState(null); 
@@ -23,22 +23,19 @@ const CalendarPage = () => {
             const data = await getEvents();
             
             // ESTÁNDAR DE SEGURIDAD: Restricción jerárquica estricta
-            // El 'admin' es el único con visibilidad total.
-            // 'boss', 's4' y otros roles filtran por su unidad (ej. DIR AE) o eventos globales.
+            // SOLO el 'admin' tiene visibilidad total. 
+            // OTO, DIRECTOR y demás roles filtran por su unidad o eventos globales.
             const filteredData = role === 'admin' 
                 ? data 
                 : data.filter(ev => {
                     const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
                     const unidadUsuario = userUnidad.toUpperCase();
                     
-                    // El BOSS y demás ven solo lo de su unidad O lo que es Global
                     return evElemento.includes(unidadUsuario) || ev.esGlobal;
                 });
 
-            // Actualización atómica del estado
             setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
-            // CRÍTICA: Registro de error para auditoría de sistemas
             console.error("❌ ERROR CRÍTICO: Fallo en sincronización de datos operativos:", error); 
         }
     };
@@ -57,7 +54,6 @@ const CalendarPage = () => {
         let cleanNotes = event.extendedProps.notes || '';
         const sdas = event.extendedProps.sdaListado || [];
         
-        // Limpieza de notas para evitar duplicidad visual con los badges de SDA
         sdas.forEach(sda => {
             const regex = new RegExp(`SDA:\\s*${sda}`, 'gi');
             cleanNotes = cleanNotes.replace(regex, '').replace(/\|\s*\|/g, '|').trim();
@@ -88,7 +84,6 @@ const CalendarPage = () => {
 
         info.el.style.backgroundColor = backgroundColor;
 
-        // 1. LEGIBILIDAD CRÍTICA: Contraste automático según el fondo
         const isWhite = backgroundColor.toLowerCase() === '#ffffff' || backgroundColor === 'rgb(255, 255, 255)';
         const textElements = info.el.querySelectorAll('.fc-event-title, .fc-event-time');
         
@@ -99,13 +94,11 @@ const CalendarPage = () => {
 
         if (isWhite) info.el.style.border = '1px solid #ddd';
 
-        // 2. LÓGICA DE NEGOCIO: Actividad interna de la Unidad (Borde Sólido)
         const evElemento = elemento ? String(elemento).toUpperCase() : '';
         if (evElemento === userUnidad && !esGlobal && tipoOrigen !== 'COMANDO') {
             info.el.style.border = '2px solid #000000';
         }
 
-        // 3. LÓGICA DE NEGOCIO: Etapa Recepción (Borde Discontinuo)
         if (etapa === 'recepcion') {
             info.el.style.borderStyle = 'dashed';
             info.el.style.borderWidth = '2px';
@@ -246,7 +239,7 @@ const CalendarPage = () => {
                             </div>
                             <hr style={styles.divider} />
                             <div style={styles.infoRow}>
-                                <strong>🚁 Tipo de Apoyo / SdA:</strong> 
+                                <strong>🚀 Tipo de Apoyo / SdA:</strong> 
                                 <span>{selectedEvent.tipoApoyo || 'No especificado'}</span>
                                 {selectedEvent.sdaListado?.length > 0 && (
                                     <div style={styles.sdaContainer}>
