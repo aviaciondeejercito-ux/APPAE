@@ -204,8 +204,24 @@ const OperacionesMapa = () => {
     const fetchMisiones = async () => {
         try {
             const data = await getEvents();
+            const role = localStorage.getItem('role');
+            const userElemento = localStorage.getItem('elemento'); // Asumiendo que guardas la unidad del usuario
+            
             const dataArray = Array.isArray(data) ? data : data.data || [];
-            const activas = dataArray.filter(ev => ev.isRealTime === true && ev.etapa === 'operativo');
+            
+            // FILTRADO POR ROL Y UNIDAD
+            const activas = dataArray.filter(ev => {
+                const esOperativo = ev.isRealTime === true && ev.etapa === 'operativo';
+                
+                // Jerarquía alta: Ven todo
+                if (['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role)) {
+                    return esOperativo;
+                }
+                
+                // Usuarios comunes: Solo ven su unidad
+                return esOperativo && ev.elemento === userElemento;
+            });
+
             setMisiones(activas);
         } catch (error) {
             console.error("Error en radar:", error);
