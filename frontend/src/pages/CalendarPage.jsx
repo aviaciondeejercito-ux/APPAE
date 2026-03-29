@@ -8,8 +8,9 @@ import { getEvents } from '../services/EventService';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
-    const [role] = useState(localStorage.getItem('role')?.toLowerCase());
-    const [userUnidad] = useState(localStorage.getItem('elemento')?.toUpperCase()); 
+    // SEGURIDAD: Valores por defecto para evitar errores de renderizado
+    const [role] = useState(localStorage.getItem('role')?.toLowerCase() || 'guest');
+    const [userUnidad] = useState(localStorage.getItem('elemento')?.toUpperCase() || ''); 
     const [selectedEvent, setSelectedEvent] = useState(null); 
     const [isMobile] = useState(window.innerWidth < 768);
 
@@ -21,7 +22,7 @@ const CalendarPage = () => {
         try {
             const data = await getEvents();
             
-            // ESTÁNDAR DE SEGURIDAD: Validación de integridad de datos recibidos
+            // ESTÁNDAR DE SEGURIDAD: Validación de jerarquía para filtrado de datos
             const esMando = role === 'admin' || role === 'boss' || role === 's4';
             
             const filteredData = esMando 
@@ -31,9 +32,10 @@ const CalendarPage = () => {
                     return evElemento.includes(userUnidad) || ev.esGlobal;
                 });
 
+            // Actualización atómica del estado
             setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
-            // CRÍTICA: Registro de error específico para auditoría
+            // CRÍTICA: Registro de error para auditoría de sistemas
             console.error("❌ ERROR CRÍTICO: Fallo en sincronización de datos operativos:", error); 
         }
     };
@@ -52,7 +54,7 @@ const CalendarPage = () => {
         let cleanNotes = event.extendedProps.notes || '';
         const sdas = event.extendedProps.sdaListado || [];
         
-        // Limpieza atómica de notas para evitar redundancia
+        // Limpieza de notas para evitar duplicidad visual con los badges de SDA
         sdas.forEach(sda => {
             const regex = new RegExp(`SDA:\\s*${sda}`, 'gi');
             cleanNotes = cleanNotes.replace(regex, '').replace(/\|\s*\|/g, '|').trim();
@@ -81,10 +83,9 @@ const CalendarPage = () => {
         const { elemento, esGlobal, tipoOrigen, etapa } = info.event.extendedProps;
         const backgroundColor = info.event.backgroundColor;
 
-        // Estilo base
         info.el.style.backgroundColor = backgroundColor;
 
-        // 1. Legibilidad Crítica (Contraste de seguridad)
+        // 1. LEGIBILIDAD CRÍTICA: Contraste automático según el fondo
         const isWhite = backgroundColor.toLowerCase() === '#ffffff' || backgroundColor === 'rgb(255, 255, 255)';
         const textElements = info.el.querySelectorAll('.fc-event-title, .fc-event-time');
         
@@ -95,13 +96,13 @@ const CalendarPage = () => {
 
         if (isWhite) info.el.style.border = '1px solid #ddd';
 
-        // 2. Lógica de Negocio: ACTIVIDAD INTERNA (Borde Sólido Negro)
+        // 2. LÓGICA DE NEGOCIO: Actividad interna de la Unidad (Borde Sólido)
         const evElemento = elemento ? String(elemento).toUpperCase() : '';
         if (evElemento === userUnidad && !esGlobal && tipoOrigen !== 'COMANDO') {
             info.el.style.border = '2px solid #000000';
         }
 
-        // 3. Lógica de Negocio: ETAPA RECEPCIÓN (Estilo Discontinuo / Pendiente)
+        // 3. LÓGICA DE NEGOCIO: Etapa Recepción (Borde Discontinuo)
         if (etapa === 'recepcion') {
             info.el.style.borderStyle = 'dashed';
             info.el.style.borderWidth = '2px';
@@ -244,7 +245,6 @@ const CalendarPage = () => {
     );
 };
 
-// Estilos se mantienen con mejoras de espaciado y contraste
 const styles = {
     pageContainer: { padding: '15px', backgroundColor: '#f4f7f6', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '15px' },
     mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden' },
