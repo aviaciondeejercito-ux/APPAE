@@ -6,14 +6,20 @@ const Material = () => {
     const [loading, setLoading] = useState(true);
     const [selectedNote, setSelectedNote] = useState(null); 
     
-    const role = localStorage.getItem('role');
-    const userElemento = localStorage.getItem('elemento')?.trim() || "";
+    // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER)
+    const rawRole = localStorage.getItem('role') || "";
+    const role = rawRole.toUpperCase().trim().replace(/\s+/g, '_');
+    
+    const userElemento = localStorage.getItem('elemento')?.toUpperCase().trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // Definición de permisos: admin tiene control total, oficina tecnica tiene control sobre su unidad
-    const canManageAll = role === 'admin';
-    const canManageUnit = role === 'OFICINA_TECNICA';
-    const hasEditPrivileges = canManageAll || canManageUnit;
+    // Definición de permisos: admin/boss/director/oto tienen control total o supervisión
+    // oficina_tecnica y s4_unidad tienen control sobre su unidad específica
+    const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
+    const isGestionUnidad = ['OFICINA_TECNICA', 'S4_UNIDAD', 'USER'].includes(role);
+    
+    // Privilegios de edición para la interfaz
+    const hasEditPrivileges = isMando || isGestionUnidad;
 
     const sdaList = [
         "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
@@ -37,13 +43,14 @@ const Material = () => {
         try {
             setLoading(true);
             const { data } = await getAircrafts();
-            // El admin y boss ven todo, los demás (incluida oficina técnica) solo su unidad
-            const filtrados = (role === 'admin' || role === 'boss') 
+            
+            // Lógica de visualización jerárquica
+            const filtrados = isMando 
                 ? data 
                 : data.filter(a => 
                     a.unidad && 
                     userElemento && 
-                    String(a.unidad).toUpperCase() === String(userElemento).toUpperCase()
+                    String(a.unidad).toUpperCase().trim() === userElemento
                 );
             setAircrafts(filtrados);
             setLoading(false);
@@ -74,7 +81,7 @@ const Material = () => {
             await fetchMaterial();
             alert("Aeronave registrada correctamente.");
         } catch (error) {
-            alert("Error al dar de alta el material.");
+            alert("Error de Autorización: Su nivel jerárquico no permite esta acción.");
         }
     };
 
@@ -83,8 +90,9 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            // Validación de seguridad: oficina técnica solo puede editar si la aeronave es de su unidad
-            if (role !== 'admin' && String(targetAir.unidad).trim() !== String(userElemento).trim()) {
+            // Validación de seguridad local previa al envío
+            const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
+            if (!isMando && targetUnidad !== userElemento) {
                 return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");
             }
 
@@ -101,7 +109,7 @@ const Material = () => {
             setAircrafts(prev => prev.map(a => a._id === id ? fullUpdatedObject : a));
         } catch (error) {
             console.error("Error al actualizar:", error);
-            alert("Error al actualizar servidor.");
+            alert("Acceso Denegado: Error de permisos en el servidor.");
         }
     };
 
@@ -115,8 +123,8 @@ const Material = () => {
         const targetAir = aircrafts.find(a => a._id === id);
         if (!targetAir) return;
 
-        // Seguridad: Oficina técnica solo borra lo propio
-        if (role !== 'admin' && String(targetAir.unidad).trim() !== String(userElemento).trim()) {
+        const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
+        if (!isMando && targetUnidad !== userElemento) {
             return alert("Seguridad: No tiene permisos para eliminar este registro.");
         }
 
@@ -125,7 +133,7 @@ const Material = () => {
             await deleteAircraft(id);
             setAircrafts(prev => prev.filter(a => a._id !== id));
         } catch (error) {
-            alert("Error al eliminar.");
+            alert("Error de seguridad: No autorizado para eliminar.");
         }
     };
 
@@ -134,7 +142,6 @@ const Material = () => {
     return (
         <div style={styles.container}>
             <div style={styles.grid}>
-                {/* Lógica de Seguridad: Admin y Oficina Técnica pueden dar de alta */}
                 {hasEditPrivileges ? (
                     <div style={styles.card}>
                         <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
@@ -165,7 +172,7 @@ const Material = () => {
                     <div style={styles.card}>
                         <h3 style={styles.title}>📋 Información de Unidad</h3>
                         <p style={{fontSize: '0.9rem', color: '#666'}}>Usted está operando en: <strong>{userElemento}</strong></p>
-                        <p style={{fontSize: '0.8rem', color: '#888'}}>El alta de nuevas aeronaves está reservada para Oficina Técnica y Administradores.</p>
+                        <p style={{fontSize: '0.8rem', color: '#888'}}>El alta de nuevas aeronaves está reservada para niveles técnicos y mandos.</p>
                     </div>
                 )}
 
@@ -218,7 +225,6 @@ const Material = () => {
                     <div style={styles.modal}>
                         <h4 style={{marginTop: 0, color: '#1b3a57'}}>Gestión de Novedades: {selectedNote.matricula}</h4>
                         <div style={styles.noteContent}>
-                            <strong>Registro Actual:</strong><br/>
                             {selectedNote.novedades || "Sin novedades registradas."}
                         </div>
                         
@@ -226,23 +232,18 @@ const Material = () => {
                             <>
                                 <textarea 
                                     id="newNoteText"
-                                    placeholder="Escribir nueva novedad (esto reemplazará la anterior)..." 
+                                    placeholder="Escribir nueva novedad..." 
                                     style={{...styles.input, width: '100%', height: '80px', marginTop: '15px', boxSizing: 'border-box'}}
                                 />
-                                
-                                <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px'}}>
-                                    <div style={{display: 'flex', gap: '10px'}}>
-                                        <button onClick={() => {
-                                            const val = document.getElementById('newNoteText').value;
-                                            if(val) handleSaveNote(selectedNote._id, val);
-                                        }} style={{...styles.btnPrimary, flex: 2, margin: 0}}>Actualizar Registro</button>
-                                        
-                                        <button onClick={() => {
-                                            if(window.confirm("¿Limpiar todas las novedades de esta aeronave?")) {
-                                                handleSaveNote(selectedNote._id, "", true);
-                                            }
-                                        }} style={styles.btnClear}>Limpiar</button>
-                                    </div>
+                                <div style={{display: 'flex', gap: '10px', marginTop: '15px'}}>
+                                    <button onClick={() => {
+                                        const val = document.getElementById('newNoteText').value;
+                                        if(val) handleSaveNote(selectedNote._id, val);
+                                    }} style={{...styles.btnPrimary, flex: 2, margin: 0}}>Actualizar</button>
+                                    
+                                    <button onClick={() => {
+                                        if(window.confirm("¿Limpiar novedades?")) handleSaveNote(selectedNote._id, "", true);
+                                    }} style={styles.btnClear}>Limpiar</button>
                                 </div>
                             </>
                         )}
@@ -254,6 +255,7 @@ const Material = () => {
     );
 };
 
+// Mantener estilos originales (sin cambios)
 const styles = {
     container: { padding: '25px', maxWidth: '1200px', margin: '0 auto' },
     grid: { display: 'grid', gridTemplateColumns: window.innerWidth < 900 ? '1fr' : '1fr 1.5fr', gap: '25px' },
