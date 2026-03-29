@@ -93,7 +93,7 @@ const createEvent = async (req, res) => {
             elemento, etapa, tipoApoyo, sdaListado,
             isRealTime, ubicacion, notasMarginales, status,
             aeronave, matricula, tipoIcono, lat, lng,
-            misionDetalle // Nuevo campo solicitado
+            misionDetalle 
         } = req.body;
 
         if (!title) return res.status(400).json({ message: 'Título requerido.' });
@@ -110,7 +110,6 @@ const createEvent = async (req, res) => {
             userName: req.user.username,
             elemento: ((isMando && elemento) ? elemento : req.user.elemento).toUpperCase(),
             status: status || 'programado',
-            // Procesamiento de tripulación y carga
             misionDetalle: {
                 comandante: (misionDetalle?.comandante || '').toUpperCase(),
                 copiloto: (misionDetalle?.copiloto || '').toUpperCase(),
@@ -175,11 +174,12 @@ const updateEvent = async (req, res) => {
         const { elemento, role } = req.user;
         const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
         
-        const perteneceAUnidad = event.elemento && event.elemento.toUpperCase().includes(elemento.toUpperCase());
+        // Lógica de Propiedad: Verificamos si el elemento del usuario coincide con el del evento
+        const perteneceAUnidad = event.elemento && (event.elemento.toUpperCase() === elemento.toUpperCase());
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
         if (!isMando && !isOwner && !perteneceAUnidad) {
-            return res.status(403).json({ message: 'No tiene permisos para modificar este vuelo.' });
+            return res.status(403).json({ message: 'No tiene permisos para modificar este registro.' });
         }
 
         const updateData = { ...req.body };
@@ -187,7 +187,6 @@ const updateEvent = async (req, res) => {
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        // Procesar misionDetalle si viene en el body
         if (updateData.misionDetalle) {
             updateData.misionDetalle = {
                 comandante: (updateData.misionDetalle.comandante || '').toUpperCase(),
@@ -224,8 +223,9 @@ const updateEvent = async (req, res) => {
         );
 
         const io = req.app.get('socketio');
-        if (io && updatedEvent.isRealTime) {
-            io.emit('updateOperation', updatedEvent);
+        if (io) {
+            const emitChannel = updatedEvent.isRealTime ? 'updateOperation' : 'calendarUpdate';
+            io.emit(emitChannel, updatedEvent);
         }
 
         res.status(200).json(updatedEvent);
@@ -243,11 +243,14 @@ const deleteEvent = async (req, res) => {
 
         const { elemento, role } = req.user;
         const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
-        const perteneceAUnidad = event.elemento && event.elemento.toUpperCase().includes(elemento.toUpperCase());
+        
+        // Lógica corregida: Comparación exacta de strings para evitar fallos de jerarquía
+        const perteneceAUnidad = event.elemento && (event.elemento.toUpperCase() === elemento.toUpperCase());
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
+        // Una unidad DEBE poder borrar sus propias actividades aunque estén en etapa 'ordenada'
         if (!isMando && !isOwner && !perteneceAUnidad) {
-            return res.status(403).json({ message: 'No tiene permisos para finalizar este vuelo.' });
+            return res.status(403).json({ message: 'Acceso denegado: No posee permisos sobre esta actividad.' });
         }
 
         const isRealTime = event.isRealTime;
@@ -256,8 +259,9 @@ const deleteEvent = async (req, res) => {
         await event.deleteOne();
 
         const io = req.app.get('socketio');
-        if (io && isRealTime) {
-            io.emit('deleteOperation', eventId);
+        if (io) {
+            const deleteChannel = isRealTime ? 'deleteOperation' : 'deleteCalendarEvent';
+            io.emit(deleteChannel, eventId);
         }
 
         res.status(200).json({ message: 'Eliminado correctamente.' });
