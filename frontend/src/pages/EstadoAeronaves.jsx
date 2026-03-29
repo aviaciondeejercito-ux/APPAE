@@ -11,7 +11,7 @@ const EstadoAeronaves = () => {
 
     useEffect(() => {
         fetchData();
-        // Refresco automático cada 5 minutos para mantener el monitor actualizado
+        // Refresco automático cada 5 minutos
         const interval = setInterval(fetchData, 300000);
         return () => clearInterval(interval);
     }, [userElemento]);
@@ -19,10 +19,15 @@ const EstadoAeronaves = () => {
     const fetchData = async () => {
         try {
             const { data } = await getAircrafts();
-            // Filtrado por unidad para usuarios que no son admin/boss
+            
+            // Filtrado robusto: Maneja casos de unidad undefined o nula
             const filtrados = (role === 'admin' || role === 'boss') 
                 ? data 
-                : data.filter(a => String(a.unidad).trim().toUpperCase() === String(userElemento).toUpperCase());
+                : data.filter(a => 
+                    a.unidad && 
+                    userElemento && 
+                    String(a.unidad).trim().toUpperCase() === String(userElemento).toUpperCase()
+                );
             
             setAircrafts(filtrados);
             setLoading(false);
@@ -32,8 +37,8 @@ const EstadoAeronaves = () => {
         }
     };
 
-    // Obtener lista única de unidades presentes en los datos filtrados
-    const unidades = [...new Set(aircrafts.map(a => a.unidad))].sort();
+    // Obtener lista única de unidades evitando valores undefined
+    const unidades = [...new Set(aircrafts.filter(a => a.unidad).map(a => a.unidad))].sort();
 
     if (loading) return <div style={styles.loader}>Cargando Estado de Situación AE...</div>;
 
@@ -52,7 +57,7 @@ const EstadoAeronaves = () => {
                     </div>
                     <div style={styles.summaryItem}>
                         <span style={{...styles.dot, backgroundColor: '#f1c40f'}}></span> 
-                        Críticos {"<"}10hs: {aircrafts.filter(a => a.horasRemanentes <= 10).length}
+                        Críticos {"<"}10hs: {aircrafts.filter(a => Number(a.horasRemanentes) <= 10).length}
                     </div>
                 </div>
             </header>
@@ -91,31 +96,30 @@ const EstadoAeronaves = () => {
                                             <tr key={air._id} style={{
                                                 ...styles.tr,
                                                 backgroundColor: air.estado === 'F/S' ? '#fff5f5' : 'transparent',
-                                                borderLeft: air.horasRemanentes <= 10 ? '4px solid #e74c3c' : 'none'
+                                                borderLeft: Number(air.horasRemanentes) <= 10 ? '4px solid #e74c3c' : 'none'
                                             }}>
-                                                <td style={styles.td}>{air.sda}</td>
-                                                <td style={{...styles.td, fontWeight: 'bold'}}>{air.matricula}</td>
+                                                <td style={styles.td}>{air.sda || "S/D"}</td>
+                                                <td style={{...styles.td, fontWeight: 'bold'}}>{air.matricula || "S/M"}</td>
                                                 <td style={styles.td}>
                                                     <span style={{
                                                         ...styles.statusBadge,
                                                         backgroundColor: air.estado === 'E/S' ? '#2ecc71' : '#e74c3c'
                                                     }}>
-                                                        {air.estado}
+                                                        {air.estado || "N/A"}
                                                     </span>
                                                 </td>
                                                 <td style={{
                                                     ...styles.td, 
-                                                    color: air.horasRemanentes <= 10 ? '#e74c3c' : '#2c3e50',
-                                                    fontWeight: air.horasRemanentes <= 10 ? 'bold' : 'normal'
+                                                    color: Number(air.horasRemanentes) <= 10 ? '#e74c3c' : '#2c3e50',
+                                                    fontWeight: Number(air.horasRemanentes) <= 10 ? 'bold' : 'normal'
                                                 }}>
-                                                    {air.horasRemanentes} {air.horasRemanentes <= 10 && '⚠️'}
+                                                    {air.horasRemanentes ?? 0} {Number(air.horasRemanentes) <= 10 && '⚠️'}
                                                 </td>
                                                 <td style={styles.td}>
                                                     <button 
                                                         onClick={() => setSelectedNote(air)}
                                                         style={{
                                                             ...styles.btnNote,
-                                                            // CAMBIO: Se usa novedades (backend) en lugar de notas
                                                             background: air.novedades ? '#3498db' : '#ecf0f1',
                                                             color: air.novedades ? 'white' : '#95a5a6'
                                                         }}

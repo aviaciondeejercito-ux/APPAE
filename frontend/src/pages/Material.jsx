@@ -4,7 +4,7 @@ import { getAircrafts, updateAircraftStatus, createAircraft, deleteAircraft } fr
 const Material = () => {
     const [aircrafts, setAircrafts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [selectedNote, setSelectedNote] = useState(null); // Para el Pop-up de novedades
+    const [selectedNote, setSelectedNote] = useState(null); 
     
     const role = localStorage.getItem('role');
     const userElemento = localStorage.getItem('elemento')?.trim() || "";
@@ -19,7 +19,7 @@ const Material = () => {
         matricula: '',
         sda: '',
         horasRemanentes: 0,
-        novedades: '' // Unificado con Backend
+        novedades: '' 
     });
 
     useEffect(() => {
@@ -60,7 +60,7 @@ const Material = () => {
                 unidad: userElemento,
                 estado: 'E/S',
                 novedades: newAir.novedades ? `[${new Date().toLocaleDateString()}] ${userName}: ${newAir.novedades}` : '',
-                creadoPor: userName // Requerido por el modelo
+                creadoPor: userName 
             };
 
             await createAircraft(payload);
@@ -72,24 +72,33 @@ const Material = () => {
         }
     };
 
+    // CORRECCIÓN: Aseguramos que el objeto enviado mantenga todas las propiedades para evitar (undefined)
     const handleUpdateField = async (id, updatedFields) => {
         try {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            // Verificación de seguridad local (el backend también lo hace)
             if (role !== 'admin' && role !== 'boss' && String(targetAir.unidad).trim() !== String(userElemento).trim()) {
                 return alert("Seguridad: No tiene permisos sobre esta unidad.");
             }
 
-            const cleanFields = { ...updatedFields };
-            if (cleanFields.horasRemanentes !== undefined) cleanFields.horasRemanentes = Number(cleanFields.horasRemanentes);
+            // Construimos el objeto completo para el backend y el estado local
+            const fullUpdatedObject = {
+                ...targetAir,
+                ...updatedFields
+            };
+
+            if (fullUpdatedObject.horasRemanentes !== undefined) {
+                fullUpdatedObject.horasRemanentes = Number(fullUpdatedObject.horasRemanentes);
+            }
             
-            await updateAircraftStatus(id, cleanFields);
+            // Enviamos el objeto completo para que otros módulos no reciban datos parciales
+            await updateAircraftStatus(id, fullUpdatedObject);
             
-            // Actualización optimista del estado local
-            setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...cleanFields } : a));
+            // Actualización local
+            setAircrafts(prev => prev.map(a => a._id === id ? fullUpdatedObject : a));
         } catch (error) {
+            console.error("Error al actualizar:", error);
             alert("Error al actualizar servidor.");
         }
     };
@@ -115,8 +124,6 @@ const Material = () => {
     return (
         <div style={styles.container}>
             <div style={styles.grid}>
-                
-                {/* ALTA DE MATERIAL */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
                     <form onSubmit={handleCreate} style={styles.form}>
@@ -143,7 +150,6 @@ const Material = () => {
                     </form>
                 </div>
 
-                {/* LISTADO Y GESTIÓN */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>🛠️ Gestión y Novedades</h3>
                     <div style={styles.scrollList}>
@@ -160,14 +166,14 @@ const Material = () => {
                                 <div style={styles.actions}>
                                     <div style={styles.controlGroup}>
                                         <label style={styles.tinyLabel}>ESTADO</label>
-                                        <select value={air.estado} onChange={(e) => handleUpdateField(air._id, { estado: e.target.value })} style={{...styles.selectSmall, color: air.estado === 'E/S' ? '#28a745' : '#e74c3c'}}>
+                                        <select value={air.estado || 'E/S'} onChange={(e) => handleUpdateField(air._id, { estado: e.target.value })} style={{...styles.selectSmall, color: air.estado === 'E/S' ? '#28a745' : '#e74c3c'}}>
                                             <option value="E/S">E/S</option>
                                             <option value="F/S">F/S</option>
                                         </select>
                                     </div>
                                     <div style={styles.controlGroup}>
                                         <label style={styles.tinyLabel}>HS REM</label>
-                                        <input type="number" value={air.horasRemanentes} onChange={(e) => handleUpdateField(air._id, { horasRemanentes: e.target.value })} style={styles.inputSmall} />
+                                        <input type="number" value={air.horasRemanentes || 0} onChange={(e) => handleUpdateField(air._id, { horasRemanentes: e.target.value })} style={styles.inputSmall} />
                                     </div>
                                     {role === 'admin' && <button onClick={() => handleDelete(air._id)} style={styles.btnDelete}>🗑️</button>}
                                 </div>
@@ -177,7 +183,6 @@ const Material = () => {
                 </div>
             </div>
 
-            {/* POP-UP MODAL DE NOVEDADES (MODIFICADO) */}
             {selectedNote && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modal}>
