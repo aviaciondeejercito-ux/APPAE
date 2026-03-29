@@ -45,11 +45,12 @@ function App() {
 
     /**
      * LÓGICA DE PERMISOS ACTUALIZADA (ESTÁNDAR DE SEGURIDAD 2026)
+     * Se ajustaron los strings a MAYÚSCULAS para coincidir con la DB.
      */
-    const puedeGestionarMaterial = role === 'admin' || role === 'oficina_tecnica';
-    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'oto' || role === 'oficina_tecnica';
-    const puedeVerStats = role === 'admin' || role === 'boss' || role === 'director';
-    const puedeVerMapa = role === 'admin' || role === 'boss' || role === 'director' || role === 'oto' || role === 'user';
+    const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
+    const puedeCargarOperaciones = role === 'admin' || role === 'USER' || role === 'OTO' || role === 'OFICINA_TECNICA';
+    const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
+    const puedeVerMapa = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'USER';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -100,7 +101,7 @@ function App() {
                                 </button>
                             )}
 
-                            {(role === 'admin' || role === 'oto' || role === 'user') && (
+                            {(role === 'admin' || role === 'OTO' || role === 'USER') && (
                                 <button 
                                     onClick={() => setView('despacho')}
                                     style={{
