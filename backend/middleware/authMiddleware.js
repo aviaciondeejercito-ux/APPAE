@@ -41,7 +41,7 @@ const authMiddleware = async (req, res, next) => {
             }
 
             // NORMALIZACIÓN DE DATOS PARA LÓGICA DE CONTROLADORES Y AUTHORIZE
-            // SINCRO JOKER: Sincronizamos con authorize.js (Mayúsculas y Guiones Bajos)
+            // SINCRO JOKER: Sincronizamos con la base de datos y rolecheck.js
             req.user = userFound;
             
             if (req.user.elemento) {
@@ -49,9 +49,13 @@ const authMiddleware = async (req, res, next) => {
             }
             
             if (req.user.role) {
-                // CORRECCIÓN CRÍTICA: Cambiado a toUpperCase() y reemplazo de espacios por guiones
-                // Esto permite que 'oficina tecnica' sea 'OFICINA_TECNICA' antes de llegar al authorize
-                req.user.role = req.user.role.toString().toUpperCase().trim().replace(/\s+/g, '_');
+                /**
+                 * CORRECCIÓN DE COMPATIBILIDAD:
+                 * Mantenemos el formato original de la DB (Mayúsculas y espacios simples).
+                 * Esto evita que 'OFICINA TECNICA' se rompa al convertirse en 'OFICINA_TECNICA'
+                 * si el autorizador espera el string con espacios.
+                 */
+                req.user.role = req.user.role.toString().toUpperCase().trim().replace(/\s+/g, ' ');
             }
 
             // 6. Autorización exitosa: El flujo continúa al siguiente middleware o controlador

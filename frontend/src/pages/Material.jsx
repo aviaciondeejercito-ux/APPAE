@@ -7,16 +7,18 @@ const Material = () => {
     const [selectedNote, setSelectedNote] = useState(null); 
     
     // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER)
+    // Importante: Mantenemos el espacio para coincidir con la DB ("OFICINA TECNICA")
     const rawRole = localStorage.getItem('role') || "";
-    const role = rawRole.toUpperCase().trim().replace(/\s+/g, '_');
+    const role = rawRole.toUpperCase().trim().replace(/\s+/g, ' '); 
     
     const userElemento = localStorage.getItem('elemento')?.toUpperCase().trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // Definición de permisos jerárquicos
+    // Definición de permisos jerárquicos (Sincronizado con backend)
     const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
-    // S4_UNIDAD ahora tiene permisos plenos de gestión sobre su unidad
-    const isGestionUnidad = ['OFICINA_TECNICA', 'S4_UNIDAD'].includes(role);
+    
+    // S4_UNIDAD y OFICINA TECNICA ahora tienen permisos plenos de gestión sobre su unidad
+    const isGestionUnidad = role === 'OFICINA TECNICA' || role === 'S4 UNIDAD' || role === 'S4_UNIDAD';
     const isBasicUser = role === 'USER';
     
     // Privilegios de edición: Mandos, Oficina Técnica y S4 Unidad
@@ -91,7 +93,7 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            // Validación de seguridad local: S4_UNIDAD y OFICINA_TECNICA solo editan lo propio
+            // Validación de seguridad local: Solo editan lo propio a menos que sea Mando
             const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
             if (!isMando && targetUnidad !== userElemento) {
                 return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");

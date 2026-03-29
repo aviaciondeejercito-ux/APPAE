@@ -42,7 +42,8 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        // Permitir peticiones sin origen (como apps móviles o curl) o de orígenes permitidos
+        if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
             console.error(`🛑 BLOQUEO DE SEGURIDAD CORS: Origen no autorizado: ${origin}`);
@@ -57,9 +58,9 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Límite de carga: Prevención de ataques de desbordamiento
-app.use(express.json({ limit: '15kb' })); 
-app.use(express.urlencoded({ extended: true, limit: '15kb' }));
+// Límite de carga: Ajustado a 50kb para permitir novedades técnicas extensas sin desbordamiento
+app.use(express.json({ limit: '50kb' })); 
+app.use(express.urlencoded({ extended: true, limit: '50kb' }));
 
 // --- 4. INICIALIZACIÓN DE SOCKET.IO (TIEMPO REAL) ---
 const io = new Server(server, {
