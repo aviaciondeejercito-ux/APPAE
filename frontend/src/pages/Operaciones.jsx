@@ -83,17 +83,13 @@ const Operaciones = () => {
         }
     };
 
-    // --- MANEJO DE FECHAS: TRABAJO CON STRINGS LITERALES (EVITA UTC) ---
-    
     const parseFromBackend = (dateString) => {
         if (!dateString) return '';
-        // Extraemos solo YYYY-MM-DDTHH:mm ignorando cualquier sufijo Z o milisegundos
         return dateString.split('.')[0].slice(0, 16);
     };
 
     const formatDateForDisplay = (dateString) => {
         if (!dateString) return '';
-        // Separamos la fecha del tiempo por el carácter 'T' para evitar procesamiento de Timezone
         const [datePart] = dateString.split('T');
         if (!datePart) return '';
         const [year, month, day] = datePart.split('-');
@@ -158,7 +154,7 @@ const Operaciones = () => {
 
         const finalData = {
             title: formData.title.toUpperCase(),
-            start: formData.start, // String directo: "YYYY-MM-DDTHH:mm"
+            start: formData.start, 
             end: formData.end,
             color: formData.color,
             tipoApoyo: formData.tipoApoyo.toUpperCase(),
@@ -265,7 +261,8 @@ const Operaciones = () => {
                         </div>
                     )}
 
-                    {(role === 'admin' || role === 'boss') && (
+                    {/* MODIFICACIÓN: Ahora visible para el dueño de la orden o mandos superiores */}
+                    {(role === 'admin' || role === 'boss' || isEditing) && (
                         <div style={styles.etapaWrapper}>
                             <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
                             <div style={styles.etapaGrid}>
@@ -324,10 +321,11 @@ const Operaciones = () => {
                             >
                                 <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave E/S..."}</option>
                                 {availableAircraft.map(air => {
-                                    const label = air.modelo && air.matricula ? `${air.modelo} (${air.matricula})` : air.modelo || 'S/D';
+                                    // CORRECCIÓN: Aseguramos que el valor sea el string descriptivo que espera el calendario
+                                    const aircraftLabel = `${air.modelo} (${air.matricula})`;
                                     return (
-                                        <option key={air._id} value={label}>
-                                            {label}
+                                        <option key={air._id} value={aircraftLabel}>
+                                            {aircraftLabel}
                                         </option>
                                     );
                                 })}
