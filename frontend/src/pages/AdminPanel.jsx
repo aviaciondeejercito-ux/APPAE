@@ -5,6 +5,7 @@ import { getUsers, deleteUser, updateUserRole, resetPassword, register } from '.
  * PANEL DE ADMINISTRACIÓN CENTRALIZADO - SISTEMA AE
  * Configuración: Usuario (Nombre y Apellido) es la credencial principal.
  * Columnas: Usuario, GDE, Elemento, Nivel de Acceso, Acciones.
+ * Ordenamiento: Por Elemento (Unidad) de forma automática.
  */
 const AdminPanel = () => {
     const [users, setUsers] = useState([]);
@@ -16,7 +17,7 @@ const AdminPanel = () => {
         nombreReal: '',  // Usuario (Credencial de acceso)
         elemento: '',    // Unidad/Elemento
         password: '',
-        role: 'user'
+        role: 'USER'     // Sincronizado con default del modelo
     });
 
     useEffect(() => {
@@ -28,9 +29,14 @@ const AdminPanel = () => {
             setLoading(true);
             const response = await getUsers();
             
-            // Verificación de la estructura de respuesta del backend
             if (response.data && response.data.data) {
-                setUsers(response.data.data);
+                // ORDENAMIENTO POR ELEMENTO (UNIDAD)
+                const sortedUsers = response.data.data.sort((a, b) => {
+                    if (a.elemento < b.elemento) return -1;
+                    if (a.elemento > b.elemento) return 1;
+                    return 0;
+                });
+                setUsers(sortedUsers);
             } else {
                 setUsers([]);
             }
@@ -46,10 +52,9 @@ const AdminPanel = () => {
     const handleCreateUser = async (e) => {
         e.preventDefault();
         try {
-            // Construcción del payload según el nuevo modelo del Backend
             const payload = { 
-                nombreReal: newUser.nombreReal, // Prioridad: Credencial de entrada
-                username: newUser.username,     // GDE
+                nombreReal: newUser.nombreReal, 
+                username: newUser.username,     
                 elemento: newUser.elemento,
                 email: `${newUser.username.toLowerCase()}@ae.mil.ar`, 
                 password: newUser.password, 
@@ -59,8 +64,7 @@ const AdminPanel = () => {
             await register(payload);
             alert(`Personal: ${newUser.nombreReal} (GDE: ${newUser.username}) incorporado correctamente.`);
             
-            // Reset del formulario
-            setNewUser({ username: '', nombreReal: '', elemento: '', password: '', role: 'user' });
+            setNewUser({ username: '', nombreReal: '', elemento: '', password: '', role: 'USER' });
             fetchUsers(); 
         } catch (err) {
             alert(err.response?.data?.message || 'Error al registrar: Verifique si el nombre o GDE ya existen.');
@@ -153,11 +157,11 @@ const AdminPanel = () => {
                             onChange={e => setNewUser({...newUser, role: e.target.value})}
                             style={styles.select}
                         >
-                            <option value="user">USER (Consulta)</option>
-                            <option value="S4_UNIDAD">S4 UNIDAD (Carga)</option>
-                            <option value="oto">OTO (Oficial Técnico)</option>
-                            <option value="boss">BOSS (Comando)</option>
-                            <option value="director">DIRECTOR (Dirección)</option>
+                            <option value="USER">USER (Consulta)</option>
+                            <option value="OFICINA_TECNICA">OFICINA TÉCNICA (S4 UNIDAD)</option>
+                            <option value="OTO">OTO (Oficial Técnico)</option>
+                            <option value="BOSS">BOSS (Comando)</option>
+                            <option value="DIRECTOR">DIRECTOR (Dirección)</option>
                             <option value="admin">ADMIN (Total)</option>
                         </select>
                     </div>
@@ -167,7 +171,7 @@ const AdminPanel = () => {
 
             {/* TABLA DE ESCALAFÓN */}
             <div style={styles.card}>
-                <h3 style={styles.cardTitle}>👥 Escalafón de Usuarios y Control de Acceso</h3>
+                <h3 style={styles.cardTitle}>👥 Escalafón de Usuarios y Control de Acceso (Ordenado por Elemento)</h3>
                 {error && <p style={styles.errorText}>{error}</p>}
 
                 <div style={{ overflowX: 'auto' }}>
@@ -196,15 +200,15 @@ const AdminPanel = () => {
                                                 onChange={(e) => handleRoleChange(user._id, e.target.value)}
                                                 style={{
                                                     ...styles.roleSelect,
-                                                    color: (user.role === 'admin' || user.role === 'director') ? '#d9534f' : 
-                                                           (user.role === 'oto' || user.role === 'S4_UNIDAD') ? '#2980b9' : '#333'
+                                                    color: (user.role === 'admin' || user.role === 'DIRECTOR') ? '#d9534f' : 
+                                                           (user.role === 'OTO' || user.role === 'OFICINA_TECNICA') ? '#2980b9' : '#333'
                                                 }}
                                             >
-                                                <option value="user">USER</option>
-                                                <option value="S4_UNIDAD">S4 UNIDAD</option>
-                                                <option value="oto">OTO</option>
-                                                <option value="boss">BOSS</option>
-                                                <option value="director">DIRECTOR</option>
+                                                <option value="USER">USER</option>
+                                                <option value="OFICINA_TECNICA">S4 UNIDAD</option>
+                                                <option value="OTO">OTO</option>
+                                                <option value="BOSS">BOSS</option>
+                                                <option value="DIRECTOR">DIRECTOR</option>
                                                 <option value="admin">ADMIN</option>
                                             </select>
                                         </td>

@@ -34,8 +34,15 @@ exports.updateRole = async (req, res) => {
         const userId = req.params.id;
         const { role } = req.body;
         
-        // JERARQUÍA OFICIAL (Según Panel Administrativo)
-        const rolesValidos = ['S4 UNIDAD', 'OTO', 'BOSS', 'DIRECTOR', 'ADMIN'];
+        // JERARQUÍA OFICIAL (Sincronizada exactamente con el Modelo User.js)
+        const rolesValidos = [
+            'admin', 
+            'BOSS', 
+            'DIRECTOR', 
+            'OTO', 
+            'USER', 
+            'OFICINA_TECNICA'
+        ];
         
         if (!rolesValidos.includes(role)) {
             return res.status(400).json({ 
@@ -124,8 +131,8 @@ exports.getAdminStats = async (req, res) => {
     try {
         const stats = await Promise.all([
             User.countDocuments(),
-            User.countDocuments({ role: 'ADMIN' }),
-            User.countDocuments({ role: 'S4 UNIDAD' }),
+            User.countDocuments({ role: 'admin' }),
+            User.countDocuments({ role: 'OFICINA_TECNICA' }),
             User.countDocuments({ role: 'DIRECTOR' })
         ]);
 
@@ -134,7 +141,7 @@ exports.getAdminStats = async (req, res) => {
             data: {
                 totalUsers: stats[0],
                 admins: stats[1],
-                s4Unidades: stats[2],
+                oficinaTecnica: stats[2],
                 directores: stats[3]
             }
         });

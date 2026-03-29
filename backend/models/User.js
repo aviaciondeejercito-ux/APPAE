@@ -42,11 +42,11 @@ const userSchema = new mongoose.Schema({
         // Se actualizan los roles según la nueva estructura de permisos solicitada
         enum: [
             'admin', 
-            'boss', 
-            'director', 
-            'oto', 
-            'user', 
-            'oficina_tecnica'
+            'BOSS', 
+            'DIRECTOR', 
+            'OTO', 
+            'USER', 
+            'OFICINA_TECNICA'
         ], 
         default: 'user' 
     }
