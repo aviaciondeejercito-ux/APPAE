@@ -30,7 +30,38 @@ const AEROPUERTOS_ESTANDAR = [
     { nombre: "SARF - FORMOSA", lat: -26.213, lng: -58.228 },
     { nombre: "SAAV - SANTA FE", lat: -31.711, lng: -60.812 },
     { nombre: "SANE - SANTIAGO DEL ESTERO", lat: -27.766, lng: -64.311 },
-    { nombre: "SANU - SAN JUAN", lat: -31.571, lng: -68.418 }
+    { nombre: "SANU - SAN JUAN", lat: -31.571, lng: -68.418 },
+    
+    // --- NUEVOS AEROPUERTOS Y AERÓDROMOS INCORPORADOS ---
+    { nombre: "SARE - RESISTENCIA", lat: -27.449, lng: -59.056 },
+    { nombre: "SARL - PASO DE LOS LIBRES", lat: -29.691, lng: -57.152 },
+    { nombre: "SAAJ - JUNÍN", lat: -34.545, lng: -60.923 },
+    { nombre: "SAOU - GENERAL PICO", lat: -35.696, lng: -63.758 },
+    { nombre: "SAAR - ROSARIO (AD)", lat: -32.904, lng: -60.785 },
+    { nombre: "SAXG - GUALEGUAYCHÚ", lat: -33.012, lng: -58.613 },
+    { nombre: "SAVV - VIEDMA", lat: -40.869, lng: -63.003 },
+    { nombre: "SAVT - TRELEW", lat: -43.211, lng: -65.270 },
+    { nombre: "SAWC - EL CALAFATE", lat: -50.280, lng: -72.053 },
+    { nombre: "SAWO - USHUAIA", lat: -54.843, lng: -68.295 },
+    { nombre: "SAJU - JUJUY", lat: -24.392, lng: -64.914 },
+    { nombre: "SANL - SAN LUIS", lat: -33.273, lng: -66.355 },
+    { nombre: "SANC - RÍO HONDO", lat: -27.508, lng: -64.935 },
+    { nombre: "SAAG - GUALEGUAY", lat: -33.155, lng: -59.387 },
+    { nombre: "SAAL - ALVEAR", lat: -33.004, lng: -60.627 },
+    { nombre: "SAZY - SAN MARTÍN DE LOS ANDES", lat: -40.075, lng: -71.139 },
+
+    // --- LADS Y LUGARES DE ATERRIZAJE OPERATIVOS ---
+    { nombre: "LAD - BATERÍAS (IMARA)", lat: -38.991, lng: -62.115 },
+    { nombre: "LAD - ARROYO DULCE", lat: -34.148, lng: -60.395 },
+    { nombre: "LAD - LA MEZQUITA (CBA)", lat: -31.428, lng: -64.312 },
+    { nombre: "LAD - MONTE CASEROS", lat: -30.244, lng: -57.643 },
+    { nombre: "LAD - PRIMAVERA (ANTÁRTIDA)", lat: -64.155, lng: -60.895 },
+    { nombre: "LAD - PULMARÍ", lat: -39.117, lng: -71.083 },
+    { nombre: "LAD - RÍO MAYO", lat: -45.688, lng: -70.252 },
+    { nombre: "LAD - UMBE", lat: -34.883, lng: -58.483 },
+    { nombre: "AEROCLUB - SAN MIGUEL", lat: -34.542, lng: -58.712 },
+    { nombre: "AEROCLUB - LUJÁN", lat: -34.582, lng: -59.191 },
+    { nombre: "AEROCLUB - MERCEDES", lat: -34.693, lng: -59.418 }
 ];
 
 const UNIDADES_AE = [
