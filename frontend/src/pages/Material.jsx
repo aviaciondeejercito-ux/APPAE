@@ -13,12 +13,13 @@ const Material = () => {
     const userElemento = localStorage.getItem('elemento')?.toUpperCase().trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // Definición de permisos: admin/boss/director/oto tienen control total o supervisión
-    // oficina_tecnica y s4_unidad tienen control sobre su unidad específica
+    // Definición de permisos jerárquicos
     const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
-    const isGestionUnidad = ['OFICINA_TECNICA', 'S4_UNIDAD', 'USER'].includes(role);
+    // S4_UNIDAD ahora tiene permisos plenos de gestión sobre su unidad
+    const isGestionUnidad = ['OFICINA_TECNICA', 'S4_UNIDAD'].includes(role);
+    const isBasicUser = role === 'USER';
     
-    // Privilegios de edición para la interfaz
+    // Privilegios de edición: Mandos, Oficina Técnica y S4 Unidad
     const hasEditPrivileges = isMando || isGestionUnidad;
 
     const sdaList = [
@@ -90,7 +91,7 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            // Validación de seguridad local previa al envío
+            // Validación de seguridad local: S4_UNIDAD y OFICINA_TECNICA solo editan lo propio
             const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
             if (!isMando && targetUnidad !== userElemento) {
                 return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");
@@ -172,7 +173,7 @@ const Material = () => {
                     <div style={styles.card}>
                         <h3 style={styles.title}>📋 Información de Unidad</h3>
                         <p style={{fontSize: '0.9rem', color: '#666'}}>Usted está operando en: <strong>{userElemento}</strong></p>
-                        <p style={{fontSize: '0.8rem', color: '#888'}}>El alta de nuevas aeronaves está reservada para niveles técnicos y mandos.</p>
+                        <p style={{fontSize: '0.8rem', color: '#888'}}>El alta de nuevas aeronaves está reservada para Oficina Técnica, S4 y Mandos.</p>
                     </div>
                 )}
 
@@ -255,7 +256,6 @@ const Material = () => {
     );
 };
 
-// Mantener estilos originales (sin cambios)
 const styles = {
     container: { padding: '25px', maxWidth: '1200px', margin: '0 auto' },
     grid: { display: 'grid', gridTemplateColumns: window.innerWidth < 900 ? '1fr' : '1fr 1.5fr', gap: '25px' },
