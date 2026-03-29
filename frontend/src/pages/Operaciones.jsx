@@ -26,11 +26,10 @@ const Operaciones = () => {
         { label: 'Otros', value: 'Otros', color: '#000000' }
     ];
 
-    // DEFINICIÓN DE COLORES POR ETAPA (Sincro Joker)
     const etapaColors = {
-        recepcion: '#f39c12', // Naranja/Amarillo
-        revision: '#3498db',  // Azul
-        ordenada: '#27ae60'   // Verde
+        recepcion: '#f39c12',
+        revision: '#3498db',
+        ordenada: '#27ae60'
     };
 
     const [formData, setFormData] = useState({
@@ -74,14 +73,23 @@ const Operaciones = () => {
     const fetchData = async () => {
         try {
             const data = await getEvents();
-            const esMando = role === 'admin' || role === 'boss';
+            const userUnidadUpper = userUnidad?.trim().toUpperCase();
             
             const filteredData = data.filter(ev => {
                 if (ev.isRealTime) return false; 
                 const esOrdenOperativa = ev.tipoApoyo || (ev.sdaListado && ev.sdaListado.length > 0);
                 if (!esOrdenOperativa) return false;
-                if (esMando) return true;
-                return ev.elemento?.includes(userUnidad) || ev.esGlobal;
+
+                // LÓGICA DE PRIVACIDAD CORREGIDA:
+                const esGlobal = ev.esGlobal === true;
+                const perteneceAMiUnidad = ev.elemento && ev.elemento.toUpperCase().includes(userUnidadUpper);
+
+                // 1. Si el evento es GLOBAL, lo ven todos (incluido Admin/Boss).
+                if (esGlobal) return true;
+
+                // 2. Si el evento es LOCAL (no global), SOLO lo ve la unidad dueña.
+                // El mando NO lo ve hasta que se haga global.
+                return perteneceAMiUnidad;
             });
             
             setEvents(Array.isArray(filteredData) ? filteredData : []);
@@ -125,11 +133,7 @@ const Operaciones = () => {
     };
 
     const addSda = () => {
-        if (!formData.sdaSelected || 
-            formData.sdaSelected.trim() === "" || 
-            formData.sdaSelected.toLowerCase().includes('undefined')) {
-            return;
-        }
+        if (!formData.sdaSelected || formData.sdaSelected.trim() === "" || formData.sdaSelected.toLowerCase().includes('undefined')) return;
         const valorLimpio = formData.sdaSelected.trim();
         const nuevoSda = `${formData.sdaCantidad}x ${valorLimpio}`;
         if (!formData.sdaListado.includes(nuevoSda)) {
@@ -156,6 +160,7 @@ const Operaciones = () => {
         }
         const esMando = role === 'admin' || role === 'boss';
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
+        
         const finalData = {
             title: formData.title.toUpperCase(),
             start: formData.start, 
@@ -170,6 +175,7 @@ const Operaciones = () => {
                       ? formData.unidadesInvolucradas.join(', ') 
                       : (isEditing ? formData.unidadesInvolucradas.join(', ') : userUnidad)
         };
+
         try {
             if (isEditing) {
                 await updateEvent(selectedId, finalData);
@@ -182,7 +188,7 @@ const Operaciones = () => {
             fetchData();
         } catch (error) { 
             console.error("Error en Submit:", error);
-            alert("❌ Error al guardar. Verifique los datos y su conexión."); 
+            alert("❌ Error al guardar."); 
         }
     };
 
@@ -225,20 +231,11 @@ const Operaciones = () => {
     const handleDelete = async (id, elementoEv, etapaEv) => {
         const esMando = role === 'admin' || role === 'boss';
         const esDueno = elementoEv?.includes(userUnidad);
-        const estaOrdenada = etapaEv === 'ordenada';
-
-        const puedeEliminar = esMando || esDueno || estaOrdenada;
-
-        if (!puedeEliminar) {
+        if (!esMando && !esDueno) {
             alert("No tiene permisos para eliminar esta orden.");
             return;
         }
-
-        const msg = estaOrdenada 
-            ? "⚠️ ADVERTENCIA: Esta orden ya está en estado 'ORDENADA'. ¿Está seguro de que desea eliminarla manualmente?"
-            : "¿Confirmar ELIMINACIÓN de la orden operativa?";
-
-        if (window.confirm(msg)) {
+        if (window.confirm("¿Confirmar ELIMINACIÓN de la orden operativa?")) {
             try {
                 await deleteEvent(id);
                 fetchData();
@@ -282,7 +279,7 @@ const Operaciones = () => {
                     )}
 
                     <form onSubmit={handleSubmit} style={styles.form}>
-                        <input type="text" required placeholder="Nombre de la Misión / Ejercicio" value={formData.title} 
+                        <input type="text" required placeholder="Nombre de la Misión" value={formData.title} 
                                onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} />
                         
                         <div style={styles.row}>
@@ -294,7 +291,7 @@ const Operaciones = () => {
 
                         {(role === 'admin' || role === 'boss') && (
                             <div style={styles.unidadSelector}>
-                                <label style={styles.label}>Asignar Unidades Destinatarias:</label>
+                                <label style={styles.label}>Asignar Unidades:</label>
                                 <div style={styles.unidadChips}>
                                     {unidadesAE.map(u => (
                                         <button key={u} type="button" onClick={() => toggleUnidad(u)}
@@ -308,18 +305,13 @@ const Operaciones = () => {
 
                         <select value={formData.tipoApoyo} onChange={e => handleMissionChange(e.target.value)} style={styles.input} required>
                             <option value="">Tipo de Misión...</option>
-                            {missionOptions.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
+                            {missionOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                         </select>
 
                         <div style={styles.sdaBox}>
                             <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave E/S..."}</option>
-                                {availableAircraft.map(air => {
-                                    const aircraftLabel = `${air.modelo} (${air.matricula})`;
-                                    return <option key={air._id} value={aircraftLabel}>{aircraftLabel}</option>;
-                                })}
+                                <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave..."}</option>
+                                {availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} ({air.matricula})</option>)}
                             </select>
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
                             <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
@@ -327,40 +319,27 @@ const Operaciones = () => {
 
                         <div style={styles.tagWrap}>
                             {formData.sdaListado.map((s, i) => (
-                                <span key={i} style={styles.tag}>
-                                    {s} 
-                                    <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button>
-                                </span>
+                                <span key={i} style={styles.tag}>{s} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
                             ))}
                         </div>
 
-                        <textarea placeholder="Coordenadas, Carga, Personal o detalles adicionales..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
+                        <textarea placeholder="Observaciones..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
                         
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
                             {isEditing ? "ACTUALIZAR REGISTRO" : "GRABAR EN MONITOR OPERATIVO"}
                         </button>
                         {isEditing && (
-                            <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>
-                                CANCELAR EDICIÓN
-                            </button>
+                            <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR</button>
                         )}
                     </form>
                 </div>
 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>📜 Registro de Órdenes {role === 'admin' || role === 'boss' ? 'Generales' : `de ${userUnidad}`}</h3>
+                    <h3 style={styles.title}>📜 Registro de Órdenes</h3>
                     <div style={styles.scrollList}>
-                        {events.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes registradas.</p> : 
+                        {events.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes visibles.</p> : 
                         events.map(ev => {
-                            const esMando = role === 'admin' || role === 'boss';
-                            const esDueno = ev.elemento?.includes(userUnidad);
-                            
-                            // LÓGICA DE ORIGEN: ¿Es interna o del elemento superior?
-                            const esInterna = ev.elemento === userUnidad && !ev.esGlobal;
-                            const labelOrigen = esInterna ? "INTERNA" : "ELEM. SUPERIOR";
-
-                            const puedeGestionar = esMando || esDueno || ev.etapa === 'ordenada';
-                            
+                            const esInterna = !ev.esGlobal;
                             return (
                                 <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
                                     <div style={{flex: 1}}>
@@ -370,34 +349,15 @@ const Operaciones = () => {
                                         <div style={{fontSize: '0.75rem', color: '#666', fontWeight: '600'}}>
                                             {ev.elemento} | {formatDateForDisplay(ev.start)}
                                         </div>
-                                        <div style={{fontSize: '0.75rem', color: '#555', marginTop: '3px', fontWeight: 'bold'}}>
-                                            {ev.tipoApoyo}
-                                        </div>
-                                        
-                                        {/* CONTENEDOR DE BADGES REFORZADO */}
                                         <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>
-                                            <span style={{
-                                                ...styles.miniBadge, 
-                                                backgroundColor: etapaColors[ev.etapa] || '#95a5a6',
-                                                padding: '4px 10px',
-                                                fontSize: '0.7rem'
-                                            }}>
-                                                {ev.etapa?.toUpperCase() || 'PROCESANDO'}
-                                            </span>
-                                            <span style={{
-                                                ...styles.miniBadge, 
-                                                backgroundColor: esInterna ? '#7f8c8d' : '#1b3a57',
-                                                padding: '4px 10px',
-                                                fontSize: '0.7rem'
-                                            }}>
-                                                {labelOrigen}
-                                            </span>
+                                            <span style={{...styles.miniBadge, backgroundColor: etapaColors[ev.etapa] || '#95a5a6'}}>{ev.etapa?.toUpperCase()}</span>
+                                            <span style={{...styles.miniBadge, backgroundColor: esInterna ? '#7f8c8d' : '#1b3a57'}}>{esInterna ? "LOCAL" : "GLOBAL"}</span>
                                         </div>
                                     </div>
-                                    {puedeGestionar && (
+                                    {(role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad)) && (
                                         <div style={styles.logActions}>
-                                            <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit} title="Editar">✏️</button>
-                                            <button onClick={() => handleDelete(ev._id, ev.elemento, ev.etapa)} style={styles.btnIconDel} title="Eliminar">🗑️</button>
+                                            <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
+                                            <button onClick={() => handleDelete(ev._id, ev.elemento, ev.etapa)} style={styles.btnIconDel}>🗑️</button>
                                         </div>
                                     )}
                                 </div>
@@ -437,7 +397,7 @@ const styles = {
     btnSave: { color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', marginTop: '10px' },
     scrollList: { maxHeight: '600px', overflowY: 'auto' },
     logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', borderBottom: '1px solid #f0f0f0' },
-    miniBadge: { color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 'bold', display: 'inline-block' },
+    miniBadge: { color: 'white', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' },
     logActions: { display: 'flex', gap: '5px' },
     btnIconEdit: { background: '#f1c40f', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' },
     btnIconDel: { background: '#fadbd8', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }
