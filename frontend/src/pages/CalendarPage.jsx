@@ -74,13 +74,20 @@ const CalendarPage = () => {
         const { elemento, esGlobal, tipoOrigen, etapa } = info.event.extendedProps;
         const backgroundColor = info.event.backgroundColor;
 
-        // 1. Manejo de color de texto según el fondo
+        // FUERZA EL COLOR DE FONDO EN EL ELEMENTO
+        info.el.style.backgroundColor = backgroundColor;
+
+        // 1. Manejo de color de texto según el fondo (Asegura visibilidad)
         const titleEl = info.el.querySelector('.fc-event-title');
         const timeEl = info.el.querySelector('.fc-event-time');
+        const dotEl = info.el.querySelector('.fc-daygrid-event-dot');
         
-        if (backgroundColor === '#ffffff' || backgroundColor === '#FFFFFF') {
+        const isWhite = backgroundColor.toLowerCase() === '#ffffff';
+
+        if (isWhite) {
             if (titleEl) titleEl.style.color = '#000000';
             if (timeEl) timeEl.style.color = '#000000';
+            if (dotEl) dotEl.style.borderColor = '#007bff'; // Punto azul para visibilidad en blanco
             info.el.style.border = '1px solid #ddd';
         } else {
             if (titleEl) titleEl.style.color = '#ffffff';
@@ -131,14 +138,16 @@ const CalendarPage = () => {
                         if (ev.etapa === 'revision') tilde = '🔵 ';
                         if (ev.etapa === 'ordenada') tilde = '🟢 ';
 
+                        const isWhite = colorBase.toLowerCase() === '#ffffff';
+
                         return {
                             id: ev._id,
                             title: `${tilde}${ev.esGlobal ? '🌐 ' : ''}${ev.title}`,
                             start: ev.start,
                             end: ev.end,
                             backgroundColor: colorBase, 
-                            borderColor: colorBase, // Sincronizado para que no se vea vacío
-                            textColor: colorBase === '#ffffff' ? '#000000' : '#ffffff',
+                            borderColor: isWhite ? '#ddd' : colorBase,
+                            textColor: isWhite ? '#000000' : '#ffffff',
                             extendedProps: { 
                                 notes: ev.notes, 
                                 user: ev.userName,
