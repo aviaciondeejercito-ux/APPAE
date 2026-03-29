@@ -40,14 +40,18 @@ const authMiddleware = async (req, res, next) => {
                 });
             }
 
-            // NORMALIZACIÓN DE DATOS PARA LÓGICA DE CONTROLADORES
-            // Aseguramos que 'elemento' y 'role' existan y estén en un formato previsible.
+            // NORMALIZACIÓN DE DATOS PARA LÓGICA DE CONTROLADORES Y AUTHORIZE
+            // SINCRO JOKER: Sincronizamos con authorize.js (Mayúsculas y Guiones Bajos)
             req.user = userFound;
+            
             if (req.user.elemento) {
                 req.user.elemento = req.user.elemento.toString().toUpperCase().trim();
             }
+            
             if (req.user.role) {
-                req.user.role = req.user.role.toString().toLowerCase().trim();
+                // CORRECCIÓN CRÍTICA: Cambiado a toUpperCase() y reemplazo de espacios por guiones
+                // Esto permite que 'oficina tecnica' sea 'OFICINA_TECNICA' antes de llegar al authorize
+                req.user.role = req.user.role.toString().toUpperCase().trim().replace(/\s+/g, '_');
             }
 
             // 6. Autorización exitosa: El flujo continúa al siguiente middleware o controlador

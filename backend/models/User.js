@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 /**
  * Modelo de Usuario - Estándar de Seguridad Aviación de Ejército
- * Actualización: Jerarquía de Roles (Director, OTO, Oficina Técnica) y Vinculación por Elemento.
+ * Actualización: Jerarquía de Roles (Director, OTO, OTOAE, Oficina Técnica) y Vinculación por Elemento.
  */
 const userSchema = new mongoose.Schema({
     nombreReal: { 
@@ -22,7 +22,8 @@ const userSchema = new mongoose.Schema({
     elemento: { 
         type: String, 
         required: [true, 'El elemento/unidad es obligatorio'],
-        trim: true
+        trim: true,
+        uppercase: true // Asegura que la unidad siempre sea comparable
     },
     email: { 
         type: String, 
@@ -39,16 +40,21 @@ const userSchema = new mongoose.Schema({
     },
     role: { 
         type: String, 
-        // Se actualizan los roles según la nueva estructura de permisos solicitada
+        // Se estandarizan los roles a MAYÚSCULAS para coincidir con el Middleware de Seguridad
         enum: [
-            'admin', 
+            'ADMIN', 
             'BOSS', 
             'DIRECTOR', 
             'OTO', 
+            'OTOAE',
             'USER', 
+            'S4',
+            'S4_UNIDAD',
             'OFICINA_TECNICA'
         ], 
-        default: 'user' 
+        default: 'USER',
+        uppercase: true,
+        trim: true
     }
 }, { 
     timestamps: true 

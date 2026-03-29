@@ -10,11 +10,16 @@ const generateToken = (user) => {
         console.error("❌ ERROR CRÍTICO: JWT_SECRET no definido en el servidor.");
         return null;
     }
+
+    // NORMALIZACIÓN SINCRO JOKER: Aseguramos formato para el Payload del Token
+    const roleNormalized = String(user.role).toUpperCase().trim().replace(/\s+/g, '_');
+    const elementoNormalized = String(user.elemento).toUpperCase().trim();
+
     return jwt.sign(
         { 
             id: user._id, 
-            role: user.role, 
-            elemento: user.elemento // <--- CRÍTICO: El token ahora sabe a qué unidad pertenece el usuario
+            role: roleNormalized, 
+            elemento: elementoNormalized 
         }, 
         process.env.JWT_SECRET, 
         { expiresIn: '30d' }
@@ -36,13 +41,16 @@ exports.register = async (req, res) => {
         const gdeExists = await User.findOne({ username });
         if (gdeExists) return res.status(400).json({ message: 'El Identificador GDE ya existe' });
 
+        // Normalización antes de crear en DB
+        const finalRole = (role || 'USER').toUpperCase().trim().replace(/\s+/g, '_');
+
         const user = await User.create({ 
             nombreReal, 
             username, 
-            elemento: elemento.toUpperCase().trim(), // Normalización de unidad
+            elemento: elemento.toUpperCase().trim(), 
             email, 
             password,
-            role: role || 'user'
+            role: finalRole
         });
         
         if (user) {
@@ -50,7 +58,7 @@ exports.register = async (req, res) => {
                 _id: user._id,
                 nombreReal: user.nombreReal,
                 username: user.username,
-                elemento: user.elemento, // <--- Enviado al Frontend
+                elemento: user.elemento, 
                 role: user.role,
                 token: generateToken(user)
             });
@@ -72,9 +80,13 @@ exports.login = async (req, res) => {
             return res.status(400).json({ message: 'Ingrese sus credenciales' });
         }
 
-        // Buscamos al usuario por nombreReal o email
+        // Buscamos al usuario por nombreReal o email (con soporte para GDE si fuera necesario)
         const user = await User.findOne({ 
-            $or: [{ nombreReal: username }, { email: username }] 
+            $or: [
+                { nombreReal: username }, 
+                { email: username },
+                { username: username.toLowerCase() } 
+            ] 
         });
 
         if (!user) {
@@ -90,14 +102,17 @@ exports.login = async (req, res) => {
         if (isMatch) {
             console.log("🔓 ACCESO CONCEDIDO para:", user.nombreReal);
             
-            // Enviamos todo lo necesario para reconstruir la sesión en el Frontend
+            // Generamos el token con la lógica de normalización incluida
+            const token = generateToken(user);
+
+            // Enviamos respuesta al Frontend con datos sincronizados
             res.json({
                 _id: user._id,
                 nombreReal: user.nombreReal,
                 username: user.username,
-                role: user.role,
-                elemento: user.elemento, // <--- CRÍTICO: Esto quita el "No detectado"
-                token: generateToken(user)
+                role: user.role, // Ya viene normalizado por el modelo y generateToken
+                elemento: user.elemento, 
+                token: token
             });
         } else {
             console.log("🚫 ERROR: Contraseña incorrecta.");
