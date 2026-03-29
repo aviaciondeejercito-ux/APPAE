@@ -54,24 +54,24 @@ const Operaciones = () => {
         setFilteredEvents(results);
     }, [searchTerm, events]);
 
+    // Carga aeronaves basadas en la unidad seleccionada o la unidad del usuario
     useEffect(() => {
         const fetchAeronaves = async () => {
-            if (!userUnidad && formData.unidadesInvolucradas.length === 0) return;
+            const unidadABuscar = (formData.unidadesInvolucradas.length > 0) 
+                ? formData.unidadesInvolucradas[0] 
+                : userUnidad;
+
+            if (!unidadABuscar) return;
+            
             setLoadingAircraft(true);
             try {
-                const destinoBusqueda = (formData.unidadesInvolucradas.length > 0) 
-                    ? formData.unidadesInvolucradas[0] 
-                    : userUnidad;
-
-                if (destinoBusqueda) {
-                    const data = await getAvailableAircraft(destinoBusqueda);
-                    const cleanData = data.map(a => ({
-                        ...a,
-                        matricula: a.matricula || 'S/M',
-                        modelo: a.modelo || a.sda || 'S/D'
-                    }));
-                    setAvailableAircraft(cleanData);
-                }
+                const data = await getAvailableAircraft(unidadABuscar);
+                const cleanData = data.map(a => ({
+                    ...a,
+                    matricula: a.matricula || 'S/M',
+                    modelo: a.modelo || a.sda || 'S/D'
+                }));
+                setAvailableAircraft(cleanData);
             } catch (err) {
                 console.error("Error cargando aeronaves");
             } finally {
@@ -93,19 +93,11 @@ const Operaciones = () => {
 
                 const esGlobal = ev.esGlobal === true;
                 const esDeDIRAE = ev.elemento?.toUpperCase().includes("DIR AE");
-                
-                // Nueva Lógica: Verifica si MI UNIDAD está explícitamente listada en los responsables
                 const soyResponsableAsignado = ev.elemento?.toUpperCase().includes(userUnidadUpper);
 
                 if (role === 'admin') return true;
-
-                if (role === 'boss') {
-                    return esDeDIRAE || esGlobal || soyResponsableAsignado;
-                }
-
-                if (role === 'user' || role === 's4 unidad' || role === 's4') {
-                    return soyResponsableAsignado || esGlobal;
-                }
+                if (role === 'boss') return esDeDIRAE || esGlobal || soyResponsableAsignado;
+                if (['user', 's4 unidad', 's4'].includes(role)) return soyResponsableAsignado || esGlobal;
 
                 return false; 
             });
@@ -138,10 +130,6 @@ const Operaciones = () => {
         });
     };
 
-    const handleEtapaChange = (nuevaEtapa) => {
-        setFormData({ ...formData, etapa: nuevaEtapa });
-    };
-
     const toggleUnidad = (unidad) => {
         const current = formData.unidadesInvolucradas;
         const updated = current.includes(unidad) 
@@ -151,9 +139,8 @@ const Operaciones = () => {
     };
 
     const addSda = () => {
-        if (!formData.sdaSelected || formData.sdaSelected.trim() === "" || formData.sdaSelected.toLowerCase().includes('undefined')) return;
-        const valorLimpio = formData.sdaSelected.trim();
-        const nuevoSda = `${formData.sdaCantidad}x ${valorLimpio}`;
+        if (!formData.sdaSelected || formData.sdaSelected.trim() === "") return;
+        const nuevoSda = `${formData.sdaCantidad}x ${formData.sdaSelected}`;
         if (!formData.sdaListado.includes(nuevoSda)) {
             setFormData({ 
                 ...formData, 
@@ -176,10 +163,10 @@ const Operaciones = () => {
             alert("Por favor complete las fechas de inicio y fin.");
             return;
         }
+
         const esMando = role === 'admin' || role === 'boss';
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
         
-        // El elemento será la lista de unidades involucradas O la unidad del usuario si es local
         const finalElemento = (esMando && formData.unidadesInvolucradas.length > 0)
             ? formData.unidadesInvolucradas.join(', ')
             : userUnidad;
@@ -200,15 +187,14 @@ const Operaciones = () => {
         try {
             if (isEditing) {
                 await updateEvent(selectedId, finalData);
-                alert("✅ Registro actualizado correctamente.");
+                alert("✅ Registro actualizado.");
             } else {
                 await createEvent(finalData);
-                alert("✅ Grabado con éxito en el Monitor AE.");
+                alert("✅ Grabado en Monitor AE.");
             }
             resetForm();
             fetchData();
         } catch (error) { 
-            console.error("Error en Submit:", error);
             alert("❌ Error al guardar."); 
         }
     };
@@ -227,20 +213,19 @@ const Operaciones = () => {
     const handleEdit = (ev) => {
         const puedeEditar = role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad);
         if (!puedeEditar) {
-            alert("No tiene permisos para editar órdenes de otra unidad.");
+            alert("Sin permisos para editar.");
             return;
         }
         setIsEditing(true);
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
         const parts = ev.notes?.split(' | Obs: ');
-        const obsPart = parts && parts.length > 1 ? parts[1] : ev.notes;
         setFormData({
             title: ev.title || '',
             start: parseFromBackend(ev.start),
             end: parseFromBackend(ev.end),
             color: ev.color || '#3498db',
-            notes: obsPart || '',
+            notes: parts && parts.length > 1 ? parts[1] : ev.notes || '',
             sdaListado: Array.isArray(ev.sdaListado) ? ev.sdaListado : [], 
             tipoApoyo: ev.tipoApoyo || '',
             etapa: ev.etapa || 'recepcion',
@@ -250,18 +235,17 @@ const Operaciones = () => {
     };
 
     const handleDelete = async (id, elementoEv) => {
-        const esMando = role === 'admin' || role === 'boss';
-        const esDueno = elementoEv?.includes(userUnidad);
-        if (!esMando && !esDueno) {
-            alert("No tiene permisos para eliminar esta orden.");
+        const puedeEliminar = role === 'admin' || role === 'boss' || elementoEv?.includes(userUnidad);
+        if (!puedeEliminar) {
+            alert("Sin permisos para eliminar.");
             return;
         }
-        if (window.confirm("¿Confirmar ELIMINACIÓN de la orden operativa?")) {
+        if (window.confirm("¿Eliminar orden operativa?")) {
             try {
                 await deleteEvent(id);
                 fetchData();
             } catch (error) {
-                alert("No se pudo eliminar el evento.");
+                alert("Error al eliminar.");
             }
         }
     };
@@ -270,33 +254,25 @@ const Operaciones = () => {
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
-                {/* COLUMNA FORMULARIO */}
+                {/* FORMULARIO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
                     
-                    <div style={styles.globalToggleContainer}>
-                        <button 
-                            type="button" 
-                            onClick={() => setPublicarGlobal(!publicarGlobal)}
-                            style={{
-                                ...styles.btnGlobal, 
-                                backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7'
-                            }}
-                        >
-                            {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE)" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
-                        </button>
-                    </div>
+                    <button type="button" onClick={() => setPublicarGlobal(!publicarGlobal)}
+                        style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px' }}>
+                        {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE)" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
+                    </button>
 
                     {(role === 'admin' || role === 'boss' || isEditing) && (
                         <div style={styles.etapaWrapper}>
                             <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
                             <div style={styles.etapaGrid}>
-                                <button type="button" onClick={() => handleEtapaChange('recepcion')} 
-                                        style={{...styles.btnStep, background: formData.etapa === 'recepcion' ? etapaColors.recepcion : 'white', color: formData.etapa === 'recepcion' ? 'white' : '#555'}}>🟡 Recibida</button>
-                                <button type="button" onClick={() => handleEtapaChange('revision')} 
-                                        style={{...styles.btnStep, background: formData.etapa === 'revision' ? etapaColors.revision : 'white', color: formData.etapa === 'revision' ? 'white' : '#555'}}>🔵 Revisión</button>
-                                <button type="button" onClick={() => handleEtapaChange('ordenada')} 
-                                        style={{...styles.btnStep, background: formData.etapa === 'ordenada' ? etapaColors.ordenada : 'white', color: formData.etapa === 'ordenada' ? 'white' : '#555'}}>🟢 Ordenada</button>
+                                {Object.keys(etapaColors).map(e => (
+                                    <button key={e} type="button" onClick={() => setFormData({...formData, etapa: e})} 
+                                        style={{...styles.btnStep, background: formData.etapa === e ? etapaColors[e] : 'white', color: formData.etapa === e ? 'white' : '#555'}}>
+                                        {e.charAt(0).toUpperCase() + e.slice(1)}
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -314,7 +290,7 @@ const Operaciones = () => {
 
                         {(role === 'admin' || role === 'boss') && (
                             <div style={styles.unidadSelector}>
-                                <label style={styles.label}>Asignar Responsables (Monitor Unidades):</label>
+                                <label style={styles.label}>Asignar Responsables:</label>
                                 <div style={styles.unidadChips}>
                                     {unidadesAE.map(u => (
                                         <button key={u} type="button" onClick={() => toggleUnidad(u)}
@@ -351,53 +327,35 @@ const Operaciones = () => {
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
                             {isEditing ? "ACTUALIZAR REGISTRO" : "GRABAR EN MONITOR OPERATIVO"}
                         </button>
-                        {isEditing && (
-                            <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR</button>
-                        )}
+                        {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR</button>}
                     </form>
                 </div>
 
-                {/* COLUMNA LOG / REGISTRO */}
+                {/* REGISTRO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Órdenes</h3>
-                    
-                    <div style={{ marginBottom: '15px' }}>
-                        <input 
-                            type="text" 
-                            placeholder="🔍 Buscar por misión, unidad o tipo..." 
-                            value={searchTerm} 
-                            onChange={(e) => setSearchTerm(e.target.value)} 
-                            style={{...styles.input, width: '100%', boxSizing: 'border-box'}}
-                        />
-                    </div>
+                    <input type="text" placeholder="🔍 Buscar por misión, unidad o tipo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
 
                     <div style={styles.scrollList}>
-                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No se encontraron órdenes.</p> : 
-                        filteredEvents.map(ev => {
-                            const esInterna = !ev.esGlobal;
-                            return (
-                                <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
-                                    <div style={{flex: 1}}>
-                                        <div style={{fontWeight: 'bold', color: '#1b3a57', fontSize: '1rem'}}>
-                                            {ev.esGlobal && "🌐 "}{ev.title}
-                                        </div>
-                                        <div style={{fontSize: '0.75rem', color: '#666', fontWeight: '600'}}>
-                                            {ev.elemento} | {formatDateForDisplay(ev.start)}
-                                        </div>
-                                        <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>
-                                            <span style={{...styles.miniBadge, backgroundColor: etapaColors[ev.etapa] || '#95a5a6'}}>{ev.etapa?.toUpperCase()}</span>
-                                            <span style={{...styles.miniBadge, backgroundColor: esInterna ? '#7f8c8d' : '#1b3a57'}}>{esInterna ? "LOCAL" : "GLOBAL"}</span>
-                                        </div>
+                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes.</p> : 
+                        filteredEvents.map(ev => (
+                            <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
+                                <div style={{flex: 1}}>
+                                    <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.esGlobal && "🌐 "}{ev.title}</div>
+                                    <div style={{fontSize: '0.75rem', color: '#666'}}>{ev.elemento} | {formatDateForDisplay(ev.start)}</div>
+                                    <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>
+                                        <span style={{...styles.miniBadge, backgroundColor: etapaColors[ev.etapa] || '#95a5a6'}}>{ev.etapa?.toUpperCase()}</span>
+                                        <span style={{...styles.miniBadge, backgroundColor: !ev.esGlobal ? '#7f8c8d' : '#1b3a57'}}>{!ev.esGlobal ? "LOCAL" : "GLOBAL"}</span>
                                     </div>
-                                    {(role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad)) && (
-                                        <div style={styles.logActions}>
-                                            <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
-                                            <button onClick={() => handleDelete(ev._id, ev.elemento)} style={styles.btnIconDel}>🗑️</button>
-                                        </div>
-                                    )}
                                 </div>
-                            );
-                        })}
+                                {(role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad)) && (
+                                    <div style={styles.logActions}>
+                                        <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
+                                        <button onClick={() => handleDelete(ev._id, ev.elemento)} style={styles.btnIconDel}>🗑️</button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -411,15 +369,14 @@ const styles = {
     card: { background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f0f2f5' },
     title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '12px', fontSize: '1.2rem', color: '#1b3a57', marginBottom: '20px' },
     form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    globalToggleContainer: { marginBottom: '15px' },
-    btnGlobal: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' },
+    btnGlobal: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
     etapaWrapper: { marginBottom: '20px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' },
     labelEtapa: { fontSize: '0.7rem', fontWeight: 'bold', color: '#777', marginBottom: '8px', display: 'block' },
     etapaGrid: { display: 'flex', gap: '8px' },
-    btnStep: { flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid #ddd', transition: '0.3s' },
+    btnStep: { flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid #ddd' },
     unidadSelector: { margin: '10px 0' },
     unidadChips: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '8px' },
-    chip: { border: 'none', padding: '5px 10px', borderRadius: '15px', fontSize: '0.7rem', cursor: 'pointer', transition: '0.2s' },
+    chip: { border: 'none', padding: '5px 10px', borderRadius: '15px', fontSize: '0.7rem', cursor: 'pointer' },
     row: { display: 'flex', gap: '12px' },
     label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#555' },
     input: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem', outline: 'none' },
