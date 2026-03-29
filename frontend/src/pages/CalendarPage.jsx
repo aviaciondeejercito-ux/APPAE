@@ -105,11 +105,12 @@ const CalendarPage = () => {
                     plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                     initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
                     locale={esLocale}
+                    // IMPORTANTE: Se mapean los eventos respetando el valor exacto del string de la DB
                     events={events.map(ev => ({
                         id: ev._id,
                         title: `${ev.esGlobal ? '🌐 ' : ''}${ev.tipoApoyo ? `[${ev.tipoApoyo}] ` : ''}${ev.title}`,
-                        start: ev.start,
-                        end: ev.end,
+                        start: ev.start, // Usamos el valor directo de la DB
+                        end: ev.end,     // Usamos el valor directo de la DB
                         backgroundColor: ev.color || '#1b3a57', 
                         borderColor: 'transparent',
                         extendedProps: { 
@@ -137,7 +138,8 @@ const CalendarPage = () => {
                     eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
                     dayMaxEvents={isMobile ? 2 : 6}
                     nowIndicator={true}
-                    timeZone="local" 
+                    // CORRECCIÓN: Forzamos zona horaria UTC para que NO aplique el desfase local del navegador
+                    timeZone="UTC" 
                 />
             </div>
 
@@ -178,8 +180,9 @@ const CalendarPage = () => {
                             <div style={styles.infoRow}>
                                 <strong>⏱️ Horario Operativo:</strong> 
                                 <span>
-                                    {new Date(selectedEvent.start).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })} - 
-                                    {new Date(selectedEvent.end).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                                    {/* CORRECCIÓN MODAL: Se usa toISOString para evitar el cálculo de la zona local al mostrar el texto */}
+                                    {new Date(selectedEvent.start).toISOString().slice(0, 16).replace('T', ' ')} - 
+                                    {new Date(selectedEvent.end).toISOString().slice(0, 16).replace('T', ' ')}
                                 </span>
                             </div>
                             <hr style={styles.divider} />
