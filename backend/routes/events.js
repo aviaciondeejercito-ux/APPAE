@@ -30,7 +30,7 @@ const protect = authMiddleware.protect || authMiddleware.verifyToken || authMidd
  * Jerarquía de permisos actualizada según Matriz Operativa (Sincro Joker):
  * - ADMIN / BOSS: Control Estratégico y Gestión Global.
  * - S4_UNIDAD / S4: Gestión y Monitoreo de su Elemento.
- * - USER: Carga de Vuelos y Monitor básico.
+ * - USER: Carga de Vuelos y Monitor básico (Ahora con permiso de baja sobre su propia carga).
  */
 
 // --- 1. PROTECCIÓN DE IDENTIDAD (TOKEN JWT) ---
@@ -66,7 +66,7 @@ router.put('/:id', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), update
 
 // @route    DELETE /api/events/:id
 // @desc     Baja de misión o evento del sistema (Protocolo de Seguridad)
-// @nota     Restringido a S4 en adelante para evitar borrados accidentales en la red
-router.delete('/:id', authorize('s4', 's4_unidad', 'boss', 'admin'), deleteEvent);
+// @nota     Se agrega 'user' para permitir que la unidad elimine sus propios registros coordinados
+router.delete('/:id', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), deleteEvent);
 
 module.exports = router;

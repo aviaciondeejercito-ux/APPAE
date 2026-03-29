@@ -28,12 +28,11 @@ const authMiddleware = async (req, res, next) => {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
             // 4. Inyección del Usuario en la Petición
-            // IMPORTANTE: Traemos 'role', 'elemento', 'username' y 'userName' explícitamente.
             // .select('-password') asegura que la clave nunca viaje en req.user
-            req.user = await User.findById(decoded.id).select('-password');
+            const userFound = await User.findById(decoded.id).select('-password');
 
             // 5. Validación de existencia del usuario (Seguridad ante bajas recientes)
-            if (!req.user) {
+            if (!userFound) {
                 console.warn(`[SEGURIDAD] Intento de uso de token de usuario eliminado o inexistente. ID: ${decoded.id}`);
                 return res.status(401).json({ 
                     success: false,
@@ -41,8 +40,17 @@ const authMiddleware = async (req, res, next) => {
                 });
             }
 
+            // NORMALIZACIÓN DE DATOS PARA LÓGICA DE CONTROLADORES
+            // Aseguramos que 'elemento' y 'role' existan y estén en un formato previsible.
+            req.user = userFound;
+            if (req.user.elemento) {
+                req.user.elemento = req.user.elemento.toString().toUpperCase().trim();
+            }
+            if (req.user.role) {
+                req.user.role = req.user.role.toString().toLowerCase().trim();
+            }
+
             // 6. Autorización exitosa: El flujo continúa al siguiente middleware o controlador
-            // Registro de auditoría silenciosa para trazabilidad
             return next(); 
 
         } catch (error) {

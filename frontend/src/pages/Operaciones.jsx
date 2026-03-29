@@ -26,6 +26,13 @@ const Operaciones = () => {
         { label: 'Otros', value: 'Otros', color: '#000000' }
     ];
 
+    // DEFINICIÓN DE COLORES POR ETAPA (Sincro Joker)
+    const etapaColors = {
+        recepcion: '#f39c12', // Naranja/Amarillo
+        revision: '#3498db',  // Azul
+        ordenada: '#27ae60'   // Verde
+    };
+
     const [formData, setFormData] = useState({
         title: '', start: '', end: '', color: '#3498db', notes: '',
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
@@ -157,7 +164,7 @@ const Operaciones = () => {
             tipoApoyo: formData.tipoApoyo.toUpperCase(),
             sdaListado: formData.sdaListado,
             etapa: formData.etapa,
-            esGlobal: publicarGlobal, // Ahora toma el estado del botón, sea quien sea
+            esGlobal: publicarGlobal,
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
             elemento: (esMando && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
@@ -247,7 +254,6 @@ const Operaciones = () => {
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
                     
-                    {/* El botón de Global/Local ahora está visible para todos los usuarios inicialmente */}
                     <div style={styles.globalToggleContainer}>
                         <button 
                             type="button" 
@@ -266,11 +272,11 @@ const Operaciones = () => {
                             <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
                             <div style={styles.etapaGrid}>
                                 <button type="button" onClick={() => handleEtapaChange('recepcion')} 
-                                        style={{...styles.btnStep, background: formData.etapa === 'recepcion' ? '#f39c12' : 'white', color: formData.etapa === 'recepcion' ? 'white' : '#555'}}>🟡 Recibida</button>
+                                        style={{...styles.btnStep, background: formData.etapa === 'recepcion' ? etapaColors.recepcion : 'white', color: formData.etapa === 'recepcion' ? 'white' : '#555'}}>🟡 Recibida</button>
                                 <button type="button" onClick={() => handleEtapaChange('revision')} 
-                                        style={{...styles.btnStep, background: formData.etapa === 'revision' ? '#3498db' : 'white', color: formData.etapa === 'revision' ? 'white' : '#555'}}>🔵 Revisión</button>
+                                        style={{...styles.btnStep, background: formData.etapa === 'revision' ? etapaColors.revision : 'white', color: formData.etapa === 'revision' ? 'white' : '#555'}}>🔵 Revisión</button>
                                 <button type="button" onClick={() => handleEtapaChange('ordenada')} 
-                                        style={{...styles.btnStep, background: formData.etapa === 'ordenada' ? '#27ae60' : 'white', color: formData.etapa === 'ordenada' ? 'white' : '#555'}}>🟢 Ordenada</button>
+                                        style={{...styles.btnStep, background: formData.etapa === 'ordenada' ? etapaColors.ordenada : 'white', color: formData.etapa === 'ordenada' ? 'white' : '#555'}}>🟢 Ordenada</button>
                             </div>
                         </div>
                     )}
@@ -348,25 +354,45 @@ const Operaciones = () => {
                         events.map(ev => {
                             const esMando = role === 'admin' || role === 'boss';
                             const esDueno = ev.elemento?.includes(userUnidad);
-                            const estaOrdenada = ev.etapa === 'ordenada';
                             
-                            const puedeGestionar = esMando || esDueno || estaOrdenada;
+                            // LÓGICA DE ORIGEN: ¿Es interna o del elemento superior?
+                            const esInterna = ev.elemento === userUnidad && !ev.esGlobal;
+                            const labelOrigen = esInterna ? "INTERNA" : "ELEM. SUPERIOR";
+
+                            const puedeGestionar = esMando || esDueno || ev.etapa === 'ordenada';
                             
                             return (
                                 <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
                                     <div style={{flex: 1}}>
-                                        <div style={{fontWeight: 'bold', color: '#1b3a57'}}>
+                                        <div style={{fontWeight: 'bold', color: '#1b3a57', fontSize: '1rem'}}>
                                             {ev.esGlobal && "🌐 "}{ev.title}
                                         </div>
-                                        <div style={{fontSize: '0.75rem', color: '#666'}}>
+                                        <div style={{fontSize: '0.75rem', color: '#666', fontWeight: '600'}}>
                                             {ev.elemento} | {formatDateForDisplay(ev.start)}
                                         </div>
-                                        <div style={{fontSize: '0.7rem', color: '#555', marginTop: '3px', fontWeight: '500'}}>
+                                        <div style={{fontSize: '0.75rem', color: '#555', marginTop: '3px', fontWeight: 'bold'}}>
                                             {ev.tipoApoyo}
                                         </div>
-                                        <span style={{...styles.miniBadge, backgroundColor: ev.color}}>
-                                            {ev.etapa?.toUpperCase() || 'PROCESANDO'}
-                                        </span>
+                                        
+                                        {/* CONTENEDOR DE BADGES REFORZADO */}
+                                        <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>
+                                            <span style={{
+                                                ...styles.miniBadge, 
+                                                backgroundColor: etapaColors[ev.etapa] || '#95a5a6',
+                                                padding: '4px 10px',
+                                                fontSize: '0.7rem'
+                                            }}>
+                                                {ev.etapa?.toUpperCase() || 'PROCESANDO'}
+                                            </span>
+                                            <span style={{
+                                                ...styles.miniBadge, 
+                                                backgroundColor: esInterna ? '#7f8c8d' : '#1b3a57',
+                                                padding: '4px 10px',
+                                                fontSize: '0.7rem'
+                                            }}>
+                                                {labelOrigen}
+                                            </span>
+                                        </div>
                                     </div>
                                     {puedeGestionar && (
                                         <div style={styles.logActions}>
@@ -410,8 +436,8 @@ const styles = {
     btnTagX: { background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', marginLeft: '5px' },
     btnSave: { color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', marginTop: '10px' },
     scrollList: { maxHeight: '600px', overflowY: 'auto' },
-    logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #f0f0f0' },
-    miniBadge: { color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 'bold', marginTop: '5px', display: 'inline-block' },
+    logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', borderBottom: '1px solid #f0f0f0' },
+    miniBadge: { color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 'bold', display: 'inline-block' },
     logActions: { display: 'flex', gap: '5px' },
     btnIconEdit: { background: '#f1c40f', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' },
     btnIconDel: { background: '#fadbd8', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }
