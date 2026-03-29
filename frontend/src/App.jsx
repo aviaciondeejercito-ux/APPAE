@@ -97,7 +97,7 @@ function App() {
                                         border: view === 'mapa' ? '2px solid white' : 'none'
                                     }}
                                 >
-                                    📍 Mapa Táctico
+                                    📍 Mapa 
                                 </button>
                             )}
 

@@ -205,7 +205,7 @@ const OperacionesMapa = () => {
         try {
             const data = await getEvents();
             const role = localStorage.getItem('role');
-            const userElemento = localStorage.getItem('elemento'); // Asumiendo que guardas la unidad del usuario
+            const userElemento = localStorage.getItem('elemento'); 
             
             const dataArray = Array.isArray(data) ? data : data.data || [];
             
@@ -213,8 +213,8 @@ const OperacionesMapa = () => {
             const activas = dataArray.filter(ev => {
                 const esOperativo = ev.isRealTime === true && ev.etapa === 'operativo';
                 
-                // Jerarquía alta: Ven todo
-                if (['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role)) {
+                // Jerarquía alta: Ven todo (Se agregó OTOAE a la lista de privilegios)
+                if (['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role)) {
                     return esOperativo;
                 }
                 
