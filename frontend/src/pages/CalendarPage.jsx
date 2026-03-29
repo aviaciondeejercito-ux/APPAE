@@ -32,14 +32,13 @@ const CalendarPage = () => {
         }
     };
 
-    // Lógica de colores unificada para todos los eventos
     const getEventColor = (tipo) => {
         if (!tipo) return '#ffffff';
         const t = tipo.toUpperCase();
         if (t.includes('SOSTENIMIENTO')) return '#007bff'; // Azul
         if (t.includes('FUERZA OPERATIVA')) return '#28a745'; // Verde
         if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000'; // Bordó
-        return '#ffffff'; // Otros / Blanco
+        return '#ffffff'; // Otros
     };
 
     const handleEventClick = (info) => {
@@ -72,24 +71,30 @@ const CalendarPage = () => {
     const closeModal = () => setSelectedEvent(null);
 
     const eventDidMount = (info) => {
-        const { tipoOrigen, esGlobal, etapa, elemento } = info.event.extendedProps;
+        const { elemento, esGlobal, tipoOrigen, etapa } = info.event.extendedProps;
+        const backgroundColor = info.event.backgroundColor;
+
+        // 1. Manejo de color de texto según el fondo
+        const titleEl = info.el.querySelector('.fc-event-title');
+        const timeEl = info.el.querySelector('.fc-event-time');
         
-        // Actividades Internas: Reborde Negro (Prioridad visual)
+        if (backgroundColor === '#ffffff' || backgroundColor === '#FFFFFF') {
+            if (titleEl) titleEl.style.color = '#000000';
+            if (timeEl) timeEl.style.color = '#000000';
+            info.el.style.border = '1px solid #ddd';
+        } else {
+            if (titleEl) titleEl.style.color = '#ffffff';
+            if (timeEl) timeEl.style.color = '#ffffff';
+        }
+
+        // 2. Actividades Internas: Reborde Negro
         if (elemento === userUnidad && !esGlobal && tipoOrigen !== 'COMANDO') {
             info.el.style.border = '2px solid #000000';
         }
 
+        // 3. Estado Recepción: Discontinuo
         if (etapa === 'recepcion') {
-            info.el.style.opacity = '0.8'; 
             info.el.style.borderStyle = 'dashed';
-        }
-
-        if (info.event.backgroundColor === '#ffffff' || info.event.backgroundColor === '#FFFFFF') {
-            const titleEl = info.el.querySelector('.fc-event-title');
-            if (titleEl) titleEl.style.color = '#000000';
-            if (!info.el.style.border.includes('black')) {
-                info.el.style.border = '1px solid #ddd';
-            }
         }
     };
 
@@ -132,7 +137,8 @@ const CalendarPage = () => {
                             start: ev.start,
                             end: ev.end,
                             backgroundColor: colorBase, 
-                            borderColor: 'transparent',
+                            borderColor: colorBase, // Sincronizado para que no se vea vacío
+                            textColor: colorBase === '#ffffff' ? '#000000' : '#ffffff',
                             extendedProps: { 
                                 notes: ev.notes, 
                                 user: ev.userName,
@@ -158,7 +164,6 @@ const CalendarPage = () => {
                 />
             </div>
 
-            {/* LEYENDA TÁCTICA APB - AHORA INFERIOR Y ESPACIADA */}
             <div style={styles.legendBar}>
                 <div style={styles.legendGroup}>
                     <span style={styles.legendGroupTitle}>MISIONES:</span>
@@ -230,34 +235,31 @@ const CalendarPage = () => {
 
 const styles = {
     pageContainer: { padding: '15px', backgroundColor: '#f4f7f6', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '15px' },
-    mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', flex: 1 },
+    mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden' },
     headerMonitor: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    title: { color: '#1b3a57', margin: 0, fontSize: '1.4rem', fontWeight: 'bold' },
-    unidadBadge: { fontSize: '0.8rem', background: '#e9ecef', color: '#1b3a57', padding: '5px 12px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
-    modeBadge: { fontSize: '0.8rem', background: '#1b3a57', color: 'white', padding: '5px 12px', borderRadius: '4px' },
-    
-    // Nueva Barra de Leyenda Inferior
-    legendBar: { background: '#fff', padding: '15px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '20px' },
-    legendGroup: { display: 'flex', alignItems: 'center', gap: '12px' },
-    legendGroupTitle: { fontSize: '0.75rem', fontWeight: 'bold', color: '#1b3a57', textTransform: 'uppercase' },
-    legendItem: { fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px', color: '#444' },
-    colorBox: { width: '14px', height: '14px', borderRadius: '3px' },
-
+    title: { color: '#1b3a57', margin: 0, fontSize: '1.2rem', fontWeight: 'bold' },
+    unidadBadge: { fontSize: '0.75rem', background: '#e9ecef', color: '#1b3a57', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
+    modeBadge: { fontSize: '0.75rem', background: '#1b3a57', color: 'white', padding: '4px 10px', borderRadius: '4px' },
+    legendBar: { background: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '15px' },
+    legendGroup: { display: 'flex', alignItems: 'center', gap: '10px' },
+    legendGroupTitle: { fontSize: '0.7rem', fontWeight: 'bold', color: '#1b3a57', textTransform: 'uppercase' },
+    legendItem: { fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#444' },
+    colorBox: { width: '12px', height: '12px', borderRadius: '2px' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-    modalContent: { background: 'white', borderRadius: '12px', width: '95%', maxWidth: '500px', overflow: 'hidden' },
+    modalContent: { background: 'white', borderRadius: '12px', width: '95%', maxWidth: '450px', overflow: 'hidden' },
     modalHeader: { padding: '15px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    modalTitle: { margin: 0, fontSize: '1.1rem' },
-    btnClose: { background: 'transparent', border: 'none', color: 'white', fontSize: '1.8rem', cursor: 'pointer' },
-    modalBody: { padding: '20px' },
-    etapaBanner: { padding: '8px', borderRadius: '6px', color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: '0.85rem', marginBottom: '15px' },
-    infoRow: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.95rem' },
-    divider: { border: 'none', borderBottom: '1px solid #eee', margin: '12px 0' },
-    sdaContainer: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' },
-    sdaBadge: { background: '#f1f4f8', color: '#1b3a57', padding: '3px 10px', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid #d1d9e6' },
-    notesBox: { marginTop: '10px' },
-    notesText: { background: '#f8f9fa', padding: '12px', borderRadius: '8px', fontSize: '0.9rem', color: '#333', whiteSpace: 'pre-line' },
-    modalFooter: { padding: '15px', textAlign: 'right', borderTop: '1px solid #eee' },
-    btnOk: { background: '#1b3a57', color: 'white', border: 'none', padding: '10px 25px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
+    modalTitle: { margin: 0, fontSize: '1rem' },
+    btnClose: { background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' },
+    modalBody: { padding: '15px' },
+    etapaBanner: { padding: '6px', borderRadius: '4px', color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: '0.8rem', marginBottom: '12px' },
+    infoRow: { display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.9rem' },
+    divider: { border: 'none', borderBottom: '1px solid #eee', margin: '10px 0' },
+    sdaContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' },
+    sdaBadge: { background: '#f1f4f8', color: '#1b3a57', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', border: '1px solid #d1d9e6' },
+    notesBox: { marginTop: '8px' },
+    notesText: { background: '#f8f9fa', padding: '10px', borderRadius: '6px', fontSize: '0.85rem', color: '#333', whiteSpace: 'pre-line' },
+    modalFooter: { padding: '12px', textAlign: 'right', borderTop: '1px solid #eee' },
+    btnOk: { background: '#1b3a57', color: 'white', border: 'none', padding: '8px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
 };
 
 export default CalendarPage;
