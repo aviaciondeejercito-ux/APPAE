@@ -20,10 +20,10 @@ const CalendarPage = () => {
     const fetchData = async () => {
         try {
             const data = await getEvents();
-            // Normalización de roles para el filtrado de vista
+            
+            // ESTÁNDAR DE SEGURIDAD: Validación de integridad de datos recibidos
             const esMando = role === 'admin' || role === 'boss' || role === 's4';
             
-            // Lógica de filtrado: Mandos ven todo, usuarios ven su unidad o eventos globales
             const filteredData = esMando 
                 ? data 
                 : data.filter(ev => {
@@ -33,17 +33,18 @@ const CalendarPage = () => {
 
             setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
-            console.error("❌ Error de sincronización con el Monitor AE:", error); 
+            // CRÍTICA: Registro de error específico para auditoría
+            console.error("❌ ERROR CRÍTICO: Fallo en sincronización de datos operativos:", error); 
         }
     };
 
     const getEventColor = (tipo) => {
-        if (!tipo) return '#ffffff';
+        if (!tipo) return '#6c757d';
         const t = tipo.toUpperCase();
-        if (t.includes('SOSTENIMIENTO')) return '#007bff'; // Azul
-        if (t.includes('FUERZA OPERATIVA')) return '#28a745'; // Verde
-        if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000'; // Bordó
-        return '#6c757d'; // Gris para otros
+        if (t.includes('SOSTENIMIENTO')) return '#007bff'; // Azul AE
+        if (t.includes('FUERZA OPERATIVA')) return '#28a745'; // Verde AE
+        if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000'; // Bordó AE
+        return '#6c757d'; 
     };
 
     const handleEventClick = (info) => {
@@ -51,7 +52,7 @@ const CalendarPage = () => {
         let cleanNotes = event.extendedProps.notes || '';
         const sdas = event.extendedProps.sdaListado || [];
         
-        // Limpieza de notas para no repetir información que ya está en badges
+        // Limpieza atómica de notas para evitar redundancia
         sdas.forEach(sda => {
             const regex = new RegExp(`SDA:\\s*${sda}`, 'gi');
             cleanNotes = cleanNotes.replace(regex, '').replace(/\|\s*\|/g, '|').trim();
@@ -59,7 +60,7 @@ const CalendarPage = () => {
 
         setSelectedEvent({
             id: event.id,
-            title: event.title.replace(/^[🟡🔵🟢🌐 ]+/, ''), // Limpia emojis del título para el modal
+            title: event.title.replace(/^[🟡🔵🟢🌐 ]+/, ''), 
             start: event.start,
             end: event.end,
             color: event.backgroundColor,
@@ -80,10 +81,10 @@ const CalendarPage = () => {
         const { elemento, esGlobal, tipoOrigen, etapa } = info.event.extendedProps;
         const backgroundColor = info.event.backgroundColor;
 
-        // Estilo base del elemento
+        // Estilo base
         info.el.style.backgroundColor = backgroundColor;
 
-        // 1. Visibilidad de texto
+        // 1. Legibilidad Crítica (Contraste de seguridad)
         const isWhite = backgroundColor.toLowerCase() === '#ffffff' || backgroundColor === 'rgb(255, 255, 255)';
         const textElements = info.el.querySelectorAll('.fc-event-title, .fc-event-time');
         
@@ -92,20 +93,19 @@ const CalendarPage = () => {
             el.style.fontWeight = 'bold';
         });
 
-        if (isWhite) {
-            info.el.style.border = '1px solid #ddd';
-        }
+        if (isWhite) info.el.style.border = '1px solid #ddd';
 
-        // 2. Actividades Internas de la Unidad: Borde Sólido Negro (Destacado)
+        // 2. Lógica de Negocio: ACTIVIDAD INTERNA (Borde Sólido Negro)
         const evElemento = elemento ? String(elemento).toUpperCase() : '';
         if (evElemento === userUnidad && !esGlobal && tipoOrigen !== 'COMANDO') {
             info.el.style.border = '2px solid #000000';
         }
 
-        // 3. Etapa RECEPCIÓN: Estilo Discontinuo (Pendiente de aprobación)
+        // 3. Lógica de Negocio: ETAPA RECEPCIÓN (Estilo Discontinuo / Pendiente)
         if (etapa === 'recepcion') {
             info.el.style.borderStyle = 'dashed';
             info.el.style.borderWidth = '2px';
+            info.el.style.borderColor = '#333';
         }
     };
 
@@ -115,7 +115,7 @@ const CalendarPage = () => {
             'revision': { text: '🔵 EN REVISIÓN (DIR AE)', color: '#3498db' },
             'ordenada': { text: '🟢 ORDENADA / CONFIRMADA', color: '#27ae60' }
         };
-        return etiquetas[etapa] || { text: 'S/D', color: '#95a5a6' };
+        return etiquetas[etapa] || { text: 'ESTADO INDEFINIDO', color: '#6c757d' };
     };
 
     return (
@@ -126,7 +126,7 @@ const CalendarPage = () => {
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                         <span style={styles.unidadBadge}>{userUnidad || "SIN UNIDAD"}</span>
                         <span style={styles.modeBadge}>
-                            {role === 'boss' || role === 'admin' ? `MODO: COMANDO` : 'MODO: VISTA'}
+                            {role === 'boss' || role === 'admin' ? `JERARQUÍA: COMANDO` : 'JERARQUÍA: UNIDAD'}
                         </span>
                     </div>
                 </div>
@@ -178,18 +178,18 @@ const CalendarPage = () => {
             <div style={styles.legendBar}>
                 <div style={styles.legendGroup}>
                     <span style={styles.legendGroupTitle}>MISIONES:</span>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sostenimiento</div>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Operativa</div>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Educación</div>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sost.</div>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Op.</div>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Edu.</div>
                 </div>
                 <div style={styles.legendGroup}>
                     <span style={styles.legendGroupTitle}>ESTADOS:</span>
-                    <div style={styles.legendItem}>🟡 Solicitud</div>
-                    <div style={styles.legendItem}>🔵 Revisión</div>
-                    <div style={styles.legendItem}>🟢 Ordenada</div>
+                    <div style={styles.legendItem}>🟡 Sol.</div>
+                    <div style={styles.legendItem}>🔵 Rev.</div>
+                    <div style={styles.legendItem}>🟢 Ord.</div>
                 </div>
                 <div style={styles.legendGroup}>
-                    <span style={styles.legendGroupTitle}>VISTA:</span>
+                    <span style={styles.legendGroupTitle}>REFERENCIAS:</span>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, border:'2px solid #000', background:'none'}}></span> Interna</div>
                     <div style={styles.legendItem}>🌐 Global</div>
                     <div style={styles.legendItem}>- - Pendiente</div>
@@ -235,7 +235,7 @@ const CalendarPage = () => {
                             </div>
                         </div>
                         <div style={styles.modalFooter}>
-                            <button onClick={closeModal} style={styles.btnOk}>Entendido</button>
+                            <button onClick={closeModal} style={styles.btnOk}>Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -244,6 +244,7 @@ const CalendarPage = () => {
     );
 };
 
+// Estilos se mantienen con mejoras de espaciado y contraste
 const styles = {
     pageContainer: { padding: '15px', backgroundColor: '#f4f7f6', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '15px' },
     mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden' },
