@@ -6,7 +6,8 @@ const EstadoAeronaves = () => {
     const [loading, setLoading] = useState(true);
     const [selectedNote, setSelectedNote] = useState(null); 
     
-    const role = localStorage.getItem('role');
+    // Normalizamos el rol a minúsculas para asegurar coincidencia con la lógica de mando
+    const role = localStorage.getItem('role')?.toLowerCase().trim();
     const userElemento = localStorage.getItem('elemento')?.trim() || "";
 
     useEffect(() => {
@@ -20,10 +21,13 @@ const EstadoAeronaves = () => {
         try {
             const { data } = await getAircrafts();
             
-            // LÓGICA DE FILTRADO JERÁRQUICO ACTUALIZADA
-            // Admin, Boss, Director y OTO: Ven TODO el material de la Aviación de Ejército.
-            // Oficina Técnica y User: Ven solo el material de su UNIDAD/ELEMENTO.
-            const filtrados = (role === 'admin' || role === 'boss' || role === 'director' || role === 'oto') 
+            // LÓGICA DE FILTRADO JERÁRQUICO ACTUALIZADA (SINCRO JOKER)
+            // Admin, Boss, Director, OTO y OTOAE: Ven TODO el material de la Aviación de Ejército.
+            // Otros roles (S4, Oficina Técnica, User): Ven solo el material de su UNIDAD/ELEMENTO.
+            
+            const isMandoEstrategico = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(role);
+
+            const filtrados = isMandoEstrategico 
                 ? data 
                 : data.filter(a => 
                     a.unidad && 
