@@ -131,39 +131,37 @@ export const deleteEvent = (id) => API.delete(`/events/${id}`);
  * SERVICIOS DE MATERIAL AERONÁUTICO (ESTADO DE FLOTA)
  */
 export const getAircrafts = () => {
-    const role = localStorage.getItem('role')?.toLowerCase().trim();
+    const role = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
     const userElemento = localStorage.getItem('elemento')?.trim();
 
-    // Actualización: Roles con visión global (Mando Estratégico)
-    const hasGlobalView = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(role);
+    // Roles con visión global (Mando Estratégico)
+    const hasGlobalView = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
 
-    // Si no es mando, filtramos por unidad
+    // Si no es mando superior, inyectamos obligatoriamente el filtro de su unidad
     if (!hasGlobalView && userElemento) {
-        return API.get(`/aircraft`, { params: { unidad: userElemento } });
+        return API.get(`/aircraft`, { params: { unidad: userElemento.toUpperCase() } });
     }
     return API.get('/aircraft');
 };
 
 export const createAircraft = (aircraftData) => {
-    const userRole = localStorage.getItem('role')?.toLowerCase().trim();
+    const rawRole = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
     const userElemento = localStorage.getItem('elemento')?.trim();
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // Roles que pueden cargar aeronaves en cualquier unidad (Mando Estratégico)
-    const isMandoEstrategico = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(userRole);
-    // Rol específico con permisos de gestión técnica
-    const isOficinaTecnica = (userRole === 'OFICINA TECNICA');
+    // Verificación de Jerarquía
+    const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(rawRole);
 
     const dataNormalized = {
         ...aircraftData, 
         matricula: aircraftData.matricula?.toUpperCase().trim(),
         sda: aircraftData.sda?.toUpperCase().trim(),
-        // Oficina Técnica solo puede cargar a su unidad; Mando puede elegir.
+        // Oficina Técnica y Usuarios comunes solo cargan a su propia unidad
         unidad: (isMandoEstrategico) 
-                ? (aircraftData.unidad?.trim() || userElemento) 
-                : userElemento,
+                ? (aircraftData.unidad?.trim().toUpperCase() || userElemento?.toUpperCase()) 
+                : userElemento?.toUpperCase(),
         horasRemanentes: Number(aircraftData.horasRemanentes) || 0,
-        novedades: aircraftData.novedades || "",
+        novedades: (aircraftData.novedades || "").toUpperCase().trim(),
         creadoPor: userName
     };
 
@@ -179,8 +177,8 @@ export const updateAircraftStatus = (id, aircraftData) => {
             ? Number(aircraftData.horasRemanentes) 
             : undefined,
         novedades: aircraftData.novedades !== undefined 
-            ? aircraftData.novedades 
-            : (aircraftData.notas || ""), 
+            ? String(aircraftData.novedades).toUpperCase().trim() 
+            : (aircraftData.notas ? String(aircraftData.notas).toUpperCase().trim() : ""), 
         actualizadoPor: userName,
         fechaActualizacion: new Date()
     };
