@@ -13,8 +13,8 @@ exports.getAircrafts = async (req, res) => {
         const userRole = req.user.role ? req.user.role.toLowerCase() : '';
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
-        // Filtro estricto para usuarios de unidad y S4
-        if (['user', 's4', 's4_unidad'].includes(userRole)) {
+        // Filtro estricto para usuarios de unidad, S4 y Oficina Técnica
+        if (['user', 's4', 's4_unidad', 'oficina tecnica'].includes(userRole)) {
             if (!userElemento) {
                 return res.status(403).json({ 
                     success: false, 
@@ -45,8 +45,8 @@ exports.createAircraft = async (req, res) => {
         const userRole = req.user.role ? req.user.role.toLowerCase() : '';
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
-        // Validación de permisos para creación
-        if (['s4', 's4_unidad'].includes(userRole)) {
+        // Validación de permisos para creación: S4 y Oficina Técnica solo para su unidad
+        if (['s4', 's4_unidad', 'oficina tecnica'].includes(userRole)) {
             if (!userElemento) return res.status(403).json({ message: "Falta asignación de unidad en su perfil para dar el alta." });
             unidad = userElemento;
         } else if (userRole !== 'admin' && userRole !== 'boss') {
@@ -92,7 +92,7 @@ exports.updateAircraftStatus = async (req, res) => {
         const aircraft = await Aircraft.findById(id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no localizada en el inventario." });
 
-        // SEGURIDAD: Solo Mandos o el S4 de la unidad responsable
+        // SEGURIDAD: Solo Mandos o Personal Técnico de la unidad responsable (incluye Oficina Técnica)
         const userRole = req.user.role ? req.user.role.toLowerCase() : '';
         const esMandoSuperior = ['admin', 'boss'].includes(userRole);
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
@@ -112,11 +112,11 @@ exports.updateAircraftStatus = async (req, res) => {
             aircraft.novedades = String(novedades).toUpperCase().trim(); 
         }
 
-        // Solo Mandos pueden cambiar datos de identificación o reasignar unidad
-        if (esMandoSuperior) {
+        // Solo Mandos u Oficina Técnica (de su unidad) pueden cambiar datos de identificación
+        if (esMandoSuperior || userRole === 'oficina tecnica') {
             if (matricula) aircraft.matricula = matricula.toUpperCase().trim();
             if (sda) aircraft.sda = sda.toUpperCase().trim();
-            if (unidad) aircraft.unidad = unidad.toUpperCase().trim();
+            if (unidad && esMandoSuperior) aircraft.unidad = unidad.toUpperCase().trim(); // Reasignar unidad solo Admin/Boss
         }
         
         aircraft.ultimaActualizacion = Date.now();
@@ -139,15 +139,21 @@ exports.updateAircraftStatus = async (req, res) => {
 exports.deleteAircraft = async (req, res) => {
     try {
         const userRole = req.user.role ? req.user.role.toLowerCase() : '';
+        const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
         
-        if (userRole !== 'admin') {
-            return res.status(403).json({ message: "Seguridad: Solo el Administrador Central puede dar de baja definitiva al material." });
+        const aircraft = await Aircraft.findById(req.params.id);
+        if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
+
+        // SEGURIDAD: Solo Admin Central u Oficina Técnica de la misma unidad
+        const esAdmin = userRole === 'admin';
+        const esOficinaTecnicaDeUnidad = (userRole === 'oficina tecnica' && userElemento === String(aircraft.unidad).trim().toUpperCase());
+
+        if (!esAdmin && !esOficinaTecnicaDeUnidad) {
+            return res.status(403).json({ message: "Seguridad: No posee permisos para dar de baja definitiva a este material." });
         }
 
-        const deleted = await Aircraft.findByIdAndDelete(req.params.id);
-        if (!deleted) return res.status(404).json({ message: "Aeronave no encontrada." });
-
-        res.json({ message: "Aeronave dada de baja del registro central." });
+        await Aircraft.findByIdAndDelete(req.params.id);
+        res.json({ message: "Aeronave dada de baja del registro." });
     } catch (error) {
         console.error('❌ Error AE (deleteAircraft):', error);
         res.status(500).json({ message: "Error al procesar la baja definitiva", error: error.message });

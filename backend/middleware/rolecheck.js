@@ -18,15 +18,18 @@ const authorize = (...rolesPermitidos) => {
         // 2. Normalización y Verificación de Permisos por Rol
         // Se normaliza a MAYÚSCULAS para evitar errores de case-sensitivity
         const userRole = req.user.role.toUpperCase().trim();
-        const allowedRoles = rolesPermitidos.map(r => r.toUpperCase().trim());
+        const allowedRoles = rolesPermitidos.map(r => r.toUpperCase().trim().replace(/\s+/g, '_'));
+
+        // Normalizamos el rol del usuario para la comparación (ej: "OFICINA TECNICA" -> "OFICINA_TECNICA")
+        const normalizedUserRole = userRole.replace(/\s+/g, '_');
 
         // Comprobamos si el rol actual del usuario está dentro de la matriz de permisos autorizados
-        if (!allowedRoles.includes(userRole)) {
-            console.warn(`[BLOQUEO CRÍTICO] Acceso Denegado: Usuario ${req.user.username || 'N/A'} (Rol: ${userRole}) intentó acceder a una ruta restringida.`);
+        if (!allowedRoles.includes(normalizedUserRole)) {
+            console.warn(`[BLOQUEO CRÍTICO] Acceso Denegado: Usuario ${req.user.username || 'N/A'} (Rol: ${normalizedUserRole}) intentó acceder a una ruta restringida.`);
             
             return res.status(403).json({ 
                 success: false,
-                message: `Acceso denegado: El nivel jerárquico '${userRole}' no posee permisos para esta acción específica.` 
+                message: `Acceso denegado: El nivel jerárquico '${normalizedUserRole}' no posee permisos para esta acción específica.` 
             });
         }
 
@@ -35,19 +38,19 @@ const authorize = (...rolesPermitidos) => {
          * Se incluye OTO y OTOAE en isMando para que hereden la visión global de todas las unidades.
          * Esto corrige el problema de visualización de vuelos en el radar.
          */
-        req.isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(userRole);
+        req.isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(normalizedUserRole);
 
         /**
          * 4. COMPROBACIÓN DE GESTIÓN TÉCNICA Y OPERATIVA (OFICINA_TECNICA / USER / S4 UNIDAD)
          * Inyectamos flags para facilitar la lógica de carga y mantenimiento por unidad.
          */
-        req.isGestionUnidad = (userRole === 'OFICINA_TECNICA' || userRole === 'USER' || userRole === 'S4 UNIDAD');
+        req.isGestionUnidad = (normalizedUserRole === 'OFICINA_TECNICA' || normalizedUserRole === 'USER' || normalizedUserRole === 'S4_UNIDAD');
         
         // Flag específico para Oficina Técnica (reemplaza lógica S4 anterior)
-        req.isOficinaTecnica = (userRole === 'OFICINA_TECNICA');
+        req.isOficinaTecnica = (normalizedUserRole === 'OFICINA_TECNICA');
 
         // Registro de Auditoría interna de accesos exitosos.
-        console.log(`[AUTORIZADO] Acceso concedido a ${req.user.username || 'Sistema'} (Rol: ${userRole}) ${req.isMando ? '[MODO MANDO ACTIVO]' : ''}`);
+        console.log(`[AUTORIZADO] Acceso concedido a ${req.user.username || 'Sistema'} (Rol: ${normalizedUserRole}) ${req.isMando ? '[MODO MANDO ACTIVO]' : ''}`);
         
         next(); 
     };
