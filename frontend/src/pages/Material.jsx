@@ -7,29 +7,21 @@ const Material = () => {
     const [selectedNote, setSelectedNote] = useState(null); 
     
     // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER)
-    // Corregido: Ahora acepta tanto espacios como guiones bajos para coincidir con la DB
+    // Se obtiene el rol y se estandariza a MAYÚSCULAS y guion bajo para coincidir con la DB
     const rawRole = localStorage.getItem('role') || "";
     const role = rawRole.toUpperCase().trim(); 
     
     const userElemento = localStorage.getItem('elemento')?.toUpperCase().trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // Función auxiliar para validación de roles flexible (idéntica al backend)
-    const checkRole = (roleToVerify) => {
-        const rName = roleToVerify.toUpperCase();
-        const rUnderscore = rName.replace(/\s+/g, '_');
-        const rSpace = rName.replace(/_/g, ' ');
-        return role === rName || role === rUnderscore || role === rSpace;
-    };
-
-    // Definición de permisos jerárquicos
-    const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].some(r => checkRole(r));
+    // Definición de permisos jerárquicos estrictos
+    const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
     
-    // S4_UNIDAD y OFICINA TECNICA ahora tienen permisos plenos de gestión sobre su unidad
-    const isGestionUnidad = checkRole('OFICINA TECNICA') || checkRole('S4 UNIDAD') || checkRole('USER');
+    // S4_UNIDAD y OFICINA_TECNICA con permisos de gestión sobre su unidad
+    const isGestionUnidad = role === 'OFICINA_TECNICA' || role === 'S4_UNIDAD' || role === 'USER';
     
     // Privilegios de edición: Mandos, Oficina Técnica y S4 Unidad
-    const hasEditPrivileges = isMando || isGestionUnidad;
+    const hasEditPrivileges = isMando || role === 'OFICINA_TECNICA' || role === 'S4_UNIDAD';
 
     const sdaList = [
         "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
@@ -54,7 +46,7 @@ const Material = () => {
             setLoading(true);
             const { data } = await getAircrafts();
             
-            // Lógica de visualización jerárquica
+            // Lógica de visualización jerárquica: Mandos ven todo, Unidades solo lo propio
             const filtrados = isMando 
                 ? data 
                 : data.filter(a => 
@@ -83,7 +75,7 @@ const Material = () => {
                 unidad: userElemento,
                 estado: 'E/S',
                 novedades: newAir.novedades ? `[${new Date().toLocaleDateString()}] ${userName}: ${newAir.novedades}` : '',
-                creadoPor: userName 
+                creadoPor: `${userName} (${role})` 
             };
 
             await createAircraft(payload);
@@ -100,7 +92,7 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            // Validación de seguridad local
+            // Validación de seguridad local (espejo del backend)
             const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
             if (!isMando && targetUnidad !== userElemento) {
                 return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");
@@ -116,7 +108,7 @@ const Material = () => {
             }
             
             await updateAircraftStatus(id, fullUpdatedObject);
-            setAircrafts(prev => prev.map(a => a._id === id ? fullUpdatedObject : a));
+            setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...updatedFields } : a));
         } catch (error) {
             console.error("Error al actualizar:", error);
             alert("Acceso Denegado: Error de permisos en el servidor.");

@@ -10,11 +10,14 @@ const Aircraft = require('../models/Aircraft');
 exports.getAircrafts = async (req, res) => {
     try {
         let query = {};
-        const userRole = req.user.role ? req.user.role.toLowerCase() : '';
+        // Normalización Sincro Joker: Mayúsculas y Guion Bajo
+        const userRole = req.user.role ? String(req.user.role).toUpperCase().trim() : '';
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
-        // Filtro estricto para usuarios de unidad, S4, S4_UNIDAD y Oficina Técnica
-        if (['user', 's4', 's4_unidad', 'oficina tecnica'].includes(userRole)) {
+        // Filtro estricto para usuarios de unidad y niveles técnicos
+        const unidadRestrictedRoles = ['USER', 'S4', 'S4_UNIDAD', 'OFICINA_TECNICA'];
+        
+        if (unidadRestrictedRoles.includes(userRole)) {
             if (!userElemento) {
                 return res.status(403).json({ 
                     success: false, 
@@ -25,7 +28,7 @@ exports.getAircrafts = async (req, res) => {
         }
 
         // Permitir a Mandos Superiores filtrar por unidad específica vía query
-        if (req.query.unidad && (userRole === 'admin' || userRole === 'boss')) {
+        if (req.query.unidad && (userRole === 'ADMIN' || userRole === 'BOSS')) {
             query.unidad = String(req.query.unidad).trim().toUpperCase();
         }
 
@@ -42,14 +45,16 @@ exports.createAircraft = async (req, res) => {
     try {
         const { matricula, sda } = req.body;
         let { unidad } = req.body;
-        const userRole = req.user.role ? req.user.role.toLowerCase() : '';
+        const userRole = req.user.role ? String(req.user.role).toUpperCase().trim() : '';
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
         // Validación de permisos para creación: S4, S4_UNIDAD y Oficina Técnica solo para su unidad
-        if (['s4', 's4_unidad', 'oficina tecnica'].includes(userRole)) {
+        const techRoles = ['S4', 'S4_UNIDAD', 'OFICINA_TECNICA'];
+        
+        if (techRoles.includes(userRole)) {
             if (!userElemento) return res.status(403).json({ message: "Falta asignación de unidad en su perfil para dar el alta." });
             unidad = userElemento;
-        } else if (userRole !== 'admin' && userRole !== 'boss') {
+        } else if (userRole !== 'ADMIN' && userRole !== 'BOSS') {
             return res.status(403).json({ message: "Acceso denegado: Su rol no posee permisos de alta de material." });
         }
 
@@ -68,7 +73,7 @@ exports.createAircraft = async (req, res) => {
             matricula: finalMatricula,
             sda: finalSda,
             unidad: finalUnidad,
-            creadoPor: `${req.user.username || 'SISTEMA'} (${userRole.toUpperCase()})`,
+            creadoPor: `${req.user.username || 'SISTEMA'} (${userRole})`,
             ultimaActualizacion: Date.now()
         });
 
@@ -92,11 +97,12 @@ exports.updateAircraftStatus = async (req, res) => {
         const aircraft = await Aircraft.findById(id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no localizada en el inventario." });
 
-        // SEGURIDAD: Solo Mandos o Personal Técnico de la unidad responsable (incluye Oficina Técnica y S4_UNIDAD)
-        const userRole = req.user.role ? req.user.role.toLowerCase() : '';
-        const esMandoSuperior = ['admin', 'boss'].includes(userRole);
+        // SEGURIDAD: Normalización de Roles
+        const userRole = req.user.role ? String(req.user.role).toUpperCase().trim() : '';
+        const esMandoSuperior = ['ADMIN', 'BOSS'].includes(userRole);
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
         
+        // Verificación de pertenencia a la unidad para roles no-administradores
         if (!esMandoSuperior && userElemento !== String(aircraft.unidad).trim().toUpperCase()) {
             return res.status(403).json({ 
                 message: `Denegado: Su unidad (${userElemento}) no tiene autoridad sobre material de ${aircraft.unidad}.` 
@@ -107,20 +113,20 @@ exports.updateAircraftStatus = async (req, res) => {
         if (estado) aircraft.estado = estado;
         if (horasRemanentes !== undefined) aircraft.horasRemanentes = Number(horasRemanentes);
         
-        // Gestión de Novedades
+        // Gestión de Novedades (Sincro Joker: Todo en Mayúsculas)
         if (novedades !== undefined) {
             aircraft.novedades = String(novedades).toUpperCase().trim(); 
         }
 
         // Solo Mandos, Oficina Técnica o S4_UNIDAD (de su unidad) pueden cambiar datos de identificación
-        if (esMandoSuperior || userRole === 'oficina tecnica' || userRole === 's4_unidad') {
+        if (esMandoSuperior || userRole === 'OFICINA_TECNICA' || userRole === 'S4_UNIDAD') {
             if (matricula) aircraft.matricula = matricula.toUpperCase().trim();
             if (sda) aircraft.sda = sda.toUpperCase().trim();
-            if (unidad && esMandoSuperior) aircraft.unidad = unidad.toUpperCase().trim(); // Reasignar unidad solo Admin/Boss
+            if (unidad && esMandoSuperior) aircraft.unidad = unidad.toUpperCase().trim(); 
         }
         
         aircraft.ultimaActualizacion = Date.now();
-        aircraft.actualizadoPor = `${req.user.username || 'SISTEMA'} (${userRole.toUpperCase()})`;
+        aircraft.actualizadoPor = `${req.user.username || 'SISTEMA'} (${userRole})`;
 
         await aircraft.save();
         res.json({ 
@@ -138,15 +144,15 @@ exports.updateAircraftStatus = async (req, res) => {
 // 4. Eliminar aeronave (Baja Definitiva del Registro)
 exports.deleteAircraft = async (req, res) => {
     try {
-        const userRole = req.user.role ? req.user.role.toLowerCase() : '';
+        const userRole = req.user.role ? String(req.user.role).toUpperCase().trim() : '';
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
         
         const aircraft = await Aircraft.findById(req.params.id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
 
         // SEGURIDAD: Solo Admin Central, Oficina Técnica o S4_UNIDAD de la misma unidad
-        const esAdmin = userRole === 'admin';
-        const esPersonalAutorizadoUnidad = (['oficina tecnica', 's4_unidad'].includes(userRole) && userElemento === String(aircraft.unidad).trim().toUpperCase());
+        const esAdmin = userRole === 'ADMIN';
+        const esPersonalAutorizadoUnidad = (['OFICINA_TECNICA', 'S4_UNIDAD'].includes(userRole) && userElemento === String(aircraft.unidad).trim().toUpperCase());
 
         if (!esAdmin && !esPersonalAutorizadoUnidad) {
             return res.status(403).json({ message: "Seguridad: No posee permisos para dar de baja definitiva a este material." });
