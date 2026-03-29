@@ -10,8 +10,7 @@ const User = require('../models/User');
 // @route   GET /api/admin/users
 exports.getAllUsers = async (req, res) => {
     try {
-        // SEGURIDAD: Nunca enviar el hash del password al cliente. 
-        // Filtramos GDE (username), email y role.
+        // SEGURIDAD: Nunca enviar el hash del password al cliente.
         const users = await User.find().select('-password').sort({ createdAt: -1 });
         
         res.status(200).json({
@@ -32,10 +31,12 @@ exports.getAllUsers = async (req, res) => {
 // @route   PUT /api/admin/users/:id/role
 exports.updateRole = async (req, res) => {
     try {
+        const userId = req.params.id;
         const { role } = req.body;
         
-        // ACTUALIZACIÓN: Inclusión de S4_UNIDAD en la jerarquía reconocida por el sistema
-        const rolesValidos = ['user', 'boss', 'admin', 'S4_UNIDAD'];
+        // JERARQUÍA OFICIAL (Según Panel Administrativo)
+        const rolesValidos = ['S4 UNIDAD', 'OTO', 'BOSS', 'DIRECTOR', 'ADMIN'];
+        
         if (!rolesValidos.includes(role)) {
             return res.status(400).json({ 
                 success: false,
@@ -44,7 +45,7 @@ exports.updateRole = async (req, res) => {
         }
 
         const user = await User.findByIdAndUpdate(
-            req.params.id, 
+            userId, 
             { role }, 
             { new: true, runValidators: true }
         ).select('-password');
@@ -53,7 +54,7 @@ exports.updateRole = async (req, res) => {
         
         res.status(200).json({ 
             success: true,
-            message: `Jerarquía actualizada: ${user.username} ahora tiene nivel ${role.toUpperCase()}`,
+            message: `Jerarquía actualizada: ${user.username} ahora tiene nivel ${role}`,
             data: user 
         });
     } catch (error) {
@@ -66,7 +67,7 @@ exports.updateRole = async (req, res) => {
 // @route   PUT /api/admin/users/:id/password
 exports.resetPassword = async (req, res) => {
     try {
-        // AJUSTE: Compatibilidad total con las claves del frontend
+        const userId = req.params.id;
         const { password, newPassword, newPass } = req.body;
         const passwordToSet = password || newPassword || newPass;
         
@@ -74,10 +75,9 @@ exports.resetPassword = async (req, res) => {
             return res.status(400).json({ message: 'La nueva clave debe tener mínimo 6 caracteres' });
         }
 
-        const user = await User.findById(req.params.id);
+        const user = await User.findById(userId);
         if (!user) return res.status(404).json({ message: 'Usuario no localizado' });
 
-        // Activamos middleware de bcrypt mediante .save()
         user.password = passwordToSet;
         await user.save();
 
@@ -95,8 +95,6 @@ exports.resetPassword = async (req, res) => {
 // @route   DELETE /api/admin/users/:id
 exports.deleteUser = async (req, res) => {
     try {
-        // SEGURIDAD: Bloqueo de auto-eliminación
-        // Verificamos si req.user existe (inyectado por authMiddleware)
         const requesterId = req.user ? req.user._id.toString() : null;
 
         if (requesterId && req.params.id === requesterId) {
@@ -124,16 +122,20 @@ exports.deleteUser = async (req, res) => {
 // @route   GET /api/admin/stats
 exports.getAdminStats = async (req, res) => {
     try {
-        const totalUsers = await User.countDocuments();
-        const admins = await User.countDocuments({ role: 'admin' });
-        const s4Unidades = await User.countDocuments({ role: 'S4_UNIDAD' });
+        const stats = await Promise.all([
+            User.countDocuments(),
+            User.countDocuments({ role: 'ADMIN' }),
+            User.countDocuments({ role: 'S4 UNIDAD' }),
+            User.countDocuments({ role: 'DIRECTOR' })
+        ]);
 
         res.status(200).json({
             success: true,
             data: {
-                totalUsers,
-                admins,
-                s4Unidades
+                totalUsers: stats[0],
+                admins: stats[1],
+                s4Unidades: stats[2],
+                directores: stats[3]
             }
         });
     } catch (error) {
