@@ -7,19 +7,26 @@ const Material = () => {
     const [selectedNote, setSelectedNote] = useState(null); 
     
     // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER)
-    // Importante: Mantenemos el espacio para coincidir con la DB ("OFICINA TECNICA")
+    // Corregido: Ahora acepta tanto espacios como guiones bajos para coincidir con la DB
     const rawRole = localStorage.getItem('role') || "";
-    const role = rawRole.toUpperCase().trim().replace(/\s+/g, ' '); 
+    const role = rawRole.toUpperCase().trim(); 
     
     const userElemento = localStorage.getItem('elemento')?.toUpperCase().trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // Definición de permisos jerárquicos (Sincronizado con backend)
-    const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
+    // Función auxiliar para validación de roles flexible (idéntica al backend)
+    const checkRole = (roleToVerify) => {
+        const rName = roleToVerify.toUpperCase();
+        const rUnderscore = rName.replace(/\s+/g, '_');
+        const rSpace = rName.replace(/_/g, ' ');
+        return role === rName || role === rUnderscore || role === rSpace;
+    };
+
+    // Definición de permisos jerárquicos
+    const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].some(r => checkRole(r));
     
     // S4_UNIDAD y OFICINA TECNICA ahora tienen permisos plenos de gestión sobre su unidad
-    const isGestionUnidad = role === 'OFICINA TECNICA' || role === 'S4 UNIDAD' || role === 'S4_UNIDAD';
-    const isBasicUser = role === 'USER';
+    const isGestionUnidad = checkRole('OFICINA TECNICA') || checkRole('S4 UNIDAD') || checkRole('USER');
     
     // Privilegios de edición: Mandos, Oficina Técnica y S4 Unidad
     const hasEditPrivileges = isMando || isGestionUnidad;
@@ -93,7 +100,7 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            // Validación de seguridad local: Solo editan lo propio a menos que sea Mando
+            // Validación de seguridad local
             const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
             if (!isMando && targetUnidad !== userElemento) {
                 return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");
