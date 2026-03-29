@@ -22,14 +22,17 @@ const CalendarPage = () => {
         try {
             const data = await getEvents();
             
-            // ESTÁNDAR DE SEGURIDAD: Validación de jerarquía para filtrado de datos
-            const esMando = role === 'admin' || role === 'boss' || role === 's4';
-            
-            const filteredData = esMando 
+            // ESTÁNDAR DE SEGURIDAD: Restricción jerárquica estricta
+            // El 'admin' es el único con visibilidad total.
+            // 'boss', 's4' y otros roles filtran por su unidad (ej. DIR AE) o eventos globales.
+            const filteredData = role === 'admin' 
                 ? data 
                 : data.filter(ev => {
                     const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
-                    return evElemento.includes(userUnidad) || ev.esGlobal;
+                    const unidadUsuario = userUnidad.toUpperCase();
+                    
+                    // El BOSS y demás ven solo lo de su unidad O lo que es Global
+                    return evElemento.includes(unidadUsuario) || ev.esGlobal;
                 });
 
             // Actualización atómica del estado
@@ -119,6 +122,35 @@ const CalendarPage = () => {
         return etiquetas[etapa] || { text: 'ESTADO INDEFINIDO', color: '#6c757d' };
     };
 
+    const styles = {
+        pageContainer: { padding: '15px', backgroundColor: '#f4f7f6', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '15px' },
+        mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden' },
+        headerMonitor: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+        title: { color: '#1b3a57', margin: 0, fontSize: '1.2rem', fontWeight: 'bold' },
+        unidadBadge: { fontSize: '0.75rem', background: '#e9ecef', color: '#1b3a57', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
+        modeBadge: { fontSize: '0.75rem', background: '#1b3a57', color: 'white', padding: '4px 10px', borderRadius: '4px' },
+        legendBar: { background: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '15px' },
+        legendGroup: { display: 'flex', alignItems: 'center', gap: '10px' },
+        legendGroupTitle: { fontSize: '0.7rem', fontWeight: 'bold', color: '#1b3a57', textTransform: 'uppercase' },
+        legendItem: { fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#444' },
+        colorBox: { width: '12px', height: '12px', borderRadius: '2px' },
+        modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
+        modalContent: { background: 'white', borderRadius: '12px', width: '95%', maxWidth: '450px', overflow: 'hidden' },
+        modalHeader: { padding: '15px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+        modalTitle: { margin: 0, fontSize: '1rem' },
+        btnClose: { background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' },
+        modalBody: { padding: '15px' },
+        etapaBanner: { padding: '6px', borderRadius: '4px', color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: '0.8rem', marginBottom: '12px' },
+        infoRow: { display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.9rem' },
+        divider: { border: 'none', borderBottom: '1px solid #eee', margin: '10px 0' },
+        sdaContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' },
+        sdaBadge: { background: '#f1f4f8', color: '#1b3a57', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', border: '1px solid #d1d9e6' },
+        notesBox: { marginTop: '8px' },
+        notesText: { background: '#f8f9fa', padding: '10px', borderRadius: '6px', fontSize: '0.85rem', color: '#333', whiteSpace: 'pre-line' },
+        modalFooter: { padding: '12px', textAlign: 'right', borderTop: '1px solid #eee' },
+        btnOk: { background: '#1b3a57', color: 'white', border: 'none', padding: '8px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
+    };
+
     return (
         <div style={styles.pageContainer}>
             <div style={styles.mainCard}>
@@ -127,7 +159,7 @@ const CalendarPage = () => {
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                         <span style={styles.unidadBadge}>{userUnidad || "SIN UNIDAD"}</span>
                         <span style={styles.modeBadge}>
-                            {role === 'boss' || role === 'admin' ? `JERARQUÍA: COMANDO` : 'JERARQUÍA: UNIDAD'}
+                            {role === 'admin' ? 'JERARQUÍA: CONTROL TOTAL' : `JERARQUÍA: ${role.toUpperCase()}`}
                         </span>
                     </div>
                 </div>
@@ -243,35 +275,6 @@ const CalendarPage = () => {
             )}
         </div>
     );
-};
-
-const styles = {
-    pageContainer: { padding: '15px', backgroundColor: '#f4f7f6', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '15px' },
-    mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden' },
-    headerMonitor: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    title: { color: '#1b3a57', margin: 0, fontSize: '1.2rem', fontWeight: 'bold' },
-    unidadBadge: { fontSize: '0.75rem', background: '#e9ecef', color: '#1b3a57', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
-    modeBadge: { fontSize: '0.75rem', background: '#1b3a57', color: 'white', padding: '4px 10px', borderRadius: '4px' },
-    legendBar: { background: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '15px' },
-    legendGroup: { display: 'flex', alignItems: 'center', gap: '10px' },
-    legendGroupTitle: { fontSize: '0.7rem', fontWeight: 'bold', color: '#1b3a57', textTransform: 'uppercase' },
-    legendItem: { fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#444' },
-    colorBox: { width: '12px', height: '12px', borderRadius: '2px' },
-    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-    modalContent: { background: 'white', borderRadius: '12px', width: '95%', maxWidth: '450px', overflow: 'hidden' },
-    modalHeader: { padding: '15px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    modalTitle: { margin: 0, fontSize: '1rem' },
-    btnClose: { background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' },
-    modalBody: { padding: '15px' },
-    etapaBanner: { padding: '6px', borderRadius: '4px', color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: '0.8rem', marginBottom: '12px' },
-    infoRow: { display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.9rem' },
-    divider: { border: 'none', borderBottom: '1px solid #eee', margin: '10px 0' },
-    sdaContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' },
-    sdaBadge: { background: '#f1f4f8', color: '#1b3a57', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', border: '1px solid #d1d9e6' },
-    notesBox: { marginTop: '8px' },
-    notesText: { background: '#f8f9fa', padding: '10px', borderRadius: '6px', fontSize: '0.85rem', color: '#333', whiteSpace: 'pre-line' },
-    modalFooter: { padding: '12px', textAlign: 'right', borderTop: '1px solid #eee' },
-    btnOk: { background: '#1b3a57', color: 'white', border: 'none', padding: '8px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
 };
 
 export default CalendarPage;
