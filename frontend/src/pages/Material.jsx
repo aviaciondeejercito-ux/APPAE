@@ -10,6 +10,11 @@ const Material = () => {
     const userElemento = localStorage.getItem('elemento')?.trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
+    // Definición de permisos: admin tiene control total, oficina tecnica tiene control sobre su unidad
+    const canManageAll = role === 'admin';
+    const canManageUnit = role === 'OFICINA_TECNICA';
+    const hasEditPrivileges = canManageAll || canManageUnit;
+
     const sdaList = [
         "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
         "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
@@ -32,6 +37,7 @@ const Material = () => {
         try {
             setLoading(true);
             const { data } = await getAircrafts();
+            // El admin y boss ven todo, los demás (incluida oficina técnica) solo su unidad
             const filtrados = (role === 'admin' || role === 'boss') 
                 ? data 
                 : data.filter(a => 
@@ -77,8 +83,9 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            if (role !== 'admin' && role !== 'boss' && String(targetAir.unidad).trim() !== String(userElemento).trim()) {
-                return alert("Seguridad: No tiene permisos sobre esta unidad.");
+            // Validación de seguridad: oficina técnica solo puede editar si la aeronave es de su unidad
+            if (role !== 'admin' && String(targetAir.unidad).trim() !== String(userElemento).trim()) {
+                return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");
             }
 
             const fullUpdatedObject = {
@@ -105,6 +112,14 @@ const Material = () => {
     };
 
     const handleDelete = async (id) => {
+        const targetAir = aircrafts.find(a => a._id === id);
+        if (!targetAir) return;
+
+        // Seguridad: Oficina técnica solo borra lo propio
+        if (role !== 'admin' && String(targetAir.unidad).trim() !== String(userElemento).trim()) {
+            return alert("Seguridad: No tiene permisos para eliminar este registro.");
+        }
+
         if (!window.confirm("¿Confirmar eliminación del registro oficial?")) return;
         try {
             await deleteAircraft(id);
@@ -119,8 +134,8 @@ const Material = () => {
     return (
         <div style={styles.container}>
             <div style={styles.grid}>
-                {/* Lógica de Seguridad: Solo admin puede crear material */}
-                {role === 'admin' ? (
+                {/* Lógica de Seguridad: Admin y Oficina Técnica pueden dar de alta */}
+                {hasEditPrivileges ? (
                     <div style={styles.card}>
                         <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
                         <form onSubmit={handleCreate} style={styles.form}>
@@ -150,7 +165,7 @@ const Material = () => {
                     <div style={styles.card}>
                         <h3 style={styles.title}>📋 Información de Unidad</h3>
                         <p style={{fontSize: '0.9rem', color: '#666'}}>Usted está operando en: <strong>{userElemento}</strong></p>
-                        <p style={{fontSize: '0.8rem', color: '#888'}}>El alta de nuevas aeronaves está reservada para el nivel Administrador.</p>
+                        <p style={{fontSize: '0.8rem', color: '#888'}}>El alta de nuevas aeronaves está reservada para Oficina Técnica y Administradores.</p>
                     </div>
                 )}
 
@@ -170,16 +185,27 @@ const Material = () => {
                                 <div style={styles.actions}>
                                     <div style={styles.controlGroup}>
                                         <label style={styles.tinyLabel}>ESTADO</label>
-                                        <select value={air.estado || 'E/S'} onChange={(e) => handleUpdateField(air._id, { estado: e.target.value })} style={{...styles.selectSmall, color: air.estado === 'E/S' ? '#28a745' : '#e74c3c'}}>
+                                        <select 
+                                            value={air.estado || 'E/S'} 
+                                            disabled={!hasEditPrivileges}
+                                            onChange={(e) => handleUpdateField(air._id, { estado: e.target.value })} 
+                                            style={{...styles.selectSmall, color: air.estado === 'E/S' ? '#28a745' : '#e74c3c'}}
+                                        >
                                             <option value="E/S">E/S</option>
                                             <option value="F/S">F/S</option>
                                         </select>
                                     </div>
                                     <div style={styles.controlGroup}>
                                         <label style={styles.tinyLabel}>HS REM</label>
-                                        <input type="number" value={air.horasRemanentes || 0} onChange={(e) => handleUpdateField(air._id, { horasRemanentes: e.target.value })} style={styles.inputSmall} />
+                                        <input 
+                                            type="number" 
+                                            value={air.horasRemanentes || 0} 
+                                            disabled={!hasEditPrivileges}
+                                            onChange={(e) => handleUpdateField(air._id, { horasRemanentes: e.target.value })} 
+                                            style={styles.inputSmall} 
+                                        />
                                     </div>
-                                    {role === 'admin' && <button onClick={() => handleDelete(air._id)} style={styles.btnDelete}>🗑️</button>}
+                                    {hasEditPrivileges && <button onClick={() => handleDelete(air._id)} style={styles.btnDelete}>🗑️</button>}
                                 </div>
                             </div>
                         ))}
@@ -196,27 +222,31 @@ const Material = () => {
                             {selectedNote.novedades || "Sin novedades registradas."}
                         </div>
                         
-                        <textarea 
-                            id="newNoteText"
-                            placeholder="Escribir nueva novedad (esto reemplazará la anterior)..." 
-                            style={{...styles.input, width: '100%', height: '80px', marginTop: '15px', boxSizing: 'border-box'}}
-                        />
-                        
-                        <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px'}}>
-                            <div style={{display: 'flex', gap: '10px'}}>
-                                <button onClick={() => {
-                                    const val = document.getElementById('newNoteText').value;
-                                    if(val) handleSaveNote(selectedNote._id, val);
-                                }} style={{...styles.btnPrimary, flex: 2, margin: 0}}>Actualizar Registro</button>
+                        {hasEditPrivileges && (
+                            <>
+                                <textarea 
+                                    id="newNoteText"
+                                    placeholder="Escribir nueva novedad (esto reemplazará la anterior)..." 
+                                    style={{...styles.input, width: '100%', height: '80px', marginTop: '15px', boxSizing: 'border-box'}}
+                                />
                                 
-                                <button onClick={() => {
-                                    if(window.confirm("¿Limpiar todas las novedades de esta aeronave?")) {
-                                        handleSaveNote(selectedNote._id, "", true);
-                                    }
-                                }} style={styles.btnClear}>Limpiar</button>
-                            </div>
-                            <button onClick={() => setSelectedNote(null)} style={styles.btnCancel}>Cerrar sin cambios</button>
-                        </div>
+                                <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px'}}>
+                                    <div style={{display: 'flex', gap: '10px'}}>
+                                        <button onClick={() => {
+                                            const val = document.getElementById('newNoteText').value;
+                                            if(val) handleSaveNote(selectedNote._id, val);
+                                        }} style={{...styles.btnPrimary, flex: 2, margin: 0}}>Actualizar Registro</button>
+                                        
+                                        <button onClick={() => {
+                                            if(window.confirm("¿Limpiar todas las novedades de esta aeronave?")) {
+                                                handleSaveNote(selectedNote._id, "", true);
+                                            }
+                                        }} style={styles.btnClear}>Limpiar</button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        <button onClick={() => setSelectedNote(null)} style={{...styles.btnCancel, width: '100%', marginTop: '10px'}}>Cerrar</button>
                     </div>
                 </div>
             )}
