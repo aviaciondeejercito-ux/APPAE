@@ -90,7 +90,6 @@ export const createEvent = (eventData) => {
         matricula: eventData.matricula?.toUpperCase().trim() || "",
         status: eventData.status || 'programado',
         notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
-        // Duplicamos lat/lng en raíz para asegurar lectura del radar
         lat: latVal,
         lng: lngVal,
         ubicacion: {
@@ -114,7 +113,6 @@ export const updateEvent = (id, eventData) => {
         aeronave: eventData.aeronave?.toUpperCase().trim(),
         matricula: eventData.matricula?.toUpperCase().trim(),
         notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
-        // Sincronización de coordenadas en raíz y objeto
         lat: latVal,
         lng: lngVal,
         ubicacion: eventData.ubicacion ? {
@@ -136,9 +134,10 @@ export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toLowerCase().trim();
     const userElemento = localStorage.getItem('elemento')?.trim();
 
-    // Actualización de Seguridad: Roles con visión global (Mando Estratégico)
+    // Actualización: Roles con visión global (Mando Estratégico)
     const hasGlobalView = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(role);
 
+    // Si no es mando, filtramos por unidad
     if (!hasGlobalView && userElemento) {
         return API.get(`/aircraft`, { params: { unidad: userElemento } });
     }
@@ -150,16 +149,19 @@ export const createAircraft = (aircraftData) => {
     const userElemento = localStorage.getItem('elemento')?.trim();
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // Roles que pueden cargar aeronaves en cualquier unidad
+    // Roles que pueden cargar aeronaves en cualquier unidad (Mando Estratégico)
     const isMandoEstrategico = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(userRole);
+    // Rol específico con permisos de gestión técnica
+    const isOficinaTecnica = (userRole === 'OFICINA TECNICA');
 
     const dataNormalized = {
         ...aircraftData, 
         matricula: aircraftData.matricula?.toUpperCase().trim(),
         sda: aircraftData.sda?.toUpperCase().trim(),
-        unidad: (!isMandoEstrategico) 
-                ? userElemento 
-                : (aircraftData.unidad?.trim() || userElemento),
+        // Oficina Técnica solo puede cargar a su unidad; Mando puede elegir.
+        unidad: (isMandoEstrategico) 
+                ? (aircraftData.unidad?.trim() || userElemento) 
+                : userElemento,
         horasRemanentes: Number(aircraftData.horasRemanentes) || 0,
         novedades: aircraftData.novedades || "",
         creadoPor: userName
