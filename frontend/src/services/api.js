@@ -133,25 +133,31 @@ export const deleteEvent = (id) => API.delete(`/events/${id}`);
  * SERVICIOS DE MATERIAL AERONÁUTICO (ESTADO DE FLOTA)
  */
 export const getAircrafts = () => {
-    const role = localStorage.getItem('role')?.toLowerCase();
+    const role = localStorage.getItem('role')?.toLowerCase().trim();
     const userElemento = localStorage.getItem('elemento')?.trim();
 
-    if (role !== 'admin' && role !== 'boss' && userElemento) {
+    // Actualización de Seguridad: Roles con visión global (Mando Estratégico)
+    const hasGlobalView = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(role);
+
+    if (!hasGlobalView && userElemento) {
         return API.get(`/aircraft`, { params: { unidad: userElemento } });
     }
     return API.get('/aircraft');
 };
 
 export const createAircraft = (aircraftData) => {
-    const userRole = localStorage.getItem('role')?.toLowerCase();
+    const userRole = localStorage.getItem('role')?.toLowerCase().trim();
     const userElemento = localStorage.getItem('elemento')?.trim();
     const userName = localStorage.getItem('username') || 'Usuario';
+
+    // Roles que pueden cargar aeronaves en cualquier unidad
+    const isMandoEstrategico = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(userRole);
 
     const dataNormalized = {
         ...aircraftData, 
         matricula: aircraftData.matricula?.toUpperCase().trim(),
         sda: aircraftData.sda?.toUpperCase().trim(),
-        unidad: (userRole !== 'admin' && userRole !== 'boss') 
+        unidad: (!isMandoEstrategico) 
                 ? userElemento 
                 : (aircraftData.unidad?.trim() || userElemento),
         horasRemanentes: Number(aircraftData.horasRemanentes) || 0,

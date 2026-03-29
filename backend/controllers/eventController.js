@@ -7,6 +7,7 @@ const Aircraft = require('../models/Aircraft');
  * - Actualizaciones Atómicas en MongoDB.
  * - Sincro Real-Time: Integración con WebSockets para el Mapa Táctico.
  * - Lógica de Permisos: Filtro por Unidad para Carga Táctica.
+ * - Actualización: Integración de jerarquía OTO/OTOAE para visión global.
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -30,10 +31,9 @@ const getAvailableAircraft = async (req, res) => {
 // @desc    Obtener eventos para CALENDARIO Y LOG
 const getEvents = async (req, res) => {
     try {
-        const { elemento, role } = req.user; 
+        const { elemento } = req.user; 
+        const isMando = req.isMando; // Usamos el flag del middleware (incluye OTO/OTOAE)
         let query = {}; 
-
-        const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
 
         if (!isMando) {
             query = {
@@ -65,8 +65,8 @@ const getEvents = async (req, res) => {
 // @desc    Obtener operaciones activas para el MAPA TÁCTICO (Con filtro de Unidad)
 const getActiveOperations = async (req, res) => {
     try {
-        const { elemento, role } = req.user;
-        const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
+        const { elemento } = req.user;
+        const isMando = req.isMando; // Usamos el flag del middleware (incluye OTO/OTOAE)
 
         let query = { 
             isRealTime: true,
@@ -98,7 +98,7 @@ const createEvent = async (req, res) => {
 
         if (!title) return res.status(400).json({ message: 'Título requerido.' });
 
-        const isMando = req.user.role === 'admin' || req.user.role === 'boss' || req.user.elemento === 'DIR AE';
+        const isMando = req.isMando;
         const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
 
         const eventData = {
@@ -171,10 +171,9 @@ const updateEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'Registro no localizado.' });
 
-        const { elemento, role } = req.user;
-        const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
+        const { elemento } = req.user;
+        const isMando = req.isMando;
         
-        // Lógica de Propiedad: Verificamos si el elemento del usuario coincide con el del evento
         const perteneceAUnidad = event.elemento && (event.elemento.toUpperCase() === elemento.toUpperCase());
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
@@ -241,14 +240,12 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
 
-        const { elemento, role } = req.user;
-        const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
+        const { elemento } = req.user;
+        const isMando = req.isMando;
         
-        // Lógica corregida: Comparación exacta de strings para evitar fallos de jerarquía
         const perteneceAUnidad = event.elemento && (event.elemento.toUpperCase() === elemento.toUpperCase());
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
-        // Una unidad DEBE poder borrar sus propias actividades aunque estén en etapa 'ordenada'
         if (!isMando && !isOwner && !perteneceAUnidad) {
             return res.status(403).json({ message: 'Acceso denegado: No posee permisos sobre esta actividad.' });
         }

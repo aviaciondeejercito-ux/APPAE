@@ -1,7 +1,7 @@
 /**
  * MIDDLEWARE DE AUTORIZACIÓN JERÁRQUICA - SISTEMA AE
  * Restringe el acceso a rutas específicas y valida propiedad de recursos.
- * Actualización: Integración de nuevos niveles (Director, OTO, Oficina Técnica).
+ * Actualización: Integración de nuevos niveles (Director, OTO, OTOAE, Oficina Técnica).
  * @param {...string} rolesPermitidos - Lista de roles autorizados
  */
 const authorize = (...rolesPermitidos) => {
@@ -17,8 +17,8 @@ const authorize = (...rolesPermitidos) => {
 
         // 2. Normalización y Verificación de Permisos por Rol
         // Se normaliza a MAYÚSCULAS para evitar errores de case-sensitivity
-        const userRole = req.user.role.toUpperCase();
-        const allowedRoles = rolesPermitidos.map(r => r.toUpperCase());
+        const userRole = req.user.role.toUpperCase().trim();
+        const allowedRoles = rolesPermitidos.map(r => r.toUpperCase().trim());
 
         // Comprobamos si el rol actual del usuario está dentro de la matriz de permisos autorizados
         if (!allowedRoles.includes(userRole)) {
@@ -31,17 +31,17 @@ const authorize = (...rolesPermitidos) => {
         }
 
         /**
-         * 3. LÓGICA DE MANDO (ADMIN / BOSS / DIRECTOR)
-         * Inyectamos propiedad en 'req' para que los controladores sepan que tienen 
-         * visión o poder sobre múltiples unidades/elementos.
+         * 3. LÓGICA DE MANDO (ADMIN / BOSS / DIRECTOR / OTO / OTOAE)
+         * Se incluye OTO y OTOAE en isMando para que hereden la visión global de todas las unidades.
+         * Esto corrige el problema de visualización de vuelos en el radar.
          */
-        req.isMando = (userRole === 'ADMIN' || userRole === 'BOSS' || userRole === 'DIRECTOR');
+        req.isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(userRole);
 
         /**
-         * 4. COMPROBACIÓN DE GESTIÓN TÉCNICA Y OPERATIVA (OTO / OFICINA_TECNICA)
+         * 4. COMPROBACIÓN DE GESTIÓN TÉCNICA Y OPERATIVA (OFICINA_TECNICA / USER / S4 UNIDAD)
          * Inyectamos flags para facilitar la lógica de carga y mantenimiento por unidad.
          */
-        req.isGestionUnidad = (userRole === 'OFICINA_TECNICA' || userRole === 'USER' || userRole === 'OTO');
+        req.isGestionUnidad = (userRole === 'OFICINA_TECNICA' || userRole === 'USER' || userRole === 'S4 UNIDAD');
         
         // Flag específico para Oficina Técnica (reemplaza lógica S4 anterior)
         req.isOficinaTecnica = (userRole === 'OFICINA_TECNICA');
