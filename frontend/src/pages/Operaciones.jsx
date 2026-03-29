@@ -3,6 +3,8 @@ import { getEvents, createEvent, deleteEvent, updateEvent, getAvailableAircraft 
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
+    const [filteredEvents, setFilteredEvents] = useState([]); 
+    const [searchTerm, setSearchTerm] = useState(""); 
     const [role] = useState(localStorage.getItem('role')?.toLowerCase());
     const [userUnidad] = useState(localStorage.getItem('elemento'));
     const [isEditing, setIsEditing] = useState(false);
@@ -44,6 +46,15 @@ const Operaciones = () => {
     }, []);
 
     useEffect(() => {
+        const results = events.filter(ev => 
+            ev.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            ev.elemento?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            ev.tipoApoyo?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        setFilteredEvents(results);
+    }, [searchTerm, events]);
+
+    useEffect(() => {
         const fetchAeronaves = async () => {
             if (!userUnidad && formData.unidadesInvolucradas.length === 0) return;
             setLoadingAircraft(true);
@@ -75,24 +86,31 @@ const Operaciones = () => {
             const data = await getEvents();
             const userUnidadUpper = userUnidad?.trim().toUpperCase();
             
-            const filteredData = data.filter(ev => {
+            const logicFiltered = data.filter(ev => {
                 if (ev.isRealTime) return false; 
                 const esOrdenOperativa = ev.tipoApoyo || (ev.sdaListado && ev.sdaListado.length > 0);
                 if (!esOrdenOperativa) return false;
 
-                // LÓGICA DE PRIVACIDAD CORREGIDA:
                 const esGlobal = ev.esGlobal === true;
-                const perteneceAMiUnidad = ev.elemento && ev.elemento.toUpperCase().includes(userUnidadUpper);
+                const esDeDIRAE = ev.elemento?.toUpperCase().includes("DIR AE");
+                
+                // Nueva Lógica: Verifica si MI UNIDAD está explícitamente listada en los responsables
+                const soyResponsableAsignado = ev.elemento?.toUpperCase().includes(userUnidadUpper);
 
-                // 1. Si el evento es GLOBAL, lo ven todos (incluido Admin/Boss).
-                if (esGlobal) return true;
+                if (role === 'admin') return true;
 
-                // 2. Si el evento es LOCAL (no global), SOLO lo ve la unidad dueña.
-                // El mando NO lo ve hasta que se haga global.
-                return perteneceAMiUnidad;
+                if (role === 'boss') {
+                    return esDeDIRAE || esGlobal || soyResponsableAsignado;
+                }
+
+                if (role === 'user' || role === 's4 unidad' || role === 's4') {
+                    return soyResponsableAsignado || esGlobal;
+                }
+
+                return false; 
             });
             
-            setEvents(Array.isArray(filteredData) ? filteredData : []);
+            setEvents(Array.isArray(logicFiltered) ? logicFiltered : []);
         } catch (error) { 
             console.error("❌ Error de Sincronización AE"); 
         }
@@ -161,6 +179,11 @@ const Operaciones = () => {
         const esMando = role === 'admin' || role === 'boss';
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
         
+        // El elemento será la lista de unidades involucradas O la unidad del usuario si es local
+        const finalElemento = (esMando && formData.unidadesInvolucradas.length > 0)
+            ? formData.unidadesInvolucradas.join(', ')
+            : userUnidad;
+
         const finalData = {
             title: formData.title.toUpperCase(),
             start: formData.start, 
@@ -171,9 +194,7 @@ const Operaciones = () => {
             etapa: formData.etapa,
             esGlobal: publicarGlobal,
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
-            elemento: (esMando && formData.unidadesInvolucradas.length > 0)
-                      ? formData.unidadesInvolucradas.join(', ') 
-                      : (isEditing ? formData.unidadesInvolucradas.join(', ') : userUnidad)
+            elemento: finalElemento
         };
 
         try {
@@ -228,7 +249,7 @@ const Operaciones = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDelete = async (id, elementoEv, etapaEv) => {
+    const handleDelete = async (id, elementoEv) => {
         const esMando = role === 'admin' || role === 'boss';
         const esDueno = elementoEv?.includes(userUnidad);
         if (!esMando && !esDueno) {
@@ -248,6 +269,8 @@ const Operaciones = () => {
     return (
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
+                
+                {/* COLUMNA FORMULARIO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
                     
@@ -291,7 +314,7 @@ const Operaciones = () => {
 
                         {(role === 'admin' || role === 'boss') && (
                             <div style={styles.unidadSelector}>
-                                <label style={styles.label}>Asignar Unidades:</label>
+                                <label style={styles.label}>Asignar Responsables (Monitor Unidades):</label>
                                 <div style={styles.unidadChips}>
                                     {unidadesAE.map(u => (
                                         <button key={u} type="button" onClick={() => toggleUnidad(u)}
@@ -334,11 +357,23 @@ const Operaciones = () => {
                     </form>
                 </div>
 
+                {/* COLUMNA LOG / REGISTRO */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Órdenes</h3>
+                    
+                    <div style={{ marginBottom: '15px' }}>
+                        <input 
+                            type="text" 
+                            placeholder="🔍 Buscar por misión, unidad o tipo..." 
+                            value={searchTerm} 
+                            onChange={(e) => setSearchTerm(e.target.value)} 
+                            style={{...styles.input, width: '100%', boxSizing: 'border-box'}}
+                        />
+                    </div>
+
                     <div style={styles.scrollList}>
-                        {events.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes visibles.</p> : 
-                        events.map(ev => {
+                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No se encontraron órdenes.</p> : 
+                        filteredEvents.map(ev => {
                             const esInterna = !ev.esGlobal;
                             return (
                                 <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
@@ -357,7 +392,7 @@ const Operaciones = () => {
                                     {(role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad)) && (
                                         <div style={styles.logActions}>
                                             <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
-                                            <button onClick={() => handleDelete(ev._id, ev.elemento, ev.etapa)} style={styles.btnIconDel}>🗑️</button>
+                                            <button onClick={() => handleDelete(ev._id, ev.elemento)} style={styles.btnIconDel}>🗑️</button>
                                         </div>
                                     )}
                                 </div>
