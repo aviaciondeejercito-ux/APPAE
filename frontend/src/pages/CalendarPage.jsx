@@ -22,6 +22,7 @@ const CalendarPage = () => {
             const data = await getEvents();
             const esMando = role === 'admin' || role === 'boss';
             
+            // Filtrado estricto por Unidad o Eventos Globales
             const filteredData = esMando 
                 ? data 
                 : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
@@ -63,7 +64,7 @@ const CalendarPage = () => {
             info.el.style.fontWeight = 'bold';
         }
 
-        // Estilos por Etapa
+        // Estilos visuales por Etapa de Gestión
         if (etapa === 'recepcion') {
             info.el.style.opacity = '0.7'; 
             info.el.style.borderStyle = 'dashed';
@@ -71,7 +72,7 @@ const CalendarPage = () => {
             info.el.style.opacity = '0.9';
         }
 
-        // Corrección de visibilidad para eventos color Negro
+        // Corrección de contraste para eventos con fondo negro
         if (info.event.backgroundColor === '#000000') {
             const titleEl = info.el.querySelector('.fc-event-title');
             if (titleEl) titleEl.style.color = '#FFFFFF';

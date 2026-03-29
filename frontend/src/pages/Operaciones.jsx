@@ -83,21 +83,21 @@ const Operaciones = () => {
         }
     };
 
-    // --- LÓGICA DE MANEJO DE FECHAS SIN DESFASAJE UTC ---
-    const formatToLocalISO = (dateString) => {
-        if (!dateString) return null;
-        // Creamos la fecha y forzamos que no se convierta a UTC al guardar
-        const d = new Date(dateString);
-        return d.toISOString(); 
-    };
-
+    // --- MANEJO DE FECHAS: TRABAJO CON STRINGS LITERALES (EVITA UTC) ---
+    
     const parseFromBackend = (dateString) => {
         if (!dateString) return '';
-        const date = new Date(dateString);
-        // Ajustamos la visualización para que el input datetime-local no reste horas
-        const tzOffset = date.getTimezoneOffset() * 60000;
-        const localISOTime = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
-        return localISOTime;
+        // Extraemos solo YYYY-MM-DDTHH:mm ignorando cualquier sufijo Z o milisegundos
+        return dateString.split('.')[0].slice(0, 16);
+    };
+
+    const formatDateForDisplay = (dateString) => {
+        if (!dateString) return '';
+        // Separamos la fecha del tiempo por el carácter 'T' para evitar procesamiento de Timezone
+        const [datePart] = dateString.split('T');
+        if (!datePart) return '';
+        const [year, month, day] = datePart.split('-');
+        return `${day}/${month}/${year}`;
     };
 
     const handleMissionChange = (valor) => {
@@ -158,7 +158,7 @@ const Operaciones = () => {
 
         const finalData = {
             title: formData.title.toUpperCase(),
-            start: formData.start, // Enviamos el string tal cual para que el backend no desfase
+            start: formData.start, // String directo: "YYYY-MM-DDTHH:mm"
             end: formData.end,
             color: formData.color,
             tipoApoyo: formData.tipoApoyo.toUpperCase(),
@@ -372,7 +372,7 @@ const Operaciones = () => {
                                             {ev.esGlobal && "🌐 "}{ev.title}
                                         </div>
                                         <div style={{fontSize: '0.75rem', color: '#666'}}>
-                                            {ev.elemento} | {new Date(ev.start).toLocaleDateString('es-AR')}
+                                            {ev.elemento} | {formatDateForDisplay(ev.start)}
                                         </div>
                                         <div style={{fontSize: '0.7rem', color: '#555', marginTop: '3px', fontWeight: '500'}}>
                                             {ev.tipoApoyo}
