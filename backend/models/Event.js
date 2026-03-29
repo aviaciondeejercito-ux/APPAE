@@ -18,7 +18,7 @@ const eventSchema = new mongoose.Schema({
         trim: true,
         default: '' 
     },
-    // Se mantiene opcional para permitir operaciones de Mapa Táctico sin agenda cronológica
+    // Cronología obligatoria para Monitor de Actividades
     start: { 
         type: Date,
         required: false 
@@ -41,7 +41,6 @@ const eventSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        // SINCRO JOKER: Estados compatibles con Mapa Táctico y Gestión
         enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado', 'operativo', 'disponible', 'emergencia'], 
         default: 'programado' 
     },
@@ -50,13 +49,22 @@ const eventSchema = new mongoose.Schema({
     tipoApoyo: {
         type: String,
         trim: true,
-        default: 'GESTION',
+        default: 'SOSTENIMIENTO',
         uppercase: true
     },
     
     sdaListado: {
         type: [String],
         default: []
+    },
+
+    // Detalle específico visto en el Monitor (Tripulación y Carga)
+    misionDetalle: {
+        comandante: { type: String, uppercase: true, trim: true },
+        copiloto: { type: String, uppercase: true, trim: true },
+        mecanico: { type: String, uppercase: true, trim: true },
+        pax: { type: String, uppercase: true, trim: true },
+        carga: { type: String, uppercase: true, trim: true }
     },
 
     // --- SECCIÓN TÁCTICA (SOPORTE PARA MAPA EN TIEMPO REAL) ---
@@ -114,7 +122,7 @@ const eventSchema = new mongoose.Schema({
     },
     etapa: {
         type: String,
-        // 'operativo' para vuelos del mapa que no deben ir al Log/Calendario tradicional
+        // Alineado con Referencias: Recepción (Ambar), Revisión (Azul), Ordenada (Verde)
         enum: ['recepcion', 'revision', 'ordenada', 'solicitud', 'operativo'],
         default: 'recepcion',
         required: true,
@@ -153,37 +161,42 @@ const eventSchema = new mongoose.Schema({
  * VALIDACIÓN DE SEGURIDAD ATÓMICA Y ESTANDARIZACIÓN MILITAR
  */
 eventSchema.pre('validate', function(next) {
-    // Validar cronología solo si ambas fechas existen (Calendario)
+    // Validar cronología
     if (this.start && this.end) {
         const dStart = new Date(this.start);
         const dEnd = new Date(this.end);
-
         if (dEnd < dStart) {
             this.invalidate('end', 'La fecha de finalización debe ser posterior a la de inicio');
         }
     }
     
-    // Normalización de color para evitar errores de renderizado
+    // Normalización de color
     if (this.color && !this.color.startsWith('#')) {
         this.color = '#1b3a57';
     }
     
     // Estandarización Militar (Todo a MAYÚSCULAS)
-    if (this.title) this.title = this.title.toUpperCase();
-    if (this.notes) this.notes = this.notes.toUpperCase();
-    if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
-    if (this.aeronave) this.aeronave = this.aeronave.toUpperCase();
-    if (this.matricula) this.matricula = this.matricula.toUpperCase();
-    if (this.elemento) this.elemento = this.elemento.toUpperCase();
-    if (this.tipoApoyo) this.tipoApoyo = this.tipoApoyo.toUpperCase();
+    const fieldsToUpper = [
+        'title', 'notes', 'notasMarginales', 'aeronave', 
+        'matricula', 'elemento', 'tipoApoyo'
+    ];
+
+    fieldsToUpper.forEach(field => {
+        if (this[field]) this[field] = this[field].toUpperCase();
+    });
+
+    if (this.misionDetalle) {
+        if (this.misionDetalle.comandante) this.misionDetalle.comandante = this.misionDetalle.comandante.toUpperCase();
+        if (this.misionDetalle.copiloto) this.misionDetalle.copiloto = this.misionDetalle.copiloto.toUpperCase();
+        if (this.misionDetalle.mecanico) this.misionDetalle.mecanico = this.misionDetalle.mecanico.toUpperCase();
+        if (this.misionDetalle.pax) this.misionDetalle.pax = this.misionDetalle.pax.toUpperCase();
+        if (this.misionDetalle.carga) this.misionDetalle.carga = this.misionDetalle.carga.toUpperCase();
+    }
     
     if (this.ubicacion) {
-        if (this.ubicacion.nombre) {
-            this.ubicacion.nombre = this.ubicacion.nombre.toUpperCase();
-        }
-        // Asegurar que lat/lng no sean nulos si el objeto existe
-        this.ubicacion.lat = (this.ubicacion.lat !== undefined && this.ubicacion.lat !== null) ? this.ubicacion.lat : 0;
-        this.ubicacion.lng = (this.ubicacion.lng !== undefined && this.ubicacion.lng !== null) ? this.ubicacion.lng : 0;
+        if (this.ubicacion.nombre) this.ubicacion.nombre = this.ubicacion.nombre.toUpperCase();
+        this.ubicacion.lat = (this.ubicacion.lat != null) ? this.ubicacion.lat : 0;
+        this.ubicacion.lng = (this.ubicacion.lng != null) ? this.ubicacion.lng : 0;
     }
     
     next();
@@ -196,6 +209,6 @@ eventSchema.index({ esGlobal: 1 });
 eventSchema.index({ isRealTime: 1, status: 1 }); 
 eventSchema.index({ createdBy: 1 });
 eventSchema.index({ createdAt: -1 }); 
-eventSchema.index({ "ubicacion.lat": 1, "ubicacion.lng": 1 }); // Índice para el Mapa Táctico
+eventSchema.index({ "ubicacion.lat": 1, "ubicacion.lng": 1 });
 
 module.exports = mongoose.model('Event', eventSchema);

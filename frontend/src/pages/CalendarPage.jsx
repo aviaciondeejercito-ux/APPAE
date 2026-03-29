@@ -9,7 +9,7 @@ import { getEvents } from '../services/EventService';
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
     const [role] = useState(localStorage.getItem('role')?.toLowerCase());
-    const [userUnidad] = useState(localStorage.getItem('elemento')); 
+    const [userUnidad] = useState(localStorage.getItem('elemento')?.toUpperCase()); 
     const [selectedEvent, setSelectedEvent] = useState(null); 
     const [isMobile] = useState(window.innerWidth < 768);
 
@@ -20,11 +20,16 @@ const CalendarPage = () => {
     const fetchData = async () => {
         try {
             const data = await getEvents();
-            const esMando = role === 'admin' || role === 'boss';
+            // Normalización de roles para el filtrado de vista
+            const esMando = role === 'admin' || role === 'boss' || role === 's4';
             
+            // Lógica de filtrado: Mandos ven todo, usuarios ven su unidad o eventos globales
             const filteredData = esMando 
                 ? data 
-                : data.filter(ev => ev.elemento?.includes(userUnidad) || ev.esGlobal);
+                : data.filter(ev => {
+                    const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
+                    return evElemento.includes(userUnidad) || ev.esGlobal;
+                });
 
             setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
@@ -38,7 +43,7 @@ const CalendarPage = () => {
         if (t.includes('SOSTENIMIENTO')) return '#007bff'; // Azul
         if (t.includes('FUERZA OPERATIVA')) return '#28a745'; // Verde
         if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000'; // Bordó
-        return '#ffffff'; // Otros
+        return '#6c757d'; // Gris para otros
     };
 
     const handleEventClick = (info) => {
@@ -46,6 +51,7 @@ const CalendarPage = () => {
         let cleanNotes = event.extendedProps.notes || '';
         const sdas = event.extendedProps.sdaListado || [];
         
+        // Limpieza de notas para no repetir información que ya está en badges
         sdas.forEach(sda => {
             const regex = new RegExp(`SDA:\\s*${sda}`, 'gi');
             cleanNotes = cleanNotes.replace(regex, '').replace(/\|\s*\|/g, '|').trim();
@@ -53,7 +59,7 @@ const CalendarPage = () => {
 
         setSelectedEvent({
             id: event.id,
-            title: event.title,
+            title: event.title.replace(/^[🟡🔵🟢🌐 ]+/, ''), // Limpia emojis del título para el modal
             start: event.start,
             end: event.end,
             color: event.backgroundColor,
@@ -74,34 +80,32 @@ const CalendarPage = () => {
         const { elemento, esGlobal, tipoOrigen, etapa } = info.event.extendedProps;
         const backgroundColor = info.event.backgroundColor;
 
-        // FUERZA EL COLOR DE FONDO EN EL ELEMENTO
+        // Estilo base del elemento
         info.el.style.backgroundColor = backgroundColor;
 
-        // 1. Manejo de color de texto según el fondo (Asegura visibilidad)
-        const titleEl = info.el.querySelector('.fc-event-title');
-        const timeEl = info.el.querySelector('.fc-event-time');
-        const dotEl = info.el.querySelector('.fc-daygrid-event-dot');
+        // 1. Visibilidad de texto
+        const isWhite = backgroundColor.toLowerCase() === '#ffffff' || backgroundColor === 'rgb(255, 255, 255)';
+        const textElements = info.el.querySelectorAll('.fc-event-title, .fc-event-time');
         
-        const isWhite = backgroundColor.toLowerCase() === '#ffffff';
+        textElements.forEach(el => {
+            el.style.color = isWhite ? '#000000' : '#ffffff';
+            el.style.fontWeight = 'bold';
+        });
 
         if (isWhite) {
-            if (titleEl) titleEl.style.color = '#000000';
-            if (timeEl) timeEl.style.color = '#000000';
-            if (dotEl) dotEl.style.borderColor = '#007bff'; // Punto azul para visibilidad en blanco
             info.el.style.border = '1px solid #ddd';
-        } else {
-            if (titleEl) titleEl.style.color = '#ffffff';
-            if (timeEl) timeEl.style.color = '#ffffff';
         }
 
-        // 2. Actividades Internas: Reborde Negro
-        if (elemento === userUnidad && !esGlobal && tipoOrigen !== 'COMANDO') {
+        // 2. Actividades Internas de la Unidad: Borde Sólido Negro (Destacado)
+        const evElemento = elemento ? String(elemento).toUpperCase() : '';
+        if (evElemento === userUnidad && !esGlobal && tipoOrigen !== 'COMANDO') {
             info.el.style.border = '2px solid #000000';
         }
 
-        // 3. Estado Recepción: Discontinuo
+        // 3. Etapa RECEPCIÓN: Estilo Discontinuo (Pendiente de aprobación)
         if (etapa === 'recepcion') {
             info.el.style.borderStyle = 'dashed';
+            info.el.style.borderWidth = '2px';
         }
     };
 
@@ -122,7 +126,7 @@ const CalendarPage = () => {
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                         <span style={styles.unidadBadge}>{userUnidad || "SIN UNIDAD"}</span>
                         <span style={styles.modeBadge}>
-                            {role === 'boss' || role === 'admin' ? `MODO: COMANDO` : 'MODO: UNIDAD'}
+                            {role === 'boss' || role === 'admin' ? `MODO: COMANDO` : 'MODO: VISTA'}
                         </span>
                     </div>
                 </div>
@@ -133,21 +137,19 @@ const CalendarPage = () => {
                     locale={esLocale}
                     events={events.map(ev => {
                         const colorBase = getEventColor(ev.tipoApoyo);
-                        let tilde = '';
-                        if (ev.etapa === 'recepcion') tilde = '🟡 ';
-                        if (ev.etapa === 'revision') tilde = '🔵 ';
-                        if (ev.etapa === 'ordenada') tilde = '🟢 ';
-
-                        const isWhite = colorBase.toLowerCase() === '#ffffff';
+                        let prefix = '';
+                        if (ev.etapa === 'recepcion') prefix = '🟡 ';
+                        if (ev.etapa === 'revision') prefix = '🔵 ';
+                        if (ev.etapa === 'ordenada') prefix = '🟢 ';
+                        if (ev.esGlobal) prefix += '🌐 ';
 
                         return {
                             id: ev._id,
-                            title: `${tilde}${ev.esGlobal ? '🌐 ' : ''}${ev.title}`,
+                            title: `${prefix}${ev.title}`,
                             start: ev.start,
                             end: ev.end,
                             backgroundColor: colorBase, 
-                            borderColor: isWhite ? '#ddd' : colorBase,
-                            textColor: isWhite ? '#000000' : '#ffffff',
+                            borderColor: colorBase,
                             extendedProps: { 
                                 notes: ev.notes, 
                                 user: ev.userName,
@@ -179,18 +181,18 @@ const CalendarPage = () => {
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sostenimiento</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Operativa</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Educación</div>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#ffffff', border:'1px solid #ccc'}}></span> Otros</div>
                 </div>
                 <div style={styles.legendGroup}>
                     <span style={styles.legendGroupTitle}>ESTADOS:</span>
-                    <div style={styles.legendItem}>🟡 Recepción</div>
+                    <div style={styles.legendItem}>🟡 Solicitud</div>
                     <div style={styles.legendItem}>🔵 Revisión</div>
                     <div style={styles.legendItem}>🟢 Ordenada</div>
                 </div>
                 <div style={styles.legendGroup}>
-                    <span style={styles.legendGroupTitle}>ORIGEN:</span>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, border:'2px solid #000', background:'none'}}></span> Actividad Interna</div>
+                    <span style={styles.legendGroupTitle}>VISTA:</span>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, border:'2px solid #000', background:'none'}}></span> Interna</div>
                     <div style={styles.legendItem}>🌐 Global</div>
+                    <div style={styles.legendItem}>- - Pendiente</div>
                 </div>
             </div>
 
@@ -211,7 +213,7 @@ const CalendarPage = () => {
                             </div>
                             <hr style={styles.divider} />
                             <div style={styles.infoRow}>
-                                <strong>🚁 Tipo de Apoyo:</strong> 
+                                <strong>🚁 Tipo de Apoyo / SdA:</strong> 
                                 <span>{selectedEvent.tipoApoyo || 'No especificado'}</span>
                                 {selectedEvent.sdaListado?.length > 0 && (
                                     <div style={styles.sdaContainer}>
@@ -223,17 +225,17 @@ const CalendarPage = () => {
                             </div>
                             <hr style={styles.divider} />
                             <div style={styles.infoRow}>
-                                <strong>⏱️ Horario (UTC):</strong> 
+                                <strong>⏱️ Horario de Operación (UTC):</strong> 
                                 <span>{new Date(selectedEvent.start).toISOString().slice(0, 16).replace('T', ' ')} hs</span>
                             </div>
                             <hr style={styles.divider} />
                             <div style={styles.notesBox}>
-                                <strong>📝 Detalle:</strong>
-                                <p style={styles.notesText}>{selectedEvent.notes || 'Sin observaciones.'}</p>
+                                <strong>📝 Detalle de la Misión:</strong>
+                                <p style={styles.notesText}>{selectedEvent.notes || 'Sin observaciones adicionales.'}</p>
                             </div>
                         </div>
                         <div style={styles.modalFooter}>
-                            <button onClick={closeModal} style={styles.btnOk}>Cerrar</button>
+                            <button onClick={closeModal} style={styles.btnOk}>Entendido</button>
                         </div>
                     </div>
                 </div>

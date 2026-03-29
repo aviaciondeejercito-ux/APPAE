@@ -4,7 +4,7 @@ const router = express.Router();
 /**
  * IMPORTACIÓN DE CONTROLADORES - SISTEMA GESTIÓN AE
  * Funciones encargadas de la lógica de negocio y despacho táctico.
- * ESTADO: PREPARADO PARA RECONSTRUCCIÓN DE LÓGICA DE CARGA
+ * ESTADO: ACTUALIZADO PARA MONITOR DE ACTIVIDADES Y CARGA TÁCTICA
  */
 const { 
     getEvents, 
@@ -40,8 +40,8 @@ router.use(protect);
 // --- 2. DEFINICIÓN DE RUTAS OPERATIVAS ---
 
 // @route    GET /api/events
-// @desc     Obtener lista de eventos (Calendario General filtrado por elemento)
-// @permiso  Visualización según perfil de usuario
+// @desc     Obtener lista de eventos (Calendario General y Monitor filtrado por elemento)
+// @permiso  Visualización según perfil de usuario y unidad
 router.get('/', getEvents);
 
 // @route    GET /api/events/active-map
@@ -55,12 +55,12 @@ router.get('/active-map', authorize('user', 's4', 's4_unidad', 'boss', 'admin'),
 router.get('/aircraft/:elemento', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), getAvailableAircraft);
 
 // @route    POST /api/events
-// @desc     Registrar VUELO TÁCTICO o Actividad de Calendario (Nueva Carga)
+// @desc     Registrar VUELO TÁCTICO o Actividad de Monitor (Nueva Carga de Misión)
 // @permiso  Todo el personal autorizado para iniciar operaciones
 router.post('/', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), createEvent);
 
 // @route    PUT /api/events/:id
-// @desc     Actualizar misión (Cambio de ubicación, info marginal o estado)
+// @desc     Actualizar misión (Cambio de ubicación, tripulación, info marginal o etapa)
 // @permiso  Personal encargado del seguimiento de la misión
 router.put('/:id', authorize('user', 's4', 's4_unidad', 'boss', 'admin'), updateEvent);
 

@@ -143,15 +143,12 @@ const Operaciones = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
         if (!formData.start || !formData.end) {
             alert("Por favor complete las fechas de inicio y fin.");
             return;
         }
-
         const esMando = role === 'admin' || role === 'boss';
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
-
         const finalData = {
             title: formData.title.toUpperCase(),
             start: formData.start, 
@@ -160,13 +157,12 @@ const Operaciones = () => {
             tipoApoyo: formData.tipoApoyo.toUpperCase(),
             sdaListado: formData.sdaListado,
             etapa: formData.etapa,
-            esGlobal: esMando ? publicarGlobal : false,
+            esGlobal: publicarGlobal, // Ahora toma el estado del botón, sea quien sea
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
             elemento: (esMando && formData.unidadesInvolucradas.length > 0)
                       ? formData.unidadesInvolucradas.join(', ') 
                       : (isEditing ? formData.unidadesInvolucradas.join(', ') : userUnidad)
         };
-
         try {
             if (isEditing) {
                 await updateEvent(selectedId, finalData);
@@ -200,14 +196,11 @@ const Operaciones = () => {
             alert("No tiene permisos para editar órdenes de otra unidad.");
             return;
         }
-
         setIsEditing(true);
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
-
         const parts = ev.notes?.split(' | Obs: ');
         const obsPart = parts && parts.length > 1 ? parts[1] : ev.notes;
-
         setFormData({
             title: ev.title || '',
             start: parseFromBackend(ev.start),
@@ -222,14 +215,23 @@ const Operaciones = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDelete = async (id, elementoEv) => {
-        const puedeEliminar = role === 'admin' || role === 'boss' || elementoEv?.includes(userUnidad);
+    const handleDelete = async (id, elementoEv, etapaEv) => {
+        const esMando = role === 'admin' || role === 'boss';
+        const esDueno = elementoEv?.includes(userUnidad);
+        const estaOrdenada = etapaEv === 'ordenada';
+
+        const puedeEliminar = esMando || esDueno || estaOrdenada;
+
         if (!puedeEliminar) {
             alert("No tiene permisos para eliminar esta orden.");
             return;
         }
 
-        if (window.confirm("¿Confirmar ELIMINACIÓN de la orden operativa?")) {
+        const msg = estaOrdenada 
+            ? "⚠️ ADVERTENCIA: Esta orden ya está en estado 'ORDENADA'. ¿Está seguro de que desea eliminarla manualmente?"
+            : "¿Confirmar ELIMINACIÓN de la orden operativa?";
+
+        if (window.confirm(msg)) {
             try {
                 await deleteEvent(id);
                 fetchData();
@@ -242,26 +244,23 @@ const Operaciones = () => {
     return (
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
-                
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
                     
-                    {(role === 'admin' || role === 'boss') && (
-                        <div style={styles.globalToggleContainer}>
-                            <button 
-                                type="button" 
-                                onClick={() => setPublicarGlobal(!publicarGlobal)}
-                                style={{
-                                    ...styles.btnGlobal, 
-                                    backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7'
-                                }}
-                            >
-                                {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE)" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
-                            </button>
-                        </div>
-                    )}
+                    {/* El botón de Global/Local ahora está visible para todos los usuarios inicialmente */}
+                    <div style={styles.globalToggleContainer}>
+                        <button 
+                            type="button" 
+                            onClick={() => setPublicarGlobal(!publicarGlobal)}
+                            style={{
+                                ...styles.btnGlobal, 
+                                backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7'
+                            }}
+                        >
+                            {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE)" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
+                        </button>
+                    </div>
 
-                    {/* MODIFICACIÓN: Ahora visible para el dueño de la orden o mandos superiores */}
                     {(role === 'admin' || role === 'boss' || isEditing) && (
                         <div style={styles.etapaWrapper}>
                             <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
@@ -301,12 +300,7 @@ const Operaciones = () => {
                             </div>
                         )}
 
-                        <select 
-                            value={formData.tipoApoyo} 
-                            onChange={e => handleMissionChange(e.target.value)} 
-                            style={styles.input} 
-                            required
-                        >
+                        <select value={formData.tipoApoyo} onChange={e => handleMissionChange(e.target.value)} style={styles.input} required>
                             <option value="">Tipo de Misión...</option>
                             {missionOptions.map(opt => (
                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -314,20 +308,11 @@ const Operaciones = () => {
                         </select>
 
                         <div style={styles.sdaBox}>
-                            <select 
-                                value={formData.sdaSelected} 
-                                onChange={e => setFormData({...formData, sdaSelected: e.target.value})} 
-                                style={{...styles.input, flex: 1}}
-                            >
+                            <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
                                 <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave E/S..."}</option>
                                 {availableAircraft.map(air => {
-                                    // CORRECCIÓN: Aseguramos que el valor sea el string descriptivo que espera el calendario
                                     const aircraftLabel = `${air.modelo} (${air.matricula})`;
-                                    return (
-                                        <option key={air._id} value={aircraftLabel}>
-                                            {aircraftLabel}
-                                        </option>
-                                    );
+                                    return <option key={air._id} value={aircraftLabel}>{aircraftLabel}</option>;
                                 })}
                             </select>
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
@@ -361,7 +346,11 @@ const Operaciones = () => {
                     <div style={styles.scrollList}>
                         {events.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes registradas.</p> : 
                         events.map(ev => {
-                            const puedeGestionar = role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad);
+                            const esMando = role === 'admin' || role === 'boss';
+                            const esDueno = ev.elemento?.includes(userUnidad);
+                            const estaOrdenada = ev.etapa === 'ordenada';
+                            
+                            const puedeGestionar = esMando || esDueno || estaOrdenada;
                             
                             return (
                                 <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
@@ -382,7 +371,7 @@ const Operaciones = () => {
                                     {puedeGestionar && (
                                         <div style={styles.logActions}>
                                             <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit} title="Editar">✏️</button>
-                                            <button onClick={() => handleDelete(ev._id, ev.elemento)} style={styles.btnIconDel} title="Eliminar">🗑️</button>
+                                            <button onClick={() => handleDelete(ev._id, ev.elemento, ev.etapa)} style={styles.btnIconDel} title="Eliminar">🗑️</button>
                                         </div>
                                     )}
                                 </div>

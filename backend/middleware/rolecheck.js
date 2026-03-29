@@ -1,7 +1,7 @@
 /**
  * MIDDLEWARE DE AUTORIZACIÓN JERÁRQUICA - SISTEMA AE
  * Restringe el acceso a rutas específicas y valida propiedad de recursos.
- * @param {...string} rolesPermitidos - Lista de roles autorizados (ej: 'admin', 'boss', 'user')
+ * @param {...string} rolesPermitidos - Lista de roles autorizados (ej: 'admin', 'boss', 'user', 's4', 's4_unidad')
  */
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
@@ -15,6 +15,7 @@ const authorize = (...rolesPermitidos) => {
         }
 
         // 2. Normalización y Verificación de Permisos por Rol
+        // Se normaliza a MAYÚSCULAS para evitar errores de case-sensitivity
         const userRole = req.user.role.toUpperCase();
         const allowedRoles = rolesPermitidos.map(r => r.toUpperCase());
 
@@ -35,6 +36,13 @@ const authorize = (...rolesPermitidos) => {
          * sobre cualquier unidad/elemento.
          */
         req.isMando = (userRole === 'ADMIN' || userRole === 'BOSS');
+
+        /**
+         * 4. COMPROBACIÓN DE ROL S4 / S4_UNIDAD
+         * Inyectamos flags adicionales para facilitar la lógica en los controladores
+         * si es necesario diferenciar gestión de unidad vs gestión global.
+         */
+        req.isS4 = (userRole === 'S4' || userRole === 'S4_UNIDAD');
 
         // Registro de Auditoría interna de accesos exitosos.
         console.log(`[AUTORIZADO] Acceso concedido a ${req.user.username || 'Sistema'} (Rol: ${userRole}) ${req.isMando ? '[MODO MANDO ACTIVO]' : ''}`);

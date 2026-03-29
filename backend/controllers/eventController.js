@@ -73,7 +73,6 @@ const getActiveOperations = async (req, res) => {
             status: { $in: ['en_curso', 'en_desarrollo', 'operativo', 'emergencia'] } 
         };
 
-        // Si no es mando, solo ve los vuelos de su unidad en el mapa
         if (!isMando) {
             query.elemento = { $regex: elemento, $options: 'i' };
         }
@@ -93,7 +92,8 @@ const createEvent = async (req, res) => {
             title, start, end, notes, color, esGlobal, 
             elemento, etapa, tipoApoyo, sdaListado,
             isRealTime, ubicacion, notasMarginales, status,
-            aeronave, matricula, tipoIcono, lat, lng
+            aeronave, matricula, tipoIcono, lat, lng,
+            misionDetalle // Nuevo campo solicitado
         } = req.body;
 
         if (!title) return res.status(400).json({ message: 'Título requerido.' });
@@ -105,11 +105,19 @@ const createEvent = async (req, res) => {
             title: (title || '').toString().toUpperCase(),
             notes: notasProcesadas,
             notasMarginales: notasProcesadas,
-            color: color || '#d35400',
+            color: color || '#1b3a57',
             createdBy: req.user._id,
             userName: req.user.username,
             elemento: ((isMando && elemento) ? elemento : req.user.elemento).toUpperCase(),
-            status: status || 'programado'
+            status: status || 'programado',
+            // Procesamiento de tripulación y carga
+            misionDetalle: {
+                comandante: (misionDetalle?.comandante || '').toUpperCase(),
+                copiloto: (misionDetalle?.copiloto || '').toUpperCase(),
+                mecanico: (misionDetalle?.mecanico || '').toUpperCase(),
+                pax: (misionDetalle?.pax || '').toUpperCase(),
+                carga: (misionDetalle?.carga || '').toUpperCase()
+            }
         };
 
         if (isRealTime) {
@@ -122,8 +130,6 @@ const createEvent = async (req, res) => {
                 start: null,
                 end: null,
                 etapa: 'operativo',
-                lat: parseFloat(finalLat),
-                lng: parseFloat(finalLng),
                 ubicacion: {
                     nombre: (ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
                     lat: parseFloat(finalLat),
@@ -136,7 +142,7 @@ const createEvent = async (req, res) => {
         } else {
             Object.assign(eventData, {
                 isRealTime: false,
-                tipoApoyo: (tipoApoyo || 'GESTION').toUpperCase(),
+                tipoApoyo: (tipoApoyo || 'SOSTENIMIENTO').toUpperCase(),
                 start: start ? new Date(start) : null,
                 end: end ? new Date(end) : null,
                 etapa: etapa || 'recepcion',
@@ -169,7 +175,6 @@ const updateEvent = async (req, res) => {
         const { elemento, role } = req.user;
         const isMando = role === 'admin' || role === 'boss' || elemento === 'DIR AE';
         
-        // El usuario puede editar si es mando O si el evento pertenece a su unidad
         const perteneceAUnidad = event.elemento && event.elemento.toUpperCase().includes(elemento.toUpperCase());
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
@@ -182,24 +187,32 @@ const updateEvent = async (req, res) => {
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
+        // Procesar misionDetalle si viene en el body
+        if (updateData.misionDetalle) {
+            updateData.misionDetalle = {
+                comandante: (updateData.misionDetalle.comandante || '').toUpperCase(),
+                copiloto: (updateData.misionDetalle.copiloto || '').toUpperCase(),
+                mecanico: (updateData.misionDetalle.mecanico || '').toUpperCase(),
+                pax: (updateData.misionDetalle.pax || '').toUpperCase(),
+                carga: (updateData.misionDetalle.carga || '').toUpperCase()
+            };
+        }
+
         if (updateData.notasMarginales || updateData.notes) {
             const txt = (updateData.notasMarginales || updateData.notes || '').toString().toUpperCase();
             updateData.notasMarginales = txt;
             updateData.notes = txt;
         }
 
-        ['title', 'elemento', 'aeronave', 'matricula'].forEach(field => {
+        ['title', 'elemento', 'aeronave', 'matricula', 'tipoApoyo'].forEach(field => {
             if (updateData[field] !== undefined) {
                 updateData[field] = (updateData[field] || '').toString().toUpperCase();
             }
         });
 
         if (updateData.lat !== undefined || updateData.lng !== undefined) {
-            const nLat = parseFloat(updateData.lat ?? event.lat);
-            const nLng = parseFloat(updateData.lng ?? event.lng);
-            
-            updateData.lat = nLat;
-            updateData.lng = nLng;
+            const nLat = parseFloat(updateData.lat ?? event.ubicacion.lat);
+            const nLng = parseFloat(updateData.lng ?? event.ubicacion.lng);
             updateData['ubicacion.lat'] = nLat;
             updateData['ubicacion.lng'] = nLng;
         }
