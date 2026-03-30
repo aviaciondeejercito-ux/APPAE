@@ -28,7 +28,7 @@ const CalendarPage = () => {
              * - Eventos de su propia unidad.
              * - Eventos globales que NO sean de otras unidades específicas.
              */
-            const filteredData = (role === 'admin' || role === 'BOSS' || role === 'DIRECTOR') 
+            const filteredData = (role === 'admin' || role === 'BOSS' || role === 'DIRECTOR'|| role === 'OTO') 
                 ? data 
                 : data.filter(ev => {
                     const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
