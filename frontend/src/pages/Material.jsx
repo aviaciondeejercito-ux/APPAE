@@ -7,7 +7,6 @@ const Material = () => {
     const [selectedNote, setSelectedNote] = useState(null); 
     
     // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER)
-    // Se obtiene el rol y se estandariza a MAYÚSCULAS y guion bajo para coincidir con la DB
     const rawRole = localStorage.getItem('role') || "";
     const role = rawRole.toUpperCase().trim(); 
     
@@ -16,9 +15,7 @@ const Material = () => {
 
     // Definición de permisos jerárquicos estrictos
     const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
-    
-    // S4_UNIDAD y OFICINA_TECNICA con permisos de gestión sobre su unidad
-    const isGestionUnidad = role === 'OFICINA_TECNICA' || role === 'S4_UNIDAD' || role === 'USER';
+    const isAdmin = role === 'ADMIN';
     
     // Privilegios de edición: Mandos, Oficina Técnica y S4 Unidad
     const hasEditPrivileges = isMando || role === 'OFICINA_TECNICA' || role === 'S4_UNIDAD';
@@ -28,11 +25,18 @@ const Material = () => {
         "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
     ];
 
+    // Listado de unidades para el selector del ADMIN
+    const unidadesAE = [
+        "DIR AE", "B AV APY COMB 601", "SEC AV EJ 121", "SEC AV EJ 141", 
+        "SEC AV EJ 181", "SEC AV CORREA", "ESC AV EXPL AT 602", "B AV ABST REPU 601"
+    ];
+
     const [newAir, setNewAir] = useState({
         matricula: '',
         sda: '',
         horasRemanentes: 0,
-        novedades: '' 
+        novedades: '',
+        unidadDestino: '' // Campo específico para el ADMIN
     });
 
     useEffect(() => {
@@ -46,7 +50,6 @@ const Material = () => {
             setLoading(true);
             const { data } = await getAircrafts();
             
-            // Lógica de visualización jerárquica: Mandos ven todo, Unidades solo lo propio
             const filtrados = isMando 
                 ? data 
                 : data.filter(a => 
@@ -65,23 +68,27 @@ const Material = () => {
     const handleCreate = async (e) => {
         e.preventDefault();
         if (!newAir.matricula || !newAir.sda) return alert("Faltan campos obligatorios");
-        if (!userElemento) return alert("Error de sesión: Unidad no detectada.");
+        
+        // El ADMIN usa la unidad seleccionada, el resto usa la suya de sesión
+        const unidadFinal = isAdmin ? newAir.unidadDestino : userElemento;
+        
+        if (!unidadFinal) return alert("Debe seleccionar una unidad de destino.");
 
         try {
             const payload = {
                 matricula: newAir.matricula.toUpperCase().trim(),
                 sda: newAir.sda,
                 horasRemanentes: Number(newAir.horasRemanentes) || 0,
-                unidad: userElemento,
+                unidad: unidadFinal,
                 estado: 'E/S',
                 novedades: newAir.novedades ? `[${new Date().toLocaleDateString()}] ${userName}: ${newAir.novedades}` : '',
                 creadoPor: `${userName} (${role})` 
             };
 
             await createAircraft(payload);
-            setNewAir({ matricula: '', sda: '', horasRemanentes: 0, novedades: '' });
+            setNewAir({ matricula: '', sda: '', horasRemanentes: 0, novedades: '', unidadDestino: '' });
             await fetchMaterial();
-            alert("Aeronave registrada correctamente.");
+            alert(`Aeronave registrada correctamente en ${unidadFinal}.`);
         } catch (error) {
             alert("Error de Autorización: Su nivel jerárquico no permite esta acción.");
         }
@@ -92,16 +99,12 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            // Validación de seguridad local (espejo del backend)
             const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
             if (!isMando && targetUnidad !== userElemento) {
                 return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");
             }
 
-            const fullUpdatedObject = {
-                ...targetAir,
-                ...updatedFields
-            };
+            const fullUpdatedObject = { ...targetAir, ...updatedFields };
 
             if (fullUpdatedObject.horasRemanentes !== undefined) {
                 fullUpdatedObject.horasRemanentes = Number(fullUpdatedObject.horasRemanentes);
@@ -148,6 +151,23 @@ const Material = () => {
                     <div style={styles.card}>
                         <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
                         <form onSubmit={handleCreate} style={styles.form}>
+                            
+                            {/* CAMPO SOLO PARA ADMIN: SELECCIÓN DE UNIDAD */}
+                            {isAdmin && (
+                                <div style={styles.field}>
+                                    <label style={{...styles.label, color: '#e67e22'}}>📍 Unidad de Destino (Solo Admin)</label>
+                                    <select 
+                                        value={newAir.unidadDestino} 
+                                        onChange={e => setNewAir({...newAir, unidadDestino: e.target.value})} 
+                                        style={{...styles.input, border: '1px solid #e67e22'}} 
+                                        required
+                                    >
+                                        <option value="">Seleccione Unidad...</option>
+                                        {unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                </div>
+                            )}
+
                             <div style={styles.field}>
                                 <label style={styles.label}>Matrícula (AE-XXX)</label>
                                 <input type="text" value={newAir.matricula} onChange={e => setNewAir({...newAir, matricula: e.target.value})} style={styles.input} required />
@@ -167,7 +187,9 @@ const Material = () => {
                                 <label style={styles.label}>Novedades Iniciales</label>
                                 <textarea value={newAir.novedades} onChange={e => setNewAir({...newAir, novedades: e.target.value})} style={{...styles.input, height: '60px', resize: 'none'}} placeholder="Ej: Próxima inspección de 100hs..." />
                             </div>
-                            <button type="submit" style={styles.btnPrimary}>Registrar en {userElemento}</button>
+                            <button type="submit" style={styles.btnPrimary}>
+                                {isAdmin ? "Registrar Aeronave" : `Registrar en ${userElemento}`}
+                            </button>
                         </form>
                     </div>
                 ) : (
@@ -185,7 +207,7 @@ const Material = () => {
                             <div key={air._id} style={{...styles.item, borderLeft: air.estado === 'E/S' ? '6px solid #28a745' : '6px solid #e74c3c'}}>
                                 <div style={{flex: 1.2}}>
                                     <div style={styles.itemMain}>{air.matricula}</div>
-                                    <div style={styles.itemSub}>{air.sda}</div>
+                                    <div style={styles.itemSub}>{air.sda} | <span style={{fontWeight:'bold'}}>{air.unidad}</span></div>
                                     <button onClick={() => setSelectedNote(air)} style={{...styles.btnNoteTrigger, background: air.novedades ? '#fff3cd' : '#eef2f7'}}>
                                         {air.novedades ? "📋 Ver Novedades" : "➕ Agregar Nota"}
                                     </button>
