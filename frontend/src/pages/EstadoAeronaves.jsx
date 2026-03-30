@@ -51,7 +51,7 @@ const EstadoAeronaves = () => {
     return (
         <div style={styles.container}>
             <header style={styles.header}>
-                <h2 style={styles.mainTitle}>📊 Monitor de Estado de Material Aéreo</h2>
+                <h2 style={styles.mainTitle}>📊 Monitor de Estado de Aeronaves</h2>
                 <div style={styles.statusRow}>
                     <div style={styles.summaryItem}>
                         <span style={{...styles.dot, backgroundColor: '#2ecc71'}}></span> 

@@ -150,7 +150,7 @@ const Material = () => {
             <div style={styles.grid}>
                 {hasEditPrivileges ? (
                     <div style={styles.card}>
-                        <h3 style={styles.title}>➕ Alta de Material Aéreo</h3>
+                        <h3 style={styles.title}>➕ Alta de Aeronave</h3>
                         <form onSubmit={handleCreate} style={styles.form}>
                             
                             {/* CAMPO SOLO PARA ADMIN: SELECCIÓN DE UNIDAD */}

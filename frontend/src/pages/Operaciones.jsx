@@ -255,7 +255,7 @@ const Operaciones = () => {
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Solicitud Operativa"}</h3>
+                    <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Orden"}</h3>
                     
                     <button type="button" onClick={() => setPublicarGlobal(!publicarGlobal)}
                         style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px' }}>

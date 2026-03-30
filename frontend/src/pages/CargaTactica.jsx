@@ -247,7 +247,7 @@ const CargaTactica = () => {
     const handleFinalizar = async (id) => {
         const result = await Swal.fire({
             title: '¿FINALIZAR MISIÓN?',
-            text: "Se eliminará el vector del radar táctico",
+            text: "Se eliminará la aeronave del Mapa",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
@@ -341,7 +341,7 @@ const CargaTactica = () => {
                 {/* SIDEBAR LOG */}
                 <div style={styles.logCard}>
                     <div style={styles.logHeader}>
-                        <h3 style={{ margin: 0, fontSize: '1rem' }}>📡 RADAR: VUELOS ACTIVOS</h3>
+                        <h3 style={{ margin: 0, fontSize: '1rem' }}>📡 Operaciones en Desarrollo</h3>
                         <button onClick={cargarDatos} style={styles.btnRefresh}>{loading ? '...' : 'SINCRO'}</button>
                     </div>
                     <div style={styles.scrollArea}>
