@@ -15,20 +15,20 @@ router.use(authMiddleware);
 /**
  * 2. Ver flota
  * Permitido para cualquier usuario logueado. 
- * El controlador filtra internamente qué unidad ve cada uno.
+ * El controlador filtra internamente qué unidad ve cada uno según su jerarquía.
  */
 router.get('/', aircraftController.getAircrafts);
 
 /**
  * 3. Crear nueva aeronave
  * Permitido para ADMIN, BOSS, DIRECTOR, OTO, OFICINA_TECNICA y S4_UNIDAD.
- * Se utiliza el estándar de guion bajo para coincidir con la DB.
+ * El controlador permitirá al ADMIN elegir la unidad, y al resto le asignará la propia.
  */
 router.post('/', authorize('ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'S4_UNIDAD'), aircraftController.createAircraft);
 
 /**
  * 4. Actualizar Estado/Horas/Novedades (Punto de Gestión Técnica)
- * Habilita a OFICINA_TECNICA, S4_UNIDAD y roles de mando para gestionar el mantenimiento.
+ * Habilita a roles de gestión y mando para actualizar el estado operativo.
  */
 router.put('/:id', authorize('ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'S4_UNIDAD'), aircraftController.updateAircraftStatus);
 

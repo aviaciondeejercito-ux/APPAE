@@ -44,21 +44,24 @@ exports.getAircrafts = async (req, res) => {
 exports.createAircraft = async (req, res) => {
     try {
         const { matricula, sda } = req.body;
-        let { unidad } = req.body;
+        let { unidad } = req.body; // Tomamos la unidad que viene del frontend
         const userRole = req.user.role ? String(req.user.role).toUpperCase().trim() : '';
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
-        // Validación de permisos para creación: S4, S4_UNIDAD y Oficina Técnica solo para su unidad
-        const techRoles = ['S4', 'S4_UNIDAD', 'OFICINA_TECNICA'];
-        
-        if (techRoles.includes(userRole)) {
+        // --- LÓGICA DE SEGURIDAD SINCRO JOKER ---
+        if (userRole === 'ADMIN' || userRole === 'BOSS') {
+            // El ADMIN/BOSS puede usar la unidad que viene en el body (la elegida en el select)
+            if (!unidad) return res.status(400).json({ message: "El ADMIN debe especificar una unidad de destino." });
+        } else if (['S4', 'S4_UNIDAD', 'OFICINA_TECNICA'].includes(userRole)) {
+            // Personal técnico: Se ignora lo que envíen y se fuerza SU unidad de sesión
             if (!userElemento) return res.status(403).json({ message: "Falta asignación de unidad en su perfil para dar el alta." });
             unidad = userElemento;
-        } else if (userRole !== 'ADMIN' && userRole !== 'BOSS') {
+        } else {
+            // Otros roles no tienen permiso de creación
             return res.status(403).json({ message: "Acceso denegado: Su rol no posee permisos de alta de material." });
         }
 
-        const finalUnidad = String(unidad || "").trim().toUpperCase();
+        const finalUnidad = String(unidad).trim().toUpperCase();
         const finalMatricula = String(matricula || "").toUpperCase().trim();
         const finalSda = String(sda || "").toUpperCase().trim();
 
@@ -122,6 +125,7 @@ exports.updateAircraftStatus = async (req, res) => {
         if (esMandoSuperior || userRole === 'OFICINA_TECNICA' || userRole === 'S4_UNIDAD') {
             if (matricula) aircraft.matricula = matricula.toUpperCase().trim();
             if (sda) aircraft.sda = sda.toUpperCase().trim();
+            // Permitir cambiar la unidad solo a Mandos Superiores (Transferencia de Material)
             if (unidad && esMandoSuperior) aircraft.unidad = unidad.toUpperCase().trim(); 
         }
         

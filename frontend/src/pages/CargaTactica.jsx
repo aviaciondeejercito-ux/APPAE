@@ -67,7 +67,7 @@ const AEROPUERTOS_ESTANDAR = [
 const UNIDADES_AE = [
     "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
     "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
-    "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9"
+    "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9","SEC AE 9"
 ];
 
 const CargaTactica = () => {
