@@ -27,8 +27,9 @@ const Material = () => {
 
     // Listado de unidades para el selector del ADMIN
     const unidadesAE = [
-        "DIR AE", "B AV APY COMB 601", "SEC AV EJ 121", "SEC AV EJ 141", 
-        "SEC AV EJ 181", "SEC AV CORREA", "ESC AV EXPL AT 602", "B AV ABST REPU 601"
+        "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
+    "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
+    "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9"
     ];
 
     const [newAir, setNewAir] = useState({
