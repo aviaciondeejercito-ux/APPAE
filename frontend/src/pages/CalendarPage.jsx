@@ -8,8 +8,7 @@ import { getEvents } from '../services/EventService';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
-    // SEGURIDAD: Valores por defecto y normalización de roles
-    const [role] = useState(localStorage.getItem('role')?.toLowerCase() || 'guest');
+    const [role] = useState(localStorage.getItem('role') || 'guest');
     const [userUnidad] = useState(localStorage.getItem('elemento')?.toUpperCase() || ''); 
     const [selectedEvent, setSelectedEvent] = useState(null); 
     const [isMobile] = useState(window.innerWidth < 768);
@@ -22,30 +21,41 @@ const CalendarPage = () => {
         try {
             const data = await getEvents();
             
-            // ESTÁNDAR DE SEGURIDAD: Restricción jerárquica estricta
-            // SOLO el 'admin' tiene visibilidad total. 
-            // OTO, DIRECTOR y demás roles filtran por su unidad o eventos globales.
-            const filteredData = role === 'admin' 
+            /**
+             * LÓGICA DE FILTRADO JERÁRQUICO
+             * 1. 'admin', 'BOSS' y 'DIRECTOR' ven TODO (incluyendo globales y locales).
+             * 2. Los usuarios de unidades solo ven:
+             * - Eventos de su propia unidad.
+             * - Eventos globales que NO sean de otras unidades específicas.
+             */
+            const filteredData = (role === 'admin' || role === 'BOSS' || role === 'DIRECTOR') 
                 ? data 
                 : data.filter(ev => {
                     const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
                     const unidadUsuario = userUnidad.toUpperCase();
                     
-                    return evElemento.includes(unidadUsuario) || ev.esGlobal;
+                    // Condición 1: Es de mi unidad
+                    const esDeMiUnidad = evElemento.includes(unidadUsuario);
+                    
+                    // Condición 2: Es global pero YO tengo rol para verlo (Si soy 'user', solo veo global si es de mi unidad o si es general de DIR AE)
+                    // Para evitar que el S4 de una unidad vea lo de otra, el evento global debe pertenecer a su unidad o ser de interés general.
+                    const esGlobalVisible = ev.esGlobal && (evElemento === '' || evElemento.includes(unidadUsuario) || evElemento.includes('DIR AE'));
+
+                    return esDeMiUnidad || esGlobalVisible;
                 });
 
             setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
-            console.error("❌ ERROR CRÍTICO: Fallo en sincronización de datos operativos:", error); 
+            console.error("❌ ERROR CRÍTICO:", error); 
         }
     };
 
     const getEventColor = (tipo) => {
         if (!tipo) return '#6c757d';
         const t = tipo.toUpperCase();
-        if (t.includes('SOSTENIMIENTO')) return '#007bff'; // Azul AE
-        if (t.includes('FUERZA OPERATIVA')) return '#28a745'; // Verde AE
-        if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000'; // Bordó AE
+        if (t.includes('SOSTENIMIENTO')) return '#007bff';
+        if (t.includes('FUERZA OPERATIVA')) return '#28a745';
+        if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000';
         return '#6c757d'; 
     };
 
@@ -81,9 +91,7 @@ const CalendarPage = () => {
     const eventDidMount = (info) => {
         const { elemento, esGlobal, tipoOrigen, etapa } = info.event.extendedProps;
         const backgroundColor = info.event.backgroundColor;
-
         info.el.style.backgroundColor = backgroundColor;
-
         const isWhite = backgroundColor.toLowerCase() === '#ffffff' || backgroundColor === 'rgb(255, 255, 255)';
         const textElements = info.el.querySelectorAll('.fc-event-title, .fc-event-time');
         
