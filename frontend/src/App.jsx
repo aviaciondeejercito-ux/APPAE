@@ -48,9 +48,9 @@ function App() {
      * Se ajustaron los strings a MAYÚSCULAS para coincidir con la DB.
      */
     const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
-    const puedeCargarOperaciones = role === 'admin' || role === 'USER' || role === 'OTO' || role === 'OFICINA_TECNICA';
+    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OTO' || role === 'OFICINA_TECNICA';
     const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
-    const puedeVerMapa = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'USER';
+    const puedeVerMapa = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'user';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
