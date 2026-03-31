@@ -54,11 +54,11 @@ const Operaciones = () => {
         setFilteredEvents(results);
     }, [searchTerm, events]);
 
+    // Lógica de carga de aeronaves optimizada para Unidades Operativas
     useEffect(() => {
         const fetchAeronaves = async () => {
-            const unidadABuscar = (formData.unidadesInvolucradas.length > 0) 
-                ? formData.unidadesInvolucradas[0] 
-                : userUnidad;
+            // Prioridad: Si la unidad está editando, siempre busca SUS aeronaves para poder asignarlas
+            const unidadABuscar = userUnidad || (formData.unidadesInvolucradas.length > 0 ? formData.unidadesInvolucradas[0] : null);
 
             if (!unidadABuscar) return;
             
@@ -78,7 +78,7 @@ const Operaciones = () => {
             }
         };
         fetchAeronaves();
-    }, [formData.unidadesInvolucradas, userUnidad]);
+    }, [formData.unidadesInvolucradas, userUnidad, isEditing]);
 
     const fetchData = async () => {
         try {
@@ -92,10 +92,10 @@ const Operaciones = () => {
 
                 const esGlobal = ev.esGlobal === true;
                 const esDeDIRAE = ev.elemento?.toUpperCase().includes("DIR AE");
+                // La unidad ve lo que le asignaron o lo que es global
                 const soyResponsableAsignado = ev.elemento?.toUpperCase().includes(userUnidadUpper);
 
-                if (role === 'admin') return true;
-                if (role === 'boss') return esDeDIRAE || esGlobal || soyResponsableAsignado;
+                if (role === 'admin' || role === 'boss') return true;
                 if (['user', 's4 unidad', 's4'].includes(role)) return soyResponsableAsignado || esGlobal;
 
                 return false; 
@@ -164,12 +164,12 @@ const Operaciones = () => {
         }
 
         const esMando = role === 'admin' || role === 'boss';
-        // Limpiamos el prefijo anterior para evitar duplicaciones al editar
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
         
+        // Si la unidad edita, el elemento sigue siendo ella misma o el conjunto original
         const finalElemento = (esMando && formData.unidadesInvolucradas.length > 0)
             ? formData.unidadesInvolucradas.join(', ')
-            : userUnidad;
+            : (formData.unidadesInvolucradas.length > 0 ? formData.unidadesInvolucradas.join(', ') : userUnidad);
 
         const finalData = {
             title: formData.title.toUpperCase(),
@@ -187,7 +187,7 @@ const Operaciones = () => {
         try {
             if (isEditing) {
                 await updateEvent(selectedId, finalData);
-                alert("✅ Registro actualizado.");
+                alert("✅ Orden Actualizada y Re-ordenada para Ejecución.");
             } else {
                 await createEvent(finalData);
                 alert("✅ Grabado en Monitor AE.");
@@ -195,7 +195,7 @@ const Operaciones = () => {
             resetForm();
             fetchData();
         } catch (error) { 
-            alert("❌ Error al guardar."); 
+            alert("❌ Error de permisos o red al guardar. Verifique nivel de acceso."); 
         }
     };
 
@@ -211,11 +211,15 @@ const Operaciones = () => {
     };
 
     const handleEdit = (ev) => {
-        const puedeEditar = role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad);
-        if (!puedeEditar) {
-            alert("Sin permisos para editar.");
+        // SECUENCIA LÓGICA: Se permite editar si el elemento incluye la unidad del usuario
+        const esMando = role === 'admin' || role === 'boss';
+        const esMiUnidadAsignada = ev.elemento?.toUpperCase().includes(userUnidad?.toUpperCase());
+        
+        if (!esMando && !esMiUnidadAsignada) {
+            alert("Sin permisos: Esta orden no está asignada a su unidad.");
             return;
         }
+
         setIsEditing(true);
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
@@ -235,12 +239,12 @@ const Operaciones = () => {
     };
 
     const handleDelete = async (id, elementoEv) => {
-        const puedeEliminar = role === 'admin' || role === 'boss' || elementoEv?.includes(userUnidad);
-        if (!puedeEliminar) {
-            alert("Sin permisos para eliminar.");
+        const esMando = role === 'admin' || role === 'boss';
+        if (!esMando) {
+            alert("Seguridad: Solo los administradores o mandos pueden eliminar órdenes oficiales.");
             return;
         }
-        if (window.confirm("¿Eliminar orden operativa?")) {
+        if (window.confirm("¿Eliminar orden operativa definitivamente?")) {
             try {
                 await deleteEvent(id);
                 fetchData();
@@ -255,26 +259,25 @@ const Operaciones = () => {
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>{isEditing ? "📝 Editar Orden de Vuelo" : "➕ Nueva Orden"}</h3>
+                    <h3 style={styles.title}>{isEditing ? "📝 Gestionar Ejecución de Orden" : "➕ Nueva Orden Operativa"}</h3>
                     
-                    <button type="button" onClick={() => setPublicarGlobal(!publicarGlobal)}
-                        style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px' }}>
+                    <button type="button" disabled={role !== 'admin' && role !== 'boss'}
+                        onClick={() => setPublicarGlobal(!publicarGlobal)}
+                        style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px', cursor: (role === 'admin' || role === 'boss') ? 'pointer' : 'not-allowed' }}>
                         {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE)" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
                     </button>
 
-                    {(role === 'admin' || role === 'boss' || isEditing) && (
-                        <div style={styles.etapaWrapper}>
-                            <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
-                            <div style={styles.etapaGrid}>
-                                {Object.keys(etapaColors).map(e => (
-                                    <button key={e} type="button" onClick={() => setFormData({...formData, etapa: e})} 
-                                        style={{...styles.btnStep, background: formData.etapa === e ? etapaColors[e] : 'white', color: formData.etapa === e ? 'white' : '#555'}}>
-                                        {e.charAt(0).toUpperCase() + e.slice(1)}
-                                    </button>
-                                ))}
-                            </div>
+                    <div style={styles.etapaWrapper}>
+                        <label style={styles.labelEtapa}>ESTADO / SECUENCIA DE LA ORDEN:</label>
+                        <div style={styles.etapaGrid}>
+                            {Object.keys(etapaColors).map(e => (
+                                <button key={e} type="button" onClick={() => setFormData({...formData, etapa: e})} 
+                                    style={{...styles.btnStep, background: formData.etapa === e ? etapaColors[e] : 'white', color: formData.etapa === e ? 'white' : '#555'}}>
+                                    {e.toUpperCase()}
+                                </button>
+                            ))}
                         </div>
-                    )}
+                    </div>
 
                     <form onSubmit={handleSubmit} style={styles.form}>
                         <input type="text" required placeholder="Nombre de la Misión" value={formData.title} 
@@ -308,7 +311,7 @@ const Operaciones = () => {
 
                         <div style={styles.sdaBox}>
                             <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave..."}</option>
+                                <option value="">{loadingAircraft ? "Cargando Flota..." : "Asignar Aeronave de la Unidad..."}</option>
                                 {availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} ({air.matricula})</option>)}
                             </select>
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
@@ -321,10 +324,10 @@ const Operaciones = () => {
                             ))}
                         </div>
 
-                        <textarea placeholder="Observaciones..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
+                        <textarea placeholder="Observaciones de ejecución..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
                         
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
-                            {isEditing ? "ACTUALIZAR REGISTRO" : "GRABAR EN MONITOR OPERATIVO"}
+                            {isEditing ? "CONFIRMAR CAMBIOS Y RE-ORDENAR" : "GRABAR EN MONITOR OPERATIVO"}
                         </button>
                         {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR</button>}
                     </form>
@@ -335,7 +338,7 @@ const Operaciones = () => {
                     <input type="text" placeholder="🔍 Buscar por misión, unidad o tipo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
 
                     <div style={styles.scrollList}>
-                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes.</p> : 
+                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes pendientes para su unidad.</p> : 
                         filteredEvents.map(ev => (
                             <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
                                 <div style={{flex: 1}}>
@@ -346,12 +349,12 @@ const Operaciones = () => {
                                         <span style={{...styles.miniBadge, backgroundColor: !ev.esGlobal ? '#7f8c8d' : '#1b3a57'}}>{!ev.esGlobal ? "LOCAL" : "GLOBAL"}</span>
                                     </div>
                                 </div>
-                                {(role === 'admin' || role === 'boss' || ev.elemento?.includes(userUnidad)) && (
-                                    <div style={styles.logActions}>
-                                        <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
+                                <div style={styles.logActions}>
+                                    <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
+                                    {(role === 'admin' || role === 'boss') && (
                                         <button onClick={() => handleDelete(ev._id, ev.elemento)} style={styles.btnIconDel}>🗑️</button>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -367,7 +370,7 @@ const styles = {
     card: { background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f0f2f5' },
     title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '12px', fontSize: '1.2rem', color: '#1b3a57', marginBottom: '20px' },
     form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    btnGlobal: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
+    btnGlobal: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold' },
     etapaWrapper: { marginBottom: '20px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' },
     labelEtapa: { fontSize: '0.7rem', fontWeight: 'bold', color: '#777', marginBottom: '8px', display: 'block' },
     etapaGrid: { display: 'flex', gap: '8px' },
