@@ -15,6 +15,10 @@ const Operaciones = () => {
     const [availableAircraft, setAvailableAircraft] = useState([]);
     const [loadingAircraft, setLoadingAircraft] = useState(false);
 
+    // Definición de roles con capacidad de mando global
+    const rolesMando = ['admin', 'boss', 'director', 'oto', 'otoae'];
+    const esMando = rolesMando.includes(role);
+
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
         "SEC AE 11", "ESC AV EXPL ATQ 602", "EC AE", "SEC AE DR", 
@@ -54,12 +58,9 @@ const Operaciones = () => {
         setFilteredEvents(results);
     }, [searchTerm, events]);
 
-    // Lógica de carga de aeronaves optimizada para Unidades Operativas
     useEffect(() => {
         const fetchAeronaves = async () => {
-            // Prioridad: Si la unidad está editando, siempre busca SUS aeronaves para poder asignarlas
             const unidadABuscar = userUnidad || (formData.unidadesInvolucradas.length > 0 ? formData.unidadesInvolucradas[0] : null);
-
             if (!unidadABuscar) return;
             
             setLoadingAircraft(true);
@@ -91,12 +92,10 @@ const Operaciones = () => {
                 if (!esOrdenOperativa) return false;
 
                 const esGlobal = ev.esGlobal === true;
-                const esDeDIRAE = ev.elemento?.toUpperCase().includes("DIR AE");
-                // La unidad ve lo que le asignaron o lo que es global
                 const soyResponsableAsignado = ev.elemento?.toUpperCase().includes(userUnidadUpper);
 
-                if (role === 'admin' || role === 'boss') return true;
-                if (['user', 's4 unidad', 's4'].includes(role)) return soyResponsableAsignado || esGlobal;
+                if (esMando) return true;
+                if (['user', 's4 unidad', 's4', 'oficina_tecnica'].includes(role)) return soyResponsableAsignado || esGlobal;
 
                 return false; 
             });
@@ -115,7 +114,6 @@ const Operaciones = () => {
     const formatDateForDisplay = (dateString) => {
         if (!dateString) return '';
         const [datePart] = dateString.split('T');
-        if (!datePart) return '';
         const [year, month, day] = datePart.split('-');
         return `${day}/${month}/${year}`;
     };
@@ -163,10 +161,7 @@ const Operaciones = () => {
             return;
         }
 
-        const esMando = role === 'admin' || role === 'boss';
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
-        
-        // Si la unidad edita, el elemento sigue siendo ella misma o el conjunto original
         const finalElemento = (esMando && formData.unidadesInvolucradas.length > 0)
             ? formData.unidadesInvolucradas.join(', ')
             : (formData.unidadesInvolucradas.length > 0 ? formData.unidadesInvolucradas.join(', ') : userUnidad);
@@ -187,7 +182,7 @@ const Operaciones = () => {
         try {
             if (isEditing) {
                 await updateEvent(selectedId, finalData);
-                alert("✅ Orden Actualizada y Re-ordenada para Ejecución.");
+                alert("✅ Orden Actualizada y Re-ordenada.");
             } else {
                 await createEvent(finalData);
                 alert("✅ Grabado en Monitor AE.");
@@ -195,7 +190,7 @@ const Operaciones = () => {
             resetForm();
             fetchData();
         } catch (error) { 
-            alert("❌ Error de permisos o red al guardar. Verifique nivel de acceso."); 
+            alert("❌ Error de permisos o red."); 
         }
     };
 
@@ -211,10 +206,7 @@ const Operaciones = () => {
     };
 
     const handleEdit = (ev) => {
-        // SECUENCIA LÓGICA: Se permite editar si el elemento incluye la unidad del usuario
-        const esMando = role === 'admin' || role === 'boss';
         const esMiUnidadAsignada = ev.elemento?.toUpperCase().includes(userUnidad?.toUpperCase());
-        
         if (!esMando && !esMiUnidadAsignada) {
             alert("Sin permisos: Esta orden no está asignada a su unidad.");
             return;
@@ -238,16 +230,20 @@ const Operaciones = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDelete = async (id, elementoEv) => {
-        const esMando = role === 'admin' || role === 'boss';
-        if (!esMando) {
-            alert("Seguridad: Solo los administradores o mandos pueden eliminar órdenes oficiales.");
+    const handleDelete = async (ev) => {
+        const esMiUnidadAsignada = ev.elemento?.toUpperCase().includes(userUnidad?.toUpperCase());
+        
+        // Verifica si es Mando o si el evento pertenece a su unidad (Elemento)
+        if (!esMando && !esMiUnidadAsignada) {
+            alert("Seguridad: Solo los mandos o la unidad responsable pueden eliminar esta orden.");
             return;
         }
+
         if (window.confirm("¿Eliminar orden operativa definitivamente?")) {
             try {
-                await deleteEvent(id);
+                await deleteEvent(ev._id);
                 fetchData();
+                if(isEditing && selectedId === ev._id) resetForm();
             } catch (error) {
                 alert("Error al eliminar.");
             }
@@ -259,11 +255,11 @@ const Operaciones = () => {
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>{isEditing ? "📝 Gestionar Ejecución de Orden" : "➕ Nueva Orden Operativa"}</h3>
+                    <h3 style={styles.title}>{isEditing ? "📝 Gestionar Ejecución" : "➕ Nueva Orden Operativa"}</h3>
                     
-                    <button type="button" disabled={role !== 'admin' && role !== 'boss'}
+                    <button type="button" disabled={!esMando}
                         onClick={() => setPublicarGlobal(!publicarGlobal)}
-                        style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px', cursor: (role === 'admin' || role === 'boss') ? 'pointer' : 'not-allowed' }}>
+                        style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px', cursor: esMando ? 'pointer' : 'not-allowed' }}>
                         {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE)" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
                     </button>
 
@@ -290,7 +286,7 @@ const Operaciones = () => {
                             <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
                         </div>
 
-                        {(role === 'admin' || role === 'boss') && (
+                        {esMando && (
                             <div style={styles.unidadSelector}>
                                 <label style={styles.label}>Asignar Responsables:</label>
                                 <div style={styles.unidadChips}>
@@ -311,7 +307,7 @@ const Operaciones = () => {
 
                         <div style={styles.sdaBox}>
                             <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                <option value="">{loadingAircraft ? "Cargando Flota..." : "Asignar Aeronave de la Unidad..."}</option>
+                                <option value="">{loadingAircraft ? "Cargando Flota..." : "Asignar Aeronave..."}</option>
                                 {availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} ({air.matricula})</option>)}
                             </select>
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
@@ -327,7 +323,7 @@ const Operaciones = () => {
                         <textarea placeholder="Observaciones de ejecución..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
                         
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
-                            {isEditing ? "CONFIRMAR CAMBIOS Y RE-ORDENAR" : "GRABAR EN MONITOR OPERATIVO"}
+                            {isEditing ? "CONFIRMAR CAMBIOS" : "GRABAR MONITOR"}
                         </button>
                         {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR</button>}
                     </form>
@@ -335,28 +331,32 @@ const Operaciones = () => {
 
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Órdenes</h3>
-                    <input type="text" placeholder="🔍 Buscar por misión, unidad o tipo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
+                    <input type="text" placeholder="🔍 Buscar misión, unidad..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
 
                     <div style={styles.scrollList}>
-                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes pendientes para su unidad.</p> : 
-                        filteredEvents.map(ev => (
-                            <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
-                                <div style={{flex: 1}}>
-                                    <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.esGlobal && "🌐 "}{ev.title}</div>
-                                    <div style={{fontSize: '0.75rem', color: '#666'}}>{ev.elemento} | {formatDateForDisplay(ev.start)}</div>
-                                    <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>
-                                        <span style={{...styles.miniBadge, backgroundColor: etapaColors[ev.etapa] || '#95a5a6'}}>{ev.etapa?.toUpperCase()}</span>
-                                        <span style={{...styles.miniBadge, backgroundColor: !ev.esGlobal ? '#7f8c8d' : '#1b3a57'}}>{!ev.esGlobal ? "LOCAL" : "GLOBAL"}</span>
+                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes.</p> : 
+                        filteredEvents.map(ev => {
+                            const esMiUnidadAsignada = ev.elemento?.toUpperCase().includes(userUnidad?.toUpperCase());
+                            return (
+                                <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
+                                    <div style={{flex: 1}}>
+                                        <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.esGlobal && "🌐 "}{ev.title}</div>
+                                        <div style={{fontSize: '0.75rem', color: '#666'}}>{ev.elemento} | {formatDateForDisplay(ev.start)}</div>
+                                        <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>
+                                            <span style={{...styles.miniBadge, backgroundColor: etapaColors[ev.etapa] || '#95a5a6'}}>{ev.etapa?.toUpperCase()}</span>
+                                        </div>
+                                    </div>
+                                    <div style={styles.logActions}>
+                                        <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
+                                        
+                                        {/* ELIMINACIÓN: Habilitada para mandos O para el elemento responsable */}
+                                        {(esMando || esMiUnidadAsignada) && (
+                                            <button onClick={() => handleDelete(ev)} style={styles.btnIconDel}>🗑️</button>
+                                        )}
                                     </div>
                                 </div>
-                                <div style={styles.logActions}>
-                                    <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
-                                    {(role === 'admin' || role === 'boss') && (
-                                        <button onClick={() => handleDelete(ev._id, ev.elemento)} style={styles.btnIconDel}>🗑️</button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </div>
