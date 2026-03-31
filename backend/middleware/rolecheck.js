@@ -39,6 +39,7 @@ const authorize = (...rolesPermitidos) => {
         /**
          * 4. LÓGICA DE MANDO (ADMIN / BOSS / DIRECTOR / OTO / OTOAE)
          * Inyectamos flag de mando para visión global del sistema.
+         * Estos roles tienen visibilidad total sobre los eventos y operaciones.
          */
         const mandoRoles = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'];
         req.isMando = mandoRoles.includes(normalizedUserRole);
@@ -46,14 +47,16 @@ const authorize = (...rolesPermitidos) => {
         /**
          * 5. COMPROBACIÓN DE GESTIÓN TÉCNICA Y OPERATIVA
          * Inyectamos flags de gestión por unidad basados en el estándar de guion bajo.
+         * Define quién puede cargar datos técnicos o modificar órdenes asignadas.
          */
         req.isOficinaTecnica = (normalizedUserRole === 'OFICINA_TECNICA');
         
+        // Gestión de unidad: Incluye a los gestores técnicos, S4, usuarios operativos y mandos superiores
         req.isGestionUnidad = (
             req.isOficinaTecnica || 
             normalizedUserRole === 'S4_UNIDAD' || 
             normalizedUserRole === 'USER' || 
-            normalizedUserRole === 'ADMIN'
+            req.isMando // Si es mando, por defecto tiene permisos de gestión
         );
 
         // Registro de Auditoría interna de accesos exitosos.

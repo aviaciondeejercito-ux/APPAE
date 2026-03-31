@@ -32,7 +32,7 @@ const getAvailableAircraft = async (req, res) => {
 const getEvents = async (req, res) => {
     try {
         const { elemento } = req.user; 
-        const isMando = req.isMando; // Usamos el flag del middleware (incluye OTO/OTOAE)
+        const isMando = req.isMando; 
         let query = {}; 
 
         if (!isMando) {
@@ -66,7 +66,7 @@ const getEvents = async (req, res) => {
 const getActiveOperations = async (req, res) => {
     try {
         const { elemento } = req.user;
-        const isMando = req.isMando; // Usamos el flag del middleware (incluye OTO/OTOAE)
+        const isMando = req.isMando;
 
         let query = { 
             isRealTime: true,
@@ -171,14 +171,16 @@ const updateEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'Registro no localizado.' });
 
-        const { elemento } = req.user;
+        const userUnidad = req.user.elemento?.toUpperCase();
         const isMando = req.isMando;
         
-        const perteneceAUnidad = event.elemento && (event.elemento.toUpperCase() === elemento.toUpperCase());
+        // SECUENCIA LÓGICA: Se permite editar si la unidad del usuario está incluida en el elemento
+        const eventElemento = event.elemento ? event.elemento.toUpperCase() : "";
+        const perteneceAUnidad = eventElemento.includes(userUnidad);
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
         if (!isMando && !isOwner && !perteneceAUnidad) {
-            return res.status(403).json({ message: 'No tiene permisos para modificar este registro.' });
+            return res.status(403).json({ message: 'No tiene permisos para modificar esta orden operativa.' });
         }
 
         const updateData = { ...req.body };
@@ -240,10 +242,11 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
 
-        const { elemento } = req.user;
+        const userUnidad = req.user.elemento?.toUpperCase();
         const isMando = req.isMando;
         
-        const perteneceAUnidad = event.elemento && (event.elemento.toUpperCase() === elemento.toUpperCase());
+        const eventElemento = event.elemento ? event.elemento.toUpperCase() : "";
+        const perteneceAUnidad = eventElemento.includes(userUnidad);
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
         if (!isMando && !isOwner && !perteneceAUnidad) {
