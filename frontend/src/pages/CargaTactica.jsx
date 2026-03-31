@@ -31,8 +31,6 @@ const AEROPUERTOS_ESTANDAR = [
     { nombre: "SAAV - SANTA FE", lat: -31.711, lng: -60.812 },
     { nombre: "SANE - SANTIAGO DEL ESTERO", lat: -27.766, lng: -64.311 },
     { nombre: "SANU - SAN JUAN", lat: -31.571, lng: -68.418 },
-    
-    // --- NUEVOS AEROPUERTOS Y AERÓDROMOS INCORPORADOS ---
     { nombre: "SARE - RESISTENCIA", lat: -27.449, lng: -59.056 },
     { nombre: "SARL - PASO DE LOS LIBRES", lat: -29.691, lng: -57.152 },
     { nombre: "SAAJ - JUNÍN", lat: -34.545, lng: -60.923 },
@@ -49,8 +47,6 @@ const AEROPUERTOS_ESTANDAR = [
     { nombre: "SAAG - GUALEGUAY", lat: -33.155, lng: -59.387 },
     { nombre: "SAAL - ALVEAR", lat: -33.004, lng: -60.627 },
     { nombre: "SAZY - SAN MARTÍN DE LOS ANDES", lat: -40.075, lng: -71.139 },
-
-    // --- LADS Y LUGARES DE ATERRIZAJE OPERATIVOS ---
     { nombre: "LAD - BATERÍAS (IMARA)", lat: -38.991, lng: -62.115 },
     { nombre: "LAD - ARROYO DULCE", lat: -34.148, lng: -60.395 },
     { nombre: "LAD - LA MEZQUITA (CBA)", lat: -31.428, lng: -64.312 },
@@ -67,14 +63,11 @@ const AEROPUERTOS_ESTANDAR = [
 const UNIDADES_AE = [
     "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
     "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
-    "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9","SEC AE 9"
+    "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9"
 ];
 
 const CargaTactica = () => {
-    // Obtener datos del usuario desde localStorage
     const user = JSON.parse(localStorage.getItem('user')) || { elemento: '', role: '' };
-    
-    // SEGURIDAD: Ni OTO ni Director ven todo. Solo 'admin' tiene visibilidad total.
     const isMandoTotal = user.role === 'admin';
 
     const [misionesActivas, setMisionesActivas] = useState([]);
@@ -82,24 +75,23 @@ const CargaTactica = () => {
     const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(false);
     
-    const [formData, setFormData] = useState({
+    const initialState = {
         title: '', elemento: user.elemento || '', notasMarginales: '', 
         aeronaveId: '', sda: '', matricula: '', 
         latG: 34, latM: 31, latS: 40, latDir: 'S',
         lngG: 58, lngM: 38, lngS: 29, lngDir: 'W',
         locNombre: ''
-    });
+    };
+
+    const [formData, setFormData] = useState(initialState);
 
     const cargarDatos = async () => {
         setLoading(true);
         try {
             const [evRes, airRes] = await Promise.all([getEvents(), getAircrafts()]);
-            
             const dataEvents = Array.isArray(evRes) ? evRes : (evRes.data || []);
             const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
 
-            // Filtro robusto + Lógica de Unidad:
-            // Si no es admin (mando total), solo ve los vuelos de su unidad
             const activas = dataEvents.filter(ev => {
                 const esVueloActivo = (ev.status === 'en_curso' || ev.isRealTime === true) && ev.tipoApoyo === 'VUELO';
                 if (!isMandoTotal) {
@@ -107,10 +99,8 @@ const CargaTactica = () => {
                 }
                 return esVueloActivo;
             });
-            
             setMisionesActivas(activas);
             
-            // Filtrar flota disponible: si no es admin, solo ve aeronaves de su unidad
             const flotaFiltrada = dataAir.filter(a => {
                 const enServicio = a.estado === 'E/S';
                 if (!isMandoTotal) {
@@ -118,7 +108,6 @@ const CargaTactica = () => {
                 }
                 return enServicio;
             });
-
             setFlotaES(flotaFiltrada);
         } catch (error) {
             console.error("Error de enlace:", error);
@@ -182,9 +171,10 @@ const CargaTactica = () => {
         
         setEditingId(mision._id);
         setFormData({
-            title: mision.title,
+            title: mision.title || '',
             elemento: mision.elemento || '',
-            notasMarginales: mision.notes || mision.notasMarginales || '',
+            notasMarginales: mision.notasMarginales || mision.notes || '',
+            aeronaveId: mision.aeronaveId || '', // Importante para el PUT
             sda: mision.aeronave || '',
             matricula: mision.matricula || '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
@@ -230,17 +220,11 @@ const CargaTactica = () => {
                 Swal.fire({ title: 'LANZADO', text: 'Misión activa en radar', icon: 'success', background: '#1e272e', color: '#fff' });
             }
             
-            setFormData({ 
-                title: '', elemento: user.elemento || '', notasMarginales: '', 
-                aeronaveId: '', sda: '', matricula: '', 
-                latG: 34, latM: 31, latS: 40, latDir: 'S', 
-                lngG: 58, lngM: 38, lngS: 29, lngDir: 'W', 
-                locNombre: '' 
-            });
+            setFormData(initialState);
             setEditingId(null);
             cargarDatos();
         } catch (error) {
-            Swal.fire({ title: 'ERROR', text: 'No tiene permisos para modificar este vuelo o fallo de red', icon: 'error', background: '#1e272e', color: '#fff' });
+            Swal.fire({ title: 'ERROR', text: 'Error 400 o Fallo de Red. Verifique integridad de datos.', icon: 'error', background: '#1e272e', color: '#fff' });
         }
     };
 
@@ -251,7 +235,6 @@ const CargaTactica = () => {
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
             confirmButtonText: 'BORRAR',
             background: '#1e272e',
             color: '#fff'
@@ -270,7 +253,6 @@ const CargaTactica = () => {
     return (
         <div style={styles.page}>
             <div style={styles.container}>
-                {/* PANEL DE CARGA */}
                 <div style={styles.card}>
                     <h2 style={styles.headerTitle}>
                         {editingId ? '📍 RE-POSICIONAR AERONAVE' : '⚡ NUEVA OPERACIÓN EN TIEMPO REAL'}
@@ -334,11 +316,10 @@ const CargaTactica = () => {
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
                             {editingId ? 'GUARDAR POSICIÓN ACTUAL' : 'LANZAR OPERACIÓN'}
                         </button>
-                        {editingId && <button type="button" onClick={() => {setEditingId(null); setFormData({...formData, title: '', elemento: user.elemento || ''})}} style={styles.btnCancel}>CANCELAR EDICIÓN</button>}
+                        {editingId && <button type="button" onClick={() => {setEditingId(null); setFormData(initialState)}} style={styles.btnCancel}>CANCELAR EDICIÓN</button>}
                     </form>
                 </div>
 
-                {/* SIDEBAR LOG */}
                 <div style={styles.logCard}>
                     <div style={styles.logHeader}>
                         <h3 style={{ margin: 0, fontSize: '1rem' }}>📡 Operaciones en Desarrollo</h3>
@@ -346,7 +327,7 @@ const CargaTactica = () => {
                     </div>
                     <div style={styles.scrollArea}>
                         {misionesActivas.length === 0 ? (
-                            <div style={styles.emptyMsg}>NO SE DETECTAN AERONAVES ACTIVOS</div>
+                            <div style={styles.emptyMsg}>NO SE DETECTAN AERONAVES ACTIVAS</div>
                         ) : (
                             misionesActivas.map(m => (
                                 <div key={m._id} style={styles.misionItem}>
