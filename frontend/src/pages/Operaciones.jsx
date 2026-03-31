@@ -135,16 +135,20 @@ const Operaciones = () => {
         setFormData({ ...formData, unidadesInvolucradas: updated });
     };
 
+    // CORRECCIÓN: Se procesa la cantidad como número para evitar el "undefined"
     const addSda = () => {
         if (!formData.sdaSelected || formData.sdaSelected.trim() === "") return;
-        const nuevoSda = `${formData.sdaCantidad}x ${formData.sdaSelected}`;
+        
+        const cantidad = parseInt(formData.sdaCantidad) || 1;
+        const nuevoSda = `${cantidad}x ${formData.sdaSelected}`;
+        
         if (!formData.sdaListado.includes(nuevoSda)) {
-            setFormData({ 
-                ...formData, 
-                sdaListado: [...formData.sdaListado, nuevoSda], 
+            setFormData(prev => ({ 
+                ...prev, 
+                sdaListado: [...prev.sdaListado, nuevoSda], 
                 sdaSelected: '', 
                 sdaCantidad: 1 
-            });
+            }));
         }
     };
 
@@ -232,8 +236,6 @@ const Operaciones = () => {
 
     const handleDelete = async (ev) => {
         const esMiUnidadAsignada = ev.elemento?.toUpperCase().includes(userUnidad?.toUpperCase());
-        
-        // Verifica si es Mando o si el evento pertenece a su unidad (Elemento)
         if (!esMando && !esMiUnidadAsignada) {
             alert("Seguridad: Solo los mandos o la unidad responsable pueden eliminar esta orden.");
             return;
@@ -253,16 +255,13 @@ const Operaciones = () => {
     return (
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
-                
                 <div style={styles.card}>
                     <h3 style={styles.title}>{isEditing ? "📝 Gestionar Ejecución" : "➕ Nueva Orden Operativa"}</h3>
-                    
                     <button type="button" disabled={!esMando}
                         onClick={() => setPublicarGlobal(!publicarGlobal)}
                         style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px', cursor: esMando ? 'pointer' : 'not-allowed' }}>
                         {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE)" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
                     </button>
-
                     <div style={styles.etapaWrapper}>
                         <label style={styles.labelEtapa}>ESTADO / SECUENCIA DE LA ORDEN:</label>
                         <div style={styles.etapaGrid}>
@@ -274,18 +273,15 @@ const Operaciones = () => {
                             ))}
                         </div>
                     </div>
-
                     <form onSubmit={handleSubmit} style={styles.form}>
                         <input type="text" required placeholder="Nombre de la Misión" value={formData.title} 
                                onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} />
-                        
                         <div style={styles.row}>
                             <div style={{flex: 1}}><label style={styles.label}>H-Inicio</label>
                             <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/></div>
                             <div style={{flex: 1}}><label style={styles.label}>H-Fin</label>
                             <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
                         </div>
-
                         {esMando && (
                             <div style={styles.unidadSelector}>
                                 <label style={styles.label}>Asignar Responsables:</label>
@@ -299,12 +295,10 @@ const Operaciones = () => {
                                 </div>
                             </div>
                         )}
-
                         <select value={formData.tipoApoyo} onChange={e => handleMissionChange(e.target.value)} style={styles.input} required>
                             <option value="">Tipo de Misión...</option>
                             {missionOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                         </select>
-
                         <div style={styles.sdaBox}>
                             <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
                                 <option value="">{loadingAircraft ? "Cargando Flota..." : "Asignar Aeronave..."}</option>
@@ -313,26 +307,21 @@ const Operaciones = () => {
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
                             <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
                         </div>
-
                         <div style={styles.tagWrap}>
                             {formData.sdaListado.map((s, i) => (
                                 <span key={i} style={styles.tag}>{s} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
                             ))}
                         </div>
-
                         <textarea placeholder="Observaciones de ejecución..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
-                        
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
                             {isEditing ? "CONFIRMAR CAMBIOS" : "GRABAR MONITOR"}
                         </button>
                         {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR</button>}
                     </form>
                 </div>
-
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Órdenes</h3>
                     <input type="text" placeholder="🔍 Buscar misión, unidad..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
-
                     <div style={styles.scrollList}>
                         {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes.</p> : 
                         filteredEvents.map(ev => {
@@ -348,8 +337,6 @@ const Operaciones = () => {
                                     </div>
                                     <div style={styles.logActions}>
                                         <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
-                                        
-                                        {/* ELIMINACIÓN: Habilitada para mandos O para el elemento responsable */}
                                         {(esMando || esMiUnidadAsignada) && (
                                             <button onClick={() => handleDelete(ev)} style={styles.btnIconDel}>🗑️</button>
                                         )}
