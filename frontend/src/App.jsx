@@ -11,6 +11,13 @@ import Material from './pages/Material';
 import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
 
+/**
+ * COMPONENTE PRINCIPAL - SISTEMA GESTIÓN AE
+ * Estándar de Seguridad: SINCRO JOKER (Frontend Core)
+ * - Gestión de sesión persistente con validación de roles.
+ * - Navegación condicional por jerarquía militar.
+ * - Soporte responsivo para tablets y terminales móviles.
+ */
 function App() {
     // 1. ESTADOS DE AUTENTICACIÓN Y NAVEGACIÓN
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
@@ -18,7 +25,7 @@ function App() {
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-    // Escucha cambios de tamaño de pantalla
+    // Escucha cambios de tamaño de pantalla para optimizar la UI
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
@@ -44,13 +51,13 @@ function App() {
     };
 
     /**
-     * LÓGICA DE PERMISOS ACTUALIZADA (ESTÁNDAR DE SEGURIDAD 2026)
-     * Se ajustaron los strings a MAYÚSCULAS para coincidir con la DB.
+     * LÓGICA DE PERMISOS (ESTÁNDAR SINCRO JOKER 2026)
+     * Strings normalizados para coincidir con la lógica del Backend.
      */
-    const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
-    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OTO' || role === 'OFICINA_TECNICA'|| role === 'BOSS' ;
-    const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
-    const puedeVerMapa = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'user';
+    const puedeGestionarMaterial = role === 'ADMIN' || role === 'OFICINA_TECNICA';
+    const puedeCargarOperaciones = role === 'ADMIN' || role === 'USER' || role === 'OTO' || role === 'OFICINA_TECNICA' || role === 'BOSS';
+    const puedeVerStats = role === 'ADMIN' || role === 'BOSS' || role === 'DIRECTOR';
+    const puedeVerMapa = role === 'ADMIN' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'USER';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -101,7 +108,7 @@ function App() {
                                 </button>
                             )}
 
-                            {(role === 'admin' || role === 'OTO' || role === 'USER') && (
+                            {(role === 'ADMIN' || role === 'OTO' || role === 'USER') && (
                                 <button 
                                     onClick={() => setView('despacho')}
                                     style={{
@@ -164,7 +171,7 @@ function App() {
                                 </button>
                             )}
 
-                            {role === 'admin' && (
+                            {role === 'ADMIN' && (
                                 <button 
                                     onClick={() => setView('admin')}
                                     style={{
@@ -192,13 +199,13 @@ function App() {
                 </div>
             </nav>
 
-            {/* ÁREA DE CONTENIDO */}
+            {/* ÁREA DE CONTENIDO DINÁMICO */}
             <main style={(view === 'mapa' || view === 'stats' || view === 'material' || view === 'estado' || view === 'despacho') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
-                        if (view === 'admin' && role === 'admin') return <AdminPanel />;
+                        if (view === 'admin' && role === 'ADMIN') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
                         if (view === 'mapa' && puedeVerMapa) return (
                             <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#000' }}>
@@ -214,8 +221,8 @@ function App() {
                 )}
             </main>
 
-            {/* FOOTER */}
-            {(view !== 'mapa' && view !== 'stats') && (
+            {/* FOOTER - OCULTO EN MAPA Y STATS PARA MAXIMIZAR VISIBILIDAD */}
+            {(view !== 'mapa' && view !== 'stats' && view !== 'despacho') && (
                 <footer style={styles.footer}>
                     © 2026 Aviación de Ejército - Sistema de Comando y Control
                 </footer>

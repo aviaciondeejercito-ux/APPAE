@@ -4,10 +4,10 @@ const Aircraft = require('../models/Aircraft');
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: SINCRO JOKER (Optimizado)
- * - Actualizaciones Atómicas en MongoDB.
+ * - Actualizaciones Atómicas en MongoDB ($set).
  * - Sincro Real-Time: Integración con WebSockets para el Mapa Táctico.
- * - Lógica de Permisos: Filtro por Unidad para Carga Táctica.
- * - Actualización: Integración de jerarquía OTO/OTOAE para visión global.
+ * - Lógica de Permisos: Filtro por Unidad/Elemento y Jerarquía OTO/OTOAE.
+ * - Integridad de Datos: Normalización estricta a Mayúsculas.
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -189,7 +189,7 @@ const updateEvent = async (req, res) => {
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        // Procesamiento de Mayúsculas
+        // Procesamiento de Mayúsculas (Estándar Sincro Joker)
         ['title', 'elemento', 'aeronave', 'matricula', 'tipoApoyo', 'notasMarginales', 'notes'].forEach(field => {
             if (updateData[field] !== undefined) {
                 updateData[field] = (updateData[field] || '').toString().toUpperCase();
@@ -221,6 +221,7 @@ const updateEvent = async (req, res) => {
             };
         }
 
+        // Actualización Atómica mediante $set
         const updatedEvent = await Event.findByIdAndUpdate(
             req.params.id,
             { $set: updateData }, 

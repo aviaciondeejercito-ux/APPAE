@@ -74,6 +74,7 @@ const CargaTactica = () => {
     const [flotaES, setFlotaES] = useState([]);
     const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [showDestino, setShowDestino] = useState(false);
     
     const initialState = {
         title: '', elemento: user.elemento || '', notasMarginales: '', 
@@ -81,7 +82,10 @@ const CargaTactica = () => {
         latG: 34, latM: 31, latS: 40, latDir: 'S',
         lngG: 58, lngM: 38, lngS: 29, lngDir: 'W',
         locNombre: '',
-        etapa: 'operativo', // Campo obligatorio según modelo
+        destLatG: 34, destLatM: 31, destLatS: 40, destLatDir: 'S',
+        destLngG: 58, destLngM: 38, destLngS: 29, destLngDir: 'W',
+        destNombre: '',
+        etapa: 'operativo',
         createdBy: user.id || '',
         userName: user.name || ''
     };
@@ -152,17 +156,27 @@ const CargaTactica = () => {
         }
     };
 
-    const handleAeropuerto = (e) => {
+    const handleAeropuerto = (e, target = 'posicion') => {
         const apto = AEROPUERTOS_ESTANDAR.find(p => p.nombre === e.target.value);
         if (apto) {
             const latGMS = fromDecimal(apto.lat, 'lat');
             const lngGMS = fromDecimal(apto.lng, 'lng');
-            setFormData({ 
-                ...formData, 
-                locNombre: apto.nombre,
-                latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
-                lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir
-            });
+            
+            if (target === 'posicion') {
+                setFormData({ 
+                    ...formData, 
+                    locNombre: apto.nombre,
+                    latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
+                    lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir
+                });
+            } else {
+                setFormData({ 
+                    ...formData, 
+                    destNombre: apto.nombre,
+                    destLatG: latGMS.g, destLatM: latGMS.m, destLatS: latGMS.s, destLatDir: latGMS.dir,
+                    destLngG: lngGMS.g, destLngM: lngGMS.m, destLngS: lngGMS.s, destLngDir: lngGMS.dir
+                });
+            }
         }
     };
 
@@ -171,21 +185,32 @@ const CargaTactica = () => {
         const lngVal = mision.lng ?? mision.ubicacion?.lng ?? 0;
         const latGMS = fromDecimal(latVal, 'lat');
         const lngGMS = fromDecimal(lngVal, 'lng');
+
+        let destData = {};
+        if (mision.destino) {
+            const dLatGMS = fromDecimal(mision.destino.lat, 'lat');
+            const dLngGMS = fromDecimal(mision.destino.lng, 'lng');
+            destData = {
+                destNombre: mision.destino.nombre,
+                destLatG: dLatGMS.g, destLatM: dLatGMS.m, destLatS: dLatGMS.s, destLatDir: dLatGMS.dir,
+                destLngG: dLngGMS.g, destLngM: dLngGMS.m, destLngS: dLngGMS.s, destLngDir: dLngGMS.dir
+            };
+            setShowDestino(true);
+        }
         
         setEditingId(mision._id);
         setFormData({
+            ...formData,
             title: mision.title || '',
             elemento: mision.elemento || '',
             notasMarginales: mision.notasMarginales || mision.notes || '',
-            aeronaveId: 'FIXED_SdA', // Mantiene el SdA vinculado visualmente
+            aeronaveId: 'FIXED_SdA',
             sda: mision.aeronave || '',
             matricula: mision.matricula || '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
             locNombre: mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA',
-            etapa: mision.etapa || 'operativo',
-            createdBy: mision.createdBy || user.id,
-            userName: mision.userName || user.name
+            ...destData
         });
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -206,10 +231,9 @@ const CargaTactica = () => {
             isRealTime: true,
             status: 'en_curso',
             tipoApoyo: 'VUELO',
-            type: 'operativo',
-            etapa: formData.etapa, // SE AGREGA CAMPO OBLIGATORIO
-            createdBy: formData.createdBy, // SE AGREGA CAMPO OBLIGATORIO
-            userName: formData.userName, // SE AGREGA CAMPO OBLIGATORIO
+            etapa: formData.etapa,
+            createdBy: formData.createdBy,
+            userName: formData.userName,
             tipoIcono: (formData.sda.includes('AE') || formData.sda.includes('C-')) ? 'ala_fija' : 'ala_rotativa',
             lat: latDec, 
             lng: lngDec,
@@ -219,6 +243,16 @@ const CargaTactica = () => {
                 lng: lngDec
             }
         };
+
+        if (showDestino && formData.destNombre) {
+            const dLatDec = toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir);
+            const dLngDec = toDecimal(formData.destLngG, formData.destLngM, formData.destLngS, formData.destLngDir);
+            payload.destino = {
+                nombre: formData.destNombre.toUpperCase(),
+                lat: dLatDec,
+                lng: dLngDec
+            };
+        }
 
         try {
             if (editingId) {
@@ -231,9 +265,10 @@ const CargaTactica = () => {
             
             setFormData(initialState);
             setEditingId(null);
+            setShowDestino(false);
             cargarDatos();
         } catch (error) {
-            Swal.fire({ title: 'ERROR 400', text: 'Error en validación de campos obligatorios.', icon: 'error', background: '#1e272e', color: '#fff' });
+            Swal.fire({ title: 'ERROR', text: 'Verifique los campos obligatorios.', icon: 'error', background: '#1e272e', color: '#fff' });
         }
     };
 
@@ -275,13 +310,7 @@ const CargaTactica = () => {
 
                             <div>
                                 <label style={styles.label}>AERONAVE SELECCIONADA</label>
-                                <select 
-                                    style={styles.input} 
-                                    value={formData.aeronaveId} 
-                                    onChange={handleAeronaveSelect} 
-                                    required
-                                    disabled={!!editingId}
-                                >
+                                <select style={styles.input} value={formData.aeronaveId} onChange={handleAeronaveSelect} required disabled={!!editingId}>
                                     {editingId ? (
                                         <option value="FIXED_SdA">{formData.sda} - {formData.matricula}</option>
                                     ) : (
@@ -295,13 +324,7 @@ const CargaTactica = () => {
 
                             <div>
                                 <label style={styles.label}>UNIDAD RESPONSABLE</label>
-                                <select 
-                                    style={styles.input} 
-                                    value={formData.elemento} 
-                                    onChange={(e) => setFormData({...formData, elemento: e.target.value})} 
-                                    disabled={!isMandoTotal}
-                                    required
-                                >
+                                <select style={styles.input} value={formData.elemento} onChange={(e) => setFormData({...formData, elemento: e.target.value})} disabled={!isMandoTotal} required>
                                     <option value="">-- Unidad --</option>
                                     {UNIDADES_AE.map(u => <option key={u} value={u}>{u}</option>)}
                                 </select>
@@ -309,8 +332,8 @@ const CargaTactica = () => {
                         </div>
 
                         <div style={styles.geoBox}>
-                            <label style={styles.label}>COORDENADAS Y REFERENCIA DE POSICIÓN</label>
-                            <select onChange={handleAeropuerto} style={{...styles.input, marginBottom: '15px'}} value={formData.locNombre}>
+                            <label style={styles.label}>COORDENADAS Y REFERENCIA DE POSICIÓN ACTUAL</label>
+                            <select onChange={(e) => handleAeropuerto(e, 'posicion')} style={{...styles.input, marginBottom: '15px'}} value={formData.locNombre}>
                                 <option value="">Cargar desde Aeródromo...</option>
                                 {AEROPUERTOS_ESTANDAR.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
                             </select>
@@ -331,13 +354,42 @@ const CargaTactica = () => {
                             </div>
                         </div>
 
-                        <label style={styles.label}>NOTAS / TRIPULACIÓN / NOVEDADES</label>
+                        <button type="button" onClick={() => setShowDestino(!showDestino)} style={styles.btnDestino}>
+                            {showDestino ? '❌ QUITAR DESTINO' : '➕ AGREGAR DESTINO (DESPLAZAMIENTO)'}
+                        </button>
+
+                        {showDestino && (
+                            <div style={{...styles.geoBox, borderColor: '#f39c12', marginTop: '10px'}}>
+                                <label style={styles.label}>COORDENADAS Y REFERENCIA DE DESTINO</label>
+                                <select onChange={(e) => handleAeropuerto(e, 'destino')} style={{...styles.input, marginBottom: '15px'}} value={formData.destNombre}>
+                                    <option value="">Cargar Aeródromo de Destino...</option>
+                                    {AEROPUERTOS_ESTANDAR.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
+                                </select>
+                                
+                                <div style={styles.row}>
+                                    <div style={styles.coordGroup}>
+                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatG: e.target.value})} value={formData.destLatG} placeholder="G"/>
+                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatM: e.target.value})} value={formData.destLatM} placeholder="M"/>
+                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatS: e.target.value})} value={formData.destLatS} placeholder="S"/>
+                                        <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, destLatDir: e.target.value})} value={formData.destLatDir}><option value="S">S</option><option value="N">N</option></select>
+                                    </div>
+                                    <div style={styles.coordGroup}>
+                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngG: e.target.value})} value={formData.destLngG} placeholder="G"/>
+                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngM: e.target.value})} value={formData.destLngM} placeholder="M"/>
+                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngS: e.target.value})} value={formData.destLngS} placeholder="S"/>
+                                        <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, destLngDir: e.target.value})} value={formData.destLngDir}><option value="W">W</option><option value="E">E</option></select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <label style={{...styles.label, marginTop: '20px'}}>NOTAS / TRIPULACIÓN / NOVEDADES</label>
                         <textarea style={styles.textarea} value={formData.notasMarginales} onChange={(e) => setFormData({...formData, notasMarginales: e.target.value})} required />
 
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
-                            {editingId ? 'GUARDAR POSICIÓN ACTUAL' : 'LANZAR OPERACIÓN'}
+                            {editingId ? 'GUARDAR CAMBIOS' : 'LANZAR OPERACIÓN'}
                         </button>
-                        {editingId && <button type="button" onClick={() => {setEditingId(null); setFormData(initialState)}} style={styles.btnCancel}>CANCELAR EDICIÓN</button>}
+                        {editingId && <button type="button" onClick={() => {setEditingId(null); setFormData(initialState); setShowDestino(false)}} style={styles.btnCancel}>CANCELAR EDICIÓN</button>}
                     </form>
                 </div>
 
@@ -388,7 +440,7 @@ const styles = {
     label: { display: 'block', fontSize: '0.7rem', fontWeight: 'bold', color: '#95a5a6', marginBottom: '8px', letterSpacing: '1px' },
     input: { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #2c3e50', backgroundColor: '#0f1418', color: 'white', fontSize: '0.9rem' },
     formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' },
-    geoBox: { padding: '20px', backgroundColor: '#0f1418', borderRadius: '8px', marginBottom: '20px', border: '1px solid #2c3e50' },
+    geoBox: { padding: '20px', backgroundColor: '#0f1418', borderRadius: '8px', marginBottom: '10px', border: '1px solid #2c3e50' },
     row: { display: 'flex', gap: '20px' },
     coordGroup: { flex: 1, display: 'flex', gap: '5px' },
     inputTriple: { width: '30%', padding: '10px', borderRadius: '4px', border: '1px solid #2c3e50', backgroundColor: '#1a1f25', color: 'white', textAlign: 'center' },
@@ -396,6 +448,7 @@ const styles = {
     textarea: { width: '100%', height: '100px', padding: '12px', borderRadius: '6px', backgroundColor: '#0f1418', color: 'white', border: '1px solid #2c3e50', resize: 'none', marginBottom: '25px' },
     btn: { width: '100%', padding: '16px', backgroundColor: '#d35400', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' },
     btnUpdate: { width: '100%', padding: '16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' },
+    btnDestino: { width: '100%', padding: '10px', backgroundColor: '#1e272e', color: '#f39c12', border: '1px dashed #f39c12', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', marginBottom: '10px' },
     btnCancel: { width: '100%', marginTop: '10px', padding: '10px', backgroundColor: 'transparent', color: '#bdc3c7', border: '1px solid #34495e', borderRadius: '6px', cursor: 'pointer' },
     btnRefresh: { padding: '6px 12px', backgroundColor: 'transparent', color: '#f39c12', border: '1px solid #f39c12', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem' },
     btnRow: { display: 'flex', gap: '10px', marginTop: '15px' },

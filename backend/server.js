@@ -10,6 +10,9 @@ const conectarDB = require('./config/db');
  * ESTÁNDAR DE SEGURIDAD AE - SINCRO JOKER
  * Configuración de motor centralizado para API de Aviación de Ejército.
  * ESTADO: RECONEXIÓN METEOROLÓGICA Y NVG ACTIVA
+ * - Integración Atómica de WebSockets.
+ * - Blindaje CORS y Helmet para entornos Render/Local.
+ * - Optimización de Carga para Datos Tácticos (500kb).
  */
 
 // --- 1. CONFIGURACIÓN DE ENTORNO ---
@@ -51,14 +54,14 @@ const corsOptions = {
         }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'], // Agregado x-auth-token por seguridad
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'], // x-auth-token por seguridad
     credentials: true,
     optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
 
-// --- CORRECCIÓN CRÍTICA: LÍMITE DE CARGA ---
+// --- LÍMITE DE CARGA (SINCRO JOKER) ---
 // Se aumenta a 500kb para permitir misiones con múltiples coordenadas y metadatos técnicos
 app.use(express.json({ limit: '500kb' })); 
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
@@ -104,16 +107,11 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// MAPEADO DE RUTAS - ASEGURANDO COMPATIBILIDAD CON EL RADAR
+// MAPEADO DE RUTAS - ASEGURANDO COMPATIBILIDAD CON EL RADAR Y MONITOR
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
 app.use('/api/admin', adminRoutes); 
 app.use('/api/aircraft', aircraftRoutes); 
-
-/**
- * IMPORTANTE: Si el radar llama a /api/weather/SADP, 
- * el router de weatherRoutes debe manejar la raíz '/' como el ID.
- */
 app.use('/api/weather', weatherRoutes); 
 app.use('/api/astronomy', astronomyRoutes); 
 
@@ -132,9 +130,9 @@ app.use((err, req, res, next) => {
         return res.status(400).json({ success: false, message: 'Carga de datos JSON malformada.' });
     }
 
-    // Manejo específico de errores de límite de carga
+    // Manejo específico de errores de límite de carga (Sincro Joker)
     if (err.type === 'entity.too.large') {
-        return res.status(413).json({ success: false, message: 'La carga de datos excede el límite operativo permitido.' });
+        return res.status(413).json({ success: false, message: 'La carga de datos excede el límite operativo permitido (500kb).' });
     }
 
     console.error(`❌ FALLO CRÍTICO EN SERVIDOR: ${err.message}`);

@@ -3,8 +3,10 @@ const mongoose = require('mongoose');
 /**
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
  * Seguridad: Trazabilidad completa con logs de usuario integrados.
- * Independencia: Soporte híbrido para Calendario Operativo y Mapa Táctico.
- * Estándar: Segregación de Vuelos mediante etapa 'operativo'.
+ * Estándar de Seguridad: SINCRO JOKER
+ * - Normalización estricta a MAYÚSCULAS en pre-validation.
+ * - Sincronización atómica de coordenadas (Mirroring lat/lng).
+ * - Optimización de índices para Mapa Táctico y Calendario.
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -22,7 +24,7 @@ const eventSchema = new mongoose.Schema({
     start: { 
         type: Date,
         required: false,
-        default: Date.now // Garantiza que no sea nulo para evitar errores de índice
+        default: Date.now 
     },
     end: { 
         type: Date,
@@ -88,7 +90,7 @@ const eventSchema = new mongoose.Schema({
         type: Boolean,
         default: false 
     },
-    // Compatibilidad para filtros directos de coordenadas
+    // Compatibilidad para filtros directos de coordenadas (Mirror de ubicacion)
     lat: { type: Number },
     lng: { type: Number },
     
@@ -118,10 +120,10 @@ const eventSchema = new mongoose.Schema({
         uppercase: true
     },
 
-    // --- SECCIÓN DE SEGURIDAD Y SEGMENTACIÓN (FLUJO DIR AE) ---
+    // --- SECCIÓN DE SEGURIDAD Y SEGMENTACIÓN ---
     elemento: { 
         type: String, 
-        required: [true, 'La unidad/elemento es obligatoria para la segmentación'],
+        required: [true, 'La unidad/elemento es obligatoria'],
         index: true,
         uppercase: true
     },
@@ -143,7 +145,7 @@ const eventSchema = new mongoose.Schema({
         default: false 
     },
 
-    // --- SECCIÓN DE AUDITORÍA Y SEGURIDAD ---
+    // --- SECCIÓN DE AUDITORÍA ---
     createdBy: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'User', 
@@ -162,24 +164,17 @@ const eventSchema = new mongoose.Schema({
 });
 
 /**
- * VALIDACIÓN DE SEGURIDAD ATÓMICA Y ESTANDARIZACIÓN MILITAR
+ * MIDDLEWARE PRE-SAVE: VALIDACIÓN Y ESTANDARIZACIÓN MILITAR
  */
 eventSchema.pre('validate', function(next) {
-    // Validar cronología si ambos existen
+    // 1. Validación de Cronología
     if (this.start && this.end) {
-        const dStart = new Date(this.start);
-        const dEnd = new Date(this.end);
-        if (dEnd < dStart) {
+        if (new Date(this.end) < new Date(this.start)) {
             this.invalidate('end', 'La fecha de finalización debe ser posterior a la de inicio');
         }
     }
     
-    // Normalización de color
-    if (this.color && !this.color.startsWith('#')) {
-        this.color = '#1b3a57';
-    }
-    
-    // Estandarización Militar (Todo a MAYÚSCULAS)
+    // 2. Normalización de Mayúsculas (Estándar Sincro Joker)
     const fieldsToUpper = [
         'title', 'notes', 'notasMarginales', 'aeronave', 
         'matricula', 'elemento', 'tipoApoyo'
@@ -197,26 +192,30 @@ eventSchema.pre('validate', function(next) {
         });
     }
     
-    // Sincronización de coordenadas duplicadas para búsqueda optimizada
+    // 3. Sincronización de Coordenadas (Atomic Mirroring)
     if (this.ubicacion) {
         if (this.ubicacion.nombre) this.ubicacion.nombre = this.ubicacion.nombre.toUpperCase();
         
-        // Si vienen coordenadas en ubicación, las espejamos en la raíz para el radar
+        // Espejamos coordenadas a la raíz para filtros de radar rápidos
         if (this.ubicacion.lat != null) this.lat = this.ubicacion.lat;
         if (this.ubicacion.lng != null) this.lng = this.ubicacion.lng;
+    }
+    
+    // 4. Corrección de color por defecto
+    if (this.color && !this.color.startsWith('#')) {
+        this.color = '#1b3a57';
     }
     
     next();
 });
 
-// ÍNDICES PARA ALTA DISPONIBILIDAD Y SEGURIDAD
+/**
+ * ÍNDICES DE ALTO RENDIMIENTO (SINCRO JOKER)
+ */
 eventSchema.index({ start: 1, end: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
-eventSchema.index({ esGlobal: 1 }); 
 eventSchema.index({ isRealTime: 1, status: 1 }); 
-eventSchema.index({ createdBy: 1 });
-eventSchema.index({ createdAt: -1 }); 
-eventSchema.index({ lat: 1, lng: 1 });
-eventSchema.index({ "ubicacion.lat": 1, "ubicacion.lng": 1 });
+eventSchema.index({ lat: 1, lng: 1 }); // Índice para búsqueda geoespacial simple
+eventSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Event', eventSchema);
