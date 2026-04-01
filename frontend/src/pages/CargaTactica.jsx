@@ -174,13 +174,15 @@ const CargaTactica = () => {
             title: mision.title || '',
             elemento: mision.elemento || '',
             notasMarginales: mision.notasMarginales || mision.notes || '',
-            aeronaveId: mision.aeronaveId || '', // Importante para el PUT
+            aeronaveId: mision.aeronaveId || 'EDIT_MODE', // Mantenemos un valor para que el select no quede vacío
             sda: mision.aeronave || '',
             matricula: mision.matricula || '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
             locNombre: mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA'
         });
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleSubmit = async (e) => {
@@ -224,7 +226,7 @@ const CargaTactica = () => {
             setEditingId(null);
             cargarDatos();
         } catch (error) {
-            Swal.fire({ title: 'ERROR', text: 'Error 400 o Fallo de Red. Verifique integridad de datos.', icon: 'error', background: '#1e272e', color: '#fff' });
+            Swal.fire({ title: 'ERROR', text: 'Error de comunicación con el servidor.', icon: 'error', background: '#1e272e', color: '#fff' });
         }
     };
 
@@ -265,11 +267,24 @@ const CargaTactica = () => {
                             </div>
 
                             <div>
-                                <label style={styles.label}>AERONAVE DISPONIBLE</label>
-                                <select style={styles.input} value={formData.aeronaveId} onChange={handleAeronaveSelect} required={!editingId}>
-                                    <option value="">-- Seleccionar SdA --</option>
-                                    {flotaES.map(a => <option key={a._id} value={a._id}>{a.sda} - {a.matricula}</option>)}
+                                <label style={styles.label}>AERONAVE SELECCIONADA</label>
+                                <select 
+                                    style={styles.input} 
+                                    value={formData.aeronaveId} 
+                                    onChange={handleAeronaveSelect} 
+                                    required
+                                    disabled={!!editingId}
+                                >
+                                    {editingId ? (
+                                        <option value="EDIT_MODE">{formData.sda} - {formData.matricula}</option>
+                                    ) : (
+                                        <>
+                                            <option value="">-- Seleccionar SdA --</option>
+                                            {flotaES.map(a => <option key={a._id} value={a._id}>{a.sda} - {a.matricula}</option>)}
+                                        </>
+                                    )}
                                 </select>
+                                {editingId && <small style={{color: '#95a5a6', fontSize: '0.6rem'}}>No se puede cambiar el SdA durante el vuelo</small>}
                             </div>
 
                             <div>
