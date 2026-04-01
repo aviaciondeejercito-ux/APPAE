@@ -120,8 +120,8 @@ const createEvent = async (req, res) => {
         };
 
         if (isRealTime) {
-            const finalLat = lat !== undefined ? lat : (ubicacion?.lat || 0);
-            const finalLng = lng !== undefined ? lng : (ubicacion?.lng || 0);
+            const finalLat = parseFloat(lat !== undefined ? lat : (ubicacion?.lat || 0));
+            const finalLng = parseFloat(lng !== undefined ? lng : (ubicacion?.lng || 0));
 
             Object.assign(eventData, {
                 isRealTime: true,
@@ -129,12 +129,12 @@ const createEvent = async (req, res) => {
                 start: start ? new Date(start) : new Date(),
                 end: end ? new Date(end) : null,
                 etapa: 'operativo',
-                lat: parseFloat(finalLat),
-                lng: parseFloat(finalLng),
+                lat: finalLat,
+                lng: finalLng,
                 ubicacion: {
-                    nombre: (ubicacion?.nombre || (req.body.locNombre) || 'POSICIÓN TÁCTICA').toUpperCase(),
-                    lat: parseFloat(finalLat),
-                    lng: parseFloat(finalLng)
+                    nombre: (ubicacion?.nombre || req.body.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+                    lat: finalLat,
+                    lng: finalLng
                 },
                 aeronave: (aeronave || '').toString().toUpperCase(),
                 matricula: (matricula || '').toString().toUpperCase(),
@@ -184,7 +184,6 @@ const updateEvent = async (req, res) => {
             return res.status(403).json({ message: 'No tiene permisos para modificar esta orden operativa.' });
         }
 
-        // Construcción limpia del objeto de actualización
         const updateData = { ...req.body };
         delete updateData._id; 
         delete updateData.createdBy;
@@ -197,7 +196,6 @@ const updateEvent = async (req, res) => {
             }
         });
 
-        // Manejo de MisionDetalle
         if (updateData.misionDetalle) {
             updateData.misionDetalle = {
                 comandante: (updateData.misionDetalle.comandante || '').toUpperCase(),
@@ -209,11 +207,10 @@ const updateEvent = async (req, res) => {
         }
 
         // --- CORRECCIÓN CRÍTICA: ESTRUCTURA DE UBICACIÓN ---
-        // Para evitar el error 400, reconstruimos el objeto ubicacion completo si hay cambios de coords
         if (updateData.lat !== undefined || updateData.lng !== undefined || updateData.ubicacion) {
-            const nLat = parseFloat(updateData.lat ?? updateData.ubicacion?.lat ?? event.ubicacion.lat);
-            const nLng = parseFloat(updateData.lng ?? updateData.ubicacion?.lng ?? event.ubicacion.lng);
-            const nNombre = (updateData.locNombre || updateData.ubicacion?.nombre || event.ubicacion.nombre).toUpperCase();
+            const nLat = parseFloat(updateData.lat ?? updateData.ubicacion?.lat ?? event.lat ?? event.ubicacion?.lat ?? 0);
+            const nLng = parseFloat(updateData.lng ?? updateData.ubicacion?.lng ?? event.lng ?? event.ubicacion?.lng ?? 0);
+            const nNombre = (updateData.locNombre || updateData.ubicacion?.nombre || (event.ubicacion && event.ubicacion.nombre) || 'POSICIÓN TÁCTICA').toUpperCase();
 
             updateData.lat = nLat;
             updateData.lng = nLng;

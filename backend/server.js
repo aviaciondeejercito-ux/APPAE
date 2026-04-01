@@ -51,16 +51,17 @@ const corsOptions = {
         }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'], // Agregado x-auth-token por seguridad
     credentials: true,
     optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
 
-// Límite de carga: Ajustado a 50kb para permitir novedades técnicas extensas sin desbordamiento
-app.use(express.json({ limit: '50kb' })); 
-app.use(express.urlencoded({ extended: true, limit: '50kb' }));
+// --- CORRECCIÓN CRÍTICA: LÍMITE DE CARGA ---
+// Se aumenta a 500kb para permitir misiones con múltiples coordenadas y metadatos técnicos
+app.use(express.json({ limit: '500kb' })); 
+app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 
 // --- 4. INICIALIZACIÓN DE SOCKET.IO (TIEMPO REAL) ---
 const io = new Server(server, {
@@ -99,7 +100,7 @@ app.get('/api/health', (req, res) => {
         database: 'Connected',
         socketStatus: 'Active',
         timestamp: new Date().toISOString(),
-        version: '1.4.0-OPERATIONAL'
+        version: '1.4.1-OPERATIONAL'
     });
 });
 
@@ -129,6 +130,11 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
     if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
         return res.status(400).json({ success: false, message: 'Carga de datos JSON malformada.' });
+    }
+
+    // Manejo específico de errores de límite de carga
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ success: false, message: 'La carga de datos excede el límite operativo permitido.' });
     }
 
     console.error(`❌ FALLO CRÍTICO EN SERVIDOR: ${err.message}`);
