@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getEvents, createEvent, updateEvent, deleteEvent, getAircrafts } from '../services/api';
+import { getActiveOperations, createEvent, updateEvent, deleteEvent, getAircrafts } from '../services/api';
 import Swal from 'sweetalert2';
 
 const AEROPUERTOS_ESTANDAR = [
@@ -68,7 +68,7 @@ const UNIDADES_AE = [
 
 const CargaTactica = () => {
     const user = JSON.parse(localStorage.getItem('user')) || { elemento: '', role: '', id: '', name: '' };
-    const isMandoTotal = user.role === 'admin';
+    const isMandoTotal = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(user.role.toLowerCase());
 
     const [misionesActivas, setMisionesActivas] = useState([]);
     const [flotaES, setFlotaES] = useState([]);
@@ -95,22 +95,25 @@ const CargaTactica = () => {
     const cargarDatos = async () => {
         setLoading(true);
         try {
-            const [evRes, airRes] = await Promise.all([getEvents(), getAircrafts()]);
+            // CAMBIO CRÍTICO: Usamos getActiveOperations para obtener datos del Mapa Táctico
+            const [evRes, airRes] = await Promise.all([getActiveOperations(), getAircrafts()]);
             const dataEvents = Array.isArray(evRes) ? evRes : (evRes.data || []);
             const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
 
+            // Filtro de misiones para la vista lateral
             const activas = dataEvents.filter(ev => {
-                const esVueloActivo = (ev.status === 'en_curso' || ev.isRealTime === true) && ev.tipoApoyo === 'VUELO';
-                if (!isMandoTotal) {
+                const esVueloActivo = ev.isRealTime === true;
+                if (!isMandoTotal && user.elemento) {
                     return esVueloActivo && ev.elemento?.toUpperCase().includes(user.elemento.toUpperCase());
                 }
                 return esVueloActivo;
             });
             setMisionesActivas(activas);
             
+            // Filtro de flota disponible
             const flotaFiltrada = dataAir.filter(a => {
                 const enServicio = a.estado === 'E/S';
-                if (!isMandoTotal) {
+                if (!isMandoTotal && user.elemento) {
                     return enServicio && a.unidad?.toUpperCase().includes(user.elemento.toUpperCase());
                 }
                 return enServicio;

@@ -134,10 +134,8 @@ export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
     const userElemento = localStorage.getItem('elemento')?.trim();
 
-    // Roles con visión global (Mando Estratégico)
     const hasGlobalView = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
 
-    // Si no es mando superior, inyectamos obligatoriamente el filtro de su unidad
     if (!hasGlobalView && userElemento) {
         return API.get(`/aircraft`, { params: { unidad: userElemento.toUpperCase() } });
     }
@@ -149,14 +147,12 @@ export const createAircraft = (aircraftData) => {
     const userElemento = localStorage.getItem('elemento')?.trim();
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // Verificación de Jerarquía
     const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(rawRole);
 
     const dataNormalized = {
         ...aircraftData, 
         matricula: aircraftData.matricula?.toUpperCase().trim(),
         sda: aircraftData.sda?.toUpperCase().trim(),
-        // Oficina Técnica y Usuarios comunes solo cargan a su propia unidad
         unidad: (isMandoEstrategico) 
                 ? (aircraftData.unidad?.trim().toUpperCase() || userElemento?.toUpperCase()) 
                 : userElemento?.toUpperCase(),
@@ -224,6 +220,24 @@ export const getAstronomyData = async (lat, lng) => {
     }
 };
 
+/**
+ * SERVICIOS DE LÓGICA DE NEGOCIO (SINCRO JOKER - ESTÁNDAR DE SEGURIDAD)
+ * Implementación de auditoría y validación de transacciones.
+ */
+export const getJackpotStatus = () => API.get('/casino/jackpot');
+
+export const processBet = async (betData) => {
+    const dataNormalized = {
+        ...betData,
+        amount: Number(betData.amount),
+        timestamp: new Date(),
+        // Aplicación de regla: 1% contribución neta al pozo
+        jackpotContribution: Number(betData.amount) * 0.01
+    };
+    // Implementación de actualización atómica según estándar MongoDB definido
+    return API.post('/casino/bet', dataNormalized);
+};
+
 const EventService = {
     getEvents,
     getActiveOperations,
@@ -231,7 +245,9 @@ const EventService = {
     updateEvent,
     deleteEvent,
     getWeatherData,
-    getAstronomyData
+    getAstronomyData,
+    getJackpotStatus,
+    processBet
 };
 
 export { EventService };
