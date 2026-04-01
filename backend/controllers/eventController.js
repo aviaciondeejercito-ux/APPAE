@@ -126,11 +126,13 @@ const createEvent = async (req, res) => {
             Object.assign(eventData, {
                 isRealTime: true,
                 tipoApoyo: 'VUELO',
-                start: null,
-                end: null,
+                start: start ? new Date(start) : new Date(),
+                end: end ? new Date(end) : null,
                 etapa: 'operativo',
+                lat: parseFloat(finalLat),
+                lng: parseFloat(finalLng),
                 ubicacion: {
-                    nombre: (ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+                    nombre: (ubicacion?.nombre || (req.body.locNombre) || 'POSICIÓN TÁCTICA').toUpperCase(),
                     lat: parseFloat(finalLat),
                     lng: parseFloat(finalLng)
                 },
@@ -174,7 +176,6 @@ const updateEvent = async (req, res) => {
         const userUnidad = req.user.elemento?.toUpperCase();
         const isMando = req.isMando;
         
-        // SECUENCIA LÓGICA: Se permite editar si la unidad del usuario está incluida en el elemento
         const eventElemento = event.elemento ? event.elemento.toUpperCase() : "";
         const perteneceAUnidad = eventElemento.includes(userUnidad);
         const isOwner = event.createdBy.toString() === req.user._id.toString();
@@ -183,11 +184,20 @@ const updateEvent = async (req, res) => {
             return res.status(403).json({ message: 'No tiene permisos para modificar esta orden operativa.' });
         }
 
+        // Construcción limpia del objeto de actualización
         const updateData = { ...req.body };
         delete updateData._id; 
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
+        // Procesamiento de Mayúsculas
+        ['title', 'elemento', 'aeronave', 'matricula', 'tipoApoyo', 'notasMarginales', 'notes'].forEach(field => {
+            if (updateData[field] !== undefined) {
+                updateData[field] = (updateData[field] || '').toString().toUpperCase();
+            }
+        });
+
+        // Manejo de MisionDetalle
         if (updateData.misionDetalle) {
             updateData.misionDetalle = {
                 comandante: (updateData.misionDetalle.comandante || '').toUpperCase(),
@@ -198,23 +208,20 @@ const updateEvent = async (req, res) => {
             };
         }
 
-        if (updateData.notasMarginales || updateData.notes) {
-            const txt = (updateData.notasMarginales || updateData.notes || '').toString().toUpperCase();
-            updateData.notasMarginales = txt;
-            updateData.notes = txt;
-        }
+        // --- CORRECCIÓN CRÍTICA: ESTRUCTURA DE UBICACIÓN ---
+        // Para evitar el error 400, reconstruimos el objeto ubicacion completo si hay cambios de coords
+        if (updateData.lat !== undefined || updateData.lng !== undefined || updateData.ubicacion) {
+            const nLat = parseFloat(updateData.lat ?? updateData.ubicacion?.lat ?? event.ubicacion.lat);
+            const nLng = parseFloat(updateData.lng ?? updateData.ubicacion?.lng ?? event.ubicacion.lng);
+            const nNombre = (updateData.locNombre || updateData.ubicacion?.nombre || event.ubicacion.nombre).toUpperCase();
 
-        ['title', 'elemento', 'aeronave', 'matricula', 'tipoApoyo'].forEach(field => {
-            if (updateData[field] !== undefined) {
-                updateData[field] = (updateData[field] || '').toString().toUpperCase();
-            }
-        });
-
-        if (updateData.lat !== undefined || updateData.lng !== undefined) {
-            const nLat = parseFloat(updateData.lat ?? event.ubicacion.lat);
-            const nLng = parseFloat(updateData.lng ?? event.ubicacion.lng);
-            updateData['ubicacion.lat'] = nLat;
-            updateData['ubicacion.lng'] = nLng;
+            updateData.lat = nLat;
+            updateData.lng = nLng;
+            updateData.ubicacion = {
+                nombre: nNombre,
+                lat: nLat,
+                lng: nLng
+            };
         }
 
         const updatedEvent = await Event.findByIdAndUpdate(
@@ -232,7 +239,7 @@ const updateEvent = async (req, res) => {
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error al actualizar registro.' });
+        res.status(400).json({ message: 'Error al actualizar registro. Verifique el formato de coordenadas.' });
     }
 };
 
