@@ -67,7 +67,7 @@ const UNIDADES_AE = [
 ];
 
 const CargaTactica = () => {
-    const user = JSON.parse(localStorage.getItem('user')) || { elemento: '', role: '' };
+    const user = JSON.parse(localStorage.getItem('user')) || { elemento: '', role: '', id: '', name: '' };
     const isMandoTotal = user.role === 'admin';
 
     const [misionesActivas, setMisionesActivas] = useState([]);
@@ -80,7 +80,10 @@ const CargaTactica = () => {
         aeronaveId: '', sda: '', matricula: '', 
         latG: 34, latM: 31, latS: 40, latDir: 'S',
         lngG: 58, lngM: 38, lngS: 29, lngDir: 'W',
-        locNombre: ''
+        locNombre: '',
+        etapa: 'operativo', // Campo obligatorio según modelo
+        createdBy: user.id || '',
+        userName: user.name || ''
     };
 
     const [formData, setFormData] = useState(initialState);
@@ -174,12 +177,15 @@ const CargaTactica = () => {
             title: mision.title || '',
             elemento: mision.elemento || '',
             notasMarginales: mision.notasMarginales || mision.notes || '',
-            aeronaveId: mision.aeronaveId || 'EDIT_MODE', // Mantenemos un valor para que el select no quede vacío
+            aeronaveId: 'FIXED_SdA', // Mantiene el SdA vinculado visualmente
             sda: mision.aeronave || '',
             matricula: mision.matricula || '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
-            locNombre: mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA'
+            locNombre: mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA',
+            etapa: mision.etapa || 'operativo',
+            createdBy: mision.createdBy || user.id,
+            userName: mision.userName || user.name
         });
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -201,15 +207,16 @@ const CargaTactica = () => {
             status: 'en_curso',
             tipoApoyo: 'VUELO',
             type: 'operativo',
+            etapa: formData.etapa, // SE AGREGA CAMPO OBLIGATORIO
+            createdBy: formData.createdBy, // SE AGREGA CAMPO OBLIGATORIO
+            userName: formData.userName, // SE AGREGA CAMPO OBLIGATORIO
             tipoIcono: (formData.sda.includes('AE') || formData.sda.includes('C-')) ? 'ala_fija' : 'ala_rotativa',
             lat: latDec, 
             lng: lngDec,
             ubicacion: {
                 nombre: (formData.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
                 lat: latDec,
-                lng: lngDec,
-                elemento: formData.elemento.toUpperCase(),
-                notasMarginales: formData.notasMarginales.toUpperCase()
+                lng: lngDec
             }
         };
 
@@ -226,7 +233,7 @@ const CargaTactica = () => {
             setEditingId(null);
             cargarDatos();
         } catch (error) {
-            Swal.fire({ title: 'ERROR', text: 'Error de comunicación con el servidor.', icon: 'error', background: '#1e272e', color: '#fff' });
+            Swal.fire({ title: 'ERROR 400', text: 'Error en validación de campos obligatorios.', icon: 'error', background: '#1e272e', color: '#fff' });
         }
     };
 
@@ -276,7 +283,7 @@ const CargaTactica = () => {
                                     disabled={!!editingId}
                                 >
                                     {editingId ? (
-                                        <option value="EDIT_MODE">{formData.sda} - {formData.matricula}</option>
+                                        <option value="FIXED_SdA">{formData.sda} - {formData.matricula}</option>
                                     ) : (
                                         <>
                                             <option value="">-- Seleccionar SdA --</option>
@@ -284,7 +291,6 @@ const CargaTactica = () => {
                                         </>
                                     )}
                                 </select>
-                                {editingId && <small style={{color: '#95a5a6', fontSize: '0.6rem'}}>No se puede cambiar el SdA durante el vuelo</small>}
                             </div>
 
                             <div>
