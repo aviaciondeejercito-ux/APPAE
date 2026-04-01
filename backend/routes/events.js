@@ -29,58 +29,48 @@ const protect = authMiddleware.protect || authMiddleware.verifyToken || authMidd
 
 /**
  * SISTEMA GESTIÓN AE - CAPA DE RUTAS OPERATIVAS BLINDADAS
- * Jerarquía de permisos actualizada según Matriz Operativa:
- * - Niveles de Mando (ADMIN, BOSS, DIRECTOR, OTO, OTOAE): Visión Global.
- * - Niveles de Elemento (S4_UNIDAD, OFICINA_TECNICA): Gestión de Unidad.
- * - Nivel Operativo (USER): Carga y monitoreo.
+ * Jerarquía de permisos actualizada según Matriz Operativa.
  */
 
 // --- 1. PROTECCIÓN DE IDENTIDAD (TOKEN JWT) ---
-// Trazabilidad completa: Ninguna ruta es accesible sin validación previa del Oficial de Turno/Usuario.
 router.use(protect);
 
 // --- 2. DEFINICIÓN DE RUTAS OPERATIVAS (ORDEN CRÍTICO) ---
-// IMPORTANTE: Las rutas estáticas van ANTES de las rutas con parámetros (:id) para evitar colisiones de Express.
 
 /**
  * @route    GET /api/events/active-map
- * @desc     Obtener misiones de VUELO TÁCTICO en curso para el Mapa (Exclusivo CargaTactica)
- * @access   Protegido - Sincro Real-Time
+ * @desc     Obtener misiones de VUELO TÁCTICO en curso para el Mapa
  */
 router.get('/active-map', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), getActiveOperations);
 
 /**
- * @route    GET /api/events/aircraft/:elemento
- * @desc     Consultar disponibilidad de aeronaves E/S (En Servicio) para carga técnica
- * @access   Protegido - Gestión de Elemento
+ * @route    GET /api/events/aircraft-available/:elemento
+ * @desc     Consultar disponibilidad de aeronaves E/S para la unidad específica
+ * @note     Se ajusta el path para coincidir con la llamada del controlador
  */
-router.get('/aircraft/:elemento', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), getAvailableAircraft);
+router.get('/aircraft-available/:elemento', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), getAvailableAircraft);
 
 /**
  * @route    GET /api/events
- * @desc     Obtener lista de eventos (Filtra automáticamente isRealTime: false en el controlador)
- * @access   Protegido - Calendario/Log
+ * @desc     Obtener lista de eventos (Filtra automáticamente isRealTime: false)
  */
 router.get('/', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), getEvents);
 
 /**
  * @route    POST /api/events
- * @desc     Registrar nuevo VUELO TÁCTICO (CargaTactica) o Actividad de Monitor (Calendario)
- * @access   Protegido - Creación Atómica
+ * @desc     Registrar nuevo VUELO TÁCTICO o Actividad de Monitor
  */
 router.post('/', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), createEvent);
 
 /**
  * @route    PUT /api/events/:id
  * @desc     Actualizar misión (Cambio de ubicación, tripulación o etapa operativa)
- * @access   Protegido - Permisos por Unidad/Dueño
  */
 router.put('/:id', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), updateEvent);
 
 /**
  * @route    DELETE /api/events/:id
- * @desc     Eliminación de registro y limpieza de rastro en Radar/Calendario
- * @access   Protegido - Permisos por Unidad/Dueño
+ * @desc     Eliminación de registro y limpieza de rastro
  */
 router.delete('/:id', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), deleteEvent);
 

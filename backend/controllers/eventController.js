@@ -4,10 +4,6 @@ const Aircraft = require('../models/Aircraft');
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: SINCRO JOKER (Optimizado)
- * - Actualizaciones Atómicas en MongoDB ($set).
- * - Sincro Real-Time: Integración con WebSockets para el Mapa Táctico.
- * - Lógica de Permisos: Filtro por Unidad/Elemento y Jerarquía OTO/OTOAE.
- * - Integridad de Datos: Normalización estricta a MAYÚSCULAS.
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -28,13 +24,12 @@ const getAvailableAircraft = async (req, res) => {
     }
 };
 
-// @desc    Obtener eventos para CALENDARIO Y LOG (Excluye Vuelos Tácticos)
+// @desc    Obtener eventos para CALENDARIO Y LOG
 const getEvents = async (req, res) => {
     try {
         const { elemento } = req.user; 
         const isMando = req.isMando; 
         
-        // REGLA CRÍTICA: El calendario solo muestra eventos que NO son RealTime
         let query = { isRealTime: false }; 
 
         if (!isMando) {
@@ -100,6 +95,10 @@ const createEvent = async (req, res) => {
 
         const isMando = req.isMando;
         const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
+        
+        // Normalización de coordenadas
+        const finalLat = parseFloat(lat !== undefined ? lat : (ubicacion?.lat || -34.61315));
+        const finalLng = parseFloat(lng !== undefined ? lng : (ubicacion?.lng || -58.37723));
 
         const eventData = {
             title: (title || '').toString().toUpperCase(),
@@ -110,58 +109,43 @@ const createEvent = async (req, res) => {
             userName: req.user.username,
             elemento: ((isMando && elemento) ? elemento : req.user.elemento).toUpperCase(),
             status: status || 'programado',
+            isRealTime: isRealTime || false,
+            // Estructura anidada obligatoria según imagen de DB
             misionDetalle: {
                 comandante: (misionDetalle?.comandante || '').toUpperCase(),
                 copiloto: (misionDetalle?.copiloto || '').toUpperCase(),
                 mecanico: (misionDetalle?.mecanico || '').toUpperCase(),
                 pax: (misionDetalle?.pax || '').toUpperCase(),
-                carga: (misionDetalle?.carga || '').toUpperCase()
-            }
-        };
-
-        if (isRealTime) {
-            const finalLat = parseFloat(lat !== undefined ? lat : (ubicacion?.lat || -34.61315));
-            const finalLng = parseFloat(lng !== undefined ? lng : (ubicacion?.lng || -58.37723));
-
-            Object.assign(eventData, {
-                isRealTime: true,
-                tipoApoyo: 'VUELO',
-                start: start ? new Date(start) : new Date(),
-                end: end ? new Date(end) : null,
-                etapa: 'operativo',
+                carga: (misionDetalle?.carga || '').toUpperCase(),
+                aeronave: (aeronave || misionDetalle?.aeronave || '').toString().toUpperCase(),
+                matricula: (matricula || misionDetalle?.matricula || '').toString().toUpperCase(),
+                tipoIcono: tipoIcono || misionDetalle?.tipoIcono || 'ala_rotativa',
+                isRealTime: isRealTime || false,
                 lat: finalLat,
-                lng: finalLng,
-                ubicacion: {
-                    nombre: (ubicacion?.nombre || req.body.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
-                    lat: finalLat,
-                    lng: finalLng
-                },
-                aeronave: (aeronave || '').toString().toUpperCase(),
-                matricula: (matricula || '').toString().toUpperCase(),
-                tipoIcono: tipoIcono || 'ala_rotativa'
-            });
-        } else {
-            Object.assign(eventData, {
-                isRealTime: false,
-                tipoApoyo: (tipoApoyo || 'SOSTENIMIENTO').toUpperCase(),
-                start: start ? new Date(start) : new Date(),
-                end: end ? new Date(end) : null,
-                etapa: etapa || 'recepcion',
-                esGlobal: isMando ? (esGlobal || false) : false,
-                sdaListado: sdaListado || []
-            });
-        }
+                lng: finalLng
+            },
+            lat: finalLat,
+            lng: finalLng,
+            ubicacion: {
+                nombre: (ubicacion?.nombre || req.body.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+                lat: finalLat,
+                lng: finalLng
+            },
+            start: start ? new Date(start) : new Date(),
+            end: end ? new Date(end) : null,
+            etapa: isRealTime ? 'operativo' : (etapa || 'recepcion'),
+            tipoApoyo: isRealTime ? 'VUELO' : (tipoApoyo || 'SOSTENIMIENTO').toUpperCase(),
+            esGlobal: isMando ? (esGlobal || false) : false,
+            sdaListado: sdaListado || []
+        };
 
         const newEvent = new Event(eventData);
         await newEvent.save();
 
         const io = req.app.get('socketio');
         if (io) {
-            if (newEvent.isRealTime) {
-                io.emit('newOperation', newEvent);
-            } else {
-                io.emit('calendarUpdate', newEvent);
-            }
+            const channel = newEvent.isRealTime ? 'newOperation' : 'calendarUpdate';
+            io.emit(channel, newEvent);
         }
 
         res.status(201).json(newEvent);
@@ -171,7 +155,7 @@ const createEvent = async (req, res) => {
     }
 };
 
-// @desc    Actualizar registro (Sincronización Atómica y Permisos de Unidad)
+// @desc    Actualizar registro (Sincronización Atómica)
 const updateEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
@@ -185,7 +169,7 @@ const updateEvent = async (req, res) => {
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
         if (!isMando && !isOwner && !perteneceAUnidad) {
-            return res.status(403).json({ message: 'No tiene permisos para modificar esta orden operativa.' });
+            return res.status(403).json({ message: 'No tiene permisos.' });
         }
 
         const updateData = { ...req.body };
@@ -193,35 +177,36 @@ const updateEvent = async (req, res) => {
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        ['title', 'elemento', 'aeronave', 'matricula', 'tipoApoyo', 'notasMarginales', 'notes', 'status'].forEach(field => {
+        // Normalización de Strings
+        ['title', 'elemento', 'tipoApoyo', 'notasMarginales', 'notes', 'status'].forEach(field => {
             if (updateData[field] !== undefined) {
                 updateData[field] = (updateData[field] || '').toString().toUpperCase();
             }
         });
 
-        if (updateData.misionDetalle) {
-            updateData.misionDetalle = {
-                comandante: (updateData.misionDetalle.comandante || event.misionDetalle?.comandante || '').toUpperCase(),
-                copiloto: (updateData.misionDetalle.copiloto || event.misionDetalle?.copiloto || '').toUpperCase(),
-                mecanico: (updateData.misionDetalle.mecanico || event.misionDetalle?.mecanico || '').toUpperCase(),
-                pax: (updateData.misionDetalle.pax || event.misionDetalle?.pax || '').toUpperCase(),
-                carga: (updateData.misionDetalle.carga || event.misionDetalle?.carga || '').toUpperCase()
-            };
-        }
+        // Manejo Atómico de MisionDetalle (Mantiene lo que ya está en DB si no viene nuevo)
+        const nLat = parseFloat(updateData.lat ?? updateData.misionDetalle?.lat ?? updateData.ubicacion?.lat ?? event.lat);
+        const nLng = parseFloat(updateData.lng ?? updateData.misionDetalle?.lng ?? updateData.ubicacion?.lng ?? event.lng);
 
-        if (updateData.lat !== undefined || updateData.lng !== undefined || updateData.ubicacion) {
-            const nLat = parseFloat(updateData.lat ?? updateData.ubicacion?.lat ?? event.lat ?? 0);
-            const nLng = parseFloat(updateData.lng ?? updateData.ubicacion?.lng ?? event.lng ?? 0);
-            const nNombre = (updateData.locNombre || updateData.ubicacion?.nombre || event.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase();
+        updateData.misionDetalle = {
+            ...event.misionDetalle,
+            ...updateData.misionDetalle,
+            comandante: (updateData.misionDetalle?.comandante || event.misionDetalle?.comandante || '').toUpperCase(),
+            copiloto: (updateData.misionDetalle?.copiloto || event.misionDetalle?.copiloto || '').toUpperCase(),
+            mecanico: (updateData.misionDetalle?.mecanico || event.misionDetalle?.mecanico || '').toUpperCase(),
+            aeronave: (updateData.aeronave || updateData.misionDetalle?.aeronave || event.misionDetalle?.aeronave || '').toUpperCase(),
+            matricula: (updateData.matricula || updateData.misionDetalle?.matricula || event.misionDetalle?.matricula || '').toUpperCase(),
+            lat: nLat,
+            lng: nLng
+        };
 
-            updateData.lat = nLat;
-            updateData.lng = nLng;
-            updateData.ubicacion = {
-                nombre: nNombre,
-                lat: nLat,
-                lng: nLng
-            };
-        }
+        updateData.lat = nLat;
+        updateData.lng = nLng;
+        updateData.ubicacion = {
+            nombre: (updateData.locNombre || updateData.ubicacion?.nombre || event.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+            lat: nLat,
+            lng: nLng
+        };
 
         const updatedEvent = await Event.findByIdAndUpdate(
             req.params.id,
@@ -242,20 +227,16 @@ const updateEvent = async (req, res) => {
     }
 };
 
-// @desc    Eliminar registro y limpiar radar
+// @desc    Eliminar registro
 const deleteEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
 
-        const userUnidad = req.user.elemento?.toUpperCase();
         const isMando = req.isMando;
-        
-        const eventElemento = event.elemento ? event.elemento.toUpperCase() : "";
-        const perteneceAUnidad = eventElemento.includes(userUnidad);
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
-        if (!isMando && !isOwner && !perteneceAUnidad) {
+        if (!isMando && !isOwner) {
             return res.status(403).json({ message: 'Acceso denegado.' });
         }
 

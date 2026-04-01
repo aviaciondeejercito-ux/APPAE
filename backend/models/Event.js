@@ -2,12 +2,7 @@ const mongoose = require('mongoose');
 
 /**
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
- * Seguridad: Trazabilidad completa con logs de usuario integrados.
- * Estándar de Seguridad: SINCRO JOKER
- * - Normalización estricta a MAYÚSCULAS en pre-validation.
- * - Sincronización atómica de coordenadas (Mirroring lat/lng).
- * - Optimización de índices para Mapa Táctico y Calendario.
- * - Restricción de Visibilidad: Separación de dominios (Mapa vs Calendario).
+ * Estándar de Seguridad: SINCRO JOKER (Persistencia Atómica)
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -21,7 +16,6 @@ const eventSchema = new mongoose.Schema({
         trim: true,
         default: '' 
     },
-    // Cronología: requerida para calendario, opcional para radar táctico instantáneo
     start: { 
         type: Date,
         required: false,
@@ -62,38 +56,33 @@ const eventSchema = new mongoose.Schema({
         default: []
     },
 
-    // Detalle específico visto en el Monitor (Tripulación y Carga)
+    // --- SECCIÓN TÁCTICA Y DETALLE (ESTRUCTURA UNIFICADA DB) ---
     misionDetalle: {
-         comandante: { type: String, uppercase: true, trim: true, default: '' },
-         copiloto: { type: String, uppercase: true, trim: true, default: '' },
-         mecanico: { type: String, uppercase: true, trim: true, default: '' },
-         pax: { type: String, uppercase: true, trim: true, default: '' },
-         carga: { type: String, uppercase: true, trim: true, default: '' }
+        comandante: { type: String, uppercase: true, trim: true, default: '' },
+        copiloto: { type: String, uppercase: true, trim: true, default: '' },
+        mecanico: { type: String, uppercase: true, trim: true, default: '' },
+        pax: { type: String, uppercase: true, trim: true, default: '' },
+        carga: { type: String, uppercase: true, trim: true, default: '' },
+        // Campos movidos al objeto misionDetalle para coincidir con la DB real
+        aeronave: { type: String, uppercase: true, trim: true, default: '' },
+        matricula: { type: String, uppercase: true, trim: true, default: '' },
+        tipoIcono: { 
+            type: String, 
+            enum: ['ala_fija', 'ala_rotativa'],
+            default: 'ala_rotativa' 
+        },
+        isRealTime: { type: Boolean, default: false },
+        lat: { type: Number, default: 0 },
+        lng: { type: Number, default: 0 }
     },
 
-    // --- SECCIÓN TÁCTICA (SOPORTE PARA MAPA EN TIEMPO REAL) ---
-    aeronave: { 
-        type: String, 
-        trim: true,
-        uppercase: true 
-    },
-    matricula: { 
-        type: String, 
-        trim: true,
-        uppercase: true 
-    },
-    tipoIcono: { 
-        type: String, 
-        enum: ['ala_fija', 'ala_rotativa'],
-        default: 'ala_rotativa' 
-    },
+    // --- COMPATIBILIDAD Y REDUNDANCIA DE RADAR ---
     isRealTime: {
         type: Boolean,
         default: false 
     },
-    // Compatibilidad para filtros directos de coordenadas (Mirror de ubicacion)
-    lat: { type: Number },
-    lng: { type: Number },
+    lat: { type: Number }, // Espejo raíz para filtros rápidos
+    lng: { type: Number }, // Espejo raíz para filtros rápidos
     
     ubicacion: {
         nombre: { 
@@ -168,61 +157,50 @@ const eventSchema = new mongoose.Schema({
  * MIDDLEWARE PRE-SAVE: VALIDACIÓN Y ESTANDARIZACIÓN MILITAR
  */
 eventSchema.pre('validate', function(next) {
-    // 1. Validación de Cronología
+    // 1. Sincronización de Cronología
     if (this.start && this.end) {
         if (new Date(this.end) < new Date(this.start)) {
             this.invalidate('end', 'La fecha de finalización debe ser posterior a la de inicio');
         }
     }
     
-    // 2. Normalización de Mayúsculas (Estándar Sincro Joker)
-    const fieldsToUpper = [
-        'title', 'notes', 'notasMarginales', 'aeronave', 
-        'matricula', 'elemento', 'tipoApoyo'
-    ];
-
-    fieldsToUpper.forEach(field => {
-        if (this[field]) {
-            this[field] = this[field].toString().toUpperCase();
-        }
-    });
-
+    // 2. Normalización y Sincronización Táctica
     if (this.misionDetalle) {
-        ['comandante', 'copiloto', 'mecanico', 'pax', 'carga'].forEach(key => {
+        // Aseguramos que isRealTime sea consistente en ambos lados
+        this.misionDetalle.isRealTime = this.isRealTime;
+
+        // Normalizamos campos técnicos dentro de misionDetalle
+        ['aeronave', 'matricula', 'comandante', 'copiloto', 'mecanico'].forEach(key => {
             if (this.misionDetalle[key]) {
-                this.misionDetalle[key] = this.misionDetalle[key].toString().toUpperCase();
+                this.misionDetalle[key] = this.misionDetalle[key].toString().toUpperCase().trim();
             }
         });
     }
-    
-    // 3. Sincronización de Coordenadas (Atomic Mirroring)
+
+    // 3. Atomic Mirroring de Coordenadas (Sincro Joker)
     if (this.ubicacion) {
-        if (this.ubicacion.nombre) {
-            this.ubicacion.nombre = this.ubicacion.nombre.toString().toUpperCase();
-        }
+        const finalLat = this.ubicacion.lat || 0;
+        const finalLng = this.ubicacion.lng || 0;
+
+        // Espejamos a la raíz y a misionDetalle para evitar Error 400 por campos vacíos
+        this.lat = finalLat;
+        this.lng = finalLng;
         
-        // Espejamos coordenadas a la raíz para filtros de radar rápidos
-        // Si es isRealTime pero no tiene coordenadas, forzamos valores de seguridad (0,0 o base)
-        if (this.ubicacion.lat != null) this.lat = this.ubicacion.lat;
-        if (this.ubicacion.lng != null) this.lng = this.ubicacion.lng;
-    }
-    
-    // 4. Corrección de color por defecto
-    if (this.color && !this.color.startsWith('#')) {
-        this.color = '#1b3a57';
+        if (this.misionDetalle) {
+            this.misionDetalle.lat = finalLat;
+            this.misionDetalle.lng = finalLng;
+        }
     }
     
     next();
 });
 
 /**
- * ÍNDICES DE ALTO RENDIMIENTO (SINCRO JOKER)
- * Optimizados para la separación de Calendario (isRealTime: false) y Mapa (isRealTime: true)
+ * ÍNDICES DE ALTO RENDIMIENTO
  */
-eventSchema.index({ isRealTime: 1, start: 1, end: 1 }); // Filtro principal para el Calendario
-eventSchema.index({ isRealTime: 1, status: 1 }); // Filtro principal para el Mapa Táctico
+eventSchema.index({ isRealTime: 1, status: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
-eventSchema.index({ lat: 1, lng: 1 }); // Índice para búsqueda geoespacial simple
+eventSchema.index({ lat: 1, lng: 1 }); 
 eventSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Event', eventSchema);
