@@ -95,12 +95,10 @@ const CargaTactica = () => {
     const cargarDatos = async () => {
         setLoading(true);
         try {
-            // CAMBIO CRÍTICO: Usamos getActiveOperations para obtener datos del Mapa Táctico
             const [evRes, airRes] = await Promise.all([getActiveOperations(), getAircrafts()]);
             const dataEvents = Array.isArray(evRes) ? evRes : (evRes.data || []);
             const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
 
-            // Filtro de misiones para la vista lateral
             const activas = dataEvents.filter(ev => {
                 const esVueloActivo = ev.isRealTime === true;
                 if (!isMandoTotal && user.elemento) {
@@ -110,7 +108,6 @@ const CargaTactica = () => {
             });
             setMisionesActivas(activas);
             
-            // Filtro de flota disponible
             const flotaFiltrada = dataAir.filter(a => {
                 const enServicio = a.estado === 'E/S';
                 if (!isMandoTotal && user.elemento) {
@@ -184,8 +181,10 @@ const CargaTactica = () => {
     };
 
     const handleEdit = (mision) => {
-        const latVal = mision.lat ?? mision.ubicacion?.lat ?? 0;
-        const lngVal = mision.lng ?? mision.ubicacion?.lng ?? 0;
+        // Obtenemos coordenadas priorizando misionDetalle (Estructura DB real)
+        const latVal = mision.misionDetalle?.lat ?? mision.lat ?? mision.ubicacion?.lat ?? 0;
+        const lngVal = mision.misionDetalle?.lng ?? mision.lng ?? mision.ubicacion?.lng ?? 0;
+        
         const latGMS = fromDecimal(latVal, 'lat');
         const lngGMS = fromDecimal(lngVal, 'lng');
 
@@ -208,8 +207,8 @@ const CargaTactica = () => {
             elemento: mision.elemento || '',
             notasMarginales: mision.notasMarginales || mision.notes || '',
             aeronaveId: 'FIXED_SdA',
-            sda: mision.aeronave || '',
-            matricula: mision.matricula || '',
+            sda: mision.misionDetalle?.aeronave || mision.aeronave || '',
+            matricula: mision.misionDetalle?.matricula || mision.matricula || '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
             locNombre: mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA',
@@ -224,10 +223,9 @@ const CargaTactica = () => {
         const latDec = toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir);
         const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
 
+        // CONSTRUCCIÓN DEL PAYLOAD (ESTANDARIZADO PARA DB REAL)
         const payload = {
             title: formData.title.toUpperCase(),
-            aeronave: formData.sda.toUpperCase(),
-            matricula: formData.matricula.toUpperCase(),
             elemento: formData.elemento.toUpperCase(),
             notes: formData.notasMarginales.toUpperCase(),
             notasMarginales: formData.notasMarginales.toUpperCase(),
@@ -237,15 +235,34 @@ const CargaTactica = () => {
             etapa: formData.etapa,
             createdBy: formData.createdBy,
             userName: formData.userName,
-            tipoIcono: (formData.sda.includes('AE') || formData.sda.includes('C-')) ? 'ala_fija' : 'ala_rotativa',
+            // Sincronización de coordenadas en raíz
             lat: latDec, 
             lng: lngDec,
             ubicacion: {
                 nombre: (formData.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
                 lat: latDec,
                 lng: lngDec
+            },
+            // ANIDACIÓN CRÍTICA: misionDetalle para evitar Error 400
+            misionDetalle: {
+                aeronave: formData.sda.toUpperCase(),
+                matricula: formData.matricula.toUpperCase(),
+                tipoIcono: (formData.sda.includes('AE') || formData.sda.includes('C-')) ? 'ala_fija' : 'ala_rotativa',
+                isRealTime: true,
+                lat: latDec,
+                lng: lngDec,
+                comandante: '', // Campos requeridos por el modelo
+                copiloto: '',
+                mecanico: '',
+                pax: '',
+                carga: ''
             }
         };
+
+        // Compatibilidad hacia atrás (campos en raíz que el modelo aún usa)
+        payload.aeronave = payload.misionDetalle.aeronave;
+        payload.matricula = payload.misionDetalle.matricula;
+        payload.tipoIcono = payload.misionDetalle.tipoIcono;
 
         if (showDestino && formData.destNombre) {
             const dLatDec = toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir);
@@ -271,7 +288,14 @@ const CargaTactica = () => {
             setShowDestino(false);
             cargarDatos();
         } catch (error) {
-            Swal.fire({ title: 'ERROR', text: 'Verifique los campos obligatorios.', icon: 'error', background: '#1e272e', color: '#fff' });
+            console.error("Detalle del Error:", error.response?.data);
+            Swal.fire({ 
+                title: 'ERROR 400', 
+                text: error.response?.data?.message || 'Error de validación en la estructura de datos.', 
+                icon: 'error', 
+                background: '#1e272e', 
+                color: '#fff' 
+            });
         }
     };
 
@@ -408,8 +432,8 @@ const CargaTactica = () => {
                             misionesActivas.map(m => (
                                 <div key={m._id} style={styles.misionItem}>
                                     <div style={styles.misionHeader}>
-                                        <span style={{color: '#f39c12'}}>{m.aeronave}</span>
-                                        <span style={{backgroundColor: '#1e272e', padding: '2px 6px', borderRadius: '4px'}}>{m.matricula}</span>
+                                        <span style={{color: '#f39c12'}}>{m.misionDetalle?.aeronave || m.aeronave}</span>
+                                        <span style={{backgroundColor: '#1e272e', padding: '2px 6px', borderRadius: '4px'}}>{m.misionDetalle?.matricula || m.matricula}</span>
                                     </div>
                                     <div style={styles.misionTitle}>{m.title}</div>
                                     <div style={styles.misionSub}>Unidad: {m.elemento}</div>
