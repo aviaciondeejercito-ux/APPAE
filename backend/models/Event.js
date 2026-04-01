@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
  * - Normalización estricta a MAYÚSCULAS en pre-validation.
  * - Sincronización atómica de coordenadas (Mirroring lat/lng).
  * - Optimización de índices para Mapa Táctico y Calendario.
+ * - Restricción de Visibilidad: Separación de dominios (Mapa vs Calendario).
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -63,11 +64,11 @@ const eventSchema = new mongoose.Schema({
 
     // Detalle específico visto en el Monitor (Tripulación y Carga)
     misionDetalle: {
-        comandante: { type: String, uppercase: true, trim: true, default: '' },
-        copiloto: { type: String, uppercase: true, trim: true, default: '' },
-        mecanico: { type: String, uppercase: true, trim: true, default: '' },
-        pax: { type: String, uppercase: true, trim: true, default: '' },
-        carga: { type: String, uppercase: true, trim: true, default: '' }
+         comandante: { type: String, uppercase: true, trim: true, default: '' },
+         copiloto: { type: String, uppercase: true, trim: true, default: '' },
+         mecanico: { type: String, uppercase: true, trim: true, default: '' },
+         pax: { type: String, uppercase: true, trim: true, default: '' },
+         carga: { type: String, uppercase: true, trim: true, default: '' }
     },
 
     // --- SECCIÓN TÁCTICA (SOPORTE PARA MAPA EN TIEMPO REAL) ---
@@ -181,22 +182,27 @@ eventSchema.pre('validate', function(next) {
     ];
 
     fieldsToUpper.forEach(field => {
-        if (this[field]) this[field] = this[field].toUpperCase();
+        if (this[field]) {
+            this[field] = this[field].toString().toUpperCase();
+        }
     });
 
     if (this.misionDetalle) {
         ['comandante', 'copiloto', 'mecanico', 'pax', 'carga'].forEach(key => {
             if (this.misionDetalle[key]) {
-                this.misionDetalle[key] = this.misionDetalle[key].toUpperCase();
+                this.misionDetalle[key] = this.misionDetalle[key].toString().toUpperCase();
             }
         });
     }
     
     // 3. Sincronización de Coordenadas (Atomic Mirroring)
     if (this.ubicacion) {
-        if (this.ubicacion.nombre) this.ubicacion.nombre = this.ubicacion.nombre.toUpperCase();
+        if (this.ubicacion.nombre) {
+            this.ubicacion.nombre = this.ubicacion.nombre.toString().toUpperCase();
+        }
         
         // Espejamos coordenadas a la raíz para filtros de radar rápidos
+        // Si es isRealTime pero no tiene coordenadas, forzamos valores de seguridad (0,0 o base)
         if (this.ubicacion.lat != null) this.lat = this.ubicacion.lat;
         if (this.ubicacion.lng != null) this.lng = this.ubicacion.lng;
     }
@@ -211,10 +217,11 @@ eventSchema.pre('validate', function(next) {
 
 /**
  * ÍNDICES DE ALTO RENDIMIENTO (SINCRO JOKER)
+ * Optimizados para la separación de Calendario (isRealTime: false) y Mapa (isRealTime: true)
  */
-eventSchema.index({ start: 1, end: 1 });
+eventSchema.index({ isRealTime: 1, start: 1, end: 1 }); // Filtro principal para el Calendario
+eventSchema.index({ isRealTime: 1, status: 1 }); // Filtro principal para el Mapa Táctico
 eventSchema.index({ elemento: 1, etapa: 1 }); 
-eventSchema.index({ isRealTime: 1, status: 1 }); 
 eventSchema.index({ lat: 1, lng: 1 }); // Índice para búsqueda geoespacial simple
 eventSchema.index({ createdAt: -1 });
 

@@ -7,7 +7,7 @@ const Aircraft = require('../models/Aircraft');
  * - Actualizaciones Atómicas en MongoDB ($set).
  * - Sincro Real-Time: Integración con WebSockets para el Mapa Táctico.
  * - Lógica de Permisos: Filtro por Unidad/Elemento y Jerarquía OTO/OTOAE.
- * - Integridad de Datos: Normalización estricta a Mayúsculas.
+ * - Integridad de Datos: Normalización estricta a MAYÚSCULAS.
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -28,30 +28,30 @@ const getAvailableAircraft = async (req, res) => {
     }
 };
 
-// @desc    Obtener eventos para CALENDARIO Y LOG
+// @desc    Obtener eventos para CALENDARIO Y LOG (Excluye Vuelos Tácticos)
 const getEvents = async (req, res) => {
     try {
         const { elemento } = req.user; 
         const isMando = req.isMando; 
-        let query = {}; 
+        
+        // REGLA CRÍTICA: El calendario solo muestra eventos que NO son RealTime
+        let query = { isRealTime: false }; 
 
         if (!isMando) {
-            query = {
-                $or: [
-                    { elemento: { $regex: elemento, $options: 'i' } },
-                    { 
-                        $and: [
-                            { etapa: 'ordenada' }, 
-                            { 
-                                $or: [
-                                    { esGlobal: true }, 
-                                    { elemento: { $regex: elemento, $options: 'i' } } 
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            };
+            query.$or = [
+                { elemento: { $regex: elemento, $options: 'i' } },
+                { 
+                    $and: [
+                        { etapa: 'ordenada' }, 
+                        { 
+                            $or: [
+                                { esGlobal: true }, 
+                                { elemento: { $regex: elemento, $options: 'i' } } 
+                            ]
+                        }
+                    ]
+                }
+            ];
         }
 
         const events = await Event.find(query).sort({ start: 1, updatedAt: -1 });
@@ -62,7 +62,7 @@ const getEvents = async (req, res) => {
     }
 };
 
-// @desc    Obtener operaciones activas para el MAPA TÁCTICO (Con filtro de Unidad)
+// @desc    Obtener operaciones activas para el MAPA TÁCTICO
 const getActiveOperations = async (req, res) => {
     try {
         const { elemento } = req.user;
@@ -120,8 +120,8 @@ const createEvent = async (req, res) => {
         };
 
         if (isRealTime) {
-            const finalLat = parseFloat(lat !== undefined ? lat : (ubicacion?.lat || 0));
-            const finalLng = parseFloat(lng !== undefined ? lng : (ubicacion?.lng || 0));
+            const finalLat = parseFloat(lat !== undefined ? lat : (ubicacion?.lat || -34.61315));
+            const finalLng = parseFloat(lng !== undefined ? lng : (ubicacion?.lng || -58.37723));
 
             Object.assign(eventData, {
                 isRealTime: true,
@@ -144,7 +144,7 @@ const createEvent = async (req, res) => {
             Object.assign(eventData, {
                 isRealTime: false,
                 tipoApoyo: (tipoApoyo || 'SOSTENIMIENTO').toUpperCase(),
-                start: start ? new Date(start) : null,
+                start: start ? new Date(start) : new Date(),
                 end: end ? new Date(end) : null,
                 etapa: etapa || 'recepcion',
                 esGlobal: isMando ? (esGlobal || false) : false,
@@ -156,8 +156,12 @@ const createEvent = async (req, res) => {
         await newEvent.save();
 
         const io = req.app.get('socketio');
-        if (io && newEvent.isRealTime) {
-            io.emit('newOperation', newEvent);
+        if (io) {
+            if (newEvent.isRealTime) {
+                io.emit('newOperation', newEvent);
+            } else {
+                io.emit('calendarUpdate', newEvent);
+            }
         }
 
         res.status(201).json(newEvent);
@@ -189,8 +193,7 @@ const updateEvent = async (req, res) => {
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        // Procesamiento de Mayúsculas (Estándar Sincro Joker)
-        ['title', 'elemento', 'aeronave', 'matricula', 'tipoApoyo', 'notasMarginales', 'notes'].forEach(field => {
+        ['title', 'elemento', 'aeronave', 'matricula', 'tipoApoyo', 'notasMarginales', 'notes', 'status'].forEach(field => {
             if (updateData[field] !== undefined) {
                 updateData[field] = (updateData[field] || '').toString().toUpperCase();
             }
@@ -198,19 +201,18 @@ const updateEvent = async (req, res) => {
 
         if (updateData.misionDetalle) {
             updateData.misionDetalle = {
-                comandante: (updateData.misionDetalle.comandante || '').toUpperCase(),
-                copiloto: (updateData.misionDetalle.copiloto || '').toUpperCase(),
-                mecanico: (updateData.misionDetalle.mecanico || '').toUpperCase(),
-                pax: (updateData.misionDetalle.pax || '').toUpperCase(),
-                carga: (updateData.misionDetalle.carga || '').toUpperCase()
+                comandante: (updateData.misionDetalle.comandante || event.misionDetalle?.comandante || '').toUpperCase(),
+                copiloto: (updateData.misionDetalle.copiloto || event.misionDetalle?.copiloto || '').toUpperCase(),
+                mecanico: (updateData.misionDetalle.mecanico || event.misionDetalle?.mecanico || '').toUpperCase(),
+                pax: (updateData.misionDetalle.pax || event.misionDetalle?.pax || '').toUpperCase(),
+                carga: (updateData.misionDetalle.carga || event.misionDetalle?.carga || '').toUpperCase()
             };
         }
 
-        // --- CORRECCIÓN CRÍTICA: ESTRUCTURA DE UBICACIÓN ---
         if (updateData.lat !== undefined || updateData.lng !== undefined || updateData.ubicacion) {
-            const nLat = parseFloat(updateData.lat ?? updateData.ubicacion?.lat ?? event.lat ?? event.ubicacion?.lat ?? 0);
-            const nLng = parseFloat(updateData.lng ?? updateData.ubicacion?.lng ?? event.lng ?? event.ubicacion?.lng ?? 0);
-            const nNombre = (updateData.locNombre || updateData.ubicacion?.nombre || (event.ubicacion && event.ubicacion.nombre) || 'POSICIÓN TÁCTICA').toUpperCase();
+            const nLat = parseFloat(updateData.lat ?? updateData.ubicacion?.lat ?? event.lat ?? 0);
+            const nLng = parseFloat(updateData.lng ?? updateData.ubicacion?.lng ?? event.lng ?? 0);
+            const nNombre = (updateData.locNombre || updateData.ubicacion?.nombre || event.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase();
 
             updateData.lat = nLat;
             updateData.lng = nLng;
@@ -221,7 +223,6 @@ const updateEvent = async (req, res) => {
             };
         }
 
-        // Actualización Atómica mediante $set
         const updatedEvent = await Event.findByIdAndUpdate(
             req.params.id,
             { $set: updateData }, 
@@ -237,7 +238,7 @@ const updateEvent = async (req, res) => {
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error al actualizar registro. Verifique el formato de coordenadas.' });
+        res.status(400).json({ message: 'Error al actualizar registro.' });
     }
 };
 
@@ -255,7 +256,7 @@ const deleteEvent = async (req, res) => {
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
         if (!isMando && !isOwner && !perteneceAUnidad) {
-            return res.status(403).json({ message: 'Acceso denegado: No posee permisos sobre esta actividad.' });
+            return res.status(403).json({ message: 'Acceso denegado.' });
         }
 
         const isRealTime = event.isRealTime;
