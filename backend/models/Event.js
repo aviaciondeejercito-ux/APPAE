@@ -18,10 +18,11 @@ const eventSchema = new mongoose.Schema({
         trim: true,
         default: '' 
     },
-    // Cronología obligatoria para Monitor de Actividades
+    // Cronología: requerida para calendario, opcional para radar táctico instantáneo
     start: { 
         type: Date,
-        required: false 
+        required: false,
+        default: Date.now // Garantiza que no sea nulo para evitar errores de índice
     },
     end: { 
         type: Date,
@@ -60,11 +61,11 @@ const eventSchema = new mongoose.Schema({
 
     // Detalle específico visto en el Monitor (Tripulación y Carga)
     misionDetalle: {
-        comandante: { type: String, uppercase: true, trim: true },
-        copiloto: { type: String, uppercase: true, trim: true },
-        mecanico: { type: String, uppercase: true, trim: true },
-        pax: { type: String, uppercase: true, trim: true },
-        carga: { type: String, uppercase: true, trim: true }
+        comandante: { type: String, uppercase: true, trim: true, default: '' },
+        copiloto: { type: String, uppercase: true, trim: true, default: '' },
+        mecanico: { type: String, uppercase: true, trim: true, default: '' },
+        pax: { type: String, uppercase: true, trim: true, default: '' },
+        carga: { type: String, uppercase: true, trim: true, default: '' }
     },
 
     // --- SECCIÓN TÁCTICA (SOPORTE PARA MAPA EN TIEMPO REAL) ---
@@ -87,6 +88,10 @@ const eventSchema = new mongoose.Schema({
         type: Boolean,
         default: false 
     },
+    // Compatibilidad para filtros directos de coordenadas
+    lat: { type: Number },
+    lng: { type: Number },
+    
     ubicacion: {
         nombre: { 
             type: String, 
@@ -122,7 +127,6 @@ const eventSchema = new mongoose.Schema({
     },
     etapa: {
         type: String,
-        // Alineado con Referencias: Recepción (Ambar), Revisión (Azul), Ordenada (Verde)
         enum: ['recepcion', 'revision', 'ordenada', 'solicitud', 'operativo'],
         default: 'recepcion',
         required: true,
@@ -161,7 +165,7 @@ const eventSchema = new mongoose.Schema({
  * VALIDACIÓN DE SEGURIDAD ATÓMICA Y ESTANDARIZACIÓN MILITAR
  */
 eventSchema.pre('validate', function(next) {
-    // Validar cronología
+    // Validar cronología si ambos existen
     if (this.start && this.end) {
         const dStart = new Date(this.start);
         const dEnd = new Date(this.end);
@@ -186,17 +190,20 @@ eventSchema.pre('validate', function(next) {
     });
 
     if (this.misionDetalle) {
-        if (this.misionDetalle.comandante) this.misionDetalle.comandante = this.misionDetalle.comandante.toUpperCase();
-        if (this.misionDetalle.copiloto) this.misionDetalle.copiloto = this.misionDetalle.copiloto.toUpperCase();
-        if (this.misionDetalle.mecanico) this.misionDetalle.mecanico = this.misionDetalle.mecanico.toUpperCase();
-        if (this.misionDetalle.pax) this.misionDetalle.pax = this.misionDetalle.pax.toUpperCase();
-        if (this.misionDetalle.carga) this.misionDetalle.carga = this.misionDetalle.carga.toUpperCase();
+        ['comandante', 'copiloto', 'mecanico', 'pax', 'carga'].forEach(key => {
+            if (this.misionDetalle[key]) {
+                this.misionDetalle[key] = this.misionDetalle[key].toUpperCase();
+            }
+        });
     }
     
+    // Sincronización de coordenadas duplicadas para búsqueda optimizada
     if (this.ubicacion) {
         if (this.ubicacion.nombre) this.ubicacion.nombre = this.ubicacion.nombre.toUpperCase();
-        this.ubicacion.lat = (this.ubicacion.lat != null) ? this.ubicacion.lat : 0;
-        this.ubicacion.lng = (this.ubicacion.lng != null) ? this.ubicacion.lng : 0;
+        
+        // Si vienen coordenadas en ubicación, las espejamos en la raíz para el radar
+        if (this.ubicacion.lat != null) this.lat = this.ubicacion.lat;
+        if (this.ubicacion.lng != null) this.lng = this.ubicacion.lng;
     }
     
     next();
@@ -209,6 +216,7 @@ eventSchema.index({ esGlobal: 1 });
 eventSchema.index({ isRealTime: 1, status: 1 }); 
 eventSchema.index({ createdBy: 1 });
 eventSchema.index({ createdAt: -1 }); 
+eventSchema.index({ lat: 1, lng: 1 });
 eventSchema.index({ "ubicacion.lat": 1, "ubicacion.lng": 1 });
 
 module.exports = mongoose.model('Event', eventSchema);
