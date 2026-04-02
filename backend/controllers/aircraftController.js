@@ -28,7 +28,7 @@ exports.getAircrafts = async (req, res) => {
         }
 
         // Permitir a Mandos Superiores filtrar por unidad específica vía query
-        if (req.query.unidad && (userRole === 'ADMIN' || userRole === 'BOSS')) {
+        if (req.query.unidad && (userRole === 'admin' || userRole === 'BOSS')) {
             query.unidad = String(req.query.unidad).trim().toUpperCase();
         }
 
@@ -49,7 +49,7 @@ exports.createAircraft = async (req, res) => {
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
         // --- LÓGICA DE SEGURIDAD SINCRO JOKER ---
-        if (userRole === 'ADMIN' || userRole === 'BOSS') {
+        if (userRole === 'admin' || userRole === 'BOSS') {
             // El ADMIN/BOSS puede usar la unidad que viene en el body (la elegida en el select)
             if (!unidad) return res.status(400).json({ message: "El ADMIN debe especificar una unidad de destino." });
         } else if (['S4', 'S4_UNIDAD', 'OFICINA_TECNICA'].includes(userRole)) {
@@ -102,7 +102,7 @@ exports.updateAircraftStatus = async (req, res) => {
 
         // SEGURIDAD: Normalización de Roles
         const userRole = req.user.role ? String(req.user.role).toUpperCase().trim() : '';
-        const esMandoSuperior = ['ADMIN', 'BOSS'].includes(userRole);
+        const esMandoSuperior = ['admin', 'BOSS'].includes(userRole);
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
         
         // Verificación de pertenencia a la unidad para roles no-administradores
@@ -155,7 +155,7 @@ exports.deleteAircraft = async (req, res) => {
         if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
 
         // SEGURIDAD: Solo Admin Central, Oficina Técnica o S4_UNIDAD de la misma unidad
-        const esAdmin = userRole === 'ADMIN';
+        const esAdmin = userRole === 'admin';
         const esPersonalAutorizadoUnidad = (['OFICINA_TECNICA', 'S4_UNIDAD'].includes(userRole) && userElemento === String(aircraft.unidad).trim().toUpperCase());
 
         if (!esAdmin && !esPersonalAutorizadoUnidad) {

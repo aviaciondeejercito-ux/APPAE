@@ -214,7 +214,7 @@ const OperacionesMapa = () => {
                 const esOperativo = ev.isRealTime === true && ev.etapa === 'operativo';
                 
                 // Jerarquía alta: Ven todo (Se agregó OTOAE a la lista de privilegios)
-                if (['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role)) {
+                if (['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role)) {
                     return esOperativo;
                 }
                 

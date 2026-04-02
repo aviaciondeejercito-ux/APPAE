@@ -134,7 +134,7 @@ export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
     const userElemento = localStorage.getItem('elemento')?.trim();
 
-    const hasGlobalView = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
+    const hasGlobalView = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
 
     if (!hasGlobalView && userElemento) {
         return API.get(`/aircraft`, { params: { unidad: userElemento.toUpperCase() } });
@@ -147,7 +147,7 @@ export const createAircraft = (aircraftData) => {
     const userElemento = localStorage.getItem('elemento')?.trim();
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(rawRole);
+    const isMandoEstrategico = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(rawRole);
 
     const dataNormalized = {
         ...aircraftData, 

@@ -41,37 +41,37 @@ router.use(protect);
  * @route    GET /api/events/active-map
  * @desc     Obtener misiones de VUELO TÁCTICO en curso para el Mapa
  */
-router.get('/active-map', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), getActiveOperations);
+router.get('/active-map', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getActiveOperations);
 
 /**
  * @route    GET /api/events/aircraft-available/:elemento
  * @desc     Consultar disponibilidad de aeronaves E/S para la unidad específica
  * @note     Se ajusta el path para coincidir con la llamada del controlador
  */
-router.get('/aircraft-available/:elemento', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), getAvailableAircraft);
+router.get('/aircraft-available/:elemento', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getAvailableAircraft);
 
 /**
  * @route    GET /api/events
  * @desc     Obtener lista de eventos (Filtra automáticamente isRealTime: false)
  */
-router.get('/', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), getEvents);
+router.get('/', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getEvents);
 
 /**
  * @route    POST /api/events
  * @desc     Registrar nuevo VUELO TÁCTICO o Actividad de Monitor
  */
-router.post('/', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), createEvent);
+router.post('/', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), createEvent);
 
 /**
  * @route    PUT /api/events/:id
  * @desc     Actualizar misión (Cambio de ubicación, tripulación o etapa operativa)
  */
-router.put('/:id', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), updateEvent);
+router.put('/:id', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), updateEvent);
 
 /**
  * @route    DELETE /api/events/:id
  * @desc     Eliminación de registro y limpieza de rastro
  */
-router.delete('/:id', authorize('USER', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'ADMIN'), deleteEvent);
+router.delete('/:id', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), deleteEvent);
 
 module.exports = router;

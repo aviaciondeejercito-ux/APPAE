@@ -14,8 +14,8 @@ const Material = () => {
     const userName = localStorage.getItem('username') || 'Usuario';
 
     // Definición de permisos jerárquicos estrictos
-    const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
-    const isAdmin = role === 'ADMIN';
+    const isMando = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role);
+    const isAdmin = role === 'admin';
     
     // Privilegios de edición: Mandos, Oficina Técnica y S4 Unidad
     const hasEditPrivileges = isMando || role === 'OFICINA_TECNICA' || role === 'S4_UNIDAD';
