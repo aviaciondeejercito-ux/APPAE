@@ -108,7 +108,7 @@ function App() {
                                 </button>
                             )}
 
-                            {(role === 'ADMIN' || role === 'OTO' || role === 'USER') && (
+                            {(role === 'admin' || role === 'OTO' || role === 'user') && (
                                 <button 
                                     onClick={() => setView('despacho')}
                                     style={{
@@ -171,7 +171,7 @@ function App() {
                                 </button>
                             )}
 
-                            {role === 'ADMIN' && (
+                            {role === 'admin' && (
                                 <button 
                                     onClick={() => setView('admin')}
                                     style={{
@@ -205,7 +205,7 @@ function App() {
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
-                        if (view === 'admin' && role === 'ADMIN') return <AdminPanel />;
+                        if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
                         if (view === 'mapa' && puedeVerMapa) return (
                             <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#000' }}>
