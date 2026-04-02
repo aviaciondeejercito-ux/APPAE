@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 /**
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: SINCRO JOKER (Persistencia Atómica)
- * Acción: Eliminación de Error 400 y Sincronización de Espejos
+ * Acción: Soporte de Trayecto (Origen/Destino) y Sincronización de Espejos
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -73,6 +73,7 @@ const eventSchema = new mongoose.Schema({
             default: 'ala_rotativa' 
         },
         isRealTime: { type: Boolean, default: false },
+        // Coordenadas actuales (o de salida por defecto)
         lat: { type: Number, default: -34.61315 },
         lng: { type: Number, default: -58.37723 }
     },
@@ -82,28 +83,34 @@ const eventSchema = new mongoose.Schema({
         type: Boolean,
         default: false 
     },
+    // Estas representan la posición "viva" en el mapa
     lat: { type: Number, default: -34.61315 }, 
     lng: { type: Number, default: -58.37723 }, 
     
+    // --- GEOLOCALIZACIÓN DE TRAYECTO (SALIDA Y LLEGADA) ---
     ubicacion: {
         nombre: { 
             type: String, 
             default: 'POSICIÓN POR COORDENADAS',
             uppercase: true 
         },
-        lat: { 
-            type: Number, 
-            default: -34.61315,
-            min: -90,
-            max: 90
+        // Punto de Salida / Despliegue
+        salida: {
+            nombre: { type: String, uppercase: true, default: 'ORIGEN' },
+            lat: { type: Number, default: -34.61315 },
+            lng: { type: Number, default: -58.37723 }
         },
-        lng: { 
-            type: Number, 
-            default: -58.37723,
-            min: -180,
-            max: 180
-        }
+        // Punto de Llegada / Destino
+        llegada: {
+            nombre: { type: String, uppercase: true, default: 'DESTINO' },
+            lat: { type: Number, default: -34.61315 },
+            lng: { type: Number, default: -58.37723 }
+        },
+        // Mantenemos lat/lng raíz en ubicacion para compatibilidad con código viejo
+        lat: { type: Number, default: -34.61315 },
+        lng: { type: Number, default: -58.37723 }
     },
+
     notasMarginales: {
         type: String, 
         default: '', 
@@ -165,19 +172,24 @@ eventSchema.pre('validate', function(next) {
         }
     }
     
-    // 2. Normalización de Coordenadas (Prioridad de entrada)
-    // Buscamos un valor válido en cualquier rama para evitar el 0 por defecto si hay data
-    const finalLat = this.lat ?? this.ubicacion?.lat ?? this.misionDetalle?.lat ?? -34.61315;
-    const finalLng = this.lng ?? this.ubicacion?.lng ?? this.misionDetalle?.lng ?? -58.37723;
+    // 2. Lógica de Trayecto y Sincro Joker
+    // Si es un vuelo, la posición actual (this.lat) debería ser la de salida al iniciar
+    // Priorizamos 'ubicacion.salida' si existe para la persistencia atómica
+    const finalLat = this.ubicacion?.salida?.lat ?? this.lat ?? this.misionDetalle?.lat ?? -34.61315;
+    const finalLng = this.ubicacion?.salida?.lng ?? this.lng ?? this.misionDetalle?.lng ?? -58.37723;
 
-    // 3. Atomic Mirroring (Sincro Joker)
-    // Espejamos a todas las ramas para consistencia total en consultas
+    // 3. Atomic Mirroring (Sincronización de espejos)
+    // Aseguramos que la posición de "referencia" sea consistente
     this.lat = finalLat;
     this.lng = finalLng;
 
     if (this.ubicacion) {
         this.ubicacion.lat = finalLat;
         this.ubicacion.lng = finalLng;
+        
+        // Normalización de nombres de salida/llegada
+        if (this.ubicacion.salida.nombre) this.ubicacion.salida.nombre = this.ubicacion.salida.nombre.toUpperCase();
+        if (this.ubicacion.llegada.nombre) this.ubicacion.llegada.nombre = this.ubicacion.llegada.nombre.toUpperCase();
     }
 
     if (this.misionDetalle) {

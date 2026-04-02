@@ -209,14 +209,11 @@ const OperacionesMapa = () => {
             
             const dataArray = Array.isArray(data) ? data : data.data || [];
             
-            // FILTRADO POR ROL Y UNIDAD
             const activas = dataArray.filter(ev => {
                 const esOperativo = ev.isRealTime === true && ev.etapa === 'operativo';
-                
                 if (['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role)) {
                     return esOperativo;
                 }
-                
                 return esOperativo && ev.elemento === userElemento;
             });
 
@@ -264,7 +261,6 @@ const OperacionesMapa = () => {
                     const hasDetailPos = m.misionDetalle && m.misionDetalle.lat && m.misionDetalle.lng;
                     const isMoving = hasDetailPos && (m.misionDetalle.lat !== m.ubicacion.lat || m.misionDetalle.lng !== m.ubicacion.lng);
                     
-                    // Si se mueve, calculamos punto medio para el icono y definimos la trayectoria
                     const startPos = [m.ubicacion.lat, m.ubicacion.lng];
                     const endPos = isMoving ? [m.misionDetalle.lat, m.misionDetalle.lng] : startPos;
                     

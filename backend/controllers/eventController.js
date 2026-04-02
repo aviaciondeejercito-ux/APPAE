@@ -4,7 +4,7 @@ const Aircraft = require('../models/Aircraft');
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: SINCRO JOKER (Optimizado)
- * Acción: Auditoría de error 400 y Normalización Atómica
+ * Acción: Auditoría de error 400 y Normalización Atómica de Trayectos
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -81,7 +81,7 @@ const getActiveOperations = async (req, res) => {
     }
 };
 
-// @desc    Crear un nuevo registro (Sincronizado con CargaTactica)
+// @desc    Crear un nuevo registro (Sincronizado con CargaTactica y Trayectos)
 const createEvent = async (req, res) => {
     try {
         const { 
@@ -92,15 +92,15 @@ const createEvent = async (req, res) => {
             misionDetalle 
         } = req.body;
 
-        // Validación crítica para evitar 400 sin mensaje
         if (!title) return res.status(400).json({ message: 'El título es obligatorio.' });
 
         const isMando = req.isMando;
         const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
         
-        // Normalización de coordenadas (Evita errores de parseo en MongoDB)
-        const finalLat = parseFloat(lat ?? misionDetalle?.lat ?? ubicacion?.lat ?? -34.61315);
-        const finalLng = parseFloat(lng ?? misionDetalle?.lng ?? ubicacion?.lng ?? -58.37723);
+        // Normalización de coordenadas principales (Persistencia Sincro Joker)
+        // Se prioriza la ubicación de salida para vuelos en desplazamiento
+        const finalLat = parseFloat(ubicacion?.salida?.lat ?? lat ?? misionDetalle?.lat ?? -34.61315);
+        const finalLng = parseFloat(ubicacion?.salida?.lng ?? lng ?? misionDetalle?.lng ?? -58.37723);
 
         const eventData = {
             title: (title || '').toString().toUpperCase(),
@@ -108,7 +108,7 @@ const createEvent = async (req, res) => {
             notasMarginales: notasProcesadas,
             color: color || '#1b3a57',
             createdBy: req.user._id,
-            userName: req.user.username, // Requerido por el Estándar de Seguridad
+            userName: req.user.username,
             elemento: ((isMando && elemento) ? elemento : req.user.elemento).toUpperCase(),
             status: (status || 'programado').toLowerCase(),
             isRealTime: isRealTime || false,
@@ -129,6 +129,16 @@ const createEvent = async (req, res) => {
             lng: finalLng,
             ubicacion: {
                 nombre: (ubicacion?.nombre || req.body.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+                salida: {
+                    nombre: (ubicacion?.salida?.nombre || 'ORIGEN').toUpperCase(),
+                    lat: parseFloat(ubicacion?.salida?.lat ?? finalLat),
+                    lng: parseFloat(ubicacion?.salida?.lng ?? finalLng)
+                },
+                llegada: {
+                    nombre: (ubicacion?.llegada?.nombre || 'DESTINO').toUpperCase(),
+                    lat: parseFloat(ubicacion?.llegada?.lat ?? finalLat),
+                    lng: parseFloat(ubicacion?.llegada?.lng ?? finalLng)
+                },
                 lat: finalLat,
                 lng: finalLng
             },
@@ -152,12 +162,11 @@ const createEvent = async (req, res) => {
         res.status(201).json(newEvent);
     } catch (error) {
         console.error(`❌ Error en createEvent: ${error.message}`);
-        // Devolvemos el error específico de validación para depurar el 400
         res.status(400).json({ message: 'Error en la persistencia.', details: error.message });
     }
 };
 
-// @desc    Actualizar registro (Sincronización Atómica)
+// @desc    Actualizar registro (Sincronización Atómica de Trayecto)
 const updateEvent = async (req, res) => {
     try {
         const event = await Event.findById(req.params.id);
@@ -186,11 +195,11 @@ const updateEvent = async (req, res) => {
             }
         });
 
-        // Manejo Atómico de Coordenadas
-        const nLat = parseFloat(updateData.lat ?? updateData.misionDetalle?.lat ?? updateData.ubicacion?.lat ?? event.lat);
-        const nLng = parseFloat(updateData.lng ?? updateData.misionDetalle?.lng ?? updateData.ubicacion?.lng ?? event.lng);
+        // Manejo Atómico de Coordenadas (Sincro Joker)
+        // Se mantiene la prioridad del punto de salida como referencia de 'lat/lng' raíz
+        const nLat = parseFloat(updateData.ubicacion?.salida?.lat ?? updateData.lat ?? updateData.misionDetalle?.lat ?? event.lat);
+        const nLng = parseFloat(updateData.ubicacion?.salida?.lng ?? updateData.lng ?? updateData.misionDetalle?.lng ?? event.lng);
 
-        // Reconstrucción del objeto embebido para asegurar consistencia
         updateData.misionDetalle = {
             ...event.misionDetalle,
             ...updateData.misionDetalle,
@@ -205,8 +214,20 @@ const updateEvent = async (req, res) => {
 
         updateData.lat = nLat;
         updateData.lng = nLng;
+        
+        // Reconstrucción del objeto ubicación con soporte de salida/llegada
         updateData.ubicacion = {
             nombre: (updateData.locNombre || updateData.ubicacion?.nombre || event.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+            salida: {
+                nombre: (updateData.ubicacion?.salida?.nombre || event.ubicacion?.salida?.nombre || 'ORIGEN').toUpperCase(),
+                lat: parseFloat(updateData.ubicacion?.salida?.lat ?? event.ubicacion?.salida?.lat ?? nLat),
+                lng: parseFloat(updateData.ubicacion?.salida?.lng ?? event.ubicacion?.salida?.lng ?? nLng)
+            },
+            llegada: {
+                nombre: (updateData.ubicacion?.llegada?.nombre || event.ubicacion?.llegada?.nombre || 'DESTINO').toUpperCase(),
+                lat: parseFloat(updateData.ubicacion?.llegada?.lat ?? event.ubicacion?.llegada?.lat ?? nLat),
+                lng: parseFloat(updateData.ubicacion?.llegada?.lng ?? event.ubicacion?.llegada?.lng ?? nLng)
+            },
             lat: nLat,
             lng: nLng
         };
