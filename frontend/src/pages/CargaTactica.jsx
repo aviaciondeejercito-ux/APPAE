@@ -191,19 +191,19 @@ const CargaTactica = () => {
         const latGMS = fromDecimal(latVal, 'lat');
         const lngGMS = fromDecimal(lngVal, 'lng');
 
-        let destData = {};
-        if (mision.destino) {
+        let destData = { destNombre: '', destLatG: 34, destLatM: 31, destLatS: 40, destLatDir: 'S', destLngG: 58, destLngM: 38, destLngS: 29, destLngDir: 'W' };
+        
+        if (mision.destino && mision.destino.lat) {
             const dLatGMS = fromDecimal(mision.destino.lat, 'lat');
             const dLngGMS = fromDecimal(mision.destino.lng, 'lng');
             destData = {
-                destNombre: mision.destino.nombre,
+                destNombre: mision.destino.nombre || 'DESTINO TÁCTICO',
                 destLatG: dLatGMS.g, destLatM: dLatGMS.m, destLatS: dLatGMS.s, destLatDir: dLatGMS.dir,
                 destLngG: dLngGMS.g, destLngM: dLngGMS.m, destLngS: dLngGMS.s, destLngDir: dLngGMS.dir
             };
             setShowDestino(true);
         } else {
             setShowDestino(false);
-            destData = { destNombre: '', destLatG: 34, destLatM: 31, destLatS: 40, destLatDir: 'S', destLngG: 58, destLngM: 38, destLngS: 29, destLngDir: 'W' };
         }
         
         setEditingId(mision._id);
@@ -262,14 +262,17 @@ const CargaTactica = () => {
             }
         };
 
-        if (showDestino && formData.destNombre) {
+        // Lógica de dos puntos: si showDestino está activo, se añade al payload
+        if (showDestino && (formData.destNombre || formData.destLatG)) {
             const dLatDec = toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir);
             const dLngDec = toDecimal(formData.destLngG, formData.destLngM, formData.destLngS, formData.destLngDir);
             payload.destino = {
-                nombre: formData.destNombre.toUpperCase(),
+                nombre: (formData.destNombre || 'DESTINO TÁCTICO').toUpperCase(),
                 lat: dLatDec,
                 lng: dLngDec
             };
+        } else {
+            payload.destino = null; // Para misiones estáticas
         }
 
         try {
@@ -357,7 +360,7 @@ const CargaTactica = () => {
                         </div>
 
                         <div style={styles.geoBox}>
-                            <label style={styles.label}>COORDENADAS Y REFERENCIA DE POSICIÓN ACTUAL</label>
+                            <label style={styles.label}>COORDENADAS Y REFERENCIA DE POSICIÓN ACTUAL (INICIO)</label>
                             <select onChange={(e) => handleAeropuerto(e, 'posicion')} style={{...styles.input, marginBottom: '15px'}} value={formData.locNombre}>
                                 <option value="">Cargar desde Aeródromo...</option>
                                 {AEROPUERTOS_ESTANDAR.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
@@ -385,7 +388,7 @@ const CargaTactica = () => {
 
                         {showDestino && (
                             <div style={{...styles.geoBox, borderColor: '#f39c12', marginTop: '10px'}}>
-                                <label style={styles.label}>COORDENADAS Y REFERENCIA DE DESTINO</label>
+                                <label style={styles.label}>COORDENADAS Y REFERENCIA DE DESTINO (FIN)</label>
                                 <select onChange={(e) => handleAeropuerto(e, 'destino')} style={{...styles.input, marginBottom: '15px'}} value={formData.destNombre}>
                                     <option value="">Cargar Aeródromo de Destino...</option>
                                     {AEROPUERTOS_ESTANDAR.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
