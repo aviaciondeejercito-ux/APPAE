@@ -8,17 +8,18 @@ const Material = () => {
     
     // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER)
     const rawRole = localStorage.getItem('role') || "";
-    const role = rawRole.toUpperCase().trim(); 
+    const role = rawRole.trim(); // Se mantiene el case original para comparar con 'admin'
     
     const userElemento = localStorage.getItem('elemento')?.toUpperCase().trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
     // Definición de permisos jerárquicos estrictos
-    const isMando = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role);
+    // Corregido: Se asegura que 'admin' (minúscula como viene del sistema) sea reconocido
     const isAdmin = role === 'admin';
+    const isMando = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role);
     
     // Privilegios de edición: Mandos, Oficina Técnica y S4 Unidad
-    const hasEditPrivileges = isMando || role === 'OFICINA_TECNICA' || role === 'S4_UNIDAD';
+    const hasEditPrivileges = isMando || role.toUpperCase() === 'OFICINA_TECNICA' || role.toUpperCase() === 'S4_UNIDAD';
 
     const sdaList = [
         "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
@@ -28,8 +29,8 @@ const Material = () => {
     // Listado de unidades para el selector del ADMIN
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
-    "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
-    "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"
+        "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
+        "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"
     ];
 
     const [newAir, setNewAir] = useState({
@@ -37,7 +38,7 @@ const Material = () => {
         sda: '',
         horasRemanentes: 0,
         novedades: '',
-        unidadDestino: '' // Campo específico para el ADMIN
+        unidadDestino: '' 
     });
 
     useEffect(() => {
@@ -51,6 +52,7 @@ const Material = () => {
             setLoading(true);
             const { data } = await getAircrafts();
             
+            // Si es Mando/Admin ve todo. Si no, solo su unidad.
             const filtrados = isMando 
                 ? data 
                 : data.filter(a => 
@@ -100,6 +102,7 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
+            // Seguridad: El Admin e isMando saltan la validación de unidad
             const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
             if (!isMando && targetUnidad !== userElemento) {
                 return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");
@@ -129,6 +132,7 @@ const Material = () => {
         const targetAir = aircrafts.find(a => a._id === id);
         if (!targetAir) return;
 
+        // Seguridad: El Admin e isMando pueden eliminar cualquier aeronave cargada
         const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
         if (!isMando && targetUnidad !== userElemento) {
             return alert("Seguridad: No tiene permisos para eliminar este registro.");
@@ -153,7 +157,6 @@ const Material = () => {
                         <h3 style={styles.title}>➕ Alta de Aeronave</h3>
                         <form onSubmit={handleCreate} style={styles.form}>
                             
-                            {/* CAMPO SOLO PARA ADMIN: SELECCIÓN DE UNIDAD */}
                             {isAdmin && (
                                 <div style={styles.field}>
                                     <label style={{...styles.label, color: '#e67e22'}}>📍 Unidad de Destino (Solo Admin)</label>
