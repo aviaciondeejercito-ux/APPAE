@@ -4,6 +4,7 @@ const Aircraft = require('../models/Aircraft');
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: SINCRO JOKER (Optimizado)
+ * Acción: Auditoría de error 400 y Normalización Atómica
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -91,14 +92,15 @@ const createEvent = async (req, res) => {
             misionDetalle 
         } = req.body;
 
-        if (!title) return res.status(400).json({ message: 'Título requerido.' });
+        // Validación crítica para evitar 400 sin mensaje
+        if (!title) return res.status(400).json({ message: 'El título es obligatorio.' });
 
         const isMando = req.isMando;
         const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
         
-        // Normalización de coordenadas
-        const finalLat = parseFloat(lat !== undefined ? lat : (ubicacion?.lat || -34.61315));
-        const finalLng = parseFloat(lng !== undefined ? lng : (ubicacion?.lng || -58.37723));
+        // Normalización de coordenadas (Evita errores de parseo en MongoDB)
+        const finalLat = parseFloat(lat ?? misionDetalle?.lat ?? ubicacion?.lat ?? -34.61315);
+        const finalLng = parseFloat(lng ?? misionDetalle?.lng ?? ubicacion?.lng ?? -58.37723);
 
         const eventData = {
             title: (title || '').toString().toUpperCase(),
@@ -106,11 +108,10 @@ const createEvent = async (req, res) => {
             notasMarginales: notasProcesadas,
             color: color || '#1b3a57',
             createdBy: req.user._id,
-            userName: req.user.username,
+            userName: req.user.username, // Requerido por el Estándar de Seguridad
             elemento: ((isMando && elemento) ? elemento : req.user.elemento).toUpperCase(),
-            status: status || 'programado',
+            status: (status || 'programado').toLowerCase(),
             isRealTime: isRealTime || false,
-            // Estructura anidada obligatoria según imagen de DB
             misionDetalle: {
                 comandante: (misionDetalle?.comandante || '').toUpperCase(),
                 copiloto: (misionDetalle?.copiloto || '').toUpperCase(),
@@ -151,7 +152,8 @@ const createEvent = async (req, res) => {
         res.status(201).json(newEvent);
     } catch (error) {
         console.error(`❌ Error en createEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error en la persistencia.' });
+        // Devolvemos el error específico de validación para depurar el 400
+        res.status(400).json({ message: 'Error en la persistencia.', details: error.message });
     }
 };
 
@@ -184,10 +186,11 @@ const updateEvent = async (req, res) => {
             }
         });
 
-        // Manejo Atómico de MisionDetalle (Mantiene lo que ya está en DB si no viene nuevo)
+        // Manejo Atómico de Coordenadas
         const nLat = parseFloat(updateData.lat ?? updateData.misionDetalle?.lat ?? updateData.ubicacion?.lat ?? event.lat);
         const nLng = parseFloat(updateData.lng ?? updateData.misionDetalle?.lng ?? updateData.ubicacion?.lng ?? event.lng);
 
+        // Reconstrucción del objeto embebido para asegurar consistencia
         updateData.misionDetalle = {
             ...event.misionDetalle,
             ...updateData.misionDetalle,
@@ -223,7 +226,7 @@ const updateEvent = async (req, res) => {
         res.status(200).json(updatedEvent);
     } catch (error) {
         console.error(`❌ Error en updateEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error al actualizar registro.' });
+        res.status(400).json({ message: 'Error al actualizar registro.', details: error.message });
     }
 };
 

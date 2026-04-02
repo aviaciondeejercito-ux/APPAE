@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 /**
  * MODELO DE EVENTOS / ACTIVIDADES - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: SINCRO JOKER (Persistencia Atómica)
+ * Acción: Eliminación de Error 400 y Sincronización de Espejos
  */
 const eventSchema = new mongoose.Schema({
     title: { 
@@ -40,7 +41,8 @@ const eventSchema = new mongoose.Schema({
     status: { 
         type: String, 
         enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado', 'operativo', 'disponible', 'emergencia'], 
-        default: 'programado' 
+        default: 'programado',
+        lowercase: true
     },
 
     // --- SECCIÓN DE APOYOS Y REQUERIMIENTOS ---
@@ -63,7 +65,6 @@ const eventSchema = new mongoose.Schema({
         mecanico: { type: String, uppercase: true, trim: true, default: '' },
         pax: { type: String, uppercase: true, trim: true, default: '' },
         carga: { type: String, uppercase: true, trim: true, default: '' },
-        // Campos movidos al objeto misionDetalle para coincidir con la DB real
         aeronave: { type: String, uppercase: true, trim: true, default: '' },
         matricula: { type: String, uppercase: true, trim: true, default: '' },
         tipoIcono: { 
@@ -72,8 +73,8 @@ const eventSchema = new mongoose.Schema({
             default: 'ala_rotativa' 
         },
         isRealTime: { type: Boolean, default: false },
-        lat: { type: Number, default: 0 },
-        lng: { type: Number, default: 0 }
+        lat: { type: Number, default: -34.61315 },
+        lng: { type: Number, default: -58.37723 }
     },
 
     // --- COMPATIBILIDAD Y REDUNDANCIA DE RADAR ---
@@ -81,8 +82,8 @@ const eventSchema = new mongoose.Schema({
         type: Boolean,
         default: false 
     },
-    lat: { type: Number }, // Espejo raíz para filtros rápidos
-    lng: { type: Number }, // Espejo raíz para filtros rápidos
+    lat: { type: Number, default: -34.61315 }, 
+    lng: { type: Number, default: -58.37723 }, 
     
     ubicacion: {
         nombre: { 
@@ -92,13 +93,13 @@ const eventSchema = new mongoose.Schema({
         },
         lat: { 
             type: Number, 
-            default: 0,
+            default: -34.61315,
             min: -90,
             max: 90
         },
         lng: { 
             type: Number, 
-            default: 0,
+            default: -58.37723,
             min: -180,
             max: 180
         }
@@ -164,32 +165,32 @@ eventSchema.pre('validate', function(next) {
         }
     }
     
-    // 2. Normalización y Sincronización Táctica
+    // 2. Normalización de Coordenadas (Prioridad de entrada)
+    // Buscamos un valor válido en cualquier rama para evitar el 0 por defecto si hay data
+    const finalLat = this.lat ?? this.ubicacion?.lat ?? this.misionDetalle?.lat ?? -34.61315;
+    const finalLng = this.lng ?? this.ubicacion?.lng ?? this.misionDetalle?.lng ?? -58.37723;
+
+    // 3. Atomic Mirroring (Sincro Joker)
+    // Espejamos a todas las ramas para consistencia total en consultas
+    this.lat = finalLat;
+    this.lng = finalLng;
+
+    if (this.ubicacion) {
+        this.ubicacion.lat = finalLat;
+        this.ubicacion.lng = finalLng;
+    }
+
     if (this.misionDetalle) {
-        // Aseguramos que isRealTime sea consistente en ambos lados
+        this.misionDetalle.lat = finalLat;
+        this.misionDetalle.lng = finalLng;
         this.misionDetalle.isRealTime = this.isRealTime;
 
-        // Normalizamos campos técnicos dentro de misionDetalle
+        // Normalización de campos técnicos
         ['aeronave', 'matricula', 'comandante', 'copiloto', 'mecanico'].forEach(key => {
             if (this.misionDetalle[key]) {
                 this.misionDetalle[key] = this.misionDetalle[key].toString().toUpperCase().trim();
             }
         });
-    }
-
-    // 3. Atomic Mirroring de Coordenadas (Sincro Joker)
-    if (this.ubicacion) {
-        const finalLat = this.ubicacion.lat || 0;
-        const finalLng = this.ubicacion.lng || 0;
-
-        // Espejamos a la raíz y a misionDetalle para evitar Error 400 por campos vacíos
-        this.lat = finalLat;
-        this.lng = finalLng;
-        
-        if (this.misionDetalle) {
-            this.misionDetalle.lat = finalLat;
-            this.misionDetalle.lng = finalLng;
-        }
     }
     
     next();
