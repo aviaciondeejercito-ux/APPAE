@@ -46,7 +46,6 @@ const AEROPUERTOS_ESTANDAR = [
     { nombre: "SANC - RÍO HONDO", lat: -27.508, lng: -64.935 },
     { nombre: "SAAG - GUALEGUAY", lat: -33.155, lng: -59.387 },
     { nombre: "SAAL - ALVEAR", lat: -33.004, lng: -60.627 },
-    { nombre: "SAZY - SAN MARTÍN DE LOS ANDES", lat: -40.075, lng: -71.139 },
     { nombre: "LAD - BATERÍAS (IMARA)", lat: -38.991, lng: -62.115 },
     { nombre: "LAD - ARROYO DULCE", lat: -34.148, lng: -60.395 },
     { nombre: "LAD - LA MEZQUITA (CBA)", lat: -31.428, lng: -64.312 },
@@ -67,8 +66,9 @@ const UNIDADES_AE = [
 ];
 
 const CargaTactica = () => {
-    const user = JSON.parse(localStorage.getItem('user')) || { elemento: '', role: '', id: '', name: '' };
-    const isMandoTotal = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(user.role.toLowerCase());
+    const rawUser = localStorage.getItem('user');
+    const user = rawUser ? JSON.parse(rawUser) : { elemento: '', role: '', id: '', name: 'OPERADOR_DESCONOCIDO' };
+    const isMandoTotal = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(user.role?.toLowerCase());
 
     const [misionesActivas, setMisionesActivas] = useState([]);
     const [flotaES, setFlotaES] = useState([]);
@@ -77,8 +77,12 @@ const CargaTactica = () => {
     const [showDestino, setShowDestino] = useState(false);
     
     const initialState = {
-        title: '', elemento: user.elemento || '', notasMarginales: '', 
-        aeronaveId: '', sda: '', matricula: '', 
+        title: '', 
+        elemento: user.elemento || '', 
+        notasMarginales: '', 
+        aeronaveId: '', 
+        sda: '', 
+        matricula: '', 
         latG: 34, latM: 31, latS: 40, latDir: 'S',
         lngG: 58, lngM: 38, lngS: 29, lngDir: 'W',
         locNombre: '',
@@ -86,8 +90,8 @@ const CargaTactica = () => {
         destLngG: 58, destLngM: 38, destLngS: 29, destLngDir: 'W',
         destNombre: '',
         etapa: 'operativo',
-        createdBy: user.id || '',
-        userName: user.name || ''
+        createdBy: user.id || user._id || '',
+        userName: user.name || user.username || 'S/N'
     };
 
     const [formData, setFormData] = useState(initialState);
@@ -181,8 +185,8 @@ const CargaTactica = () => {
     };
 
     const handleEdit = (mision) => {
-        const latVal = mision.misionDetalle?.lat ?? mision.lat ?? 0;
-        const lngVal = mision.misionDetalle?.lng ?? mision.lng ?? 0;
+        const latVal = mision.lat ?? mision.misionDetalle?.lat ?? 0;
+        const lngVal = mision.lng ?? mision.misionDetalle?.lng ?? 0;
         
         const latGMS = fromDecimal(latVal, 'lat');
         const lngGMS = fromDecimal(lngVal, 'lng');
@@ -199,6 +203,7 @@ const CargaTactica = () => {
             setShowDestino(true);
         } else {
             setShowDestino(false);
+            destData = { destNombre: '', destLatG: 34, destLatM: 31, destLatS: 40, destLatDir: 'S', destLngG: 58, destLngM: 38, destLngS: 29, destLngDir: 'W' };
         }
         
         setEditingId(mision._id);
@@ -207,7 +212,7 @@ const CargaTactica = () => {
             title: mision.title || '',
             elemento: mision.elemento || '',
             notasMarginales: mision.notasMarginales || mision.notes || '',
-            aeronaveId: 'FIXED_SdA',
+            aeronaveId: 'EDIT_MODE',
             sda: mision.misionDetalle?.aeronave || mision.aeronave || '',
             matricula: mision.misionDetalle?.matricula || mision.matricula || '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
@@ -230,9 +235,9 @@ const CargaTactica = () => {
             notes: formData.notasMarginales.toUpperCase(),
             notasMarginales: formData.notasMarginales.toUpperCase(),
             isRealTime: true,
-            status: 'en_curso',
+            status: 'operativo',
             tipoApoyo: 'VUELO',
-            etapa: formData.etapa,
+            etapa: formData.etapa || 'operativo',
             createdBy: formData.createdBy,
             userName: formData.userName,
             lat: latDec, 
@@ -257,10 +262,6 @@ const CargaTactica = () => {
             }
         };
 
-        payload.aeronave = payload.misionDetalle.aeronave;
-        payload.matricula = payload.misionDetalle.matricula;
-        payload.tipoIcono = payload.misionDetalle.tipoIcono;
-
         if (showDestino && formData.destNombre) {
             const dLatDec = toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir);
             const dLngDec = toDecimal(formData.destLngG, formData.destLngM, formData.destLngS, formData.destLngDir);
@@ -269,8 +270,6 @@ const CargaTactica = () => {
                 lat: dLatDec,
                 lng: dLngDec
             };
-        } else {
-            payload.destino = null; 
         }
 
         try {
@@ -290,7 +289,7 @@ const CargaTactica = () => {
             console.error("Detalle del Error:", error.response?.data);
             Swal.fire({ 
                 title: 'ERROR DE VALIDACIÓN', 
-                text: error.response?.data?.message || 'Error en la estructura del mensaje. Verifique los campos obligatorios.', 
+                text: error.response?.data?.message || 'Error en la estructura del vector.', 
                 icon: 'error', 
                 background: '#1e272e', 
                 color: '#fff' 
@@ -338,7 +337,7 @@ const CargaTactica = () => {
                                 <label style={styles.label}>AERONAVE SELECCIONADA</label>
                                 <select style={styles.input} value={formData.aeronaveId} onChange={handleAeronaveSelect} required disabled={!!editingId}>
                                     {editingId ? (
-                                        <option value="FIXED_SdA">{formData.sda} - {formData.matricula}</option>
+                                        <option value="EDIT_MODE">{formData.sda} - {formData.matricula}</option>
                                     ) : (
                                         <>
                                             <option value="">-- Seleccionar SdA --</option>
@@ -366,15 +365,15 @@ const CargaTactica = () => {
                             
                             <div style={styles.row}>
                                 <div style={styles.coordGroup}>
-                                    <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latG: e.target.value})} value={formData.latG} placeholder="G"/>
-                                    <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latM: e.target.value})} value={formData.latM} placeholder="M"/>
-                                    <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latS: e.target.value})} value={formData.latS} placeholder="S"/>
+                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latG: e.target.value})} value={formData.latG} placeholder="G"/>
+                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latM: e.target.value})} value={formData.latM} placeholder="M"/>
+                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latS: e.target.value})} value={formData.latS} placeholder="S"/>
                                     <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, latDir: e.target.value})} value={formData.latDir}><option value="S">S</option><option value="N">N</option></select>
                                 </div>
                                 <div style={styles.coordGroup}>
-                                    <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngG: e.target.value})} value={formData.lngG} placeholder="G"/>
-                                    <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngM: e.target.value})} value={formData.lngM} placeholder="M"/>
-                                    <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngS: e.target.value})} value={formData.lngS} placeholder="S"/>
+                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngG: e.target.value})} value={formData.lngG} placeholder="G"/>
+                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngM: e.target.value})} value={formData.lngM} placeholder="M"/>
+                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngS: e.target.value})} value={formData.lngS} placeholder="S"/>
                                     <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, lngDir: e.target.value})} value={formData.lngDir}><option value="W">W</option><option value="E">E</option></select>
                                 </div>
                             </div>
@@ -394,15 +393,15 @@ const CargaTactica = () => {
                                 
                                 <div style={styles.row}>
                                     <div style={styles.coordGroup}>
-                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatG: e.target.value})} value={formData.destLatG} placeholder="G"/>
-                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatM: e.target.value})} value={formData.destLatM} placeholder="M"/>
-                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatS: e.target.value})} value={formData.destLatS} placeholder="S"/>
+                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatG: e.target.value})} value={formData.destLatG} placeholder="G"/>
+                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatM: e.target.value})} value={formData.destLatM} placeholder="M"/>
+                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatS: e.target.value})} value={formData.destLatS} placeholder="S"/>
                                         <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, destLatDir: e.target.value})} value={formData.destLatDir}><option value="S">S</option><option value="N">N</option></select>
                                     </div>
                                     <div style={styles.coordGroup}>
-                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngG: e.target.value})} value={formData.destLngG} placeholder="G"/>
-                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngM: e.target.value})} value={formData.destLngM} placeholder="M"/>
-                                        <input type="number" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngS: e.target.value})} value={formData.destLngS} placeholder="S"/>
+                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngG: e.target.value})} value={formData.destLngG} placeholder="G"/>
+                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngM: e.target.value})} value={formData.destLngM} placeholder="M"/>
+                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngS: e.target.value})} value={formData.destLngS} placeholder="S"/>
                                         <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, destLngDir: e.target.value})} value={formData.destLngDir}><option value="W">W</option><option value="E">E</option></select>
                                     </div>
                                 </div>
@@ -413,7 +412,7 @@ const CargaTactica = () => {
                         <textarea style={styles.textarea} value={formData.notasMarginales} onChange={(e) => setFormData({...formData, notasMarginales: e.target.value})} required />
 
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
-                            {editingId ? 'GUARDAR CAMBIOS' : 'LANZAR OPERACIÓN'}
+                            {editingId ? 'GUARDAR CAMBIOS / REPOSICIONAR' : 'LANZAR OPERACIÓN'}
                         </button>
                         {editingId && <button type="button" onClick={() => {setEditingId(null); setFormData(initialState); setShowDestino(false)}} style={styles.btnCancel}>CANCELAR EDICIÓN</button>}
                     </form>
