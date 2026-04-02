@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getWeatherData, getEvents } from '../services/api';
@@ -213,12 +213,10 @@ const OperacionesMapa = () => {
             const activas = dataArray.filter(ev => {
                 const esOperativo = ev.isRealTime === true && ev.etapa === 'operativo';
                 
-                // Jerarquía alta: Ven todo (Se agregó OTOAE a la lista de privilegios)
                 if (['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role)) {
                     return esOperativo;
                 }
                 
-                // Usuarios comunes: Solo ven su unidad
                 return esOperativo && ev.elemento === userElemento;
             });
 
@@ -262,23 +260,47 @@ const OperacionesMapa = () => {
                     <BaseLayer name="🗺️ Político"><TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></BaseLayer>
                 </LayersControl>
 
-                {misiones.map((m) => (
-                    <Marker key={m._id} position={[m.ubicacion.lat, m.ubicacion.lng]} icon={crearIconoTactico(m.tipoIcono || 'ala_rotativa')}>
-                        <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
-                            <span style={{color: '#f39c12', fontWeight: 'bold'}}>{m.matricula}</span>
-                        </Tooltip>
-                        <Popup>
-                            <div style={{padding: '10px', minWidth: '220px', backgroundColor: '#1a1a1a', color: 'white'}}>
-                                <div style={{color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #f39c12', marginBottom: '8px', paddingBottom: '4px'}}>{m.aeronave} | {m.matricula}</div>
-                                <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>OPERACIÓN:</strong> {m.title}</div>
-                                <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>UNIDAD:</strong> {m.elemento}</div>
-                                <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>POSICIÓN:</strong> {m.ubicacion.nombre}</div>
-                                <div style={styles.popupNoteBox}><strong style={{color: '#f39c12', fontSize: '9px'}}>INFORMACIÓN ADICIONAL:</strong><br/>{m.notasMarginales || m.notes || "SIN NOVEDAD"}</div>
-                                <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>ACTUALIZADO: {new Date(m.updatedAt).toLocaleTimeString()}</div>
-                            </div>
-                        </Popup>
-                    </Marker>
-                ))}
+                {misiones.map((m) => {
+                    const hasDetailPos = m.misionDetalle && m.misionDetalle.lat && m.misionDetalle.lng;
+                    const isMoving = hasDetailPos && (m.misionDetalle.lat !== m.ubicacion.lat || m.misionDetalle.lng !== m.ubicacion.lng);
+                    
+                    // Si se mueve, calculamos punto medio para el icono y definimos la trayectoria
+                    const startPos = [m.ubicacion.lat, m.ubicacion.lng];
+                    const endPos = isMoving ? [m.misionDetalle.lat, m.misionDetalle.lng] : startPos;
+                    
+                    const markerPos = isMoving 
+                        ? [(startPos[0] + endPos[0]) / 2, (startPos[1] + endPos[1]) / 2]
+                        : startPos;
+
+                    return (
+                        <React.Fragment key={m._id}>
+                            {isMoving && (
+                                <Polyline 
+                                    positions={[startPos, endPos]} 
+                                    pathOptions={{ color: '#f39c12', weight: 2, dashArray: '5, 10', opacity: 0.6 }} 
+                                />
+                            )}
+                            <Marker position={markerPos} icon={crearIconoTactico(m.tipoIcono || 'ala_rotativa')}>
+                                <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
+                                    <span style={{color: isMoving ? '#3498db' : '#f39c12', fontWeight: 'bold'}}>
+                                        {m.matricula} {isMoving ? '✈️' : ''}
+                                    </span>
+                                </Tooltip>
+                                <Popup>
+                                    <div style={{padding: '10px', minWidth: '220px', backgroundColor: '#1a1a1a', color: 'white'}}>
+                                        <div style={{color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #f39c12', marginBottom: '8px', paddingBottom: '4px'}}>{m.aeronave} | {m.matricula}</div>
+                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>ESTADO:</strong> {isMoving ? "EN TRAYECTO" : "DESPLEGADO"}</div>
+                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>OPERACIÓN:</strong> {m.title}</div>
+                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>UNIDAD:</strong> {m.elemento}</div>
+                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>POSICIÓN:</strong> {m.ubicacion.nombre || "COORDENADAS"}</div>
+                                        <div style={styles.popupNoteBox}><strong style={{color: '#f39c12', fontSize: '9px'}}>INFORMACIÓN ADICIONAL:</strong><br/>{m.notasMarginales || m.notes || "SIN NOVEDAD"}</div>
+                                        <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>ACTUALIZADO: {new Date(m.updatedAt).toLocaleTimeString()}</div>
+                                    </div>
+                                </Popup>
+                            </Marker>
+                        </React.Fragment>
+                    );
+                })}
             </MapContainer>
 
             <style>{`
