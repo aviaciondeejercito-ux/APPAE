@@ -30,7 +30,7 @@ const AEROPUERTOS_ESTANDAR = [
     { nombre: "SARF - FORMOSA", lat: -26.213, lng: -58.228 },
     { nombre: "SAAV - SANTA FE", lat: -31.711, lng: -60.812 },
     { nombre: "SANE - SANTIAGO DEL ESTERO", lat: -27.766, lng: -64.311 },
-    { nombre: "SANU - SAN JUAN", lat: -31.571, lng: -68.418 },
+    { nombre: "SANU - SAN Juan", lat: -31.571, lng: -68.418 },
     { nombre: "SARE - RESISTENCIA", lat: -27.449, lng: -59.056 },
     { nombre: "SARL - PASO DE LOS LIBRES", lat: -29.691, lng: -57.152 },
     { nombre: "SAAJ - JUNÍN", lat: -34.545, lng: -60.923 },
@@ -103,6 +103,7 @@ const CargaTactica = () => {
             const dataEvents = Array.isArray(evRes) ? evRes : (evRes.data || []);
             const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
 
+            // Filtro de Misiones Activas
             const activas = dataEvents.filter(ev => {
                 const esVueloActivo = ev.isRealTime === true;
                 if (!isMandoTotal && user.elemento) {
@@ -112,14 +113,17 @@ const CargaTactica = () => {
             });
             setMisionesActivas(activas);
             
+            // Filtro de Aeronaves E/S (SOLUCIÓN AL SELECT VACÍO)
             const flotaFiltrada = dataAir.filter(a => {
-                const enServicio = a.estado === 'E/S';
+                const enServicio = a.estado?.toUpperCase() === 'E/S';
                 if (!isMandoTotal && user.elemento) {
-                    return enServicio && a.unidad?.toUpperCase().includes(user.elemento.toUpperCase());
+                    // Verificamos que la unidad de la aeronave contenga el elemento del usuario (case-insensitive)
+                    return enServicio && a.unidad?.toUpperCase().includes(user.elemento.toUpperCase().trim());
                 }
                 return enServicio;
             });
             setFlotaES(flotaFiltrada);
+
         } catch (error) {
             console.error("Error de enlace:", error);
         } finally {
@@ -262,7 +266,6 @@ const CargaTactica = () => {
             }
         };
 
-        // Lógica de dos puntos: si showDestino está activo, se añade al payload
         if (showDestino && (formData.destNombre || formData.destLatG)) {
             const dLatDec = toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir);
             const dLngDec = toDecimal(formData.destLngG, formData.destLngM, formData.destLngS, formData.destLngDir);
@@ -272,7 +275,7 @@ const CargaTactica = () => {
                 lng: dLngDec
             };
         } else {
-            payload.destino = null; // Para misiones estáticas
+            payload.destino = null;
         }
 
         try {
@@ -337,7 +340,7 @@ const CargaTactica = () => {
                             </div>
 
                             <div>
-                                <label style={styles.label}>AERONAVE SELECCIONADA</label>
+                                <label style={styles.label}>AERONAVE EN SERVICIO (E/S)</label>
                                 <select style={styles.input} value={formData.aeronaveId} onChange={handleAeronaveSelect} required disabled={!!editingId}>
                                     {editingId ? (
                                         <option value="EDIT_MODE">{formData.sda} - {formData.matricula}</option>
