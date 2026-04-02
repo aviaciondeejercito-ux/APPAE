@@ -181,9 +181,8 @@ const CargaTactica = () => {
     };
 
     const handleEdit = (mision) => {
-        // Obtenemos coordenadas priorizando misionDetalle (Estructura DB real)
-        const latVal = mision.misionDetalle?.lat ?? mision.lat ?? mision.ubicacion?.lat ?? 0;
-        const lngVal = mision.misionDetalle?.lng ?? mision.lng ?? mision.ubicacion?.lng ?? 0;
+        const latVal = mision.misionDetalle?.lat ?? mision.lat ?? 0;
+        const lngVal = mision.misionDetalle?.lng ?? mision.lng ?? 0;
         
         const latGMS = fromDecimal(latVal, 'lat');
         const lngGMS = fromDecimal(lngVal, 'lng');
@@ -198,6 +197,8 @@ const CargaTactica = () => {
                 destLngG: dLngGMS.g, destLngM: dLngGMS.m, destLngS: dLngGMS.s, destLngDir: dLngGMS.dir
             };
             setShowDestino(true);
+        } else {
+            setShowDestino(false);
         }
         
         setEditingId(mision._id);
@@ -223,7 +224,6 @@ const CargaTactica = () => {
         const latDec = toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir);
         const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
 
-        // CONSTRUCCIÓN DEL PAYLOAD (ESTANDARIZADO PARA DB REAL)
         const payload = {
             title: formData.title.toUpperCase(),
             elemento: formData.elemento.toUpperCase(),
@@ -235,7 +235,6 @@ const CargaTactica = () => {
             etapa: formData.etapa,
             createdBy: formData.createdBy,
             userName: formData.userName,
-            // Sincronización de coordenadas en raíz
             lat: latDec, 
             lng: lngDec,
             ubicacion: {
@@ -243,7 +242,6 @@ const CargaTactica = () => {
                 lat: latDec,
                 lng: lngDec
             },
-            // ANIDACIÓN CRÍTICA: misionDetalle para evitar Error 400
             misionDetalle: {
                 aeronave: formData.sda.toUpperCase(),
                 matricula: formData.matricula.toUpperCase(),
@@ -251,15 +249,14 @@ const CargaTactica = () => {
                 isRealTime: true,
                 lat: latDec,
                 lng: lngDec,
-                comandante: '', // Campos requeridos por el modelo
-                copiloto: '',
-                mecanico: '',
-                pax: '',
-                carga: ''
+                comandante: 'S/D', 
+                copiloto: 'S/D',
+                mecanico: 'S/D',
+                pax: '0',
+                carga: '0'
             }
         };
 
-        // Compatibilidad hacia atrás (campos en raíz que el modelo aún usa)
         payload.aeronave = payload.misionDetalle.aeronave;
         payload.matricula = payload.misionDetalle.matricula;
         payload.tipoIcono = payload.misionDetalle.tipoIcono;
@@ -272,12 +269,14 @@ const CargaTactica = () => {
                 lat: dLatDec,
                 lng: dLngDec
             };
+        } else {
+            payload.destino = null; 
         }
 
         try {
             if (editingId) {
                 await updateEvent(editingId, payload);
-                Swal.fire({ title: 'ACTUALIZADO', text: 'Vector reposicionado', icon: 'success', background: '#1e272e', color: '#fff' });
+                Swal.fire({ title: 'ACTUALIZADO', text: 'Vector reposicionado correctamente', icon: 'success', background: '#1e272e', color: '#fff' });
             } else {
                 await createEvent(payload);
                 Swal.fire({ title: 'LANZADO', text: 'Misión activa en radar', icon: 'success', background: '#1e272e', color: '#fff' });
@@ -290,8 +289,8 @@ const CargaTactica = () => {
         } catch (error) {
             console.error("Detalle del Error:", error.response?.data);
             Swal.fire({ 
-                title: 'ERROR 400', 
-                text: error.response?.data?.message || 'Error de validación en la estructura de datos.', 
+                title: 'ERROR DE VALIDACIÓN', 
+                text: error.response?.data?.message || 'Error en la estructura del mensaje. Verifique los campos obligatorios.', 
                 icon: 'error', 
                 background: '#1e272e', 
                 color: '#fff' 
