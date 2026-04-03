@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getActiveOperations, createEvent, deleteEvent } from '../services/api';
+import { getActiveOperations, createEvent, deleteEvent, getAircrafts } from '../services/api';
 import Swal from 'sweetalert2';
 
 const CargaTactica = () => {
-    // Función para obtener datos del usuario de forma segura
     const getUser = () => {
         try {
             const u = localStorage.getItem('user');
@@ -14,25 +13,27 @@ const CargaTactica = () => {
     const user = getUser();
     const userElemento = localStorage.getItem('elemento') || user.elemento || "SIN UNIDAD";
 
-    // Lógica de permisos para ver misiones
     const isMando = user.role === 'admin' || user.role === 'OTO' || 
                     ['boss', 'director', 'otoae'].includes(user.role?.toLowerCase()) ||
                     !user.role;
 
     const [misiones, setMisiones] = useState([]);
+    const [aeronaves, setAeronaves] = useState([]); // Nuevo estado para la flota
     const [loading, setLoading] = useState(false);
     const [title, setTitle] = useState('');
+    const [selectedMatricula, setSelectedMatricula] = useState('');
 
-    // Carga de datos manual (según lo acordado, sin refresco automático)
     const cargarDatos = useCallback(async () => {
         setLoading(true);
         try {
+            // 1. Cargar operaciones activas
             const evRes = await getActiveOperations();
-            // getActiveOperations ya devuelve res.data según tu api.js
             const events = Array.isArray(evRes) ? evRes : [];
-            
-            // Filtramos misiones en tiempo real según permisos
             setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === userElemento)));
+
+            // 2. Cargar flota disponible desde DB
+            const airRes = await getAircrafts();
+            setAeronaves(Array.isArray(airRes) ? airRes : airRes.data || []);
         } catch (e) { 
             console.error("Error en la carga de datos:", e); 
         }
@@ -45,15 +46,24 @@ const CargaTactica = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!title.trim()) return;
+        
+        // Buscamos la aeronave seleccionada en nuestra lista local para obtener sus datos de DB
+        const aeroInfo = aeronaves.find(a => a.matricula === selectedMatricula);
 
-        // Payload compatible con la normalización de tu createEvent en api.js
+        if (!title.trim() || !selectedMatricula || !aeroInfo) {
+            Swal.fire('Atención', 'Debe completar el indicativo y seleccionar una aeronave', 'warning');
+            return;
+        }
+
         const payload = {
             title: title.toUpperCase().trim(),
-            elemento: userElemento,
+            elemento: aeroInfo.unidad || aeroInfo.elemento || userElemento,
             isRealTime: true,
             status: 'operativo',
-            tipoIcono: 'ala_rotativa', // Valor por defecto compatible
+            // Datos críticos extraídos de la base de datos:
+            tipoIcono: aeroInfo.tipoIcono, 
+            matricula: aeroInfo.matricula,
+            aeronave: aeroInfo.sda,
             ubicacion: {
                 nombre: "CARGA TÁCTICA",
                 lat: 0,
@@ -63,18 +73,12 @@ const CargaTactica = () => {
 
         try {
             await createEvent(payload);
-            Swal.fire({ 
-                title: 'ÉXITO', 
-                text: 'Vuelo lanzado al radar', 
-                icon: 'success', 
-                timer: 1500, 
-                showConfirmButton: false 
-            });
+            Swal.fire({ title: 'ÉXITO', text: 'Vuelo lanzado al radar', icon: 'success', timer: 1500, showConfirmButton: false });
             setTitle('');
+            setSelectedMatricula('');
             cargarDatos();
         } catch (err) {
-            console.error("Error al crear evento:", err);
-            Swal.fire('Error', 'No se pudo registrar el vuelo. Verifique conexión.', 'error');
+            Swal.fire('Error', 'No se pudo registrar el vuelo.', 'error');
         }
     };
 
@@ -102,27 +106,43 @@ const CargaTactica = () => {
         <div style={styles.page}>
             <div style={styles.container}>
                 
-                {/* FORMULARIO DE CARGA: NOMBRE DEL VUELO */}
                 <div style={styles.card}>
-                    <h2 style={styles.headerTitle}>⚡ CARGA TÁCTICA</h2>
+                    <h2 style={styles.headerTitle}>⚡ DESPACHO TÁCTICO</h2>
                     <form onSubmit={handleSubmit}>
-                        <div style={{ marginBottom: '20px' }}>
-                            <label style={styles.label}>NOMBRE DEL VUELO / INDICATIVO</label>
+                        <div style={{ marginBottom: '15px' }}>
+                            <label style={styles.label}>INDICATIVO DE VUELO (CALLSIGN)</label>
                             <input 
                                 style={styles.input} 
                                 value={title} 
                                 onChange={e => setTitle(e.target.value)} 
-                                placeholder="Ej: AE-458 / HALCON" 
+                                placeholder="Ej: HALCON 1" 
                                 required 
                             />
                         </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={styles.label}>SELECCIONAR AERONAVE (SdA)</label>
+                            <select 
+                                style={styles.input}
+                                value={selectedMatricula}
+                                onChange={e => setSelectedMatricula(e.target.value)}
+                                required
+                            >
+                                <option value="">-- SELECCIONE MATRÍCULA --</option>
+                                {aeronaves.map(a => (
+                                    <option key={a._id} value={a.matricula}>
+                                        {a.matricula} - {a.sda} ({a.unidad})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
                         <button type="submit" style={styles.btn} disabled={loading}>
                             {loading ? 'PROCESANDO...' : 'LANZAR OPERACIÓN'}
                         </button>
                     </form>
                 </div>
 
-                {/* VISOR DE LOGS / RADAR */}
                 <div style={styles.logCard}>
                     <div style={styles.logHeader}>
                         <span>📡 RADAR TÁCTICO</span>
@@ -137,7 +157,7 @@ const CargaTactica = () => {
                             misiones.map(m => (
                                 <div key={m._id} style={styles.misionItem}>
                                     <div style={styles.misionHeader}>
-                                        <span style={styles.badge}>ACTIVO</span>
+                                        <span style={styles.badge}>{m.matricula}</span>
                                         <span style={styles.elementoText}>{m.elemento}</span>
                                     </div>
                                     <div style={styles.misionTitle}>{m.title}</div>

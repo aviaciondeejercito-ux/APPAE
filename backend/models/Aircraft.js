@@ -45,6 +45,15 @@ const AircraftSchema = new mongoose.Schema({
         default: '', 
         trim: true
     },
+    // NUEVO CAMPO: Define el ícono a representar en el mapa táctico
+    tipoIcono: {
+        type: String,
+        enum: {
+            values: ['ala_rotativa', 'ala_fija'],
+            message: '{VALUE} no es un tipo de ícono válido'
+        },
+        default: 'ala_rotativa'
+    },
     // Auditoría de cambios en tiempo real
     ultimaActualizacion: { 
         type: Date, 
@@ -74,6 +83,11 @@ AircraftSchema.pre('save', function(next) {
     // Si novedades viene como null o undefined, lo seteamos a string vacío para evitar errores
     if (this.novedades === null || this.novedades === undefined) {
         this.novedades = '';
+    }
+
+    // Normalización del tipo de icono
+    if (this.tipoIcono) {
+        this.tipoIcono = this.tipoIcono.toLowerCase().trim();
     }
 
     this.ultimaActualizacion = Date.now();

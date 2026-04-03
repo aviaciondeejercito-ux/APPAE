@@ -11,13 +11,11 @@ exports.getAircrafts = async (req, res) => {
     try {
         let query = {};
         // Normalización Sincro Joker: Mayúsculas y Guion Bajo
-        // Se respeta 'admin' en minúscula y 'OTO' en Mayúscula según requerimiento
         const rawRole = req.user.role ? String(req.user.role).trim() : '';
         const userRole = (rawRole === 'admin' || rawRole === 'OTO') ? rawRole : rawRole.toUpperCase();
         const userElemento = req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
         // Filtro estricto para usuarios de unidad y niveles técnicos
-        // Se excluye a 'admin' y 'OTO' de esta restricción para que vean TODA la flota
         const unidadRestrictedRoles = ['USER', 'S4', 'S4_UNIDAD', 'OFICINA_TECNICA'];
         
         if (unidadRestrictedRoles.includes(userRole)) {
@@ -96,7 +94,7 @@ exports.createAircraft = async (req, res) => {
 exports.updateAircraftStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { estado, horasRemanentes, novedades, matricula, sda, unidad } = req.body;
+        const { estado, horasRemanentes, novedades, matricula, sda, unidad, tipoIcono } = req.body;
         
         const aircraft = await Aircraft.findById(id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no localizada en el inventario." });
@@ -119,9 +117,11 @@ exports.updateAircraftStatus = async (req, res) => {
             aircraft.novedades = String(novedades).toUpperCase().trim(); 
         }
 
+        // Permite actualización de datos estructurales incluyendo el nuevo campo tipoIcono
         if (esMandoSuperior || userRole === 'OFICINA_TECNICA' || userRole === 'S4_UNIDAD') {
             if (matricula) aircraft.matricula = matricula.toUpperCase().trim();
             if (sda) aircraft.sda = sda.toUpperCase().trim();
+            if (tipoIcono) aircraft.tipoIcono = tipoIcono.toLowerCase().trim();
             if (unidad && esMandoSuperior) aircraft.unidad = unidad.toUpperCase().trim(); 
         }
         
