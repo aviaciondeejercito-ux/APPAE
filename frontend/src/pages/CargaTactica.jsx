@@ -120,7 +120,7 @@ const CargaTactica = () => {
         const pLo = fromDec(pos.lng, 'lng');
         
         let desData = {};
-        if (des && (des.lat !== 0 || des.lng !== 0) && (des.lat !== pos.lat || des.lng !== pos.lng)) {
+        if (des && (des.lat !== 0 || des.lng !== 0)) {
             const dLa = fromDec(des.lat, 'lat');
             const dLo = fromDec(des.lng, 'lng');
             desData = { 
@@ -153,55 +153,51 @@ const CargaTactica = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // 1. CÁLCULO DE VALORES PRIMITIVOS (No objetos)
-        const sLat = toDec(form.latG, form.latM, form.latS, form.latDir);
-        const sLng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
-        const dLat = showDestino ? toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir) : sLat;
-        const dLng = showDestino ? toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) : sLng;
+        // 1. OBTENEMOS LOS VALORES DIRECTOS DEL FORMULARIO
+        const latSalida = toDec(form.latG, form.latM, form.latS, form.latDir);
+        const lngSalida = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
+        
+        // 2. SI SHOWDESTINO ES FALSE, USAMOS LOS MISMOS DE SALIDA
+        const latLlegada = showDestino ? toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir) : latSalida;
+        const lngLlegada = showDestino ? toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) : lngSalida;
         
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
 
-        // 2. CONSTRUCCIÓN DEL PAYLOAD CON CLONACIÓN EXPLÍCITA
-        // Usamos variables locales directas para evitar referencias al estado 'form'
         const payload = {
             title: form.title.toUpperCase(),
             elemento: form.elemento,
             notes: form.notas.toUpperCase(),
             isRealTime: true,
             status: 'operativo',
-            lat: sLat, 
-            lng: sLng,
+            lat: latSalida, 
+            lng: lngSalida,
             ubicacion: { 
                 nombre: (form.locNombre || "POSICIÓN MANUAL").toUpperCase(), 
                 salida: { 
                     nombre: (form.locNombre || "ORIGEN").toUpperCase(), 
-                    lat: sLat, 
-                    lng: sLng 
+                    lat: latSalida, 
+                    lng: lngSalida 
                 },
                 llegada: { 
                     nombre: showDestino ? (form.dNombre || "DESTINO").toUpperCase() : (form.locNombre || "ORIGEN").toUpperCase(), 
-                    lat: dLat, 
-                    lng: dLng 
+                    lat: latLlegada, 
+                    lng: lngLlegada 
                 },
-                lat: sLat,
-                lng: sLng
+                lat: latSalida,
+                lng: lngSalida
             },
             misionDetalle: { 
                 aeronave: form.sda, 
                 matricula: form.matricula, 
                 tipoIcono: icono, 
                 isRealTime: true, 
-                lat: sLat, 
-                lng: sLng 
+                lat: latSalida, 
+                lng: lngSalida 
             }
         };
 
         try {
-            // 3. ULTIMO RECURSO: Clonación profunda antes de enviar a la red
-            const cleanPayload = JSON.parse(JSON.stringify(payload));
-            
-            editingId ? await updateEvent(editingId, cleanPayload) : await createEvent(cleanPayload);
-            
+            editingId ? await updateEvent(editingId, payload) : await createEvent(payload);
             Swal.fire('ÉXITO', editingId ? 'Vector actualizado' : 'Operación lanzada', 'success');
             setForm(initialState); 
             setEditingId(null); 
