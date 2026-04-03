@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import EventService from '../services/EventService'; // Importación corregida al servicio unificado
+import EventService from '../services/EventService'; 
 
 const { BaseLayer } = LayersControl;
 
@@ -116,14 +116,18 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
         setLoading(true);
         try {
             const response = await EventService.getWeatherData(icao);
-            if (response.data) {
-                setAstronomyData(response.data.astronomy || null);
+            // Ajuste para manejar la estructura de datos del backend
+            const info = response.data?.data || response.data;
+            
+            if (info) {
+                setAstronomyData(info.astronomy || null);
                 setWeatherData({
-                    metar: response.data.raw || "SIN DATOS METAR",
-                    taf: response.data.taf || "TAF NO DISPONIBLE"
+                    metar: info.raw || info.metar || "SIN DATOS METAR",
+                    taf: info.taf || "TAF NO DISPONIBLE"
                 });
             }
         } catch (err) {
+            console.error("Error meteorológico:", err);
             setWeatherData({ metar: "ERROR DE CONEXIÓN", taf: null });
         } finally {
             setLoading(false);
@@ -210,7 +214,10 @@ const OperacionesMapa = () => {
             const dataArray = Array.isArray(data) ? data : data.data || [];
             
             const activas = dataArray.filter(ev => {
-                const esOperativo = ev.isRealTime === true && ev.etapa === 'operativo';
+                // CORRECCIÓN: Se busca isRealTime dentro de misionDetalle según la estructura de la DB
+                const isRealTime = ev.misionDetalle?.isRealTime === true || ev.isRealTime === true;
+                const esOperativo = isRealTime && ev.etapa === 'operativo';
+                
                 if (['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role)) {
                     return esOperativo;
                 }
@@ -258,12 +265,10 @@ const OperacionesMapa = () => {
                 </LayersControl>
 
                 {misiones.map((m) => {
-                    // ESTRUCTURA CORREGIDA: Sincronizada con el modelo de Salida/Llegada
                     const salidaPos = [m.ubicacion?.salida?.lat || -34.6, m.ubicacion?.salida?.lng || -58.4];
                     const llegadaPos = [m.ubicacion?.llegada?.lat || -34.6, m.ubicacion?.llegada?.lng || -58.4];
                     const actualPos = [m.ubicacion?.lat || salidaPos[0], m.ubicacion?.lng || salidaPos[1]];
                     
-                    // Se considera en trayecto si la posición actual no es igual a la de salida o llegada
                     const isMoving = m.ubicacion?.lat !== m.ubicacion?.salida?.lat;
 
                     return (
@@ -287,7 +292,7 @@ const OperacionesMapa = () => {
                                         <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>UNIDAD:</strong> {m.elemento}</div>
                                         <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>RUTA:</strong> {m.ubicacion?.salida?.nombre} ➔ {m.ubicacion?.llegada?.nombre}</div>
                                         <div style={styles.popupNoteBox}><strong style={{color: '#f39c12', fontSize: '9px'}}>NOTAS MARGINALES:</strong><br/>{m.notasMarginales || "SIN NOVEDAD"}</div>
-                                        <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>ACTUALIZADO: {new Date(m.updatedAt).toLocaleTimeString()}</div>
+                                        <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>ACTUALIZADO: {m.updatedAt ? new Date(m.updatedAt).toLocaleTimeString() : 'N/A'}</div>
                                     </div>
                                 </Popup>
                             </Marker>
