@@ -33,7 +33,18 @@ const CargaTactica = () => {
 
             // 2. Cargar flota disponible desde DB
             const airRes = await getAircrafts();
-            setAeronaves(Array.isArray(airRes) ? airRes : airRes.data || []);
+            const dataAeronaves = Array.isArray(airRes) ? airRes : airRes.data || [];
+            
+            // LOG DE DEPURACIÓN
+            console.log("--- DEPURACIÓN AERONAVES ---");
+            console.log("Total aeronaves recibidas:", dataAeronaves.length);
+            if (dataAeronaves.length > 0) {
+                console.log("Ejemplo primer aeronave:", dataAeronaves[0]);
+                const filtradas = dataAeronaves.filter(a => a.condicion === 'E/S');
+                console.log("Aeronaves que pasan el filtro E/S:", filtradas.length);
+            }
+            
+            setAeronaves(dataAeronaves);
         } catch (e) { 
             console.error("Error en la carga de datos:", e); 
         }
@@ -126,7 +137,7 @@ const CargaTactica = () => {
                                 <option value="">-- SELECCIONE MATRÍCULA --</option>
                                 {/* FILTRO: Solo aeronaves con condicion "E/S" */}
                                 {aeronaves
-                                    .filter(a => a.condicion === 'E/S')
+                                    .filter(a => String(a.condicion).trim().toUpperCase() === 'E/S')
                                     .map(a => (
                                         <option key={a._id} value={a.matricula}>
                                             {a.matricula} - {a.sda} ({a.unidad})
