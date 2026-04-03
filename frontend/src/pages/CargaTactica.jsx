@@ -30,15 +30,29 @@ const CargaTactica = () => {
             const events = Array.isArray(evRes) ? evRes : evRes.data || [];
             const aircrafts = Array.isArray(airRes) ? airRes : airRes.data || [];
 
+            console.log("--- DEBUG AERONAVES ---");
+            console.log("1. Total en DB:", aircrafts.length);
+            if(aircrafts.length > 0) console.log("2. Ejemplo de una aeronave de la DB:", aircrafts[0]);
+            console.log("3. Tu Unidad (user.elemento):", user.elemento);
+            console.log("4. Tu Rol:", user.role);
+
             setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === user.elemento)));
             
-            // Filtrado de aeronaves E/S: si es mando ve todo, si no, solo su unidad.
             const filtradas = aircrafts.filter(a => {
+                // Comprobamos estado
                 const enServicio = a.estado === 'E/S';
+                // Comprobamos acceso (Unidad o Rol)
                 const tieneAcceso = isMando || (a.unidad && a.unidad === user.elemento);
+                
                 return enServicio && tieneAcceso;
             });
             
+            console.log("5. Total después de filtrar:", filtradas.length);
+            
+            if (aircrafts.length > 0 && filtradas.length === 0) {
+                console.warn("ALERTA: Hay aviones en la DB pero ninguno pasó el filtro de E/S o Unidad.");
+            }
+
             setFlota(filtradas);
             
         } catch (e) { 
