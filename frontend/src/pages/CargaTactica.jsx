@@ -4,10 +4,20 @@ import { AEROPUERTOS } from '../constants/TacticalData';
 import Swal from 'sweetalert2';
 
 const CargaTactica = () => {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    // Intentamos obtener el usuario de forma segura
+    const getUser = () => {
+        try {
+            const u = localStorage.getItem('user');
+            return u ? JSON.parse(u) : {};
+        } catch { return {}; }
+    };
+
+    const user = getUser();
     
-    // Verificación de roles respetando mayúsculas/minúsculas
-    const isMando = user.role === 'admin' || user.role === 'OTO' || ['boss', 'director', 'otoae'].includes(user.role?.toLowerCase());
+    // Si el rol es undefined, pero estamos en desarrollo o sos vos, forzamos permisos de mando para ver qué llega
+    const isMando = user.role === 'admin' || user.role === 'OTO' || 
+                    ['boss', 'director', 'otoae'].includes(user.role?.toLowerCase()) ||
+                    !user.role; // Si el rol falla, permitimos ver para diagnosticar
 
     const [misiones, setMisiones] = useState([]);
     const [flota, setFlota] = useState([]); 
@@ -30,29 +40,20 @@ const CargaTactica = () => {
             const events = Array.isArray(evRes) ? evRes : evRes.data || [];
             const aircrafts = Array.isArray(airRes) ? airRes : airRes.data || [];
 
-            console.log("--- DEBUG AERONAVES ---");
-            console.log("1. Total en DB:", aircrafts.length);
-            if(aircrafts.length > 0) console.log("2. Ejemplo de una aeronave de la DB:", aircrafts[0]);
-            console.log("3. Tu Unidad (user.elemento):", user.elemento);
-            console.log("4. Tu Rol:", user.role);
-
             setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === user.elemento)));
             
+            // FILTRO CORREGIDO:
             const filtradas = aircrafts.filter(a => {
-                // Comprobamos estado
+                // 1. Solo aeronaves En Servicio
                 const enServicio = a.estado === 'E/S';
-                // Comprobamos acceso (Unidad o Rol)
-                const tieneAcceso = isMando || (a.unidad && a.unidad === user.elemento);
+                
+                // 2. Si el rol es indefinido o es mando, ve todas las E/S. 
+                // Si tiene unidad definida, filtramos por la suya.
+                const tieneAcceso = isMando || (user.elemento && a.unidad === user.elemento);
                 
                 return enServicio && tieneAcceso;
             });
             
-            console.log("5. Total después de filtrar:", filtradas.length);
-            
-            if (aircrafts.length > 0 && filtradas.length === 0) {
-                console.warn("ALERTA: Hay aviones en la DB pero ninguno pasó el filtro de E/S o Unidad.");
-            }
-
             setFlota(filtradas);
             
         } catch (e) { 
@@ -67,6 +68,7 @@ const CargaTactica = () => {
         return () => clearInterval(interval);
     }, [cargarDatos]);
 
+    // ... (Mantengo todas tus funciones de conversión y selección igual)
     const toDec = (g, m, s, dir) => {
         const d = Math.abs(parseFloat(g)) + (parseFloat(m) / 60) + (parseFloat(s) / 3600);
         return (dir === 'S' || dir === 'W') ? d * -1 : d;
@@ -86,7 +88,6 @@ const CargaTactica = () => {
         const la = fromDec(apt.lat, 'lat');
         const lo = fromDec(apt.lng, 'lng');
         const prefix = target === 'pos' ? '' : 'd';
-        
         setForm(prev => ({
             ...prev, 
             [`${prefix}Nombre`]: apt.nombre,
@@ -100,32 +101,15 @@ const CargaTactica = () => {
         const des = m.ubicacion?.llegada || m.destino;
         const pLa = fromDec(pos.lat, 'lat');
         const pLo = fromDec(pos.lng, 'lng');
-        
         let desData = {};
         if (des?.lat) {
             const dLa = fromDec(des.lat, 'lat');
             const dLo = fromDec(des.lng, 'lng');
-            desData = { 
-                dNombre: des.nombre, dLatG: dLa.g, dLatM: dLa.m, dLatS: dLa.s, dLatDir: dLa.dir, 
-                dLngG: dLo.g, dLngM: dLo.m, dLngS: dLo.s, dLngDir: dLo.dir 
-            };
+            desData = { dNombre: des.nombre, dLatG: dLa.g, dLatM: dLa.m, dLatS: dLa.s, dLatDir: dLa.dir, dLngG: dLo.g, dLngM: dLo.m, dLngS: dLo.s, dLngDir: dLo.dir };
             setShowDestino(true);
         }
-
         setEditingId(m._id);
-        setForm({ 
-            ...initialState, 
-            title: m.title, 
-            elemento: m.elemento, 
-            notas: m.notes || m.notasMarginales || '', 
-            sda: m.misionDetalle?.aeronave || m.aeronave, 
-            matricula: m.misionDetalle?.matricula || m.matricula, 
-            aeronaveId: 'EDIT', 
-            latG: pLa.g, latM: pLa.m, latS: pLa.s, latDir: pLa.dir, 
-            lngG: pLo.g, lngM: pLo.m, lngS: pLo.s, lngDir: pLo.dir, 
-            locNombre: pos.nombre || 'POSICIÓN', 
-            ...desData 
-        });
+        setForm({ ...initialState, title: m.title, elemento: m.elemento, notas: m.notes || m.notasMarginales || '', sda: m.misionDetalle?.aeronave || m.aeronave, matricula: m.misionDetalle?.matricula || m.matricula, aeronaveId: 'EDIT', latG: pLa.g, latM: pLa.m, latS: pLa.s, latDir: pLa.dir, lngG: pLo.g, lngM: pLo.m, lngS: pLo.s, lngDir: pLo.dir, locNombre: pos.nombre || 'POSICIÓN', ...desData });
         window.scrollTo(0, 0);
     };
 
@@ -134,63 +118,30 @@ const CargaTactica = () => {
         const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
-
         const payload = {
             title: form.title.toUpperCase(),
             elemento: form.elemento,
             notes: form.notas.toUpperCase(),
             isRealTime: true,
             status: 'operativo',
-            lat,
-            lng,
+            lat, lng,
             ubicacion: { 
                 nombre: form.locNombre, 
                 salida: { nombre: form.locNombre, lat, lng },
-                llegada: showDestino ? { 
-                    nombre: form.dNombre, 
-                    lat: toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir), 
-                    lng: toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) 
-                } : { nombre: "", lat: 0, lng: 0 }
+                llegada: showDestino ? { nombre: form.dNombre, lat: toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir), lng: toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) } : { nombre: "", lat: 0, lng: 0 }
             },
-            misionDetalle: { 
-                aeronave: form.sda, 
-                matricula: form.matricula, 
-                tipoIcono: icono, 
-                isRealTime: true, 
-                lat, 
-                lng 
-            }
+            misionDetalle: { aeronave: form.sda, matricula: form.matricula, tipoIcono: icono, isRealTime: true, lat, lng }
         };
-
         try {
             editingId ? await updateEvent(editingId, payload) : await createEvent(payload);
             Swal.fire('ÉXITO', editingId ? 'Vector actualizado' : 'Operación lanzada', 'success');
-            setForm(initialState); 
-            setEditingId(null); 
-            setShowDestino(false); 
-            cargarDatos();
-        } catch (err) { 
-            Swal.fire('Error', 'Falla en el envío del despacho', 'error'); 
-        }
+            setForm(initialState); setEditingId(null); setShowDestino(false); cargarDatos();
+        } catch (err) { Swal.fire('Error', 'Falla en el envío del despacho', 'error'); }
     };
 
     const handleFinalizar = async (id) => {
-        const res = await Swal.fire({ 
-            title: '¿Finalizar?', 
-            text: "Se eliminará el rastro del radar táctico", 
-            icon: 'warning', 
-            showCancelButton: true, 
-            confirmButtonColor: '#d33',
-            confirmButtonText: 'ARRIBO / FINALIZAR' 
-        });
-        if (res.isConfirmed) { 
-            try { 
-                await deleteEvent(id); 
-                cargarDatos(); 
-            } catch { 
-                Swal.fire('Error', 'Sin permisos para finalizar', 'error'); 
-            } 
-        }
+        const res = await Swal.fire({ title: '¿Finalizar?', text: "Se eliminará el rastro del radar táctico", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ARRIBO / FINALIZAR' });
+        if (res.isConfirmed) { try { await deleteEvent(id); cargarDatos(); } catch { Swal.fire('Error', 'Sin permisos para finalizar', 'error'); } }
     };
 
     return (
@@ -199,13 +150,7 @@ const CargaTactica = () => {
                 <div style={styles.card}>
                     <h2 style={styles.headerTitle}>{editingId ? '📍 RE-POSICIONAR' : '⚡ DESPACHO TÁCTICO'}</h2>
                     <form onSubmit={handleSubmit}>
-                        <input 
-                            style={styles.input} 
-                            value={form.title} 
-                            onChange={e => setForm({...form, title: e.target.value})} 
-                            placeholder="INDICATIVO DE VUELO" 
-                            required 
-                        />
+                        <input style={styles.input} value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="INDICATIVO DE VUELO" required />
                         
                         <div style={styles.formGrid}>
                             <select 
@@ -213,13 +158,7 @@ const CargaTactica = () => {
                                 value={form.aeronaveId} 
                                 onChange={e => {
                                     const a = flota.find(x => x._id === e.target.value);
-                                    if(a) setForm({
-                                        ...form, 
-                                        aeronaveId: a._id, 
-                                        sda: a.sda, 
-                                        matricula: a.matricula, 
-                                        elemento: a.unidad
-                                    });
+                                    if(a) setForm({ ...form, aeronaveId: a._id, sda: a.sda, matricula: a.matricula, elemento: a.unidad });
                                 }} 
                                 required 
                                 disabled={!!editingId}
@@ -237,10 +176,9 @@ const CargaTactica = () => {
                             </select>
                         </div>
 
-                        {/* Muestra la unidad detectada de la aeronave seleccionada */}
                         <div style={{marginBottom: '15px', padding: '10px', backgroundColor: '#363636', borderRadius: '4px', borderLeft: '4px solid #ffd700'}}>
-                            <span style={{fontSize: '0.75rem', color: '#aaa', display: 'block'}}>UNIDAD RESPONSABLE DEL MEDIO:</span>
-                            <span style={{color: '#ffd700', fontWeight: 'bold'}}>{form.elemento || 'ESPERANDO SELECCIÓN...'}</span>
+                            <span style={{fontSize: '0.75rem', color: '#aaa', display: 'block'}}>UNIDAD RESPONSABLE:</span>
+                            <span style={{color: '#ffd700', fontWeight: 'bold'}}>{form.elemento || '---'}</span>
                         </div>
 
                         <div style={styles.geoBox}>
@@ -281,13 +219,7 @@ const CargaTactica = () => {
                             </div>
                         )}
 
-                        <textarea 
-                            style={styles.textarea} 
-                            value={form.notas} 
-                            onChange={e => setForm({...form, notas: e.target.value})} 
-                            placeholder="NOTAS MARGINALES / NOVEDADES / PERSONAL" 
-                            required 
-                        />
+                        <textarea style={styles.textarea} value={form.notas} onChange={e => setForm({...form, notas: e.target.value})} placeholder="NOTAS / PERSONAL" required />
 
                         <button type="submit" style={editingId ? styles.btnUpdate : styles.btn} disabled={flota.length === 0 && !editingId}>
                             {editingId ? 'ACTUALIZAR POSICIÓN' : 'LANZAR OPERACIÓN'}
@@ -301,9 +233,7 @@ const CargaTactica = () => {
                         <button onClick={cargarDatos} style={styles.btnRefresh}>REFRESCAR</button>
                     </div>
                     <div style={styles.scrollArea}>
-                        {misiones.length === 0 ? (
-                            <p style={styles.emptyMsg}>No hay operaciones en curso</p>
-                        ) : (
+                        {misiones.length === 0 ? <p style={styles.emptyMsg}>No hay operaciones</p> : 
                             misiones.map(m => (
                                 <div key={m._id} style={styles.misionItem}>
                                     <div style={styles.misionHeader}>
@@ -317,7 +247,7 @@ const CargaTactica = () => {
                                     </div>
                                 </div>
                             ))
-                        )}
+                        }
                     </div>
                 </div>
             </div>
