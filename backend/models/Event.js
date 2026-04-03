@@ -176,12 +176,12 @@ const eventSchema = new mongoose.Schema({
  * MIDDLEWARE PRE-SAVE: VALIDACIÓN Y ESTANDARIZACIÓN MILITAR
  */
 eventSchema.pre('validate', function(next) {
-    // 0. Corrección de Enum de Status (Resuelve el error "e/s" no válido)
+    // 0. Corrección de Enum de Status
     const validStatuses = ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado', 'operativo', 'disponible', 'emergencia'];
     if (this.status) {
         this.status = this.status.toLowerCase().trim();
         if (!validStatuses.includes(this.status)) {
-            this.status = 'operativo'; // Mapeo por defecto si viene "E/S" o similar
+            this.status = 'operativo';
         }
     }
 
@@ -191,24 +191,29 @@ eventSchema.pre('validate', function(next) {
     if (!this.ubicacion.llegada) this.ubicacion.llegada = {};
     if (!this.misionDetalle) this.misionDetalle = {};
 
-    // 1. Manejo de entrada desde CargaTactica
-    if (this.origen) {
+    // 1. Manejo de Origen (Prioridad a datos de CargaTactica)
+    if (this.origen && (this.origen.lat || this.origen.lat === 0)) {
         this.ubicacion.salida.nombre = (this.origen.nombre || 'ORIGEN').toUpperCase();
-        this.ubicacion.salida.lat = this.origen.lat ?? this.ubicacion.salida.lat;
-        this.ubicacion.salida.lng = this.origen.lng ?? this.ubicacion.salida.lng;
+        this.ubicacion.salida.lat = this.origen.lat;
+        this.ubicacion.salida.lng = this.origen.lng;
+        this.ubicacion.nombre = this.ubicacion.salida.nombre;
     }
 
-    if (this.destino) {
-        const destinoVacio = !this.destino.lat || this.destino.lat === 0;
-        if (destinoVacio && this.origen) {
-            this.ubicacion.llegada.nombre = (this.origen.nombre || 'ESTÁTICA').toUpperCase();
-            this.ubicacion.llegada.lat = this.origen.lat;
-            this.ubicacion.llegada.lng = this.origen.lng;
-        } else {
-            this.ubicacion.llegada.nombre = (this.destino.nombre || 'DESTINO').toUpperCase();
-            this.ubicacion.llegada.lat = this.destino.lat ?? this.ubicacion.llegada.lat;
-            this.ubicacion.llegada.lng = this.destino.lng ?? this.ubicacion.llegada.lng;
-        }
+    // 2. Manejo de Destino (Arreglo: Prioridad absoluta si viene de CargaTactica)
+    if (this.destino && (this.destino.lat || this.destino.lat === 0)) {
+        // Validamos si el destino es diferente al origen para evitar el error de "estática"
+        const esMismoPunto = this.origen && 
+                           this.origen.lat === this.destino.lat && 
+                           this.origen.lng === this.destino.lng;
+
+        this.ubicacion.llegada.nombre = (this.destino.nombre || (esMismoPunto ? 'ESTÁTICA' : 'DESTINO')).toUpperCase();
+        this.ubicacion.llegada.lat = this.destino.lat;
+        this.ubicacion.llegada.lng = this.destino.lng;
+    } else if (this.origen) {
+        // Solo si no hay objeto destino, clonamos origen
+        this.ubicacion.llegada.nombre = "ESTÁTICA";
+        this.ubicacion.llegada.lat = this.origen.lat;
+        this.ubicacion.llegada.lng = this.origen.lng;
     }
 
     // Sincronizar campos tácticos raíz a misionDetalle
@@ -216,30 +221,17 @@ eventSchema.pre('validate', function(next) {
     if (this.aeronave) this.misionDetalle.aeronave = this.aeronave;
     if (this.tipoIcono) this.misionDetalle.tipoIcono = this.tipoIcono;
 
-    // 2. Sincronización de Cronología
-    if (this.start && this.end) {
-        if (new Date(this.end) < new Date(this.start)) {
-            this.invalidate('end', 'La fecha de finalización debe ser posterior a la de inicio');
-        }
-    }
-    
-    // 3. Sincronización de la posición viva (Radar)
-    let finalLat = this.lat;
-    let finalLng = this.lng;
-    const isDefaultRaiz = (this.lat === -34.61315 && this.lng === -58.37723) || !this.lat || this.lat === 0;
-    
-    if (isDefaultRaiz && this.ubicacion.salida?.lat) {
-        finalLat = this.ubicacion.salida.lat;
-        finalLng = this.ubicacion.salida.lng;
+    // 3. Sincronización de Radar (Posición Inicial)
+    if (this.ubicacion.salida && (this.ubicacion.salida.lat !== -34.61315)) {
+        this.lat = this.ubicacion.salida.lat;
+        this.lng = this.ubicacion.salida.lng;
     }
 
-    // 4. Atomic Mirroring
-    this.lat = finalLat;
-    this.lng = finalLng;
-    this.ubicacion.lat = finalLat;
-    this.ubicacion.lng = finalLng;
-    this.misionDetalle.lat = finalLat;
-    this.misionDetalle.lng = finalLng;
+    // 4. Atomic Mirroring (Sincronización de todos los espejos de posición)
+    this.ubicacion.lat = this.lat;
+    this.ubicacion.lng = this.lng;
+    this.misionDetalle.lat = this.lat;
+    this.misionDetalle.lng = this.lng;
     this.misionDetalle.isRealTime = this.isRealTime;
 
     if (this.title) this.title = this.title.toUpperCase();
