@@ -157,7 +157,7 @@ const eventSchema = new mongoose.Schema({
     createdBy: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'User', 
-        required: false // Cambiado a false para evitar Error 400 si el ID no es válido
+        required: false 
     },
     updatedBy: { 
         type: mongoose.Schema.Types.ObjectId, 
@@ -176,7 +176,16 @@ const eventSchema = new mongoose.Schema({
  * MIDDLEWARE PRE-SAVE: VALIDACIÓN Y ESTANDARIZACIÓN MILITAR
  */
 eventSchema.pre('validate', function(next) {
-    // 0. Asegurar existencia de sub-objetos
+    // 0. Corrección de Enum de Status (Resuelve el error "e/s" no válido)
+    const validStatuses = ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado', 'operativo', 'disponible', 'emergencia'];
+    if (this.status) {
+        this.status = this.status.toLowerCase().trim();
+        if (!validStatuses.includes(this.status)) {
+            this.status = 'operativo'; // Mapeo por defecto si viene "E/S" o similar
+        }
+    }
+
+    // Asegurar existencia de sub-objetos
     if (!this.ubicacion) this.ubicacion = {};
     if (!this.ubicacion.salida) this.ubicacion.salida = {};
     if (!this.ubicacion.llegada) this.ubicacion.llegada = {};
@@ -190,9 +199,7 @@ eventSchema.pre('validate', function(next) {
     }
 
     if (this.destino) {
-        // Lógica Aeronave Estática: Si no se pone destino (lat 0 o vacío), se duplica el origen
         const destinoVacio = !this.destino.lat || this.destino.lat === 0;
-        
         if (destinoVacio && this.origen) {
             this.ubicacion.llegada.nombre = (this.origen.nombre || 'ESTÁTICA').toUpperCase();
             this.ubicacion.llegada.lat = this.origen.lat;
@@ -216,10 +223,9 @@ eventSchema.pre('validate', function(next) {
         }
     }
     
-    // 3. Lógica de Trayecto Priorizada (Sincronización de la posición viva)
+    // 3. Sincronización de la posición viva (Radar)
     let finalLat = this.lat;
     let finalLng = this.lng;
-
     const isDefaultRaiz = (this.lat === -34.61315 && this.lng === -58.37723) || !this.lat || this.lat === 0;
     
     if (isDefaultRaiz && this.ubicacion.salida?.lat) {
@@ -236,7 +242,6 @@ eventSchema.pre('validate', function(next) {
     this.misionDetalle.lng = finalLng;
     this.misionDetalle.isRealTime = this.isRealTime;
 
-    // Normalización Final
     if (this.title) this.title = this.title.toUpperCase();
     if (this.elemento) this.elemento = this.elemento.toUpperCase();
     
