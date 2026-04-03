@@ -43,7 +43,7 @@ const eventSchema = new mongoose.Schema({
     matricula: { type: String, uppercase: true, trim: true },
     aeronave: { type: String, uppercase: true, trim: true },
     tipoIcono: { type: String },
-    isRealTime: { type: Boolean, default: false }, // Agregado para compatibilidad con el filtro del log
+    isRealTime: { type: Boolean, default: false }, 
 
     // 3. ORIGEN (Entrada de datos principal)
     origen: {
@@ -71,12 +71,20 @@ const eventSchema = new mongoose.Schema({
     etapa: {
         type: String,
         enum: ['recepcion', 'revision', 'ordenada', 'solicitud', 'operativo'],
-        default: 'operativo',
+        default: 'recepcion',
         required: true,
         index: true
     },
     tipoOrigen: { type: String, enum: ['LOCAL', 'COMANDO'], default: 'LOCAL', required: true },
     esGlobal: { type: Boolean, default: false },
+
+    // --- NUEVOS CAMPOS DE PECERA ESTANCA Y CONTACTO ---
+    creadorUnidad: { type: String, uppercase: true, index: true }, // Identificador de la pecera original
+    unidadApoyada: { type: String, uppercase: true, trim: true, default: '' },
+    pntoContactoNom: { type: String, trim: true, default: '' },
+    pntoContactoTel: { type: String, trim: true, default: '' },
+    responsableNom: { type: String, trim: true, default: '' },
+    responsableTel: { type: String, trim: true, default: '' },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -93,6 +101,8 @@ eventSchema.pre('validate', function(next) {
     if (this.title) this.title = this.title.toUpperCase();
     if (this.elemento) this.elemento = this.elemento.toUpperCase();
     if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
+    if (this.creadorUnidad) this.creadorUnidad = this.creadorUnidad.toUpperCase();
+    if (this.unidadApoyada) this.unidadApoyada = this.unidadApoyada.toUpperCase();
     
     // Verificación y formateo de ORIGEN
     if (this.origen) {
@@ -107,9 +117,10 @@ eventSchema.pre('validate', function(next) {
     next();
 });
 
-// Índices para optimización de búsqueda en el Monitor/Log
+// Índices para optimización de búsqueda
 eventSchema.index({ status: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
+eventSchema.index({ creadorUnidad: 1 }); // Índice para filtro de pecera
 eventSchema.index({ createdAt: -1 });
 eventSchema.index({ isRealTime: 1 });
 

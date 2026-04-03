@@ -22,23 +22,18 @@ const CalendarPage = () => {
             const data = await getEvents();
             
             /**
-             * LÓGICA DE FILTRADO JERÁRQUICO
-             * 1. 'admin', 'BOSS' y 'DIRECTOR' ven TODO (incluyendo globales y locales).
-             * 2. Los usuarios de unidades solo ven:
-             * - Eventos de su propia unidad.
-             * - Eventos globales que NO sean de otras unidades específicas.
+             * LÓGICA DE FILTRADO JERÁRQUICO (PECERA ESTANCA)
+             * 1. Roles de mando ven todo.
+             * 2. Unidades ven: lo propio, lo global de DIR AE o lo que crearon.
              */
             const filteredData = (role === 'admin' || role === 'BOSS' || role === 'DIRECTOR'|| role === 'OTO') 
                 ? data 
                 : data.filter(ev => {
                     const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
+                    const evCreador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
                     const unidadUsuario = userUnidad.toUpperCase();
                     
-                    // Condición 1: Es de mi unidad
-                    const esDeMiUnidad = evElemento.includes(unidadUsuario);
-                    
-                    // Condición 2: Es global pero YO tengo rol para verlo (Si soy 'user', solo veo global si es de mi unidad o si es general de DIR AE)
-                    // Para evitar que el S4 de una unidad vea lo de otra, el evento global debe pertenecer a su unidad o ser de interés general.
+                    const esDeMiUnidad = evElemento.includes(unidadUsuario) || evCreador === unidadUsuario;
                     const esGlobalVisible = ev.esGlobal && (evElemento === '' || evElemento.includes(unidadUsuario) || evElemento.includes('DIR AE'));
 
                     return esDeMiUnidad || esGlobalVisible;
@@ -82,7 +77,13 @@ const CalendarPage = () => {
             etapa: event.extendedProps.etapa,
             tipoApoyo: event.extendedProps.tipoApoyo,
             esGlobal: event.extendedProps.esGlobal,
-            sdaListado: sdas
+            sdaListado: sdas,
+            // Nuevos campos de contacto
+            unidadApoyada: event.extendedProps.unidadApoyada,
+            pntoContactoNom: event.extendedProps.pntoContactoNom,
+            pntoContactoTel: event.extendedProps.pntoContactoTel,
+            responsableNom: event.extendedProps.responsableNom,
+            responsableTel: event.extendedProps.responsableTel
         });
     };
 
@@ -136,13 +137,13 @@ const CalendarPage = () => {
         legendItem: { fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#444' },
         colorBox: { width: '12px', height: '12px', borderRadius: '2px' },
         modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-        modalContent: { background: 'white', borderRadius: '12px', width: '95%', maxWidth: '450px', overflow: 'hidden' },
+        modalContent: { background: 'white', borderRadius: '12px', width: '95%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' },
         modalHeader: { padding: '15px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
         modalTitle: { margin: 0, fontSize: '1rem' },
         btnClose: { background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' },
         modalBody: { padding: '15px' },
         etapaBanner: { padding: '6px', borderRadius: '4px', color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: '0.8rem', marginBottom: '12px' },
-        infoRow: { display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.9rem' },
+        infoRow: { display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.85rem', marginBottom: '8px' },
         divider: { border: 'none', borderBottom: '1px solid #eee', margin: '10px 0' },
         sdaContainer: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' },
         sdaBadge: { background: '#f1f4f8', color: '#1b3a57', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', border: '1px solid #d1d9e6' },
@@ -192,7 +193,12 @@ const CalendarPage = () => {
                                 esGlobal: ev.esGlobal,
                                 etapa: ev.etapa,
                                 tipoApoyo: ev.tipoApoyo,
-                                sdaListado: ev.sdaListado 
+                                sdaListado: ev.sdaListado,
+                                unidadApoyada: ev.unidadApoyada,
+                                pntoContactoNom: ev.pntoContactoNom,
+                                pntoContactoTel: ev.pntoContactoTel,
+                                responsableNom: ev.responsableNom,
+                                responsableTel: ev.responsableTel
                             }
                         };
                     })}
@@ -222,12 +228,6 @@ const CalendarPage = () => {
                     <div style={styles.legendItem}>🔵 Rev.</div>
                     <div style={styles.legendItem}>🟢 Ord.</div>
                 </div>
-                <div style={styles.legendGroup}>
-                    <span style={styles.legendGroupTitle}>REFERENCIAS:</span>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, border:'2px solid #000', background:'none'}}></span> Interna</div>
-                    <div style={styles.legendItem}>🌐 Global</div>
-                    <div style={styles.legendItem}>- - Pendiente</div>
-                </div>
             </div>
 
             {selectedEvent && (
@@ -241,11 +241,36 @@ const CalendarPage = () => {
                             <div style={{...styles.etapaBanner, backgroundColor: getEtapaLabel(selectedEvent.etapa).color}}>
                                 {getEtapaLabel(selectedEvent.etapa).text}
                             </div>
+                            
                             <div style={styles.infoRow}>
                                 <strong>🏢 Unidades Involucradas:</strong> 
                                 <span style={{ color: '#1b3a57', fontWeight: 'bold' }}>{selectedEvent.elemento}</span>
                             </div>
+
+                            {selectedEvent.unidadApoyada && (
+                                <div style={styles.infoRow}>
+                                    <strong>🤝 Unidad/Entidad Apoyada:</strong> 
+                                    <span>{selectedEvent.unidadApoyada}</span>
+                                </div>
+                            )}
+
                             <hr style={styles.divider} />
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                <div style={styles.infoRow}>
+                                    <strong>👤 Responsable:</strong>
+                                    <span>{selectedEvent.responsableNom || 'N/C'}</span>
+                                    <span style={{ fontSize: '0.75rem', color: '#666' }}>{selectedEvent.responsableTel}</span>
+                                </div>
+                                <div style={styles.infoRow}>
+                                    <strong>📞 Punto Contacto:</strong>
+                                    <span>{selectedEvent.pntoContactoNom || 'N/C'}</span>
+                                    <span style={{ fontSize: '0.75rem', color: '#666' }}>{selectedEvent.pntoContactoTel}</span>
+                                </div>
+                            </div>
+
+                            <hr style={styles.divider} />
+
                             <div style={styles.infoRow}>
                                 <strong>🚀 Tipo de Apoyo / SdA:</strong> 
                                 <span>{selectedEvent.tipoApoyo || 'No especificado'}</span>
@@ -257,12 +282,14 @@ const CalendarPage = () => {
                                     </div>
                                 )}
                             </div>
-                            <hr style={styles.divider} />
+
                             <div style={styles.infoRow}>
                                 <strong>⏱️ Horario de Operación (UTC):</strong> 
                                 <span>{new Date(selectedEvent.start).toISOString().slice(0, 16).replace('T', ' ')} hs</span>
                             </div>
+
                             <hr style={styles.divider} />
+
                             <div style={styles.notesBox}>
                                 <strong>📝 Detalle de la Misión:</strong>
                                 <p style={styles.notesText}>{selectedEvent.notes || 'Sin observaciones adicionales.'}</p>

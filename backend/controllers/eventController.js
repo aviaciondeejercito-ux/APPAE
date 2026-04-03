@@ -95,7 +95,9 @@ const createEvent = async (req, res) => {
             elemento, etapa, tipoApoyo, sdaListado,
             isRealTime, notasMarginales, status,
             aeronave, matricula, tipoIcono,
-            origen, destino, misionDetalle 
+            origen, destino, misionDetalle,
+            unidadApoyada, pntoContactoNom, pntoContactoTel,
+            responsableNom, responsableTel
         } = req.body;
 
         if (!title) return res.status(400).json({ message: 'El título es obligatorio.' });
@@ -110,6 +112,7 @@ const createEvent = async (req, res) => {
         }
 
         const isMando = req.isMando;
+        const userElemento = (req.user.elemento || 'DESCONOCIDO').toUpperCase();
         
         const eventData = {
             title: (title || '').toString().toUpperCase(),
@@ -118,7 +121,11 @@ const createEvent = async (req, res) => {
             color: color || '#1b3a57',
             createdBy: req.user._id,
             userName: req.user.username || req.user.name,
-            elemento: ((isMando && elemento) ? elemento : req.user.elemento).toUpperCase(),
+            elemento: ((isMando && elemento) ? elemento : userElemento).toUpperCase(),
+            
+            // Lógica de Pecera Estanca: El creador original queda marcado
+            creadorUnidad: userElemento,
+
             status: (status || 'programado').toLowerCase(),
             isRealTime: isRealTime || false,
             
@@ -138,6 +145,13 @@ const createEvent = async (req, res) => {
                 lat: destino?.lat ? parseFloat(destino.lat) : null,
                 lng: destino?.lng ? parseFloat(destino.lng) : null
             },
+
+            // 3. Contactos y Responsables
+            unidadApoyada: (unidadApoyada || '').toUpperCase(),
+            pntoContactoNom: (pntoContactoNom || '').toUpperCase(),
+            pntoContactoTel: pntoContactoTel || '',
+            responsableNom: (responsableNom || '').toUpperCase(),
+            responsableTel: responsableTel || '',
 
             misionDetalle: {
                 ...misionDetalle,
@@ -185,10 +199,14 @@ const updateEvent = async (req, res) => {
         const updateData = { ...req.body };
         delete updateData._id; 
         delete updateData.createdBy;
+        delete updateData.creadorUnidad; // Protegemos la unidad de origen
         updateData.updatedBy = req.user._id; 
 
         if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
         if (updateData.notes) updateData.notes = updateData.notes.toUpperCase();
+        if (updateData.unidadApoyada) updateData.unidadApoyada = updateData.unidadApoyada.toUpperCase();
+        if (updateData.pntoContactoNom) updateData.pntoContactoNom = updateData.pntoContactoNom.toUpperCase();
+        if (updateData.responsableNom) updateData.responsableNom = updateData.responsableNom.toUpperCase();
 
         if (updateData.origen) {
             updateData.origen.nombre = (updateData.origen.nombre || '').toUpperCase();
