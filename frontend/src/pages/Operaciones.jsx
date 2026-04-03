@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { getEvents, createEvent, deleteEvent, updateEvent, getAvailableAircraft } from '../services/EventService';
-import { TIPOS_DE_APOYO } from '../constants/TacticalData'; // Importación de la matriz solicitada
+import { TIPOS_DE_APOYO } from '../constants/TacticalData';
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
     const [filteredEvents, setFilteredEvents] = useState([]); 
     const [searchTerm, setSearchTerm] = useState(""); 
     const [role] = useState(localStorage.getItem('role')?.toLowerCase());
-    const [userUnidad] = useState(localStorage.getItem('elemento'));
+    const [userUnidad] = useState(localStorage.getItem('elemento')?.trim().toUpperCase());
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [isMobile] = useState(window.innerWidth < 768);
@@ -36,14 +36,14 @@ const Operaciones = () => {
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
         etapa: 'recepcion', 
         unidadesInvolucradas: [],
-        // Nuevos campos agregados
+        unidadApoyada: '', 
         pntoContactoNom: '', pntoContactoTel: '',
         responsableNom: '', responsableTel: ''
     });
 
     useEffect(() => { 
         fetchData(); 
-    }, []);
+    }, [userUnidad]);
 
     useEffect(() => {
         const results = events.filter(ev => 
@@ -80,38 +80,37 @@ const Operaciones = () => {
     const fetchData = async () => {
         try {
             const data = await getEvents();
-            const userUnidadUpper = userUnidad?.trim().toUpperCase();
             
             const logicFiltered = data.filter(ev => {
-                if (ev.isRealTime) return false; 
-                const esOrdenOperativa = ev.tipoApoyo || (ev.sdaListado && ev.sdaListado.length > 0);
-                if (!esOrdenOperativa) return false;
+                if (ev.isRealTime) return false;
+                
+                const creador = ev.creadorUnidad?.toUpperCase() || "";
+                const unidadesResponsables = ev.elemento?.toUpperCase() || "";
+                const esMiPropiaOrden = creador === userUnidad;
+                const soyResponsable = unidadesResponsables.includes(userUnidad);
 
-                const esGlobal = ev.esGlobal === true;
-                const soyResponsableAsignado = ev.elemento?.toUpperCase().includes(userUnidadUpper);
+                if (ev.etapa === 'recepcion' || ev.etapa === 'revision') {
+                    return esMiPropiaOrden;
+                }
 
-                if (esMando) return true;
-                if (['user', 's4 unidad', 's4', 'oficina_tecnica'].includes(role)) return soyResponsableAsignado || esGlobal;
+                if (esMando) {
+                    if (esMiPropiaOrden) return true;
+                    return ev.esGlobal === true;
+                }
 
-                return false; 
+                if (esMiPropiaOrden) return true;
+                return soyResponsable && ev.etapa === 'ordenada';
             });
             
             setEvents(Array.isArray(logicFiltered) ? logicFiltered : []);
         } catch (error) { 
-            console.error("❌ Error de Sincronización AE"); 
+            console.error("❌ Error de Sincronización Estanca"); 
         }
     };
 
     const parseFromBackend = (dateString) => {
         if (!dateString) return '';
         return dateString.split('.')[0].slice(0, 16);
-    };
-
-    const formatDateForDisplay = (dateString) => {
-        if (!dateString) return '';
-        const [datePart] = dateString.split('T');
-        const [year, month, day] = datePart.split('-');
-        return `${day}/${month}/${year}`;
     };
 
     const toggleUnidad = (unidad) => {
@@ -145,14 +144,14 @@ const Operaciones = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.start || !formData.end) {
-            alert("Por favor complete las fechas de inicio y fin.");
+            alert("Complete fechas.");
             return;
         }
 
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
-        const finalElemento = (esMando && formData.unidadesInvolucradas.length > 0)
+        const finalElemento = (formData.unidadesInvolucradas.length > 0)
             ? formData.unidadesInvolucradas.join(', ')
-            : (formData.unidadesInvolucradas.length > 0 ? formData.unidadesInvolucradas.join(', ') : userUnidad);
+            : userUnidad;
 
         const finalData = {
             title: formData.title.toUpperCase(),
@@ -163,9 +162,10 @@ const Operaciones = () => {
             sdaListado: formData.sdaListado,
             etapa: formData.etapa,
             esGlobal: publicarGlobal,
-            notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
+            notes: `SdA: ${formData.sdaListado.join(', ')} | Apoyado: ${formData.unidadApoyada} | Obs: ${cleanNotes}`,
             elemento: finalElemento,
-            // Datos de contacto y responsables
+            creadorUnidad: isEditing ? undefined : userUnidad, // No sobreescribir el creador original al editar
+            unidadApoyada: formData.unidadApoyada.toUpperCase(),
             pntoContactoNom: formData.pntoContactoNom,
             pntoContactoTel: formData.pntoContactoTel,
             responsableNom: formData.responsableNom,
@@ -175,15 +175,14 @@ const Operaciones = () => {
         try {
             if (isEditing) {
                 await updateEvent(selectedId, finalData);
-                alert("✅ Orden Actualizada y Re-ordenada.");
             } else {
                 await createEvent(finalData);
-                alert("✅ Grabado en Monitor AE.");
             }
             resetForm();
             fetchData();
+            alert("✅ Operación procesada.");
         } catch (error) { 
-            alert("❌ Error de permisos o red."); 
+            alert("❌ Error de red."); 
         }
     };
 
@@ -191,7 +190,7 @@ const Operaciones = () => {
         setFormData({ 
             title: '', start: '', end: '', color: '#3498db', notes: '', 
             tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
-            etapa: 'recepcion', unidadesInvolucradas: [],
+            etapa: 'recepcion', unidadesInvolucradas: [], unidadApoyada: '',
             pntoContactoNom: '', pntoContactoTel: '',
             responsableNom: '', responsableTel: ''
         });
@@ -201,12 +200,6 @@ const Operaciones = () => {
     };
 
     const handleEdit = (ev) => {
-        const esMiUnidadAsignada = ev.elemento?.toUpperCase().includes(userUnidad?.toUpperCase());
-        if (!esMando && !esMiUnidadAsignada) {
-            alert("Sin permisos: Esta orden no está asignada a su unidad.");
-            return;
-        }
-
         setIsEditing(true);
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
@@ -221,6 +214,7 @@ const Operaciones = () => {
             tipoApoyo: ev.tipoApoyo || '',
             etapa: ev.etapa || 'recepcion',
             unidadesInvolucradas: ev.elemento ? ev.elemento.split(', ') : [],
+            unidadApoyada: ev.unidadApoyada || '',
             pntoContactoNom: ev.pntoContactoNom || '',
             pntoContactoTel: ev.pntoContactoTel || '',
             responsableNom: ev.responsableNom || '',
@@ -230,19 +224,13 @@ const Operaciones = () => {
     };
 
     const handleDelete = async (ev) => {
-        const esMiUnidadAsignada = ev.elemento?.toUpperCase().includes(userUnidad?.toUpperCase());
-        if (!esMando && !esMiUnidadAsignada) {
-            alert("Seguridad: Solo los mandos o la unidad responsable pueden eliminar esta orden.");
-            return;
-        }
-
-        if (window.confirm("¿Eliminar orden operativa definitivamente?")) {
+        if (window.confirm("¿Eliminar?")) {
             try {
                 await deleteEvent(ev._id);
                 fetchData();
                 if(isEditing && selectedId === ev._id) resetForm();
             } catch (error) {
-                alert("Error al eliminar.");
+                alert("Error.");
             }
         }
     };
@@ -251,14 +239,16 @@ const Operaciones = () => {
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
                 <div style={styles.card}>
-                    <h3 style={styles.title}>{isEditing ? "📝 Gestionar Ejecución" : "➕ Nueva Orden Operativa"}</h3>
-                    <button type="button" disabled={!esMando}
+                    <h3 style={styles.title}>{isEditing ? "📝 Editar Orden" : "➕ Nueva Orden"}</h3>
+                    
+                    <button type="button" 
                         onClick={() => setPublicarGlobal(!publicarGlobal)}
-                        style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px', cursor: esMando ? 'pointer' : 'not-allowed' }}>
-                        {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE)" : "🏠 PUBLICACIÓN LOCAL (UNIDAD)"}
+                        style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px', cursor: 'pointer' }}>
+                        {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (Visible para DIR AE)" : "🏠 PUBLICACIÓN LOCAL (Solo Unidad)"}
                     </button>
+
                     <div style={styles.etapaWrapper}>
-                        <label style={styles.labelEtapa}>ESTADO / SECUENCIA DE LA ORDEN:</label>
+                        <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
                         <div style={styles.etapaGrid}>
                             {Object.keys(etapaColors).map(e => (
                                 <button key={e} type="button" onClick={() => setFormData({...formData, etapa: e})} 
@@ -268,6 +258,7 @@ const Operaciones = () => {
                             ))}
                         </div>
                     </div>
+
                     <form onSubmit={handleSubmit} style={styles.form}>
                         <input type="text" required placeholder="Nombre de la Misión" value={formData.title} 
                                onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} />
@@ -281,7 +272,7 @@ const Operaciones = () => {
 
                         {esMando && (
                             <div style={styles.unidadSelector}>
-                                <label style={styles.label}>Asignar Responsables:</label>
+                                <label style={styles.label}>Asignar Unidad AE Responsable:</label>
                                 <div style={styles.unidadChips}>
                                     {unidadesAE.map(u => (
                                         <button key={u} type="button" onClick={() => toggleUnidad(u)}
@@ -293,34 +284,35 @@ const Operaciones = () => {
                             </div>
                         )}
 
-                        {/* SECCIÓN: PUNTO DE CONTACTO */}
+                        <div style={styles.sectionTitle}>UNIDAD APOYADA (QUIEN RECIBE)</div>
+                        <input type="text" placeholder="Escriba la unidad que recibe el apoyo..." value={formData.unidadApoyada} 
+                               onChange={e => setFormData({...formData, unidadApoyada: e.target.value})} style={styles.input} />
+
                         <div style={styles.sectionTitle}>PUNTO DE CONTACTO</div>
                         <div style={styles.row}>
-                            <input type="text" placeholder="Grado / Nombre / Apellido" value={formData.pntoContactoNom} 
+                            <input type="text" placeholder="Grado / Nombre" value={formData.pntoContactoNom} 
                                    onChange={e => setFormData({...formData, pntoContactoNom: e.target.value})} style={{...styles.input, flex: 2}} />
-                            <input type="text" placeholder="Teléfono" value={formData.pntoContactoTel} 
+                            <input type="text" placeholder="Tel" value={formData.pntoContactoTel} 
                                    onChange={e => setFormData({...formData, pntoContactoTel: e.target.value})} style={{...styles.input, flex: 1}} />
                         </div>
 
-                        {/* SECCIÓN: TIPO DE APOYO */}
                         <div style={styles.sectionTitle}>TIPO DE APOYO</div>
                         <select value={formData.tipoApoyo} onChange={e => setFormData({...formData, tipoApoyo: e.target.value})} style={styles.input} required>
-                            <option value="">Seleccione Tipo de Apoyo...</option>
+                            <option value="">Seleccione...</option>
                             {TIPOS_DE_APOYO.map((apoyo, idx) => <option key={idx} value={apoyo}>{apoyo}</option>)}
                         </select>
 
-                        {/* SECCIÓN: RESPONSABLE */}
-                        <div style={styles.sectionTitle}>RESPONSABLE</div>
+                        <div style={styles.sectionTitle}>RESPONSABLE DE EJECUCIÓN</div>
                         <div style={styles.row}>
-                            <input type="text" placeholder="Comandante de Aeronave / Responsable" value={formData.responsableNom} 
+                            <input type="text" placeholder="Cte Aeronave / Jefe" value={formData.responsableNom} 
                                    onChange={e => setFormData({...formData, responsableNom: e.target.value})} style={{...styles.input, flex: 2}} />
-                            <input type="text" placeholder="Teléfono" value={formData.responsableTel} 
+                            <input type="text" placeholder="Tel" value={formData.responsableTel} 
                                    onChange={e => setFormData({...formData, responsableTel: e.target.value})} style={{...styles.input, flex: 1}} />
                         </div>
 
                         <div style={styles.sdaBox}>
                             <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                <option value="">{loadingAircraft ? "Cargando Flota..." : "Asignar Aeronave..."}</option>
+                                <option value="">{loadingAircraft ? "Cargando..." : "Asignar SdA..."}</option>
                                 {availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} ({air.matricula})</option>)}
                             </select>
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
@@ -333,36 +325,38 @@ const Operaciones = () => {
                             ))}
                         </div>
 
-                        <textarea placeholder="Observaciones de ejecución..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
+                        <textarea placeholder="Observaciones adicionales..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
                         
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
-                            {isEditing ? "CONFIRMAR CAMBIOS" : "GRABAR MONITOR"}
+                            {isEditing ? "ACTUALIZAR ORDEN" : "GRABAR ORDEN"}
                         </button>
-                        {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR</button>}
+                        {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#95a5a6', marginTop: '5px'}}>CANCELAR</button>}
                     </form>
                 </div>
 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>📜 Registro de Órdenes</h3>
-                    <input type="text" placeholder="🔍 Buscar misión, unidad..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
+                    <h3 style={styles.title}>📜 Registro de Misiones</h3>
+                    <input type="text" placeholder="🔍 Filtrar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
                     <div style={styles.scrollList}>
-                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay órdenes.</p> : 
+                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay misiones visibles.</p> : 
                         filteredEvents.map(ev => {
-                            const esMiUnidadAsignada = ev.elemento?.toUpperCase().includes(userUnidad?.toUpperCase());
+                            const esCreador = ev.creadorUnidad?.toUpperCase() === userUnidad;
+                            const esResponsable = ev.elemento?.toUpperCase().includes(userUnidad);
+                            const puedeEditar = esCreador || (esResponsable && ev.etapa === 'ordenada');
+                            const puedeBorrar = esCreador || esMando;
+
                             return (
                                 <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
                                     <div style={{flex: 1}}>
                                         <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.esGlobal && "🌐 "}{ev.title}</div>
-                                        <div style={{fontSize: '0.75rem', color: '#666'}}>{ev.elemento} | {formatDateForDisplay(ev.start)}</div>
+                                        <div style={{fontSize: '0.75rem', color: '#666'}}>Resp: {ev.elemento} | Apoyado: {ev.unidadApoyada}</div>
                                         <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>
                                             <span style={{...styles.miniBadge, backgroundColor: etapaColors[ev.etapa] || '#95a5a6'}}>{ev.etapa?.toUpperCase()}</span>
                                         </div>
                                     </div>
                                     <div style={styles.logActions}>
-                                        <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>
-                                        {(esMando || esMiUnidadAsignada) && (
-                                            <button onClick={() => handleDelete(ev)} style={styles.btnIconDel}>🗑️</button>
-                                        )}
+                                        {puedeEditar && <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>}
+                                        {puedeBorrar && <button onClick={() => handleDelete(ev)} style={styles.btnIconDel}>🗑️</button>}
                                     </div>
                                 </div>
                             );
