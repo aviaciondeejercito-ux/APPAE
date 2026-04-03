@@ -23,14 +23,14 @@ const CargaTactica = () => {
     const [loading, setLoading] = useState(false);
     const [title, setTitle] = useState('');
     const [selectedMatricula, setSelectedMatricula] = useState('');
+    const [notasMarginales, setNotasMarginales] = useState('');
 
     // Estado para Coordenadas de Origen
     const [coordOri, setCoordOri] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
     
-    // Estado para Coordenadas de Destino (Agregado)
+    // Estado para Coordenadas de Destino
     const [coordDes, setCoordDes] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
 
-    // Función auxiliar para convertir Decimal a GMS
     const fromDecimal = (decimal) => {
         const absVal = Math.abs(decimal);
         const g = Math.floor(absVal);
@@ -39,11 +39,10 @@ const CargaTactica = () => {
         return { g, m, s };
     };
 
-    // Manejador de selección de Aeropuerto (Adaptado para ambos)
+    // Manejador de selección Dinámico
     const handleSelectLugar = (valor, tipo) => {
         const aero = AEROPUERTOS.find(a => a.nombre === valor);
         const setter = tipo === 'origen' ? setCoordOri : setCoordDes;
-        const current = tipo === 'origen' ? coordOri : coordDes;
 
         if (aero) {
             const latGMS = fromDecimal(aero.lat);
@@ -54,7 +53,8 @@ const CargaTactica = () => {
                 lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s
             });
         } else {
-            setter({ ...current, nombre: valor });
+            // Permite el cambio manual sin borrar
+            setter(prev => ({ ...prev, nombre: valor.toUpperCase() }));
         }
     };
 
@@ -69,7 +69,8 @@ const CargaTactica = () => {
         try {
             const evRes = await getActiveOperations();
             const events = Array.isArray(evRes) ? evRes : [];
-            setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === userElemento)));
+            // Reflejamos todos los vuelos operativos/en curso según permisos
+            setMisiones(events.filter(ev => isMando || ev.elemento === userElemento));
 
             const airRes = await getAircrafts();
             const dataAeronaves = Array.isArray(airRes) ? airRes : airRes.data || [];
@@ -101,6 +102,7 @@ const CargaTactica = () => {
             tipoIcono: aeroInfo.tipoIcono, 
             matricula: aeroInfo.matricula,
             aeronave: aeroInfo.sda,
+            notasMarginales: notasMarginales.toUpperCase().trim(),
             origen: {
                 nombre: (coordOri.nombre || "ORIGEN").toUpperCase(),
                 lat: toDecimal(coordOri.latG, coordOri.latM, coordOri.latS),
@@ -117,7 +119,6 @@ const CargaTactica = () => {
             await createEvent(payload);
             Swal.fire({ 
                 title: 'OPERACIÓN LANZADA', 
-                text: 'Vuelo registrado exitosamente', 
                 icon: 'success', 
                 timer: 1500, 
                 showConfirmButton: false,
@@ -126,6 +127,7 @@ const CargaTactica = () => {
             });
             setTitle('');
             setSelectedMatricula('');
+            setNotasMarginales('');
             setCoordOri({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
             setCoordDes({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
             cargarDatos();
@@ -192,7 +194,6 @@ const CargaTactica = () => {
                         </div>
 
                         <div style={styles.coordGrid}>
-                            {/* BLOQUE: COORDENADAS ORIGEN */}
                             <div style={styles.coordBox}>
                                 <label style={styles.labelBlue}>PUNTO DE ORIGEN</label>
                                 <input 
@@ -208,7 +209,6 @@ const CargaTactica = () => {
                                 </div>
                             </div>
 
-                            {/* BLOQUE: COORDENADAS DESTINO */}
                             <div style={styles.coordBox}>
                                 <label style={styles.labelRed}>PUNTO DE DESTINO</label>
                                 <input 
@@ -223,6 +223,11 @@ const CargaTactica = () => {
                                     <InputGMS label="LONGITUD (W)" values={{g: coordDes.lngG, m: coordDes.lngM, s: coordDes.lngS}} onChange={(f, v) => setCoordDes({...coordDes, [`lng${f}`]: v})} />
                                 </div>
                             </div>
+                        </div>
+
+                        <div style={styles.fieldGroup}>
+                            <label style={styles.label}>NOTAS MARGINALES</label>
+                            <input style={styles.input} value={notasMarginales} onChange={e => setNotasMarginales(e.target.value)} placeholder="DATOS ADICIONALES DEL VUELO" />
                         </div>
 
                         <datalist id="optsLugares">
@@ -252,6 +257,7 @@ const CargaTactica = () => {
                                     </div>
                                     <div style={styles.misionTitle}>{m.title}</div>
                                     <div style={styles.misionSub}>{m.aeronave}</div>
+                                    {m.notasMarginales && <div style={{fontSize: '0.7rem', color: '#8b949e', fontStyle: 'italic'}}>{m.notasMarginales}</div>}
                                     <div style={styles.routeText}>
                                         {m.origen?.nombre || '---'} ➔ {m.destino?.nombre || '---'}
                                     </div>
