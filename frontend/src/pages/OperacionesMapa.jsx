@@ -26,20 +26,20 @@ const OperacionesMapa = () => {
 
     const fetchMisiones = async () => {
         try {
-            const data = await EventService.getEvents();
+            // CAMBIO CLAVE: Usamos getActiveOperations para obtener solo lo que está en vuelo
+            const data = await EventService.getActiveOperations();
             const role = localStorage.getItem('role');
-            const userElemento = localStorage.getItem('elemento'); 
+            const userElemento = localStorage.getItem('elemento')?.toUpperCase(); 
             
             const dataArray = Array.isArray(data) ? data : data.data || [];
             
+            // Filtrado por jerarquía y unidad
             const activas = dataArray.filter(ev => {
-                const isRealTime = ev.misionDetalle?.isRealTime === true || ev.isRealTime === true;
-                const esOperativo = isRealTime && ev.etapa === 'operativo';
+                const isAdmin = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role);
+                const perteneceUnidad = ev.elemento?.toUpperCase() === userElemento;
                 
-                if (['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role)) {
-                    return esOperativo;
-                }
-                return esOperativo && ev.elemento === userElemento;
+                // Si es admin ve todo lo operativo, si no, solo lo de su unidad
+                return isAdmin || perteneceUnidad;
             });
 
             setMisiones(activas);
@@ -69,16 +69,22 @@ const OperacionesMapa = () => {
                 </LayersControl>
 
                 {misiones.map((m) => {
-                    // Acceso correcto según el JSON provisto
                     const detalle = m.misionDetalle || {};
-                    const salidaPos = [m.ubicacion?.salida?.lat || -34.6, m.ubicacion?.salida?.lng || -58.4];
-                    const llegadaPos = [m.ubicacion?.llegada?.lat || -34.6, m.ubicacion?.llegada?.lng || -58.4];
-                    const actualPos = [m.ubicacion?.lat || salidaPos[0], m.ubicacion?.lng || salidaPos[1]];
                     
-                    const isMoving = m.ubicacion?.lat !== m.ubicacion?.salida?.lat;
+                    // Priorizamos lat/lng raíz para el movimiento en tiempo real
+                    const actualLat = m.lat ?? detalle.lat ?? m.ubicacion?.lat ?? -34.61315;
+                    const actualLng = m.lng ?? detalle.lng ?? m.ubicacion?.lng ?? -58.37723;
+                    const actualPos = [actualLat, actualLng];
+
+                    // Coordenadas de origen y destino para la línea de trayecto
+                    const salidaPos = [m.ubicacion?.salida?.lat || actualLat, m.ubicacion?.salida?.lng || actualLng];
+                    const llegadaPos = [m.ubicacion?.llegada?.lat || actualLat, m.ubicacion?.llegada?.lng || actualLng];
+                    
+                    const isMoving = actualLat !== (m.ubicacion?.salida?.lat || 0);
 
                     return (
                         <React.Fragment key={m._id?.$oid || m._id}>
+                            {/* Línea de trayecto planeado */}
                             <Polyline 
                                 positions={[salidaPos, llegadaPos]} 
                                 pathOptions={{ color: '#f39c12', weight: 1, dashArray: '10, 10', opacity: 0.3 }} 

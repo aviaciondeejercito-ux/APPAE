@@ -21,11 +21,8 @@ const {
  * IMPORTACIÓN DE SEGURIDAD
  * 'protect' verifica el token; 'authorize' verifica el rango jerárquico.
  */
-const authMiddleware = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/rolecheck');
-
-// Normalización del middleware de protección (Blindaje de Referencia)
-const protect = authMiddleware.protect || authMiddleware.verifyToken || authMiddleware;
 
 /**
  * SISTEMA GESTIÓN AE - CAPA DE RUTAS OPERATIVAS BLINDADAS
@@ -40,19 +37,19 @@ router.use(protect);
 /**
  * @route    GET /api/events/active-map
  * @desc     Obtener misiones de VUELO TÁCTICO en curso para el Mapa
+ * @note     Debe ir ANTES de las rutas con :id para evitar colisiones
  */
 router.get('/active-map', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getActiveOperations);
 
 /**
  * @route    GET /api/events/aircraft-available/:elemento
  * @desc     Consultar disponibilidad de aeronaves E/S para la unidad específica
- * @note     Se ajusta el path para coincidir con la llamada del controlador
  */
 router.get('/aircraft-available/:elemento', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getAvailableAircraft);
 
 /**
  * @route    GET /api/events
- * @desc     Obtener lista de eventos (Filtra automáticamente isRealTime: false)
+ * @desc     Obtener lista de eventos (Calendario / Log)
  */
 router.get('/', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getEvents);
 
