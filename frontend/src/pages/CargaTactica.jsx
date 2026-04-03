@@ -28,11 +28,16 @@ const CargaTactica = () => {
             const events = Array.isArray(evRes) ? evRes : evRes.data || [];
             const aircrafts = Array.isArray(airRes) ? airRes : airRes.data || [];
 
-            // Filtrar misiones activas en tiempo real
-            setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento?.includes(user.elemento))));
+            // Filtrar misiones activas
+            setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === user.elemento)));
             
-            // FILTRADO DE AERONAVES DE MONGODB (Solo E/S y según permisos)
-            setFlota(aircrafts.filter(a => a.estado === 'E/S' && (isMando || a.unidad?.includes(user.elemento))));
+            // FILTRADO DE AERONAVES: La aeronave ya trae su Unidad, SDA y Tipo desde la BD.
+            // Solo filtramos las que están en servicio (E/S) y pertenecen a la unidad del usuario (si no es mando).
+            const filtradas = aircrafts.filter(a => 
+                a.estado === 'E/S' && (isMando || (a.unidad && a.unidad === user.elemento))
+            );
+            
+            setFlota(filtradas);
             
         } catch (e) { 
             console.error("Error en la carga de datos de red:", e); 
@@ -46,7 +51,6 @@ const CargaTactica = () => {
         return () => clearInterval(interval);
     }, [cargarDatos]);
 
-    // Helpers de conversión de coordenadas
     const toDec = (g, m, s, dir) => {
         const d = Math.abs(parseFloat(g)) + (parseFloat(m) / 60) + (parseFloat(s) / 3600);
         return (dir === 'S' || dir === 'W') ? d * -1 : d;
@@ -61,6 +65,7 @@ const CargaTactica = () => {
     };
 
     const handleAptSelect = (e, target) => {
+        // Los aeródromos se siguen tomando del archivo de constantes
         const apt = AEROPUERTOS.find(p => p.nombre === e.target.value);
         if (!apt) return;
         const la = fromDec(apt.lat, 'lat');
@@ -113,6 +118,8 @@ const CargaTactica = () => {
         e.preventDefault();
         const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
+        
+        // El icono se decide según el SDA que ya viene de la aeronave de la base de datos
         const icono = CLASIFICACION_SDA[form.sda] || (form.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
 
         const payload = {
@@ -193,6 +200,7 @@ const CargaTactica = () => {
                                 value={form.aeronaveId} 
                                 onChange={e => {
                                     const a = flota.find(x => x._id === e.target.value);
+                                    // Al seleccionar, cargamos SDA, Matrícula y Unidad directamente desde el objeto de la BD
                                     if(a) setForm({...form, aeronaveId: a._id, sda: a.sda, matricula: a.matricula, elemento: a.unidad});
                                 }} 
                                 required 
@@ -258,7 +266,7 @@ const CargaTactica = () => {
                             required 
                         />
 
-                        <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
+                        <button type="submit" style={editingId ? styles.btnUpdate : styles.btn} disabled={flota.length === 0 && !editingId}>
                             {editingId ? 'ACTUALIZAR POSICIÓN' : 'LANZAR OPERACIÓN'}
                         </button>
                     </form>
