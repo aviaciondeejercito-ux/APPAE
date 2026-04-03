@@ -73,7 +73,6 @@ const eventSchema = new mongoose.Schema({
             default: 'ala_rotativa' 
         },
         isRealTime: { type: Boolean, default: false },
-        // Coordenadas actuales (o de salida por defecto)
         lat: { type: Number, default: -34.61315 },
         lng: { type: Number, default: -58.37723 }
     },
@@ -83,7 +82,6 @@ const eventSchema = new mongoose.Schema({
         type: Boolean,
         default: false 
     },
-    // Estas representan la posición "viva" en el mapa
     lat: { type: Number, default: -34.61315 }, 
     lng: { type: Number, default: -58.37723 }, 
     
@@ -94,21 +92,33 @@ const eventSchema = new mongoose.Schema({
             default: 'POSICIÓN POR COORDENADAS',
             uppercase: true 
         },
-        // Punto de Salida / Despliegue
         salida: {
             nombre: { type: String, uppercase: true, default: 'ORIGEN' },
             lat: { type: Number, default: -34.61315 },
             lng: { type: Number, default: -58.37723 }
         },
-        // Punto de Llegada / Destino
         llegada: {
             nombre: { type: String, uppercase: true, default: 'DESTINO' },
             lat: { type: Number, default: -34.61315 },
             lng: { type: Number, default: -58.37723 }
         },
-        // Mantenemos lat/lng raíz en ubicacion para compatibilidad con código viejo
         lat: { type: Number, default: -34.61315 },
         lng: { type: Number, default: -58.37723 }
+    },
+
+    // --- CAMPOS PARA SOPORTE DIRECTO DESDE CARGA TACTICA ---
+    matricula: { type: String, uppercase: true, trim: true },
+    aeronave: { type: String, uppercase: true, trim: true },
+    tipoIcono: { type: String },
+    origen: {
+        nombre: { type: String, uppercase: true },
+        lat: { type: Number },
+        lng: { type: Number }
+    },
+    destino: {
+        nombre: { type: String, uppercase: true },
+        lat: { type: Number },
+        lng: { type: Number }
     },
 
     notasMarginales: {
@@ -165,21 +175,46 @@ const eventSchema = new mongoose.Schema({
  * MIDDLEWARE PRE-SAVE: VALIDACIÓN Y ESTANDARIZACIÓN MILITAR
  */
 eventSchema.pre('validate', function(next) {
-    // 1. Sincronización de Cronología
+    // 1. Manejo de entrada desde CargaTactica (Mapeo de campos sueltos a estructura interna)
+    if (this.origen) {
+        this.ubicacion.salida.nombre = this.origen.nombre || this.ubicacion.salida.nombre;
+        this.ubicacion.salida.lat = this.origen.lat ?? this.ubicacion.salida.lat;
+        this.ubicacion.salida.lng = this.origen.lng ?? this.ubicacion.salida.lng;
+    }
+
+    if (this.destino) {
+        // Lógica Aeronave Estática: Si no se pone destino (lat/lng son 0 o iguales al default), se duplica el origen
+        const destinoVacio = !this.destino.lat || this.destino.lat === 0;
+        
+        if (destinoVacio && this.origen) {
+            this.ubicacion.llegada.nombre = (this.origen.nombre || 'ESTÁTICA').toUpperCase();
+            this.ubicacion.llegada.lat = this.origen.lat;
+            this.ubicacion.llegada.lng = this.origen.lng;
+        } else {
+            this.ubicacion.llegada.nombre = this.destino.nombre || this.ubicacion.llegada.nombre;
+            this.ubicacion.llegada.lat = this.destino.lat ?? this.ubicacion.llegada.lat;
+            this.ubicacion.llegada.lng = this.destino.lng ?? this.ubicacion.llegada.lng;
+        }
+    }
+
+    // Sincronizar campos tácticos raíz si vienen sueltos
+    if (this.matricula) this.misionDetalle.matricula = this.matricula;
+    if (this.aeronave) this.misionDetalle.aeronave = this.aeronave;
+    if (this.tipoIcono) this.misionDetalle.tipoIcono = this.tipoIcono;
+
+    // 2. Sincronización de Cronología
     if (this.start && this.end) {
         if (new Date(this.end) < new Date(this.start)) {
             this.invalidate('end', 'La fecha de finalización debe ser posterior a la de inicio');
         }
     }
     
-    // 2. Lógica de Trayecto Priorizada para Despacho Táctico
-    // Evitamos que el valor 0 o el default pisen los datos reales de salida
+    // 3. Lógica de Trayecto Priorizada para Despacho Táctico
     let finalLat = this.lat;
     let finalLng = this.lng;
 
     const isDefaultRaiz = (this.lat === -34.61315 && this.lng === -58.37723) || (this.lat === 0) || !this.lat;
     
-    // Si la raíz no tiene datos reales pero la salida sí, priorizamos salida
     if (isDefaultRaiz && this.ubicacion?.salida?.lat !== undefined && this.ubicacion?.salida?.lat !== 0 && this.ubicacion?.salida?.lat !== -34.61315) {
         finalLat = this.ubicacion.salida.lat;
         finalLng = this.ubicacion.salida.lng;
@@ -188,20 +223,15 @@ eventSchema.pre('validate', function(next) {
         finalLng = this.misionDetalle.lng;
     }
 
-    // 3. Atomic Mirroring (Sincronización de espejos corregida)
+    // 4. Atomic Mirroring (Sincronización de espejos)
     this.lat = finalLat;
     this.lng = finalLng;
 
     if (this.ubicacion) {
         this.ubicacion.lat = finalLat;
         this.ubicacion.lng = finalLng;
-        
-        if (this.ubicacion.salida && this.ubicacion.salida.nombre) {
-            this.ubicacion.salida.nombre = this.ubicacion.salida.nombre.toUpperCase();
-        }
-        if (this.ubicacion.llegada && this.ubicacion.llegada.nombre) {
-            this.ubicacion.llegada.nombre = this.ubicacion.llegada.nombre.toUpperCase();
-        }
+        if (this.ubicacion.salida?.nombre) this.ubicacion.salida.nombre = this.ubicacion.salida.nombre.toUpperCase();
+        if (this.ubicacion.llegada?.nombre) this.ubicacion.llegada.nombre = this.ubicacion.llegada.nombre.toUpperCase();
     }
 
     if (this.misionDetalle) {
