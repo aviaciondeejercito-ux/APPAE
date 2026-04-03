@@ -69,7 +69,6 @@ const getActiveOperations = async (req, res) => {
             status: { $in: ['en_curso', 'en_desarrollo', 'operativo', 'emergencia'] } 
         };
 
-        // MODIFICACIÓN SINCRO JOKER: Permitir visualización de eventos globales en el mapa
         if (!isMando) {
             query.$or = [
                 { elemento: { $regex: elemento, $options: 'i' } },
@@ -110,8 +109,9 @@ const createEvent = async (req, res) => {
         const isMando = req.isMando;
         const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
         
-        const finalLat = parseFloat(ubicacion?.salida?.lat ?? lat ?? misionDetalle?.lat ?? -34.61315);
-        const finalLng = parseFloat(ubicacion?.salida?.lng ?? lng ?? misionDetalle?.lng ?? -58.37723);
+        // CORRECCIÓN PRIORIDAD: La posición actual (lat/lng) manda sobre la de salida para permitir el radar.
+        const finalLat = parseFloat(lat ?? misionDetalle?.lat ?? ubicacion?.salida?.lat ?? -34.61315);
+        const finalLng = parseFloat(lng ?? misionDetalle?.lng ?? ubicacion?.salida?.lng ?? -58.37723);
 
         const eventData = {
             title: (title || '').toString().toUpperCase(),
@@ -205,8 +205,9 @@ const updateEvent = async (req, res) => {
             }
         });
 
-        const nLat = parseFloat(updateData.ubicacion?.salida?.lat ?? updateData.lat ?? updateData.misionDetalle?.lat ?? event.lat);
-        const nLng = parseFloat(updateData.ubicacion?.salida?.lng ?? updateData.lng ?? updateData.misionDetalle?.lng ?? event.lng);
+        // CORRECCIÓN PRIORIDAD: lat/lng actuales mandan sobre el punto de origen.
+        const nLat = parseFloat(updateData.lat ?? updateData.misionDetalle?.lat ?? updateData.ubicacion?.salida?.lat ?? event.lat);
+        const nLng = parseFloat(updateData.lng ?? updateData.misionDetalle?.lng ?? updateData.ubicacion?.salida?.lng ?? event.lng);
 
         updateData.misionDetalle = {
             ...event.misionDetalle,
@@ -216,6 +217,7 @@ const updateEvent = async (req, res) => {
             mecanico: (updateData.misionDetalle?.mecanico || event.misionDetalle?.mecanico || 'S/D').toUpperCase(),
             aeronave: (updateData.aeronave || updateData.misionDetalle?.aeronave || event.misionDetalle?.aeronave || '').toUpperCase(),
             matricula: (updateData.matricula || updateData.misionDetalle?.matricula || event.misionDetalle?.matricula || '').toUpperCase(),
+            tipoIcono: updateData.tipoIcono || updateData.misionDetalle?.tipoIcono || event.misionDetalle?.tipoIcono || 'ala_rotativa',
             lat: nLat,
             lng: nLng
         };

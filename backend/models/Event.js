@@ -172,14 +172,14 @@ eventSchema.pre('validate', function(next) {
         }
     }
     
-    // 2. Lógica de Trayecto y Sincro Joker
-    // Si es un vuelo, la posición actual (this.lat) debería ser la de salida al iniciar
-    // Priorizamos 'ubicacion.salida' si existe para la persistencia atómica
-    const finalLat = this.ubicacion?.salida?.lat ?? this.lat ?? this.misionDetalle?.lat ?? -34.61315;
-    const finalLng = this.ubicacion?.salida?.lng ?? this.lng ?? this.misionDetalle?.lng ?? -58.37723;
+    // 2. Lógica de Trayecto y Sincro Joker corregida
+    // Priorizamos la posición actual (this.lat) para permitir el movimiento en el mapa.
+    // Solo si no hay posición actual, usamos la de salida.
+    const finalLat = this.lat ?? this.misionDetalle?.lat ?? this.ubicacion?.salida?.lat ?? -34.61315;
+    const finalLng = this.lng ?? this.misionDetalle?.lng ?? this.ubicacion?.salida?.lng ?? -58.37723;
 
     // 3. Atomic Mirroring (Sincronización de espejos)
-    // Aseguramos que la posición de "referencia" sea consistente
+    // Aseguramos que todas las referencias internas tengan la misma posición "viva"
     this.lat = finalLat;
     this.lng = finalLng;
 
@@ -188,8 +188,12 @@ eventSchema.pre('validate', function(next) {
         this.ubicacion.lng = finalLng;
         
         // Normalización de nombres de salida/llegada
-        if (this.ubicacion.salida.nombre) this.ubicacion.salida.nombre = this.ubicacion.salida.nombre.toUpperCase();
-        if (this.ubicacion.llegada.nombre) this.ubicacion.llegada.nombre = this.ubicacion.llegada.nombre.toUpperCase();
+        if (this.ubicacion.salida && this.ubicacion.salida.nombre) {
+            this.ubicacion.salida.nombre = this.ubicacion.salida.nombre.toUpperCase();
+        }
+        if (this.ubicacion.llegada && this.ubicacion.llegada.nombre) {
+            this.ubicacion.llegada.nombre = this.ubicacion.llegada.nombre.toUpperCase();
+        }
     }
 
     if (this.misionDetalle) {
