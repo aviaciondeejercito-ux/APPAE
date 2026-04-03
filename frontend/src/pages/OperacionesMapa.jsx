@@ -26,19 +26,15 @@ const OperacionesMapa = () => {
 
     const fetchMisiones = async () => {
         try {
-            // CAMBIO CLAVE: Usamos getActiveOperations para obtener solo lo que está en vuelo
             const data = await EventService.getActiveOperations();
             const role = localStorage.getItem('role');
             const userElemento = localStorage.getItem('elemento')?.toUpperCase(); 
             
             const dataArray = Array.isArray(data) ? data : data.data || [];
             
-            // Filtrado por jerarquía y unidad
             const activas = dataArray.filter(ev => {
                 const isAdmin = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role);
                 const perteneceUnidad = ev.elemento?.toUpperCase() === userElemento;
-                
-                // Si es admin ve todo lo operativo, si no, solo lo de su unidad
                 return isAdmin || perteneceUnidad;
             });
 
@@ -69,45 +65,82 @@ const OperacionesMapa = () => {
                 </LayersControl>
 
                 {misiones.map((m) => {
-                    const detalle = m.misionDetalle || {};
+                    const ori = m.origen || {};
+                    const des = m.destino || {};
                     
-                    // Priorizamos lat/lng raíz para el movimiento en tiempo real
-                    const actualLat = m.lat ?? detalle.lat ?? m.ubicacion?.lat ?? -34.61315;
-                    const actualLng = m.lng ?? detalle.lng ?? m.ubicacion?.lng ?? -58.37723;
-                    const actualPos = [actualLat, actualLng];
+                    // Coordenadas base
+                    const latOri = ori.lat;
+                    const lngOri = ori.lng;
+                    const latDes = des.lat;
+                    const lngDes = des.lng;
 
-                    // Coordenadas de origen y destino para la línea de trayecto
-                    const salidaPos = [m.ubicacion?.salida?.lat || actualLat, m.ubicacion?.salida?.lng || actualLng];
-                    const llegadaPos = [m.ubicacion?.llegada?.lat || actualLat, m.ubicacion?.llegada?.lng || actualLng];
-                    
-                    const isMoving = actualLat !== (m.ubicacion?.salida?.lat || 0);
+                    const tieneDestino = latDes && lngDes;
+
+                    // Posicionamiento: Si tiene destino, va al punto medio. Si no, al origen.
+                    const actualPos = tieneDestino 
+                        ? [(latOri + latDes) / 2, (lngOri + lngDes) / 2]
+                        : [latOri, lngOri];
 
                     return (
                         <React.Fragment key={m._id?.$oid || m._id}>
-                            {/* Línea de trayecto planeado */}
-                            <Polyline 
-                                positions={[salidaPos, llegadaPos]} 
-                                pathOptions={{ color: '#f39c12', weight: 1, dashArray: '10, 10', opacity: 0.3 }} 
-                            />
+                            {/* Trayecto con efecto Glow (solo si tiene destino) */}
+                            {tieneDestino && (
+                                <>
+                                    {/* Línea de resplandor (Glow) */}
+                                    <Polyline 
+                                        positions={[[latOri, lngOri], [latDes, lngDes]]} 
+                                        pathOptions={{ color: '#00d4ff', weight: 8, opacity: 0.15 }} 
+                                    />
+                                    {/* Línea sutil central */}
+                                    <Polyline 
+                                        positions={[[latOri, lngOri], [latDes, lngDes]]} 
+                                        pathOptions={{ color: '#00d4ff', weight: 1.5, opacity: 0.6, dashArray: '5, 10' }} 
+                                    />
+                                </>
+                            )}
                             
-                            <Marker position={actualPos} icon={crearIconoTactico(detalle.tipoIcono || 'ala_rotativa')}>
+                            <Marker position={actualPos} icon={crearIconoTactico(m.tipoIcono || 'ala_rotativa')}>
                                 <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
-                                    <span style={{color: isMoving ? '#3498db' : '#f39c12', fontWeight: 'bold'}}>
-                                        {detalle.matricula || 'S/M'} {isMoving ? '✈️' : ''}
+                                    <span style={{color: tieneDestino ? '#00d4ff' : '#f39c12', fontWeight: 'bold', fontSize: '10px', textShadow: '1px 1px 2px black'}}>
+                                        {m.matricula || 'S/M'} {tieneDestino ? '✈️' : '📍'}
                                     </span>
                                 </Tooltip>
                                 <Popup>
-                                    <div style={{padding: '10px', minWidth: '220px', backgroundColor: '#1a1a1a', color: 'white'}}>
-                                        <div style={{color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #f39c12', marginBottom: '8px', paddingBottom: '4px'}}>
-                                            {detalle.aeronave || 'S/D'} | {detalle.matricula || 'S/M'}
+                                    <div style={styles.popupContainer}>
+                                        <div style={styles.popupHeader}>
+                                            {m.title}
                                         </div>
-                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>ESTADO:</strong> {isMoving ? "EN TRAYECTO" : "EN POSICIÓN"}</div>
-                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>OPERACIÓN:</strong> {m.title}</div>
-                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>UNIDAD:</strong> {m.elemento}</div>
-                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>RUTA:</strong> {m.ubicacion?.salida?.nombre} ➔ {m.ubicacion?.llegada?.nombre}</div>
-                                        <div style={styles.popupNoteBox}><strong style={{color: '#f39c12', fontSize: '9px'}}>NOTAS MARGINALES:</strong><br/>{m.notasMarginales || "SIN NOVEDAD"}</div>
-                                        <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>
-                                            ACTUALIZADO: {m.updatedAt?.$date ? new Date(m.updatedAt.$date).toLocaleTimeString() : new Date(m.updatedAt).toLocaleTimeString()}
+                                        
+                                        <div style={styles.popupBody}>
+                                            <div style={styles.popupRow}>
+                                                <span style={styles.popupLabel}>MATRÍCULA:</span> 
+                                                <span style={styles.popupValue}>{m.matricula || '---'}</span>
+                                            </div>
+                                            <div style={styles.popupRow}>
+                                                <span style={styles.popupLabel}>SDA:</span> 
+                                                <span style={styles.popupValue}>{m.aeronave || '---'}</span>
+                                            </div>
+                                            <div style={styles.popupRow}>
+                                                <span style={styles.popupLabel}>ELEMENTO:</span> 
+                                                <span style={styles.popupValue}>{m.elemento || '---'}</span>
+                                            </div>
+                                            <div style={styles.popupRow}>
+                                                <span style={styles.popupLabel}>RUTA:</span> 
+                                                <span style={styles.popupValue}>
+                                                    {ori.nombre || '---'} ➔ {des.nombre || '---'}
+                                                </span>
+                                            </div>
+                                            
+                                            {m.notasMarginales && (
+                                                <div style={styles.popupNoteBox}>
+                                                    <div style={styles.popupLabelNote}>NOTAS ADICIONALES:</div>
+                                                    {m.notasMarginales}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div style={styles.popupFooter}>
+                                            ACTUALIZADO: {new Date(m.updatedAt).toLocaleTimeString()}
                                         </div>
                                     </div>
                                 </Popup>
@@ -119,9 +152,9 @@ const OperacionesMapa = () => {
 
             <style>{`
                 .label-tactica-custom { background: transparent !important; border: none !important; }
-                .leaflet-popup-content-wrapper { padding: 0 !important; background: #1a1a1a !important; color: white !important; border: 1px solid #f39c12; border-radius: 4px; overflow: hidden; }
-                .leaflet-popup-tip { background: #f39c12; }
-                .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; }
+                .leaflet-popup-content-wrapper { padding: 0 !important; background: #111 !important; border: 1px solid #00d4ff; border-radius: 4px; overflow: hidden; }
+                .leaflet-popup-tip { background: #00d4ff; }
+                .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; }
                 .leaflet-popup-content { margin: 0 !important; width: auto !important; }
             `}</style>
         </div>
@@ -130,10 +163,17 @@ const OperacionesMapa = () => {
 
 const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },
-    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.95)', color: '#f39c12', padding: '12px 30px', border: '1px solid #f39c12', textAlign: 'center', borderRadius: '4px', boxShadow: '0 0 20px rgba(0,0,0,0.8)' },
+    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.95)', color: '#00d4ff', padding: '12px 30px', border: '1px solid #00d4ff', textAlign: 'center', borderRadius: '4px', boxShadow: '0 0 20px rgba(0,0,0,0.8)' },
     subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #333', paddingTop: '4px', letterSpacing: '1px' },
-    popupRow: { fontSize: '11px', marginBottom: '5px' },
-    popupNoteBox: { fontSize: '10px', color: '#ecf0f1', background: '#222', padding: '10px', borderRadius: '4px', marginTop: '8px', whiteSpace: 'pre-wrap', borderLeft: '3px solid #f39c12' }
+    popupContainer: { padding: '12px', minWidth: '240px', backgroundColor: '#111', color: '#fff', fontFamily: 'monospace' },
+    popupHeader: { color: '#00d4ff', fontWeight: 'bold', fontSize: '14px', borderBottom: '1px solid #333', marginBottom: '10px', paddingBottom: '5px', letterSpacing: '1px' },
+    popupBody: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    popupRow: { display: 'flex', justifyContent: 'space-between', fontSize: '11px' },
+    popupLabel: { color: '#888', fontWeight: 'bold' },
+    popupValue: { color: '#fff', textAlign: 'right' },
+    popupNoteBox: { background: '#1a1a1a', padding: '8px', borderRadius: '4px', marginTop: '10px', borderLeft: '3px solid #00d4ff', fontSize: '10px', color: '#ccc' },
+    popupLabelNote: { color: '#00d4ff', fontSize: '9px', fontWeight: 'bold', marginBottom: '3px' },
+    popupFooter: { fontSize: '9px', marginTop: '12px', color: '#555', textAlign: 'right', borderTop: '1px solid #222', paddingTop: '5px' }
 };
 
 export default OperacionesMapa;
