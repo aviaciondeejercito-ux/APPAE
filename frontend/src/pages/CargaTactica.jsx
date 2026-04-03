@@ -65,7 +65,6 @@ const UNIDADES_AE = [
     "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9"
 ];
 
-/** CLASIFICACIÓN TÁCTICA DE ICONOS POR SDA */
 const CLASIFICACION_SDA = {
     'C-212': 'ala_fija', 'C-208': 'ala_fija', 'C-550': 'ala_fija', 'DA-62': 'ala_fija', 'DHC-6': 'ala_fija',
     'UH-1H': 'ala_rotativa', 'UH-1H/II': 'ala_rotativa', 'BELL 212': 'ala_rotativa', 'AS-332B': 'ala_rotativa',
@@ -185,8 +184,8 @@ const CargaTactica = () => {
                 setFormData({ 
                     ...formData, 
                     destNombre: apto.nombre,
-                    destLatG: latGMS.g, destLatM: latGMS.m, destLatS: latGMS.s, destLatDir: latGMS.dir,
-                    destLngG: lngGMS.g, destLngM: lngGMS.m, destLngS: lngGMS.s, destLngDir: lngGMS.dir
+                    destLatG: dLatGMS.g, destLatM: dLatGMS.m, destLatS: dLatGMS.s, destLatDir: dLatGMS.dir,
+                    destLngG: dLngGMS.g, destLngM: dLngGMS.m, destLngS: dLngGMS.s, destLngDir: dLngGMS.dir
                 });
             }
         }
@@ -247,7 +246,6 @@ const CargaTactica = () => {
         const latDec = Number(toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir).toFixed(6));
         const lngDec = Number(toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir).toFixed(6));
 
-        // Determinar icono según SDA exacto
         const tipoIcono = CLASIFICACION_SDA[formData.sda] || (formData.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
 
         const payload = {
@@ -270,6 +268,7 @@ const CargaTactica = () => {
                     lat: latDec,
                     lng: lngDec
                 },
+                // Mantenemos lat/lng en el root de ubicacion por compatibilidad
                 lat: latDec,
                 lng: lngDec
             },
@@ -279,12 +278,8 @@ const CargaTactica = () => {
                 tipoIcono: tipoIcono,
                 isRealTime: true,
                 lat: latDec,
-                lng: lngDec,
-                comandante: 'S/D', 
-                copiloto: 'S/D',
-                mecanico: 'S/D',
-                pax: '0',
-                carga: '0'
+                lng: lngDec
+                // Se eliminan comandante, copiloto, mecanico, pax y carga
             }
         };
 
