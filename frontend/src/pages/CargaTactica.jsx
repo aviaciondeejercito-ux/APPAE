@@ -29,11 +29,9 @@ const CargaTactica = () => {
         sda: '', 
         matricula: '', 
         aeronaveId: '',
-        // Bloque Origen
         locNombre: '',
         latG: 0, latM: 0, latS: 0, latDir: 'S',
         lngG: 0, lngM: 0, lngS: 0, lngDir: 'W',
-        // Bloque Destino
         dNombre: '',
         dLatG: 0, dLatM: 0, dLatS: 0, dLatDir: 'S',
         dLngG: 0, dLngM: 0, dLngS: 0, dLngDir: 'W'
@@ -112,8 +110,8 @@ const CargaTactica = () => {
     };
 
     const handleEdit = (m) => {
-        const pos = m.ubicacion?.salida || m;
-        const des = m.ubicacion?.llegada || m.destino;
+        const pos = m.ubicacion?.salida || { lat: m.lat, lng: m.lng, nombre: m.ubicacion?.nombre };
+        const des = m.ubicacion?.llegada;
         const pLa = fromDec(pos.lat, 'lat');
         const pLo = fromDec(pos.lng, 'lng');
         
@@ -142,7 +140,7 @@ const CargaTactica = () => {
             aeronaveId: 'EDIT', 
             latG: pLa.g, latM: pLa.m, latS: pLa.s, latDir: pLa.dir, 
             lngG: pLo.g, lngM: pLo.m, lngS: pLo.s, lngDir: pLo.dir, 
-            locNombre: pos.nombre || 'POSICIÓN',
+            locNombre: pos.nombre || 'POSICIÓN MANUAL',
             ...desData 
         });
         window.scrollTo(0, 0);
@@ -150,8 +148,13 @@ const CargaTactica = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
-        const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
+        
+        // CÁLCULO SEGURO DE COORDENADAS
+        const currentLat = toDec(form.latG, form.latM, form.latS, form.latDir);
+        const currentLng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
+        const destLat = showDestino ? toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir) : 0;
+        const destLng = showDestino ? toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) : 0;
+        
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
 
         const payload = {
@@ -160,17 +163,29 @@ const CargaTactica = () => {
             notes: form.notas.toUpperCase(),
             isRealTime: true,
             status: 'operativo',
-            lat, lng,
+            lat: currentLat, 
+            lng: currentLng,
             ubicacion: { 
                 nombre: form.locNombre || "POSICIÓN MANUAL", 
-                salida: { nombre: form.locNombre || "ORIGEN", lat, lng },
-                llegada: showDestino ? { 
-                    nombre: form.dNombre || "DESTINO", 
-                    lat: toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir), 
-                    lng: toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) 
-                } : { nombre: "", lat: 0, lng: 0 }
+                salida: { 
+                    nombre: form.locNombre || "ORIGEN", 
+                    lat: currentLat, 
+                    lng: currentLng 
+                },
+                llegada: { 
+                    nombre: showDestino ? (form.dNombre || "DESTINO") : "", 
+                    lat: destLat, 
+                    lng: destLng 
+                }
             },
-            misionDetalle: { aeronave: form.sda, matricula: form.matricula, tipoIcono: icono, isRealTime: true, lat, lng }
+            misionDetalle: { 
+                aeronave: form.sda, 
+                matricula: form.matricula, 
+                tipoIcono: icono, 
+                isRealTime: true, 
+                lat: currentLat, 
+                lng: currentLng 
+            }
         };
 
         try {
@@ -220,7 +235,6 @@ const CargaTactica = () => {
                             <span style={{color: '#ffd700', fontWeight: 'bold'}}>{form.elemento || '---'}</span>
                         </div>
 
-                        {/* BLOQUE ORIGEN */}
                         <div style={styles.geoBox}>
                             <label style={styles.label}>POSICIÓN / ORIGEN</label>
                             <select onChange={e => handleAptSelect(e, 'pos')} style={styles.input} value={form.locNombre}>
@@ -249,7 +263,6 @@ const CargaTactica = () => {
                             {showDestino ? '❌ QUITAR DESTINO' : '➕ AGREGAR DESTINO'}
                         </button>
 
-                        {/* BLOQUE DESTINO */}
                         {showDestino && (
                             <div style={styles.geoBox}>
                                 <label style={styles.label}>DESTINO PREVISTO</label>
