@@ -38,10 +38,6 @@ const eventSchema = new mongoose.Schema({
         aeronave: { type: String, uppercase: true, trim: true, default: '' },
         tipoIcono: { type: String, default: 'ala_rotativa' }
     },
-
-    // COORDENADAS RAÍZ (DESACTIVADAS MOMENTÁNEAMENTE)
-    lat: { type: Number }, 
-    lng: { type: Number }, 
     
     // UBICACIÓN (ESTRUCTURA MANTENIDA - SIN AUTO-LLENADO)
     ubicacion: {
