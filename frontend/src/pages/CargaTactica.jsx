@@ -5,7 +5,9 @@ import Swal from 'sweetalert2';
 
 const CargaTactica = () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const isMando = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(user.role?.toLowerCase());
+    
+    // Verificación de roles respetando mayúsculas/minúsculas según lo acordado
+    const isMando = user.role === 'admin' || user.role === 'OTO' || ['boss', 'director', 'otoae'].includes(user.role?.toLowerCase());
 
     const [misiones, setMisiones] = useState([]);
     const [flota, setFlota] = useState([]); 
@@ -30,9 +32,10 @@ const CargaTactica = () => {
 
             setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === user.elemento)));
             
-            // Filtro: Admin ve todo E/S, Usuario ve su unidad E/S
+            // Lógica Paso 2: Filtrado de aeronaves E/S por Unidad o Rango
             const filtradas = aircrafts.filter(a => {
                 const enServicio = a.estado === 'E/S';
+                // Si es admin o OTO ve todas las E/S. Si no, solo las E/S de su propia unidad.
                 const tieneAcceso = isMando || (a.unidad && a.unidad === user.elemento);
                 return enServicio && tieneAcceso;
             });
@@ -118,12 +121,11 @@ const CargaTactica = () => {
         const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
         
-        // El icono se decide por el SDA que ya viene en el form desde la aeronave
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
 
         const payload = {
             title: form.title.toUpperCase(),
-            elemento: form.elemento, // Viene de la aeronave seleccionada
+            elemento: form.elemento,
             notes: form.notas.toUpperCase(),
             isRealTime: true,
             status: 'operativo',
@@ -199,13 +201,12 @@ const CargaTactica = () => {
                                 value={form.aeronaveId} 
                                 onChange={e => {
                                     const a = flota.find(x => x._id === e.target.value);
-                                    // Al seleccionar, cargamos TODO lo que viene de MongoDB
                                     if(a) setForm({
                                         ...form, 
                                         aeronaveId: a._id, 
                                         sda: a.sda, 
                                         matricula: a.matricula, 
-                                        elemento: a.unidad // La unidad viene de la aeronave
+                                        elemento: a.unidad
                                     });
                                 }} 
                                 required 
@@ -224,7 +225,6 @@ const CargaTactica = () => {
                             </select>
                         </div>
 
-                        {/* Muestra la unidad responsable automáticamente al elegir aeronave */}
                         <div style={{marginBottom: '10px', color: '#ffd700', fontSize: '0.9rem', fontWeight: 'bold'}}>
                             UNIDAD: {form.elemento || '---'}
                         </div>
