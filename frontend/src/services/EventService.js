@@ -53,7 +53,21 @@ export const createEvent = async (eventData) => {
             end: eventData.end || null,
             isRealTime: eventData.isRealTime || false,
             
-            // --- SINCRONIZACIÓN ESTRUCTURA MONGODB ---
+            // --- SINCRONIZACIÓN ESTRUCTURA MONGODB (misionDetalle) ---
+            misionDetalle: {
+                comandante: eventData.misionDetalle?.comandante || eventData.comandante || "S/D",
+                copiloto: eventData.misionDetalle?.copiloto || eventData.copiloto || "S/D",
+                mecanico: eventData.misionDetalle?.mecanico || eventData.mecanico || "S/D",
+                pax: eventData.misionDetalle?.pax || eventData.pax || "0",
+                carga: eventData.misionDetalle?.carga || eventData.carga || "0",
+                aeronave: (eventData.misionDetalle?.aeronave || eventData.aeronave || "S/D").toUpperCase(),
+                matricula: (eventData.misionDetalle?.matricula || eventData.matricula || "S/M").toUpperCase(),
+                tipoIcono: eventData.misionDetalle?.tipoIcono || eventData.tipoIcono || "ala_rotativa",
+                isRealTime: eventData.isRealTime || false,
+                lat: parseFloat(eventData.lat || eventData.ubicacion?.lat || -34.61315),
+                lng: parseFloat(eventData.lng || eventData.ubicacion?.lng || -58.37723)
+            },
+
             ubicacion: {
                 nombre: (eventData.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
                 salida: {
@@ -89,7 +103,7 @@ export const updateEvent = async (id, eventData) => {
     try {
         const cleanData = JSON.parse(JSON.stringify(eventData));
 
-        // Sanitización estricta de coordenadas para el radar y trayecto
+        // Sanitización estricta de coordenadas y misionDetalle para el radar
         if (cleanData.ubicacion) {
             cleanData.ubicacion = {
                 nombre: (cleanData.ubicacion.nombre || 'ACTUALIZACIÓN DE POSICIÓN').toUpperCase(),
@@ -108,13 +122,23 @@ export const updateEvent = async (id, eventData) => {
             };
         }
 
+        // Asegurar consistencia en misionDetalle durante la actualización
+        if (cleanData.misionDetalle || cleanData.matricula || cleanData.aeronave) {
+            cleanData.misionDetalle = {
+                ...(cleanData.misionDetalle || {}),
+                aeronave: (cleanData.aeronave || cleanData.misionDetalle?.aeronave || "").toUpperCase(),
+                matricula: (cleanData.matricula || cleanData.misionDetalle?.matricula || "").toUpperCase(),
+                tipoIcono: cleanData.tipoIcono || cleanData.misionDetalle?.tipoIcono || "ala_rotativa",
+                lat: parseFloat(cleanData.lat || cleanData.ubicacion?.lat || cleanData.misionDetalle?.lat),
+                lng: parseFloat(cleanData.lng || cleanData.ubicacion?.lng || cleanData.misionDetalle?.lng)
+            };
+        }
+
         if (cleanData.start) cleanData.start = eventData.start;
         if (cleanData.end) cleanData.end = eventData.end;
 
         if (cleanData.title) cleanData.title = cleanData.title.toUpperCase();
         if (cleanData.notasMarginales) cleanData.notasMarginales = cleanData.notasMarginales.toUpperCase();
-        if (cleanData.aeronave) cleanData.aeronave = cleanData.aeronave.toUpperCase();
-        if (cleanData.matricula) cleanData.matricula = cleanData.matricula.toUpperCase();
 
         const forbidden = ['_id', '__v', 'createdAt', 'updatedAt', 'createdBy', 'userName'];
         forbidden.forEach(field => delete cleanData[field]);
