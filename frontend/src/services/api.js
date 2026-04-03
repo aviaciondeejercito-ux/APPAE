@@ -95,11 +95,14 @@ export const createEvent = (eventData) => {
         aeronave: eventData.aeronave?.toUpperCase().trim() || "",
         matricula: eventData.matricula?.toUpperCase().trim() || "",
         status: eventData.status || 'programado',
-        notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
+        // Mejora: Inclusión de notasMarginales
+        notasMarginales: (eventData.notasMarginales || "").toUpperCase().trim(),
+        
         // Mantenemos lat/lng raíz para compatibilidad con el radar actual
         lat: latOri,
         lng: lngOri,
-        // Estructura duplicada para origen y destino
+        
+        // Estructura duplicada para origen y destino (Persistencia Atómica)
         origen: {
             nombre: (eventData.origen?.nombre || "ORIGEN PENDIENTE").toUpperCase(),
             lat: latOri,
@@ -132,7 +135,9 @@ export const updateEvent = (id, eventData) => {
         notes: eventData.notes?.toUpperCase().trim(),
         aeronave: eventData.aeronave?.toUpperCase().trim(),
         matricula: eventData.matricula?.toUpperCase().trim(),
-        notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
+        // Mejora: Actualización de notasMarginales
+        notasMarginales: (eventData.notasMarginales || "").toUpperCase().trim(),
+        
         lat: latOri,
         lng: lngOri,
         origen: latOri !== undefined ? {
@@ -164,7 +169,7 @@ export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
     const userElemento = localStorage.getItem('elemento')?.trim();
 
-    const hasGlobalView = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
+    const hasGlobalView = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
 
     if (!hasGlobalView && userElemento) {
         return API.get(`/aircraft`, { params: { unidad: userElemento.toUpperCase() } });
@@ -177,7 +182,7 @@ export const createAircraft = (aircraftData) => {
     const userElemento = localStorage.getItem('elemento')?.trim();
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    const isMandoEstrategico = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(rawRole);
+    const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(rawRole);
 
     const dataNormalized = {
         ...aircraftData, 

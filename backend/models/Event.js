@@ -43,6 +43,7 @@ const eventSchema = new mongoose.Schema({
     matricula: { type: String, uppercase: true, trim: true },
     aeronave: { type: String, uppercase: true, trim: true },
     tipoIcono: { type: String },
+    isRealTime: { type: Boolean, default: false }, // Agregado para compatibilidad con el filtro del log
 
     // 3. ORIGEN (Entrada de datos principal)
     origen: {
@@ -58,6 +59,7 @@ const eventSchema = new mongoose.Schema({
         lng: { type: Number }
     },
 
+    // Campo solicitado para mejoras en CargaTactica
     notasMarginales: { type: String, default: '', trim: true, uppercase: true },
 
     elemento: { 
@@ -90,11 +92,11 @@ eventSchema.pre('validate', function(next) {
     // Formateo de strings generales
     if (this.title) this.title = this.title.toUpperCase();
     if (this.elemento) this.elemento = this.elemento.toUpperCase();
+    if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
     
     // Verificación y formateo de ORIGEN
     if (this.origen) {
         if (this.origen.nombre) this.origen.nombre = this.origen.nombre.toUpperCase();
-        // Asegurar que si no hay coordenadas, no se guarden como NaN o null si no es necesario
     }
 
     // Verificación y formateo de DESTINO
@@ -105,8 +107,10 @@ eventSchema.pre('validate', function(next) {
     next();
 });
 
+// Índices para optimización de búsqueda en el Monitor/Log
 eventSchema.index({ status: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
 eventSchema.index({ createdAt: -1 });
+eventSchema.index({ isRealTime: 1 });
 
 module.exports = mongoose.model('Event', eventSchema);

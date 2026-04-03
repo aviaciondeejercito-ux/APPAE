@@ -31,7 +31,8 @@ const getEvents = async (req, res) => {
         const { elemento } = req.user; 
         const isMando = req.isMando; 
         
-        let query = { isRealTime: false }; 
+        // MODIFICACIÓN: Se elimina el filtro isRealTime: false para que el Log vea todo.
+        let query = {}; 
 
         if (!isMando) {
             query.$or = [
@@ -108,12 +109,12 @@ const createEvent = async (req, res) => {
         }
 
         const isMando = req.isMando;
-        const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
         
         const eventData = {
             title: (title || '').toString().toUpperCase(),
-            notes: notasProcesadas,
-            notasMarginales: notasProcesadas,
+            notes: (notes || '').toString().toUpperCase(),
+            // Persistencia específica de notasMarginales
+            notasMarginales: (notasMarginales || notes || '').toString().toUpperCase(),
             color: color || '#1b3a57',
             createdBy: req.user._id,
             userName: req.user.username || req.user.name,
@@ -186,6 +187,10 @@ const updateEvent = async (req, res) => {
         delete updateData._id; 
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
+
+        // Procesamiento de Notas Marginales en Update
+        if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
+        if (updateData.notes) updateData.notes = updateData.notes.toUpperCase();
 
         // Procesamiento de Origen/Destino en Update
         if (updateData.origen) {
