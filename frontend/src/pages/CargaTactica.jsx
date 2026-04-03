@@ -65,7 +65,6 @@ const CargaTactica = () => {
         return () => clearInterval(interval);
     }, [cargarDatos]);
 
-    // Función de conversión robustecida
     const toDec = (g, m, s, dir) => {
         const deg = Math.abs(parseFloat(g) || 0);
         const min = (parseFloat(m) || 0) / 60;
@@ -121,7 +120,7 @@ const CargaTactica = () => {
         const pLo = fromDec(pos.lng, 'lng');
         
         let desData = {};
-        if (des && (des.lat !== 0 || des.lng !== 0)) {
+        if (des && (des.lat !== 0 || des.lng !== 0) && (des.lat !== pos.lat || des.lng !== pos.lng)) {
             const dLa = fromDec(des.lat, 'lat');
             const dLo = fromDec(des.lng, 'lng');
             desData = { 
@@ -154,11 +153,17 @@ const CargaTactica = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // CÁLCULO EXPLÍCITO ANTES DEL ENVÍO
         const currentLat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const currentLng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
-        const destLat = showDestino ? toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir) : currentLat;
-        const destLng = showDestino ? toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) : currentLng;
+        
+        // Separación estricta de coordenadas
+        let destLat = currentLat;
+        let destLng = currentLng;
+        
+        if (showDestino) {
+            destLat = toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir);
+            destLng = toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir);
+        }
         
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
 
@@ -254,17 +259,17 @@ const CargaTactica = () => {
                                 {AEROPUERTOS.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
                             </select>
                             <div style={styles.row}>
-                                {['latG', 'latM', 'latS'].map(f => (
-                                    <input key={f} type="number" step="any" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
-                                ))}
+                                <input type="number" step="any" style={styles.inputTriple} value={form.latG} onChange={e => setForm({...form, latG: e.target.value})} placeholder="G" />
+                                <input type="number" step="any" style={styles.inputTriple} value={form.latM} onChange={e => setForm({...form, latM: e.target.value})} placeholder="M" />
+                                <input type="number" step="any" style={styles.inputTriple} value={form.latS} onChange={e => setForm({...form, latS: e.target.value})} placeholder="S" />
                                 <select style={styles.inputShort} value={form.latDir} onChange={e => setForm({...form, latDir: e.target.value})}>
                                     <option>S</option><option>N</option>
                                 </select>
                             </div>
                             <div style={{...styles.row, marginTop: '5px'}}>
-                                {['lngG', 'lngM', 'lngS'].map(f => (
-                                    <input key={f} type="number" step="any" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
-                                ))}
+                                <input type="number" step="any" style={styles.inputTriple} value={form.lngG} onChange={e => setForm({...form, lngG: e.target.value})} placeholder="G" />
+                                <input type="number" step="any" style={styles.inputTriple} value={form.lngM} onChange={e => setForm({...form, lngM: e.target.value})} placeholder="M" />
+                                <input type="number" step="any" style={styles.inputTriple} value={form.lngS} onChange={e => setForm({...form, lngS: e.target.value})} placeholder="S" />
                                 <select style={styles.inputShort} value={form.lngDir} onChange={e => setForm({...form, lngDir: e.target.value})}>
                                     <option>W</option><option>E</option>
                                 </select>
@@ -283,17 +288,17 @@ const CargaTactica = () => {
                                     {AEROPUERTOS.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
                                 </select>
                                 <div style={styles.row}>
-                                    {['dLatG', 'dLatM', 'dLatS'].map(f => (
-                                        <input key={f} type="number" step="any" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
-                                    ))}
+                                    <input type="number" step="any" style={styles.inputTriple} value={form.dLatG} onChange={e => setForm({...form, dLatG: e.target.value})} placeholder="G" />
+                                    <input type="number" step="any" style={styles.inputTriple} value={form.dLatM} onChange={e => setForm({...form, dLatM: e.target.value})} placeholder="M" />
+                                    <input type="number" step="any" style={styles.inputTriple} value={form.dLatS} onChange={e => setForm({...form, dLatS: e.target.value})} placeholder="S" />
                                     <select style={styles.inputShort} value={form.dLatDir} onChange={e => setForm({...form, dLatDir: e.target.value})}>
                                         <option>S</option><option>N</option>
                                     </select>
                                 </div>
                                 <div style={{...styles.row, marginTop: '5px'}}>
-                                    {['dLngG', 'dLngM', 'dLngS'].map(f => (
-                                        <input key={f} type="number" step="any" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
-                                    ))}
+                                    <input type="number" step="any" style={styles.inputTriple} value={form.dLngG} onChange={e => setForm({...form, dLngG: e.target.value})} placeholder="G" />
+                                    <input type="number" step="any" style={styles.inputTriple} value={form.dLngM} onChange={e => setForm({...form, dLngM: e.target.value})} placeholder="M" />
+                                    <input type="number" step="any" style={styles.inputTriple} value={form.dLngS} onChange={e => setForm({...form, dLngS: e.target.value})} placeholder="S" />
                                     <select style={styles.inputShort} value={form.dLngDir} onChange={e => setForm({...form, dLngDir: e.target.value})}>
                                         <option>W</option><option>E</option>
                                     </select>
