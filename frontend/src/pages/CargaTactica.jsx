@@ -18,7 +18,7 @@ const CargaTactica = () => {
                     !user.role;
 
     const [misiones, setMisiones] = useState([]);
-    const [aeronaves, setAeronaves] = useState([]); // Nuevo estado para la flota
+    const [aeronaves, setAeronaves] = useState([]); 
     const [loading, setLoading] = useState(false);
     const [title, setTitle] = useState('');
     const [selectedMatricula, setSelectedMatricula] = useState('');
@@ -34,16 +34,6 @@ const CargaTactica = () => {
             // 2. Cargar flota disponible desde DB
             const airRes = await getAircrafts();
             const dataAeronaves = Array.isArray(airRes) ? airRes : airRes.data || [];
-            
-            // LOG DE DEPURACIÓN
-            console.log("--- DEPURACIÓN AERONAVES ---");
-            console.log("Total aeronaves recibidas:", dataAeronaves.length);
-            if (dataAeronaves.length > 0) {
-                console.log("Ejemplo primer aeronave:", dataAeronaves[0]);
-                const filtradas = dataAeronaves.filter(a => a.condicion === 'E/S');
-                console.log("Aeronaves que pasan el filtro E/S:", filtradas.length);
-            }
-            
             setAeronaves(dataAeronaves);
         } catch (e) { 
             console.error("Error en la carga de datos:", e); 
@@ -58,7 +48,6 @@ const CargaTactica = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // Buscamos la aeronave seleccionada en nuestra lista local para obtener sus datos de DB
         const aeroInfo = aeronaves.find(a => a.matricula === selectedMatricula);
 
         if (!title.trim() || !selectedMatricula || !aeroInfo) {
@@ -70,8 +59,7 @@ const CargaTactica = () => {
             title: title.toUpperCase().trim(),
             elemento: aeroInfo.unidad || aeroInfo.elemento || userElemento,
             isRealTime: true,
-            status: 'E/S',
-            // Datos críticos extraídos de la base de datos:
+            status: aeroInfo.estado, // Usamos el estado real de la DB (E/S)
             tipoIcono: aeroInfo.tipoIcono, 
             matricula: aeroInfo.matricula,
             aeronave: aeroInfo.sda
@@ -135,9 +123,8 @@ const CargaTactica = () => {
                                 required
                             >
                                 <option value="">-- SELECCIONE MATRÍCULA --</option>
-                                {/* FILTRO: Solo aeronaves con condicion "E/S" */}
                                 {aeronaves
-                                    .filter(a => String(a.condicion).trim().toUpperCase() === 'E/S')
+                                    .filter(a => a.estado === 'E/S') 
                                     .map(a => (
                                         <option key={a._id} value={a.matricula}>
                                             {a.matricula} - {a.sda} ({a.unidad})
