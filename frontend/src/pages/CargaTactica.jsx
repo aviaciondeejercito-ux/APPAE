@@ -83,11 +83,11 @@ const CargaTactica = () => {
         aeronaveId: '', 
         sda: '', 
         matricula: '', 
-        latG: 34, latM: 31, latS: 40, latDir: 'S',
-        lngG: 58, lngM: 38, lngS: 29, lngDir: 'W',
+        latG: 0, latM: 0, latS: 0, latDir: 'S',
+        lngG: 0, lngM: 0, lngS: 0, lngDir: 'W',
         locNombre: '',
-        destLatG: 34, destLatM: 31, destLatS: 40, destLatDir: 'S',
-        destLngG: 58, destLngM: 38, destLngS: 29, destLngDir: 'W',
+        destLatG: 0, destLatM: 0, destLatS: 0, destLatDir: 'S',
+        destLngG: 0, destLngM: 0, destLngS: 0, destLngDir: 'W',
         destNombre: '',
         etapa: 'operativo',
         createdBy: user.id || user._id || '',
@@ -103,7 +103,6 @@ const CargaTactica = () => {
             const dataEvents = Array.isArray(evRes) ? evRes : (evRes.data || []);
             const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
 
-            // Filtro de Misiones Activas (Seguridad por Unidad)
             const activas = dataEvents.filter(ev => {
                 const esVueloActivo = ev.isRealTime === true;
                 if (!isMandoTotal && user.elemento) {
@@ -113,7 +112,6 @@ const CargaTactica = () => {
             });
             setMisionesActivas(activas);
             
-            // Filtro de Aeronaves E/S vinculadas a la unidad
             const flotaFiltrada = dataAir.filter(a => {
                 const enServicio = a.estado?.toUpperCase() === 'E/S';
                 if (!isMandoTotal && user.elemento) {
@@ -137,7 +135,7 @@ const CargaTactica = () => {
     }, []);
 
     const toDecimal = (g, m, s, dir) => {
-        let dec = parseFloat(g || 0) + parseFloat(m || 0) / 60 + parseFloat(s || 0) / 3600;
+        let dec = Math.abs(parseFloat(g || 0)) + (Math.abs(parseFloat(m || 0)) / 60) + (Math.abs(parseFloat(s || 0)) / 3600);
         return (dir === 'S' || dir === 'W') ? dec * -1 : dec;
     };
 
@@ -188,17 +186,21 @@ const CargaTactica = () => {
     };
 
     const handleEdit = (mision) => {
-        const latVal = mision.lat ?? mision.misionDetalle?.lat ?? 0;
-        const lngVal = mision.lng ?? mision.misionDetalle?.lng ?? 0;
+        const latVal = mision.ubicacion?.lat ?? mision.lat ?? 0;
+        const lngVal = mision.ubicacion?.lng ?? mision.lng ?? 0;
         const latGMS = fromDecimal(latVal, 'lat');
         const lngGMS = fromDecimal(lngVal, 'lng');
 
-        let destData = { destNombre: '', destLatG: 34, destLatM: 31, destLatS: 40, destLatDir: 'S', destLngG: 58, destLngM: 38, destLngS: 29, destLngDir: 'W' };
+        let destUpdate = { 
+            destNombre: '', 
+            destLatG: 0, destLatM: 0, destLatS: 0, destLatDir: 'S', 
+            destLngG: 0, destLngM: 0, destLngS: 0, destLngDir: 'W' 
+        };
         
-        if (mision.destino && mision.destino.lat) {
+        if (mision.destino && typeof mision.destino.lat === 'number') {
             const dLatGMS = fromDecimal(mision.destino.lat, 'lat');
             const dLngGMS = fromDecimal(mision.destino.lng, 'lng');
-            destData = {
+            destUpdate = {
                 destNombre: mision.destino.nombre || 'DESTINO TÁCTICO',
                 destLatG: dLatGMS.g, destLatM: dLatGMS.m, destLatS: dLatGMS.s, destLatDir: dLatGMS.dir,
                 destLngG: dLngGMS.g, destLngM: dLngGMS.m, destLngS: dLngGMS.s, destLngDir: dLngGMS.dir
@@ -220,7 +222,7 @@ const CargaTactica = () => {
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
             locNombre: mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA',
-            ...destData
+            ...destUpdate
         });
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -228,20 +230,26 @@ const CargaTactica = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const latDec = toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir);
-        const lngDec = toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir);
+        
+        // Bloqueo de seguridad: Validar selección de aeronave
+        if (!formData.aeronaveId) {
+            return Swal.fire('ERROR DE CARGA', 'Debe seleccionar una aeronave válida en servicio.', 'error');
+        }
+
+        const latDec = Number(toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir).toFixed(6));
+        const lngDec = Number(toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir).toFixed(6));
 
         const payload = {
-            title: formData.title.toUpperCase(),
-            elemento: formData.elemento.toUpperCase(),
-            notes: formData.notasMarginales.toUpperCase(),
-            notasMarginales: formData.notasMarginales.toUpperCase(),
+            title: formData.title.toUpperCase().trim(),
+            elemento: formData.elemento.toUpperCase().trim(),
+            notes: formData.notasMarginales.toUpperCase().trim(),
+            notasMarginales: formData.notasMarginales.toUpperCase().trim(),
             isRealTime: true,
             status: 'operativo',
             tipoApoyo: 'VUELO',
             etapa: formData.etapa || 'operativo',
             createdBy: formData.createdBy,
-            userName: formData.userName,
+            userName: formData.userName.toUpperCase(),
             lat: latDec, 
             lng: lngDec,
             ubicacion: {
@@ -264,9 +272,10 @@ const CargaTactica = () => {
             }
         };
 
-        if (showDestino && (formData.destNombre || formData.destLatG)) {
-            const dLatDec = toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir);
-            const dLngDec = toDecimal(formData.destLngG, formData.destLngM, formData.destLngS, formData.destLngDir);
+        if (showDestino && (formData.destNombre || formData.destLatG !== 0)) {
+            const dLatDec = Number(toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir).toFixed(6));
+            const dLngDec = Number(toDecimal(formData.destLngG, formData.destLngM, formData.destLngS, formData.destLngDir).toFixed(6));
+            
             payload.destino = {
                 nombre: (formData.destNombre || 'DESTINO TÁCTICO').toUpperCase(),
                 lat: dLatDec,

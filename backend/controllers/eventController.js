@@ -4,7 +4,7 @@ const Aircraft = require('../models/Aircraft');
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: SINCRO JOKER (Optimizado)
- * Acción: Auditoría de error 400 y Normalización Atómica de Trayectos
+ * Acción: Auditoría de identidad y Validación de Flota E/S
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -94,11 +94,19 @@ const createEvent = async (req, res) => {
 
         if (!title) return res.status(400).json({ message: 'El título es obligatorio.' });
 
+        // SEGURIDAD: Validación de aeronave si es un vuelo operativo
+        if (isRealTime || tipoApoyo === 'VUELO') {
+            const targetMatricula = matricula || misionDetalle?.matricula;
+            const aircraftExists = await Aircraft.findOne({ matricula: targetMatricula?.toUpperCase() });
+            if (!aircraftExists) {
+                return res.status(404).json({ message: `La aeronave ${targetMatricula} no existe en la base de datos.` });
+            }
+        }
+
         const isMando = req.isMando;
         const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
         
-        // Normalización de coordenadas principales (Persistencia Sincro Joker)
-        // Se prioriza la ubicación de salida para vuelos en desplazamiento
+        // Normalización de coordenadas principales
         const finalLat = parseFloat(ubicacion?.salida?.lat ?? lat ?? misionDetalle?.lat ?? -34.61315);
         const finalLng = parseFloat(ubicacion?.salida?.lng ?? lng ?? misionDetalle?.lng ?? -58.37723);
 
@@ -107,17 +115,17 @@ const createEvent = async (req, res) => {
             notes: notasProcesadas,
             notasMarginales: notasProcesadas,
             color: color || '#1b3a57',
-            createdBy: req.user._id,
-            userName: req.user.username,
+            createdBy: req.user._id, // SEGURIDAD: Auditoría real desde el token
+            userName: req.user.username || req.user.name, // SEGURIDAD: Nombre real desde el token
             elemento: ((isMando && elemento) ? elemento : req.user.elemento).toUpperCase(),
             status: (status || 'programado').toLowerCase(),
             isRealTime: isRealTime || false,
             misionDetalle: {
-                comandante: (misionDetalle?.comandante || '').toUpperCase(),
-                copiloto: (misionDetalle?.copiloto || '').toUpperCase(),
-                mecanico: (misionDetalle?.mecanico || '').toUpperCase(),
-                pax: (misionDetalle?.pax || '').toUpperCase(),
-                carga: (misionDetalle?.carga || '').toUpperCase(),
+                comandante: (misionDetalle?.comandante || 'S/D').toUpperCase(),
+                copiloto: (misionDetalle?.copiloto || 'S/D').toUpperCase(),
+                mecanico: (misionDetalle?.mecanico || 'S/D').toUpperCase(),
+                pax: (misionDetalle?.pax || '0').toUpperCase(),
+                carga: (misionDetalle?.carga || '0').toUpperCase(),
                 aeronave: (aeronave || misionDetalle?.aeronave || '').toString().toUpperCase(),
                 matricula: (matricula || misionDetalle?.matricula || '').toString().toUpperCase(),
                 tipoIcono: tipoIcono || misionDetalle?.tipoIcono || 'ala_rotativa',
@@ -162,7 +170,7 @@ const createEvent = async (req, res) => {
         res.status(201).json(newEvent);
     } catch (error) {
         console.error(`❌ Error en createEvent: ${error.message}`);
-        res.status(400).json({ message: 'Error en la persistencia.', details: error.message });
+        res.status(400).json({ message: 'Error en la persistencia del vector.', details: error.message });
     }
 };
 
@@ -180,7 +188,7 @@ const updateEvent = async (req, res) => {
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
         if (!isMando && !isOwner && !perteneceAUnidad) {
-            return res.status(403).json({ message: 'No tiene permisos.' });
+            return res.status(403).json({ message: 'No tiene permisos para modificar este vector.' });
         }
 
         const updateData = { ...req.body };
@@ -195,17 +203,16 @@ const updateEvent = async (req, res) => {
             }
         });
 
-        // Manejo Atómico de Coordenadas (Sincro Joker)
-        // Se mantiene la prioridad del punto de salida como referencia de 'lat/lng' raíz
+        // Manejo Atómico de Coordenadas
         const nLat = parseFloat(updateData.ubicacion?.salida?.lat ?? updateData.lat ?? updateData.misionDetalle?.lat ?? event.lat);
         const nLng = parseFloat(updateData.ubicacion?.salida?.lng ?? updateData.lng ?? updateData.misionDetalle?.lng ?? event.lng);
 
         updateData.misionDetalle = {
             ...event.misionDetalle,
             ...updateData.misionDetalle,
-            comandante: (updateData.misionDetalle?.comandante || event.misionDetalle?.comandante || '').toUpperCase(),
-            copiloto: (updateData.misionDetalle?.copiloto || event.misionDetalle?.copiloto || '').toUpperCase(),
-            mecanico: (updateData.misionDetalle?.mecanico || event.misionDetalle?.mecanico || '').toUpperCase(),
+            comandante: (updateData.misionDetalle?.comandante || event.misionDetalle?.comandante || 'S/D').toUpperCase(),
+            copiloto: (updateData.misionDetalle?.copiloto || event.misionDetalle?.copiloto || 'S/D').toUpperCase(),
+            mecanico: (updateData.misionDetalle?.mecanico || event.misionDetalle?.mecanico || 'S/D').toUpperCase(),
             aeronave: (updateData.aeronave || updateData.misionDetalle?.aeronave || event.misionDetalle?.aeronave || '').toUpperCase(),
             matricula: (updateData.matricula || updateData.misionDetalle?.matricula || event.misionDetalle?.matricula || '').toUpperCase(),
             lat: nLat,
@@ -215,7 +222,6 @@ const updateEvent = async (req, res) => {
         updateData.lat = nLat;
         updateData.lng = nLng;
         
-        // Reconstrucción del objeto ubicación con soporte de salida/llegada
         updateData.ubicacion = {
             nombre: (updateData.locNombre || updateData.ubicacion?.nombre || event.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
             salida: {
@@ -261,7 +267,7 @@ const deleteEvent = async (req, res) => {
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
         if (!isMando && !isOwner) {
-            return res.status(403).json({ message: 'Acceso denegado.' });
+            return res.status(403).json({ message: 'Acceso denegado. Solo el creador o mando superior pueden finalizar.' });
         }
 
         const isRealTime = event.isRealTime;
@@ -275,10 +281,10 @@ const deleteEvent = async (req, res) => {
             io.emit(deleteChannel, eventId);
         }
 
-        res.status(200).json({ message: 'Eliminado correctamente.' });
+        res.status(200).json({ message: 'Vector eliminado correctamente del radar.' });
     } catch (error) {
         console.error(`❌ Error en deleteEvent: ${error.message}`);
-        res.status(500).json({ message: 'Error al eliminar.' });
+        res.status(500).json({ message: 'Error al eliminar el registro.' });
     }
 };
 
