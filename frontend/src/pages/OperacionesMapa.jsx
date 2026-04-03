@@ -8,7 +8,6 @@ const { BaseLayer } = LayersControl;
 
 /** SIMBOLOGÍA TÁCTICA */
 const crearIconoTactico = (tipo) => {
-    // Aseguramos que el tipo sea comparado correctamente (limpiando espacios o mayúsculas)
     const tipoNormalizado = tipo?.toLowerCase().trim();
     const color = tipoNormalizado === 'ala_fija' ? '#3498db' : '#e67e22';
     
@@ -71,7 +70,6 @@ const OperacionesMapa = () => {
                     const ori = m.origen || {};
                     const des = m.destino || {};
                     
-                    // Validación estricta de coordenadas para evitar el error de la Polyline
                     const latOri = parseFloat(ori.lat);
                     const lngOri = parseFloat(ori.lng);
                     const latDes = parseFloat(des.lat);
@@ -82,17 +80,14 @@ const OperacionesMapa = () => {
 
                     if (!tieneOrigenValido) return null;
 
-                    // Posicionamiento: Si tiene destino, va al punto medio. Si no, al origen.
                     const actualPos = tieneDestinoValido 
                         ? [(latOri + latDes) / 2, (lngOri + lngDes) / 2]
                         : [latOri, lngOri];
 
-                    // Obtenemos el tipo de icono del objeto m o de misionDetalle
                     const iconoARenderizar = m.tipoIcono || m.misionDetalle?.tipoIcono || 'ala_rotativa';
 
                     return (
                         <React.Fragment key={m._id?.$oid || m._id}>
-                            {/* Trayecto con efecto Glow (solo si tiene destino válido) */}
                             {tieneDestinoValido && (
                                 <>
                                     <Polyline 
@@ -107,17 +102,15 @@ const OperacionesMapa = () => {
                             )}
                             
                             <Marker position={actualPos} icon={crearIconoTactico(iconoARenderizar)}>
-                                <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
-                                    <span style={{color: tieneDestinoValido ? '#00d4ff' : '#f39c12', fontWeight: 'bold', fontSize: '10px', textShadow: '1px 1px 2px black'}}>
-                                        {m.matricula || 'S/M'} {tieneDestinoValido ? '✈️' : '📍'}
-                                    </span>
+                                <Tooltip direction="top" offset={[0, -15]} opacity={1} permanent className="custom-tooltip-radar">
+                                    <div style={styles.tooltipContent}>
+                                        <span style={styles.tooltipText}>{m.matricula || 'S/M'}</span>
+                                        <span style={styles.tooltipIcon}>{tieneDestinoValido ? '✈️' : '📍'}</span>
+                                    </div>
                                 </Tooltip>
                                 <Popup>
                                     <div style={styles.popupContainer}>
-                                        <div style={styles.popupHeader}>
-                                            {m.title}
-                                        </div>
-                                        
+                                        <div style={styles.popupHeader}>{m.title}</div>
                                         <div style={styles.popupBody}>
                                             <div style={styles.popupRow}>
                                                 <span style={styles.popupLabel}>MATRÍCULA:</span> 
@@ -137,7 +130,6 @@ const OperacionesMapa = () => {
                                                     {ori.nombre || '---'} {tieneDestinoValido ? `➔ ${des.nombre || '---'}` : '(EN PLATAFORMA)'}
                                                 </span>
                                             </div>
-                                            
                                             {m.notasMarginales && (
                                                 <div style={styles.popupNoteBox}>
                                                     <div style={styles.popupLabelNote}>NOTAS ADICIONALES:</div>
@@ -145,7 +137,6 @@ const OperacionesMapa = () => {
                                                 </div>
                                             )}
                                         </div>
-
                                         <div style={styles.popupFooter}>
                                             ACTUALIZADO: {m.updatedAt ? new Date(m.updatedAt).toLocaleTimeString() : '---'}
                                         </div>
@@ -159,6 +150,17 @@ const OperacionesMapa = () => {
 
             <style>{`
                 .label-tactica-custom { background: transparent !important; border: none !important; }
+                
+                /* Estilo mejorado para el Tooltip (Matrícula) */
+                .custom-tooltip-radar {
+                    background: rgba(0, 20, 30, 0.85) !important;
+                    border: 1px solid #00d4ff !important;
+                    border-radius: 3px !important;
+                    padding: 2px 6px !important;
+                    box-shadow: 0 0 10px rgba(0, 212, 255, 0.4) !important;
+                }
+                .custom-tooltip-radar::before { border-top-color: #00d4ff !important; }
+
                 .leaflet-popup-content-wrapper { padding: 0 !important; background: #111 !important; border: 1px solid #00d4ff; border-radius: 4px; overflow: hidden; }
                 .leaflet-popup-tip { background: #00d4ff; }
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; }
@@ -172,6 +174,12 @@ const styles = {
     mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },
     header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.95)', color: '#00d4ff', padding: '12px 30px', border: '1px solid #00d4ff', textAlign: 'center', borderRadius: '4px', boxShadow: '0 0 20px rgba(0,0,0,0.8)' },
     subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #333', paddingTop: '4px', letterSpacing: '1px' },
+    
+    // Estilos internos del Tooltip
+    tooltipContent: { display: 'flex', alignItems: 'center', gap: '5px', pointerEvents: 'none' },
+    tooltipText: { color: '#00f2ff', fontWeight: 'bold', fontSize: '11px', fontFamily: 'monospace', textShadow: '0 0 5px rgba(0, 242, 255, 0.5)' },
+    tooltipIcon: { fontSize: '10px' },
+
     popupContainer: { padding: '12px', minWidth: '240px', backgroundColor: '#111', color: '#fff', fontFamily: 'monospace' },
     popupHeader: { color: '#00d4ff', fontWeight: 'bold', fontSize: '14px', borderBottom: '1px solid #333', marginBottom: '10px', paddingBottom: '5px', letterSpacing: '1px' },
     popupBody: { display: 'flex', flexDirection: 'column', gap: '4px' },
