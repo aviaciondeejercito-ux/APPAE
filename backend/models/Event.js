@@ -87,11 +87,6 @@ const eventSchema = new mongoose.Schema({
             lat: { type: Number, default: -34.61315 },
             lng: { type: Number, default: -58.37723 }
         },
-        llegada: {
-            nombre: { type: String, uppercase: true, default: 'DESTINO' },
-            lat: { type: Number, default: -34.61315 },
-            lng: { type: Number, default: -58.37723 }
-        },
         lat: { type: Number, default: -34.61315 },
         lng: { type: Number, default: -58.37723 }
     },
@@ -100,11 +95,6 @@ const eventSchema = new mongoose.Schema({
     aeronave: { type: String, uppercase: true, trim: true },
     tipoIcono: { type: String },
     origen: {
-        nombre: { type: String, uppercase: true },
-        lat: { type: Number },
-        lng: { type: Number }
-    },
-    destino: {
         nombre: { type: String, uppercase: true },
         lat: { type: Number },
         lng: { type: Number }
@@ -136,43 +126,28 @@ const eventSchema = new mongoose.Schema({
 });
 
 /**
- * MIDDLEWARE PRE-SAVE: FIJACIÓN DE TRAYECTO REAL
+ * MIDDLEWARE PRE-SAVE: FIJACIÓN DE POSICIÓN ÚNICA
  */
 eventSchema.pre('validate', function(next) {
     // Asegurar estructura
     if (!this.ubicacion) this.ubicacion = {};
     if (!this.ubicacion.salida) this.ubicacion.salida = {};
-    if (!this.ubicacion.llegada) this.ubicacion.llegada = {};
 
-    // 1. Prioridad: Si vienen datos directos de Origen/Destino (CargaTactica)
+    // Sincronización desde el objeto 'origen' (Enviado por el formulario)
     if (this.origen && this.origen.lat) {
         this.ubicacion.salida.nombre = (this.origen.nombre || "ORIGEN").toUpperCase();
         this.ubicacion.salida.lat = this.origen.lat;
         this.ubicacion.salida.lng = this.origen.lng;
-    }
 
-    if (this.destino && this.destino.lat) {
-        // Si hay destino definido y es diferente al origen, lo forzamos
-        this.ubicacion.llegada.nombre = (this.destino.nombre || "DESTINO").toUpperCase();
-        this.ubicacion.llegada.lat = this.destino.lat;
-        this.ubicacion.llegada.lng = this.destino.lng;
-    } else if (this.origen && this.origen.lat) {
-        // Solo si NO hay destino, se asume vuelo local (Estática)
-        this.ubicacion.llegada.nombre = "ESTÁTICA";
-        this.ubicacion.llegada.lat = this.origen.lat;
-        this.ubicacion.llegada.lng = this.origen.lng;
-    }
-
-    // 2. Sincronización de Radar (Posición inicial en el Origen)
-    if (this.ubicacion.salida && this.ubicacion.salida.lat) {
-        this.lat = this.ubicacion.salida.lat;
-        this.lng = this.ubicacion.salida.lng;
-        this.ubicacion.lat = this.ubicacion.salida.lat;
-        this.ubicacion.lng = this.ubicacion.salida.lng;
+        // Actualizar coordenadas raíz para el Radar
+        this.lat = this.origen.lat;
+        this.lng = this.origen.lng;
+        this.ubicacion.lat = this.origen.lat;
+        this.ubicacion.lng = this.origen.lng;
         
         if (this.misionDetalle) {
-            this.misionDetalle.lat = this.ubicacion.salida.lat;
-            this.misionDetalle.lng = this.ubicacion.salida.lng;
+            this.misionDetalle.lat = this.origen.lat;
+            this.misionDetalle.lng = this.origen.lng;
         }
     }
 
