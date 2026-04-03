@@ -1,39 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getActiveOperations, createEvent, updateEvent, deleteEvent, getAircrafts } from '../services/api';
+import { AEROPUERTOS, UNIDADES_EJERCITO, CLASIFICACION_SDA } from '../constants/TacticalData';
 import Swal from 'sweetalert2';
-
-// Constantes de referencia local
-const AEROPUERTOS = [
-    { nombre: "SADO - CAMPO DE MAYO", lat: -34.528, lng: -58.641 },
-    { nombre: "SAZN - NEUQUÉN", lat: -38.949, lng: -68.143 },
-    { nombre: "SAWG - RÍO GALLEGOS", lat: -51.608, lng: -69.312 },
-    { nombre: "SAZB - BAHÍA BLANCA", lat: -38.718, lng: -62.170 },
-    { nombre: "SARC - CORRIENTES", lat: -27.445, lng: -58.761 },
-    { nombre: "SAMM - MENDOZA", lat: -32.831, lng: -68.792 },
-    { nombre: "SASR - ROSARIO DE LA FRONTERA", lat: -25.828, lng: -64.931 },
-    { nombre: "SAST - SALTA", lat: -24.856, lng: -65.482 }
-];
-
-const UNIDADES = [
-    "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
-    "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", 
-    "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9"
-];
-
-const CLASIFICACION = { 
-    'C-212': 'ala_fija', 
-    'C-208': 'ala_fija', 
-    'UH-1H': 'ala_rotativa', 
-    'BELL 212': 'ala_rotativa', 
-    'AB-206': 'ala_rotativa' 
-};
 
 const CargaTactica = () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const isMando = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(user.role?.toLowerCase());
 
     const [misiones, setMisiones] = useState([]);
-    const [flota, setFlota] = useState([]); // Este estado ahora viene de MongoDB
+    const [flota, setFlota] = useState([]); // Se obtiene de MongoDB
     const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(false);
     const [showDestino, setShowDestino] = useState(false);
@@ -138,7 +113,7 @@ const CargaTactica = () => {
         e.preventDefault();
         const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
-        const icono = CLASIFICACION[form.sda] || (form.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
+        const icono = CLASIFICACION_SDA[form.sda] || (form.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
 
         const payload = {
             title: form.title.toUpperCase(),
@@ -241,7 +216,7 @@ const CargaTactica = () => {
                                 required
                             >
                                 <option value="">-- Unidad Responsable --</option>
-                                {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                                {UNIDADES_EJERCITO.map(u => <option key={u} value={u}>{u}</option>)}
                             </select>
                         </div>
 
