@@ -59,7 +59,8 @@ const CargaTactica = () => {
             title: title.toUpperCase().trim(),
             elemento: aeroInfo.unidad || aeroInfo.elemento || userElemento,
             isRealTime: true,
-            status: 'operativo',
+            estado: 'E/S',
+            // Datos críticos extraídos de la base de datos:
             tipoIcono: aeroInfo.tipoIcono, 
             matricula: aeroInfo.matricula,
             aeronave: aeroInfo.sda
@@ -123,11 +124,15 @@ const CargaTactica = () => {
                                 required
                             >
                                 <option value="">-- SELECCIONE MATRÍCULA --</option>
-                                {aeronaves.map(a => (
-                                    <option key={a._id} value={a.matricula}>
-                                        {a.matricula} - {a.sda} ({a.unidad})
-                                    </option>
-                                ))}
+                                {/* FILTRO: Solo aeronaves con condicion "E/S" */}
+                                {aeronaves
+                                    .filter(a => a.condicion === 'E/S')
+                                    .map(a => (
+                                        <option key={a._id} value={a.matricula}>
+                                            {a.matricula} - {a.sda} ({a.unidad})
+                                        </option>
+                                    ))
+                                }
                             </select>
                         </div>
 
