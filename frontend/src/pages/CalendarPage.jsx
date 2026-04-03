@@ -23,8 +23,6 @@ const CalendarPage = () => {
             
             /**
              * LÓGICA DE FILTRADO JERÁRQUICO (PECERA ESTANCA)
-             * 1. Roles de mando ven todo.
-             * 2. Unidades ven: lo propio, lo global de DIR AE o lo que crearon.
              */
             const filteredData = (role === 'admin' || role === 'BOSS' || role === 'DIRECTOR'|| role === 'OTO') 
                 ? data 
@@ -45,7 +43,12 @@ const CalendarPage = () => {
         }
     };
 
-    const getEventColor = (tipo) => {
+    const getEventColor = (tipo, elemento) => {
+        const el = elemento ? elemento.toUpperCase() : '';
+        
+        // Prioridad SEC AE: Si el elemento pertenece a cualquier SEC AE, color Rojo
+        if (el.includes('SEC AE')) return '#dc3545';
+
         if (!tipo) return '#6c757d';
         const t = tipo.toUpperCase();
         if (t.includes('SOSTENIMIENTO')) return '#007bff';
@@ -78,7 +81,6 @@ const CalendarPage = () => {
             tipoApoyo: event.extendedProps.tipoApoyo,
             esGlobal: event.extendedProps.esGlobal,
             sdaListado: sdas,
-            // Nuevos campos de contacto
             unidadApoyada: event.extendedProps.unidadApoyada,
             pntoContactoNom: event.extendedProps.pntoContactoNom,
             pntoContactoTel: event.extendedProps.pntoContactoTel,
@@ -171,7 +173,7 @@ const CalendarPage = () => {
                     initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
                     locale={esLocale}
                     events={events.map(ev => {
-                        const colorBase = getEventColor(ev.tipoApoyo);
+                        const colorBase = getEventColor(ev.tipoApoyo, ev.elemento);
                         let prefix = '';
                         if (ev.etapa === 'recepcion') prefix = '🟡 ';
                         if (ev.etapa === 'revision') prefix = '🔵 ';
@@ -221,6 +223,7 @@ const CalendarPage = () => {
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sost.</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Op.</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Edu.</div>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#dc3545'}}></span> SEC AE</div>
                 </div>
                 <div style={styles.legendGroup}>
                     <span style={styles.legendGroupTitle}>ESTADOS:</span>
