@@ -6,7 +6,7 @@ import Swal from 'sweetalert2';
 const CargaTactica = () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     
-    // Verificación de roles respetando mayúsculas/minúsculas según lo acordado
+    // Verificación de roles respetando mayúsculas/minúsculas
     const isMando = user.role === 'admin' || user.role === 'OTO' || ['boss', 'director', 'otoae'].includes(user.role?.toLowerCase());
 
     const [misiones, setMisiones] = useState([]);
@@ -32,10 +32,9 @@ const CargaTactica = () => {
 
             setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === user.elemento)));
             
-            // Lógica Paso 2: Filtrado de aeronaves E/S por Unidad o Rango
+            // Filtrado de aeronaves E/S: si es mando ve todo, si no, solo su unidad.
             const filtradas = aircrafts.filter(a => {
                 const enServicio = a.estado === 'E/S';
-                // Si es admin o OTO ve todas las E/S. Si no, solo las E/S de su propia unidad.
                 const tieneAcceso = isMando || (a.unidad && a.unidad === user.elemento);
                 return enServicio && tieneAcceso;
             });
@@ -120,7 +119,6 @@ const CargaTactica = () => {
         e.preventDefault();
         const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
-        
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
 
         const payload = {
@@ -225,8 +223,10 @@ const CargaTactica = () => {
                             </select>
                         </div>
 
-                        <div style={{marginBottom: '10px', color: '#ffd700', fontSize: '0.9rem', fontWeight: 'bold'}}>
-                            UNIDAD: {form.elemento || '---'}
+                        {/* Muestra la unidad detectada de la aeronave seleccionada */}
+                        <div style={{marginBottom: '15px', padding: '10px', backgroundColor: '#363636', borderRadius: '4px', borderLeft: '4px solid #ffd700'}}>
+                            <span style={{fontSize: '0.75rem', color: '#aaa', display: 'block'}}>UNIDAD RESPONSABLE DEL MEDIO:</span>
+                            <span style={{color: '#ffd700', fontWeight: 'bold'}}>{form.elemento || 'ESPERANDO SELECCIÓN...'}</span>
                         </div>
 
                         <div style={styles.geoBox}>
