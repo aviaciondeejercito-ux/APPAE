@@ -172,14 +172,23 @@ eventSchema.pre('validate', function(next) {
         }
     }
     
-    // 2. Lógica de Trayecto y Sincro Joker corregida
-    // Priorizamos la posición actual (this.lat) para permitir el movimiento en el mapa.
-    // Solo si no hay posición actual, usamos la de salida.
-    const finalLat = this.lat ?? this.misionDetalle?.lat ?? this.ubicacion?.salida?.lat ?? -34.61315;
-    const finalLng = this.lng ?? this.misionDetalle?.lng ?? this.ubicacion?.salida?.lng ?? -58.37723;
+    // 2. Lógica de Trayecto Priorizada para Despacho Táctico
+    // Evitamos que el valor 0 o el default pisen los datos reales de salida
+    let finalLat = this.lat;
+    let finalLng = this.lng;
 
-    // 3. Atomic Mirroring (Sincronización de espejos)
-    // Aseguramos que todas las referencias internas tengan la misma posición "viva"
+    const isDefaultRaiz = (this.lat === -34.61315 && this.lng === -58.37723) || (this.lat === 0) || !this.lat;
+    
+    // Si la raíz no tiene datos reales pero la salida sí, priorizamos salida
+    if (isDefaultRaiz && this.ubicacion?.salida?.lat !== undefined && this.ubicacion?.salida?.lat !== 0 && this.ubicacion?.salida?.lat !== -34.61315) {
+        finalLat = this.ubicacion.salida.lat;
+        finalLng = this.ubicacion.salida.lng;
+    } else if (isDefaultRaiz && this.misionDetalle?.lat !== -34.61315 && this.misionDetalle?.lat !== 0) {
+        finalLat = this.misionDetalle.lat;
+        finalLng = this.misionDetalle.lng;
+    }
+
+    // 3. Atomic Mirroring (Sincronización de espejos corregida)
     this.lat = finalLat;
     this.lng = finalLng;
 
@@ -187,7 +196,6 @@ eventSchema.pre('validate', function(next) {
         this.ubicacion.lat = finalLat;
         this.ubicacion.lng = finalLng;
         
-        // Normalización de nombres de salida/llegada
         if (this.ubicacion.salida && this.ubicacion.salida.nombre) {
             this.ubicacion.salida.nombre = this.ubicacion.salida.nombre.toUpperCase();
         }
@@ -201,7 +209,6 @@ eventSchema.pre('validate', function(next) {
         this.misionDetalle.lng = finalLng;
         this.misionDetalle.isRealTime = this.isRealTime;
 
-        // Normalización de campos técnicos
         ['aeronave', 'matricula', 'comandante', 'copiloto', 'mecanico'].forEach(key => {
             if (this.misionDetalle[key]) {
                 this.misionDetalle[key] = this.misionDetalle[key].toString().toUpperCase().trim();

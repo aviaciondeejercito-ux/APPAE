@@ -109,9 +109,17 @@ const createEvent = async (req, res) => {
         const isMando = req.isMando;
         const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
         
-        // CORRECCIÓN PRIORIDAD: La posición actual (lat/lng) manda sobre la de salida para permitir el radar.
-        const finalLat = parseFloat(lat ?? misionDetalle?.lat ?? ubicacion?.salida?.lat ?? -34.61315);
-        const finalLng = parseFloat(lng ?? misionDetalle?.lng ?? ubicacion?.salida?.lng ?? -58.37723);
+        // CORRECCIÓN PRIORIDAD: Si ubicacion.salida trae coordenadas reales (!= 0 y != default), esas mandan.
+        let finalLat = lat;
+        let finalLng = lng;
+
+        if (ubicacion?.salida?.lat && ubicacion.salida.lat !== 0 && ubicacion.salida.lat !== -34.61315) {
+            finalLat = ubicacion.salida.lat;
+            finalLng = ubicacion.salida.lng;
+        } else {
+            finalLat = lat ?? misionDetalle?.lat ?? -34.61315;
+            finalLng = lng ?? misionDetalle?.lng ?? -58.37723;
+        }
 
         const eventData = {
             title: (title || '').toString().toUpperCase(),
@@ -133,25 +141,25 @@ const createEvent = async (req, res) => {
                 matricula: (matricula || misionDetalle?.matricula || '').toString().toUpperCase(),
                 tipoIcono: tipoIcono || misionDetalle?.tipoIcono || 'ala_rotativa',
                 isRealTime: isRealTime || false,
-                lat: finalLat,
-                lng: finalLng
+                lat: parseFloat(finalLat),
+                lng: parseFloat(finalLng)
             },
-            lat: finalLat,
-            lng: finalLng,
+            lat: parseFloat(finalLat),
+            lng: parseFloat(finalLng),
             ubicacion: {
                 nombre: (ubicacion?.nombre || req.body.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
                 salida: {
                     nombre: (ubicacion?.salida?.nombre || 'ORIGEN').toUpperCase(),
-                    lat: parseFloat(ubicacion?.salida?.lat ?? finalLat),
-                    lng: parseFloat(ubicacion?.salida?.lng ?? finalLng)
+                    lat: parseFloat(ubicacion?.salida?.lat || finalLat),
+                    lng: parseFloat(ubicacion?.salida?.lng || finalLng)
                 },
                 llegada: {
                     nombre: (ubicacion?.llegada?.nombre || 'DESTINO').toUpperCase(),
-                    lat: parseFloat(ubicacion?.llegada?.lat ?? finalLat),
-                    lng: parseFloat(ubicacion?.llegada?.lng ?? finalLng)
+                    lat: parseFloat(ubicacion?.llegada?.lat || finalLat),
+                    lng: parseFloat(ubicacion?.llegada?.lng || finalLng)
                 },
-                lat: finalLat,
-                lng: finalLng
+                lat: parseFloat(finalLat),
+                lng: parseFloat(finalLng)
             },
             start: start ? new Date(start) : new Date(),
             end: end ? new Date(end) : null,
@@ -205,9 +213,17 @@ const updateEvent = async (req, res) => {
             }
         });
 
-        // CORRECCIÓN PRIORIDAD: lat/lng actuales mandan sobre el punto de origen.
-        const nLat = parseFloat(updateData.lat ?? updateData.misionDetalle?.lat ?? updateData.ubicacion?.salida?.lat ?? event.lat);
-        const nLng = parseFloat(updateData.lng ?? updateData.misionDetalle?.lng ?? updateData.ubicacion?.salida?.lng ?? event.lng);
+        // CORRECCIÓN PRIORIDAD EN UPDATE
+        let nLat = updateData.lat;
+        let nLng = updateData.lng;
+
+        if (updateData.ubicacion?.salida?.lat && updateData.ubicacion.salida.lat !== 0 && updateData.ubicacion.salida.lat !== -34.61315) {
+            nLat = updateData.ubicacion.salida.lat;
+            nLng = updateData.ubicacion.salida.lng;
+        } else {
+            nLat = updateData.lat ?? updateData.misionDetalle?.lat ?? event.lat;
+            nLng = updateData.lng ?? updateData.misionDetalle?.lng ?? event.lng;
+        }
 
         updateData.misionDetalle = {
             ...event.misionDetalle,
@@ -218,27 +234,27 @@ const updateEvent = async (req, res) => {
             aeronave: (updateData.aeronave || updateData.misionDetalle?.aeronave || event.misionDetalle?.aeronave || '').toUpperCase(),
             matricula: (updateData.matricula || updateData.misionDetalle?.matricula || event.misionDetalle?.matricula || '').toUpperCase(),
             tipoIcono: updateData.tipoIcono || updateData.misionDetalle?.tipoIcono || event.misionDetalle?.tipoIcono || 'ala_rotativa',
-            lat: nLat,
-            lng: nLng
+            lat: parseFloat(nLat),
+            lng: parseFloat(nLng)
         };
 
-        updateData.lat = nLat;
-        updateData.lng = nLng;
+        updateData.lat = parseFloat(nLat);
+        updateData.lng = parseFloat(nLng);
         
         updateData.ubicacion = {
             nombre: (updateData.locNombre || updateData.ubicacion?.nombre || event.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
             salida: {
                 nombre: (updateData.ubicacion?.salida?.nombre || event.ubicacion?.salida?.nombre || 'ORIGEN').toUpperCase(),
-                lat: parseFloat(updateData.ubicacion?.salida?.lat ?? event.ubicacion?.salida?.lat ?? nLat),
-                lng: parseFloat(updateData.ubicacion?.salida?.lng ?? event.ubicacion?.salida?.lng ?? nLng)
+                lat: parseFloat(updateData.ubicacion?.salida?.lat || nLat),
+                lng: parseFloat(updateData.ubicacion?.salida?.lng || nLng)
             },
             llegada: {
                 nombre: (updateData.ubicacion?.llegada?.nombre || event.ubicacion?.llegada?.nombre || 'DESTINO').toUpperCase(),
-                lat: parseFloat(updateData.ubicacion?.llegada?.lat ?? event.ubicacion?.llegada?.lat ?? nLat),
-                lng: parseFloat(updateData.ubicacion?.llegada?.lng ?? event.ubicacion?.llegada?.lng ?? nLng)
+                lat: parseFloat(updateData.ubicacion?.llegada?.lat || nLat),
+                lng: parseFloat(updateData.ubicacion?.llegada?.lng || nLng)
             },
-            lat: nLat,
-            lng: nLng
+            lat: parseFloat(nLat),
+            lng: parseFloat(nLng)
         };
 
         const updatedEvent = await Event.findByIdAndUpdate(
