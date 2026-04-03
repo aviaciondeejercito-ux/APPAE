@@ -24,8 +24,11 @@ const CargaTactica = () => {
     const [title, setTitle] = useState('');
     const [selectedMatricula, setSelectedMatricula] = useState('');
 
-    // Estado único para Coordenadas de Origen
+    // Estado para Coordenadas de Origen
     const [coordOri, setCoordOri] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
+    
+    // Estado para Coordenadas de Destino (Agregado)
+    const [coordDes, setCoordDes] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
 
     // Función auxiliar para convertir Decimal a GMS
     const fromDecimal = (decimal) => {
@@ -36,26 +39,27 @@ const CargaTactica = () => {
         return { g, m, s };
     };
 
-    // Manejador de selección de Aeropuerto
-    const handleSelectLugar = (e) => {
-        const valor = e.target.value;
+    // Manejador de selección de Aeropuerto (Adaptado para ambos)
+    const handleSelectLugar = (valor, tipo) => {
         const aero = AEROPUERTOS.find(a => a.nombre === valor);
+        const setter = tipo === 'origen' ? setCoordOri : setCoordDes;
+        const current = tipo === 'origen' ? coordOri : coordDes;
 
         if (aero) {
             const latGMS = fromDecimal(aero.lat);
             const lngGMS = fromDecimal(aero.lng);
-            setCoordOri({
+            setter({
                 nombre: aero.nombre,
                 latG: latGMS.g, latM: latGMS.m, latS: latGMS.s,
                 lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s
             });
         } else {
-            setCoordOri({ ...coordOri, nombre: valor });
+            setter({ ...current, nombre: valor });
         }
     };
 
     const toDecimal = (g, m, s) => {
-        if (!g && g !== 0) return 0;
+        if (!g && g !== 0) return null;
         const dec = Math.abs(parseFloat(g)) + (parseFloat(m || 0) / 60) + (parseFloat(s || 0) / 3600);
         return dec * -1; 
     };
@@ -101,6 +105,11 @@ const CargaTactica = () => {
                 nombre: (coordOri.nombre || "ORIGEN").toUpperCase(),
                 lat: toDecimal(coordOri.latG, coordOri.latM, coordOri.latS),
                 lng: toDecimal(coordOri.lngG, coordOri.lngM, coordOri.lngS)
+            },
+            destino: {
+                nombre: (coordDes.nombre || "DESTINO").toUpperCase(),
+                lat: toDecimal(coordDes.latG, coordDes.latM, coordDes.latS),
+                lng: toDecimal(coordDes.lngG, coordDes.lngM, coordDes.lngS)
             }
         };
 
@@ -118,6 +127,7 @@ const CargaTactica = () => {
             setTitle('');
             setSelectedMatricula('');
             setCoordOri({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
+            setCoordDes({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
             cargarDatos();
         } catch (err) {
             Swal.fire('Error', 'No se pudo registrar el vuelo.', 'error');
@@ -181,24 +191,43 @@ const CargaTactica = () => {
                             </select>
                         </div>
 
-                        {/* BLOQUE ÚNICO: COORDENADAS ORIGEN */}
-                        <div style={styles.coordBox}>
-                            <label style={styles.labelBlue}>PUNTO DE POSICIÓN / ORIGEN</label>
-                            <input 
-                                style={styles.inputSmall} 
-                                list="optsOrigen"
-                                placeholder="ELEGIR O ESCRIBIR LUGAR" 
-                                value={coordOri.nombre} 
-                                onChange={handleSelectLugar} 
-                            />
-                            <datalist id="optsOrigen">
-                                {AEROPUERTOS.map(a => <option key={a.nombre} value={a.nombre} />)}
-                            </datalist>
-                            <div style={styles.gmsWrapper}>
-                                <InputGMS label="LATITUD (S)" values={{g: coordOri.latG, m: coordOri.latM, s: coordOri.latS}} onChange={(f, v) => setCoordOri({...coordOri, [`lat${f}`]: v})} />
-                                <InputGMS label="LONGITUD (W)" values={{g: coordOri.lngG, m: coordOri.lngM, s: coordOri.lngS}} onChange={(f, v) => setCoordOri({...coordOri, [`lng${f}`]: v})} />
+                        <div style={styles.coordGrid}>
+                            {/* BLOQUE: COORDENADAS ORIGEN */}
+                            <div style={styles.coordBox}>
+                                <label style={styles.labelBlue}>PUNTO DE ORIGEN</label>
+                                <input 
+                                    style={styles.inputSmall} 
+                                    list="optsLugares"
+                                    placeholder="ELEGIR O ESCRIBIR ORIGEN" 
+                                    value={coordOri.nombre} 
+                                    onChange={(e) => handleSelectLugar(e.target.value, 'origen')} 
+                                />
+                                <div style={styles.gmsWrapper}>
+                                    <InputGMS label="LATITUD (S)" values={{g: coordOri.latG, m: coordOri.latM, s: coordOri.latS}} onChange={(f, v) => setCoordOri({...coordOri, [`lat${f}`]: v})} />
+                                    <InputGMS label="LONGITUD (W)" values={{g: coordOri.lngG, m: coordOri.lngM, s: coordOri.lngS}} onChange={(f, v) => setCoordOri({...coordOri, [`lng${f}`]: v})} />
+                                </div>
+                            </div>
+
+                            {/* BLOQUE: COORDENADAS DESTINO */}
+                            <div style={styles.coordBox}>
+                                <label style={styles.labelRed}>PUNTO DE DESTINO</label>
+                                <input 
+                                    style={styles.inputSmall} 
+                                    list="optsLugares"
+                                    placeholder="ELEGIR O ESCRIBIR DESTINO" 
+                                    value={coordDes.nombre} 
+                                    onChange={(e) => handleSelectLugar(e.target.value, 'destino')} 
+                                />
+                                <div style={styles.gmsWrapper}>
+                                    <InputGMS label="LATITUD (S)" values={{g: coordDes.latG, m: coordDes.latM, s: coordDes.latS}} onChange={(f, v) => setCoordDes({...coordDes, [`lat${f}`]: v})} />
+                                    <InputGMS label="LONGITUD (W)" values={{g: coordDes.lngG, m: coordDes.lngM, s: coordDes.lngS}} onChange={(f, v) => setCoordDes({...coordDes, [`lng${f}`]: v})} />
+                                </div>
                             </div>
                         </div>
+
+                        <datalist id="optsLugares">
+                            {AEROPUERTOS.map(a => <option key={a.nombre} value={a.nombre} />)}
+                        </datalist>
 
                         <button type="submit" style={styles.btnLaunch} disabled={loading}>
                             {loading ? 'PROCESANDO...' : 'LANZAR OPERACIÓN'}
@@ -223,6 +252,9 @@ const CargaTactica = () => {
                                     </div>
                                     <div style={styles.misionTitle}>{m.title}</div>
                                     <div style={styles.misionSub}>{m.aeronave}</div>
+                                    <div style={styles.routeText}>
+                                        {m.origen?.nombre || '---'} ➔ {m.destino?.nombre || '---'}
+                                    </div>
                                     <button onClick={() => handleFinalizar(m._id)} style={styles.btnFinish}>ARRIBO</button>
                                 </div>
                             ))
@@ -244,12 +276,14 @@ const styles = {
     fieldGroup: { marginBottom: '15px' },
     label: { fontSize: '0.7rem', color: '#8b949e', display: 'block', marginBottom: '5px', fontWeight: '700' },
     labelBlue: { fontSize: '0.75rem', color: '#58a6ff', display: 'block', marginBottom: '10px', fontWeight: '800', borderBottom: '1px solid #30363d' },
+    labelRed: { fontSize: '0.75rem', color: '#f85149', display: 'block', marginBottom: '10px', fontWeight: '800', borderBottom: '1px solid #30363d' },
     labelSub: { fontSize: '0.65rem', color: '#8b949e', marginBottom: '4px', fontWeight: 'bold' },
     input: { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff', fontSize: '1rem' },
     inputSmall: { width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff', fontSize: '0.8rem', marginBottom: '10px' },
     select: { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff' },
-    coordBox: { backgroundColor: '#0d1117', padding: '15px', borderRadius: '8px', border: '1px solid #30363d', marginBottom: '15px' },
-    gmsWrapper: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' },
+    coordGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' },
+    coordBox: { backgroundColor: '#0d1117', padding: '15px', borderRadius: '8px', border: '1px solid #30363d' },
+    gmsWrapper: { display: 'flex', flexDirection: 'column', gap: '10px' },
     gmsRow: { display: 'flex', gap: '5px' },
     inputGMS: { width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #30363d', backgroundColor: '#161b22', color: '#fff', fontSize: '0.85rem', textAlign: 'center' },
     btnLaunch: { width: '100%', padding: '16px', backgroundColor: '#1f6feb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '800', fontSize: '1rem', marginTop: '10px' },
@@ -263,7 +297,8 @@ const styles = {
     badgeMatricula: { backgroundColor: '#30363d', color: '#58a6ff', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '800' },
     tagElemento: { color: '#8b949e', fontSize: '0.65rem' },
     misionTitle: { fontSize: '1.2rem', fontWeight: '900', color: '#fff' },
-    misionSub: { fontSize: '0.75rem', color: '#8b949e', marginBottom: '10px' },
+    misionSub: { fontSize: '0.75rem', color: '#8b949e', marginBottom: '5px' },
+    routeText: { fontSize: '0.7rem', color: '#58a6ff', marginBottom: '10px', fontWeight: 'bold' },
     btnFinish: { width: '100%', padding: '8px', fontSize: '0.7rem', backgroundColor: 'transparent', color: '#f85149', border: '1px solid #f85149', borderRadius: '4px', fontWeight: 'bold' },
     emptyBox: { height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
     emptyMsg: { color: '#484f58', fontWeight: 'bold', fontSize: '0.8rem' }
