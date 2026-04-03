@@ -153,55 +153,55 @@ const CargaTactica = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        const currentLat = toDec(form.latG, form.latM, form.latS, form.latDir);
-        const currentLng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
-        
-        // Separación estricta de coordenadas
-        let destLat = currentLat;
-        let destLng = currentLng;
-        
-        if (showDestino) {
-            destLat = toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir);
-            destLng = toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir);
-        }
+        // 1. CÁLCULO DE VALORES PRIMITIVOS (No objetos)
+        const sLat = toDec(form.latG, form.latM, form.latS, form.latDir);
+        const sLng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
+        const dLat = showDestino ? toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir) : sLat;
+        const dLng = showDestino ? toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) : sLng;
         
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
 
+        // 2. CONSTRUCCIÓN DEL PAYLOAD CON CLONACIÓN EXPLÍCITA
+        // Usamos variables locales directas para evitar referencias al estado 'form'
         const payload = {
             title: form.title.toUpperCase(),
             elemento: form.elemento,
             notes: form.notas.toUpperCase(),
             isRealTime: true,
             status: 'operativo',
-            lat: currentLat, 
-            lng: currentLng,
+            lat: sLat, 
+            lng: sLng,
             ubicacion: { 
                 nombre: (form.locNombre || "POSICIÓN MANUAL").toUpperCase(), 
                 salida: { 
                     nombre: (form.locNombre || "ORIGEN").toUpperCase(), 
-                    lat: currentLat, 
-                    lng: currentLng 
+                    lat: sLat, 
+                    lng: sLng 
                 },
                 llegada: { 
                     nombre: showDestino ? (form.dNombre || "DESTINO").toUpperCase() : (form.locNombre || "ORIGEN").toUpperCase(), 
-                    lat: destLat, 
-                    lng: destLng 
+                    lat: dLat, 
+                    lng: dLng 
                 },
-                lat: currentLat,
-                lng: currentLng
+                lat: sLat,
+                lng: sLng
             },
             misionDetalle: { 
                 aeronave: form.sda, 
                 matricula: form.matricula, 
                 tipoIcono: icono, 
                 isRealTime: true, 
-                lat: currentLat, 
-                lng: currentLng 
+                lat: sLat, 
+                lng: sLng 
             }
         };
 
         try {
-            editingId ? await updateEvent(editingId, payload) : await createEvent(payload);
+            // 3. ULTIMO RECURSO: Clonación profunda antes de enviar a la red
+            const cleanPayload = JSON.parse(JSON.stringify(payload));
+            
+            editingId ? await updateEvent(editingId, cleanPayload) : await createEvent(cleanPayload);
+            
             Swal.fire('ÉXITO', editingId ? 'Vector actualizado' : 'Operación lanzada', 'success');
             setForm(initialState); 
             setEditingId(null); 
