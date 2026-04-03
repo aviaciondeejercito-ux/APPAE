@@ -69,6 +69,8 @@ const OperacionesMapa = () => {
                 </LayersControl>
 
                 {misiones.map((m) => {
+                    // Acceso correcto según el JSON provisto
+                    const detalle = m.misionDetalle || {};
                     const salidaPos = [m.ubicacion?.salida?.lat || -34.6, m.ubicacion?.salida?.lng || -58.4];
                     const llegadaPos = [m.ubicacion?.llegada?.lat || -34.6, m.ubicacion?.llegada?.lng || -58.4];
                     const actualPos = [m.ubicacion?.lat || salidaPos[0], m.ubicacion?.lng || salidaPos[1]];
@@ -76,27 +78,31 @@ const OperacionesMapa = () => {
                     const isMoving = m.ubicacion?.lat !== m.ubicacion?.salida?.lat;
 
                     return (
-                        <React.Fragment key={m._id}>
+                        <React.Fragment key={m._id?.$oid || m._id}>
                             <Polyline 
                                 positions={[salidaPos, llegadaPos]} 
                                 pathOptions={{ color: '#f39c12', weight: 1, dashArray: '10, 10', opacity: 0.3 }} 
                             />
                             
-                            <Marker position={actualPos} icon={crearIconoTactico(m.tipoIcono || 'ala_rotativa')}>
+                            <Marker position={actualPos} icon={crearIconoTactico(detalle.tipoIcono || 'ala_rotativa')}>
                                 <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
                                     <span style={{color: isMoving ? '#3498db' : '#f39c12', fontWeight: 'bold'}}>
-                                        {m.matricula} {isMoving ? '✈️' : ''}
+                                        {detalle.matricula || 'S/M'} {isMoving ? '✈️' : ''}
                                     </span>
                                 </Tooltip>
                                 <Popup>
                                     <div style={{padding: '10px', minWidth: '220px', backgroundColor: '#1a1a1a', color: 'white'}}>
-                                        <div style={{color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #f39c12', marginBottom: '8px', paddingBottom: '4px'}}>{m.aeronave} | {m.matricula}</div>
+                                        <div style={{color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #f39c12', marginBottom: '8px', paddingBottom: '4px'}}>
+                                            {detalle.aeronave || 'S/D'} | {detalle.matricula || 'S/M'}
+                                        </div>
                                         <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>ESTADO:</strong> {isMoving ? "EN TRAYECTO" : "EN POSICIÓN"}</div>
                                         <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>OPERACIÓN:</strong> {m.title}</div>
                                         <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>UNIDAD:</strong> {m.elemento}</div>
                                         <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>RUTA:</strong> {m.ubicacion?.salida?.nombre} ➔ {m.ubicacion?.llegada?.nombre}</div>
                                         <div style={styles.popupNoteBox}><strong style={{color: '#f39c12', fontSize: '9px'}}>NOTAS MARGINALES:</strong><br/>{m.notasMarginales || "SIN NOVEDAD"}</div>
-                                        <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>ACTUALIZADO: {m.updatedAt ? new Date(m.updatedAt).toLocaleTimeString() : 'N/A'}</div>
+                                        <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>
+                                            ACTUALIZADO: {m.updatedAt?.$date ? new Date(m.updatedAt.$date).toLocaleTimeString() : new Date(m.updatedAt).toLocaleTimeString()}
+                                        </div>
                                     </div>
                                 </Popup>
                             </Marker>
