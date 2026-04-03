@@ -5,7 +5,7 @@ const MONGO_URI = 'mongodb+srv://aviaciondeejercito_db_user:offQfkZ4ULIR8tUz@apl
 
 const runMigration = async () => {
     try {
-        console.log("🛠️  Iniciando normalización de base de datos...");
+        console.log("🛠️  Iniciando normalización de base de datos (Estructura Pecera Estanca)...");
         await mongoose.connect(MONGO_URI);
         console.log("✅ Conexión establecida con MongoDB Atlas.");
 
@@ -19,18 +19,41 @@ const runMigration = async () => {
         let modificados = 0;
 
         for (let ev of events) {
-            // LÓGICA DE REPARACIÓN:
-            // 1. Si existe 'ubicacion', extraemos sus datos.
-            // 2. Si no existen, ponemos valores por defecto para que aparezcan en el Monitor.
+            // LÓGICA DE REPARACIÓN Y NORMALIZACIÓN:
+            const elementoFinal = (ev.ubicacion?.elemento || ev.elemento || "POR CLASIFICAR").toUpperCase();
+            
             const repair = {
-                elemento: ev.ubicacion?.elemento || ev.elemento || "POR CLASIFICAR",
+                // 1. Campos de Identificación y Jerarquía
+                elemento: elementoFinal,
+                creadorUnidad: (ev.creadorUnidad || elementoFinal).toUpperCase(), // Si no existe, asumimos que el creador es el mismo del elemento
                 etapa: ev.ubicacion?.etapa || ev.etapa || "recepcion",
                 tipoOrigen: ev.ubicacion?.tipoOrigen || ev.tipoOrigen || "MIGRACION",
                 esGlobal: ev.ubicacion?.esGlobal !== undefined 
                             ? ev.ubicacion.esGlobal 
                             : (ev.esGlobal !== undefined ? ev.esGlobal : true),
+                
+                // 2. Datos de Misión
                 sdaListado: Array.isArray(ev.sdaListado) ? ev.sdaListado : [],
-                tipoApoyo: ev.tipoApoyo || "SOSTENIMIENTO"
+                tipoApoyo: (ev.tipoApoyo || "SOSTENIMIENTO").toUpperCase(),
+                
+                // 3. Nuevos campos de contacto (Normalización a vacíos si no existen)
+                unidadApoyada: (ev.unidadApoyada || "").toUpperCase(),
+                pntoContactoNom: (ev.pntoContactoNom || "").toUpperCase(),
+                pntoContactoTel: ev.pntoContactoTel || "",
+                responsableNom: (ev.responsableNom || "").toUpperCase(),
+                responsableTel: ev.responsableTel || "",
+
+                // 4. Coordenadas (Aseguramos estructura si no existe)
+                origen: {
+                    nombre: (ev.origen?.nombre || "ORIGEN").toUpperCase(),
+                    lat: ev.origen?.lat || null,
+                    lng: ev.origen?.lng || null
+                },
+                destino: {
+                    nombre: (ev.destino?.nombre || "DESTINO").toUpperCase(),
+                    lat: ev.destino?.lat || null,
+                    lng: ev.destino?.lng || null
+                }
             };
 
             await collection.updateOne(
@@ -44,7 +67,7 @@ const runMigration = async () => {
         }
 
         console.log(`\n✅ PROCESO COMPLETADO`);
-        console.log(`✨ Eventos normalizados: ${modificados}`);
+        console.log(`✨ Eventos normalizados con nuevos campos: ${modificados}`);
         process.exit(0);
 
     } catch (error) {
