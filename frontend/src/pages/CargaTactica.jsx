@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getActiveOperations, createEvent, deleteEvent, getAircrafts } from '../services/api';
+import { AEROPUERTOS } from '../constants/TacticalData';
 import Swal from 'sweetalert2';
 
 const CargaTactica = () => {
@@ -27,11 +28,40 @@ const CargaTactica = () => {
     const [coordOri, setCoordOri] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
     const [coordDes, setCoordDes] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
 
-    // Función de conversión GMS a Decimal (considerando Sur y Oeste como negativos por defecto para Argentina)
+    // Función auxiliar para convertir Decimal a GMS
+    const fromDecimal = (decimal) => {
+        const absVal = Math.abs(decimal);
+        const g = Math.floor(absVal);
+        const m = Math.floor((absVal - g) * 60);
+        const s = Math.round((absVal - g - m / 60) * 3600);
+        return { g, m, s };
+    };
+
+    // Manejador de selección de Aeropuerto
+    const handleSelectLugar = (e, tipo) => {
+        const valor = e.target.value;
+        const aero = AEROPUERTOS.find(a => a.nombre === valor);
+
+        if (aero) {
+            const latGMS = fromDecimal(aero.lat);
+            const lngGMS = fromDecimal(aero.lng);
+            const data = {
+                nombre: aero.nombre,
+                latG: latGMS.g, latM: latGMS.m, latS: latGMS.s,
+                lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s
+            };
+            if (tipo === 'origen') setCoordOri(data);
+            else setCoordDes(data);
+        } else {
+            if (tipo === 'origen') setCoordOri({ ...coordOri, nombre: valor });
+            else setCoordDes({ ...coordDes, nombre: valor });
+        }
+    };
+
     const toDecimal = (g, m, s) => {
-        if (!g) return 0;
-        const dec = Math.abs(parseFloat(g)) + (parseFloat(m) / 60) + (parseFloat(s) / 3600);
-        return dec * -1; // Multiplicamos por -1 asumiendo coordenadas en Argentina (S y W)
+        if (!g && g !== 0) return 0;
+        const dec = Math.abs(parseFloat(g)) + (parseFloat(m || 0) / 60) + (parseFloat(s || 0) / 3600);
+        return dec * -1; 
     };
 
     const cargarDatos = useCallback(async () => {
@@ -56,7 +86,6 @@ const CargaTactica = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
         const aeroInfo = aeronaves.find(a => a.matricula === selectedMatricula);
 
         if (!title.trim() || !selectedMatricula || !aeroInfo) {
@@ -68,17 +97,17 @@ const CargaTactica = () => {
             title: title.toUpperCase().trim(),
             elemento: aeroInfo.unidad || aeroInfo.elemento || userElemento,
             isRealTime: true,
-            status: aeroInfo.estado, 
+            status: 'operativo', 
             tipoIcono: aeroInfo.tipoIcono, 
             matricula: aeroInfo.matricula,
             aeronave: aeroInfo.sda,
             origen: {
-                nombre: coordOri.nombre.toUpperCase() || "ORIGEN",
+                nombre: (coordOri.nombre || "ORIGEN").toUpperCase(),
                 lat: toDecimal(coordOri.latG, coordOri.latM, coordOri.latS),
                 lng: toDecimal(coordOri.lngG, coordOri.lngM, coordOri.lngS)
             },
             destino: {
-                nombre: coordDes.nombre.toUpperCase() || "DESTINO",
+                nombre: (coordDes.nombre || "DESTINO").toUpperCase(),
                 lat: toDecimal(coordDes.latG, coordDes.latM, coordDes.latS),
                 lng: toDecimal(coordDes.lngG, coordDes.lngM, coordDes.lngS)
             }
@@ -165,7 +194,16 @@ const CargaTactica = () => {
                         {/* BLOQUE COORDENADAS ORIGEN */}
                         <div style={styles.coordBox}>
                             <label style={styles.labelBlue}>PUNTO DE ORIGEN / SALIDA</label>
-                            <input style={styles.inputSmall} placeholder="NOMBRE LUGAR" value={coordOri.nombre} onChange={e => setCoordOri({...coordOri, nombre: e.target.value})} />
+                            <input 
+                                style={styles.inputSmall} 
+                                list="optsOrigen"
+                                placeholder="ELEGIR O ESCRIBIR LUGAR" 
+                                value={coordOri.nombre} 
+                                onChange={e => handleSelectLugar(e, 'origen')} 
+                            />
+                            <datalist id="optsOrigen">
+                                {AEROPUERTOS.map(a => <option key={a.nombre} value={a.nombre} />)}
+                            </datalist>
                             <div style={styles.gmsWrapper}>
                                 <InputGMS label="LATITUD (S)" values={{g: coordOri.latG, m: coordOri.latM, s: coordOri.latS}} onChange={(f, v) => setCoordOri({...coordOri, [`lat${f}`]: v})} />
                                 <InputGMS label="LONGITUD (W)" values={{g: coordOri.lngG, m: coordOri.lngM, s: coordOri.lngS}} onChange={(f, v) => setCoordOri({...coordOri, [`lng${f}`]: v})} />
@@ -175,7 +213,16 @@ const CargaTactica = () => {
                         {/* BLOQUE COORDENADAS DESTINO */}
                         <div style={styles.coordBox}>
                             <label style={styles.labelBlue}>PUNTO DE DESTINO / ARRIBO</label>
-                            <input style={styles.inputSmall} placeholder="NOMBRE LUGAR" value={coordDes.nombre} onChange={e => setCoordDes({...coordDes, nombre: e.target.value})} />
+                            <input 
+                                style={styles.inputSmall} 
+                                list="optsDestino"
+                                placeholder="ELEGIR O ESCRIBIR LUGAR" 
+                                value={coordDes.nombre} 
+                                onChange={e => handleSelectLugar(e, 'destino')} 
+                            />
+                            <datalist id="optsDestino">
+                                {AEROPUERTOS.map(a => <option key={a.nombre} value={a.nombre} />)}
+                            </datalist>
                             <div style={styles.gmsWrapper}>
                                 <InputGMS label="LATITUD (S)" values={{g: coordDes.latG, m: coordDes.latM, s: coordDes.latS}} onChange={(f, v) => setCoordDes({...coordDes, [`lat${f}`]: v})} />
                                 <InputGMS label="LONGITUD (W)" values={{g: coordDes.lngG, m: coordDes.lngM, s: coordDes.lngS}} onChange={(f, v) => setCoordDes({...coordDes, [`lng${f}`]: v})} />
