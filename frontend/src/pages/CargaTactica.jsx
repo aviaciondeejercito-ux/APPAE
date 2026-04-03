@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getActiveOperations, createEvent, updateEvent, deleteEvent, getAircrafts } from '../services/api';
-import { AEROPUERTOS, UNIDADES_EJERCITO, CLASIFICACION_SDA } from '../constants/TacticalData';
+import { AEROPUERTOS} from '../constants/TacticalData';
 import Swal from 'sweetalert2';
 
 const CargaTactica = () => {
@@ -8,7 +8,7 @@ const CargaTactica = () => {
     const isMando = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(user.role?.toLowerCase());
 
     const [misiones, setMisiones] = useState([]);
-    const [flota, setFlota] = useState([]); // Se obtiene de MongoDB
+    const [flota, setFlota] = useState([]); 
     const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(false);
     const [showDestino, setShowDestino] = useState(false);
@@ -31,11 +31,14 @@ const CargaTactica = () => {
             // Filtrar misiones activas
             setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === user.elemento)));
             
-            // FILTRADO DE AERONAVES: La aeronave ya trae su Unidad, SDA y Tipo desde la BD.
-            // Solo filtramos las que están en servicio (E/S) y pertenecen a la unidad del usuario (si no es mando).
-            const filtradas = aircrafts.filter(a => 
-                a.estado === 'E/S' && (isMando || (a.unidad && a.unidad === user.elemento))
-            );
+            // CORRECCIÓN DE FILTRADO: 
+            // Si es Mando (Admin/Boss), ve todas las E/S de la flota.
+            // Si es Usuario, ve solo las E/S de su unidad.
+            const filtradas = aircrafts.filter(a => {
+                const enServicio = a.estado === 'E/S';
+                const tieneAcceso = isMando || (a.unidad && a.unidad === user.elemento);
+                return enServicio && tieneAcceso;
+            });
             
             setFlota(filtradas);
             
@@ -65,7 +68,6 @@ const CargaTactica = () => {
     };
 
     const handleAptSelect = (e, target) => {
-        // Los aeródromos se siguen tomando del archivo de constantes
         const apt = AEROPUERTOS.find(p => p.nombre === e.target.value);
         if (!apt) return;
         const la = fromDec(apt.lat, 'lat');
@@ -119,7 +121,6 @@ const CargaTactica = () => {
         const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
         
-        // El icono se decide según el SDA que ya viene de la aeronave de la base de datos
         const icono = CLASIFICACION_SDA[form.sda] || (form.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
 
         const payload = {
@@ -200,7 +201,6 @@ const CargaTactica = () => {
                                 value={form.aeronaveId} 
                                 onChange={e => {
                                     const a = flota.find(x => x._id === e.target.value);
-                                    // Al seleccionar, cargamos SDA, Matrícula y Unidad directamente desde el objeto de la BD
                                     if(a) setForm({...form, aeronaveId: a._id, sda: a.sda, matricula: a.matricula, elemento: a.unidad});
                                 }} 
                                 required 
@@ -240,6 +240,14 @@ const CargaTactica = () => {
                                 ))}
                                 <select style={styles.inputShort} value={form.latDir} onChange={e => setForm({...form, latDir: e.target.value})}>
                                     <option>S</option><option>N</option>
+                                </select>
+                            </div>
+                            <div style={{...styles.row, marginTop: '5px'}}>
+                                {['lngG', 'lngM', 'lngS'].map(f => (
+                                    <input key={f} type="number" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
+                                ))}
+                                <select style={styles.inputShort} value={form.lngDir} onChange={e => setForm({...form, lngDir: e.target.value})}>
+                                    <option>W</option><option>E</option>
                                 </select>
                             </div>
                         </div>
