@@ -60,15 +60,9 @@ const CargaTactica = () => {
             elemento: aeroInfo.unidad || aeroInfo.elemento || userElemento,
             isRealTime: true,
             status: 'operativo',
-            // Datos críticos extraídos de la base de datos:
             tipoIcono: aeroInfo.tipoIcono, 
             matricula: aeroInfo.matricula,
-            aeronave: aeroInfo.sda,
-            ubicacion: {
-                nombre: "CARGA TÁCTICA",
-                lat: 0,
-                lng: 0
-            }
+            aeronave: aeroInfo.sda
         };
 
         try {
