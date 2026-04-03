@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getEvents, createEvent, deleteEvent, updateEvent, getAvailableAircraft } from '../services/EventService';
+import { TIPOS_DE_APOYO } from '../constants/TacticalData'; // Importación de la matriz solicitada
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
@@ -15,7 +16,6 @@ const Operaciones = () => {
     const [availableAircraft, setAvailableAircraft] = useState([]);
     const [loadingAircraft, setLoadingAircraft] = useState(false);
 
-    // Definición de roles con capacidad de mando global
     const rolesMando = ['admin', 'boss', 'director', 'oto', 'otoae'];
     const esMando = rolesMando.includes(role);
 
@@ -23,13 +23,6 @@ const Operaciones = () => {
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
         "SEC AE 11", "ESC AV EXPL ATQ 602", "EC AE", "SEC AE DR", 
         "SEC AE MTE 12", "B AB MANT AERON 601", "SEC AE MTE 3", "SEC AE 9"
-    ];
-
-    const missionOptions = [
-        { label: 'Sostenimiento', value: 'Sostenimiento', color: '#3498db' },
-        { label: 'Fuerza Operativa', value: 'Fuerza Operativa', color: '#e67e22' },
-        { label: 'Educación', value: 'Educacion', color: '#2ecc71' },
-        { label: 'Otros', value: 'Otros', color: '#000000' }
     ];
 
     const etapaColors = {
@@ -42,7 +35,10 @@ const Operaciones = () => {
         title: '', start: '', end: '', color: '#3498db', notes: '',
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
         etapa: 'recepcion', 
-        unidadesInvolucradas: []
+        unidadesInvolucradas: [],
+        // Nuevos campos agregados
+        pntoContactoNom: '', pntoContactoTel: '',
+        responsableNom: '', responsableTel: ''
     });
 
     useEffect(() => { 
@@ -118,15 +114,6 @@ const Operaciones = () => {
         return `${day}/${month}/${year}`;
     };
 
-    const handleMissionChange = (valor) => {
-        const mision = missionOptions.find(m => m.value === valor);
-        setFormData({ 
-            ...formData, 
-            tipoApoyo: valor, 
-            color: mision ? mision.color : '#7f8c8d' 
-        });
-    };
-
     const toggleUnidad = (unidad) => {
         const current = formData.unidadesInvolucradas;
         const updated = current.includes(unidad) 
@@ -135,13 +122,10 @@ const Operaciones = () => {
         setFormData({ ...formData, unidadesInvolucradas: updated });
     };
 
-    // CORRECCIÓN: Se procesa la cantidad como número para evitar el "undefined"
     const addSda = () => {
         if (!formData.sdaSelected || formData.sdaSelected.trim() === "") return;
-        
         const cantidad = parseInt(formData.sdaCantidad) || 1;
         const nuevoSda = `${cantidad}x ${formData.sdaSelected}`;
-        
         if (!formData.sdaListado.includes(nuevoSda)) {
             setFormData(prev => ({ 
                 ...prev, 
@@ -180,7 +164,12 @@ const Operaciones = () => {
             etapa: formData.etapa,
             esGlobal: publicarGlobal,
             notes: `SdA: ${formData.sdaListado.join(', ')} | Obs: ${cleanNotes}`,
-            elemento: finalElemento
+            elemento: finalElemento,
+            // Datos de contacto y responsables
+            pntoContactoNom: formData.pntoContactoNom,
+            pntoContactoTel: formData.pntoContactoTel,
+            responsableNom: formData.responsableNom,
+            responsableTel: formData.responsableTel
         };
 
         try {
@@ -202,7 +191,9 @@ const Operaciones = () => {
         setFormData({ 
             title: '', start: '', end: '', color: '#3498db', notes: '', 
             tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
-            etapa: 'recepcion', unidadesInvolucradas: []
+            etapa: 'recepcion', unidadesInvolucradas: [],
+            pntoContactoNom: '', pntoContactoTel: '',
+            responsableNom: '', responsableTel: ''
         });
         setPublicarGlobal(false);
         setIsEditing(false);
@@ -229,7 +220,11 @@ const Operaciones = () => {
             sdaListado: Array.isArray(ev.sdaListado) ? ev.sdaListado : [], 
             tipoApoyo: ev.tipoApoyo || '',
             etapa: ev.etapa || 'recepcion',
-            unidadesInvolucradas: ev.elemento ? ev.elemento.split(', ') : []
+            unidadesInvolucradas: ev.elemento ? ev.elemento.split(', ') : [],
+            pntoContactoNom: ev.pntoContactoNom || '',
+            pntoContactoTel: ev.pntoContactoTel || '',
+            responsableNom: ev.responsableNom || '',
+            responsableTel: ev.responsableTel || ''
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -276,12 +271,14 @@ const Operaciones = () => {
                     <form onSubmit={handleSubmit} style={styles.form}>
                         <input type="text" required placeholder="Nombre de la Misión" value={formData.title} 
                                onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} />
+                        
                         <div style={styles.row}>
                             <div style={{flex: 1}}><label style={styles.label}>H-Inicio</label>
                             <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/></div>
                             <div style={{flex: 1}}><label style={styles.label}>H-Fin</label>
                             <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
                         </div>
+
                         {esMando && (
                             <div style={styles.unidadSelector}>
                                 <label style={styles.label}>Asignar Responsables:</label>
@@ -295,10 +292,32 @@ const Operaciones = () => {
                                 </div>
                             </div>
                         )}
-                        <select value={formData.tipoApoyo} onChange={e => handleMissionChange(e.target.value)} style={styles.input} required>
-                            <option value="">Tipo de Misión...</option>
-                            {missionOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+
+                        {/* SECCIÓN: PUNTO DE CONTACTO */}
+                        <div style={styles.sectionTitle}>PUNTO DE CONTACTO</div>
+                        <div style={styles.row}>
+                            <input type="text" placeholder="Grado / Nombre / Apellido" value={formData.pntoContactoNom} 
+                                   onChange={e => setFormData({...formData, pntoContactoNom: e.target.value})} style={{...styles.input, flex: 2}} />
+                            <input type="text" placeholder="Teléfono" value={formData.pntoContactoTel} 
+                                   onChange={e => setFormData({...formData, pntoContactoTel: e.target.value})} style={{...styles.input, flex: 1}} />
+                        </div>
+
+                        {/* SECCIÓN: TIPO DE APOYO */}
+                        <div style={styles.sectionTitle}>TIPO DE APOYO</div>
+                        <select value={formData.tipoApoyo} onChange={e => setFormData({...formData, tipoApoyo: e.target.value})} style={styles.input} required>
+                            <option value="">Seleccione Tipo de Apoyo...</option>
+                            {TIPOS_DE_APOYO.map((apoyo, idx) => <option key={idx} value={apoyo}>{apoyo}</option>)}
                         </select>
+
+                        {/* SECCIÓN: RESPONSABLE */}
+                        <div style={styles.sectionTitle}>RESPONSABLE</div>
+                        <div style={styles.row}>
+                            <input type="text" placeholder="Comandante de Aeronave / Responsable" value={formData.responsableNom} 
+                                   onChange={e => setFormData({...formData, responsableNom: e.target.value})} style={{...styles.input, flex: 2}} />
+                            <input type="text" placeholder="Teléfono" value={formData.responsableTel} 
+                                   onChange={e => setFormData({...formData, responsableTel: e.target.value})} style={{...styles.input, flex: 1}} />
+                        </div>
+
                         <div style={styles.sdaBox}>
                             <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
                                 <option value="">{loadingAircraft ? "Cargando Flota..." : "Asignar Aeronave..."}</option>
@@ -307,18 +326,22 @@ const Operaciones = () => {
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
                             <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
                         </div>
+
                         <div style={styles.tagWrap}>
                             {formData.sdaListado.map((s, i) => (
                                 <span key={i} style={styles.tag}>{s} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
                             ))}
                         </div>
+
                         <textarea placeholder="Observaciones de ejecución..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
+                        
                         <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
                             {isEditing ? "CONFIRMAR CAMBIOS" : "GRABAR MONITOR"}
                         </button>
                         {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px'}}>CANCELAR</button>}
                     </form>
                 </div>
+
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Órdenes</h3>
                     <input type="text" placeholder="🔍 Buscar misión, unidad..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
@@ -356,6 +379,7 @@ const styles = {
     grid: { display: 'grid', gap: '25px', alignItems: 'start' },
     card: { background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f0f2f5' },
     title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '12px', fontSize: '1.2rem', color: '#1b3a57', marginBottom: '20px' },
+    sectionTitle: { fontSize: '0.85rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '10px', borderLeft: '3px solid #3498db', paddingLeft: '8px' },
     form: { display: 'flex', flexDirection: 'column', gap: '15px' },
     btnGlobal: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold' },
     etapaWrapper: { marginBottom: '20px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' },
