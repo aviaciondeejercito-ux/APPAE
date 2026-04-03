@@ -43,11 +43,11 @@ const CalendarPage = () => {
         }
     };
 
-    const getEventColor = (tipo, elemento) => {
-        const el = elemento ? elemento.toUpperCase() : '';
+    const getEventColor = (tipo, creadorUnidad, esGlobal) => {
+        const creador = creadorUnidad ? creadorUnidad.toUpperCase() : '';
         
-        // Prioridad SEC AE: Si el elemento pertenece a cualquier SEC AE, color Rojo
-        if (el.includes('SEC AE')) return '#dc3545';
+        // REGLA SOLICITADA: Solo rojo si es GLOBAL y el CREADOR es SEC AE
+        if (esGlobal && creador.includes('SEC AE')) return '#dc3545';
 
         if (!tipo) return '#6c757d';
         const t = tipo.toUpperCase();
@@ -173,7 +173,7 @@ const CalendarPage = () => {
                     initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
                     locale={esLocale}
                     events={events.map(ev => {
-                        const colorBase = getEventColor(ev.tipoApoyo, ev.elemento);
+                        const colorBase = getEventColor(ev.tipoApoyo, ev.creadorUnidad, ev.esGlobal);
                         let prefix = '';
                         if (ev.etapa === 'recepcion') prefix = '🟡 ';
                         if (ev.etapa === 'revision') prefix = '🔵 ';
@@ -223,7 +223,7 @@ const CalendarPage = () => {
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sost.</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Op.</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Edu.</div>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#dc3545'}}></span> SEC AE</div>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#dc3545'}}></span> Global SEC AE</div>
                 </div>
                 <div style={styles.legendGroup}>
                     <span style={styles.legendGroupTitle}>ESTADOS:</span>
