@@ -75,8 +75,14 @@ export const getActiveOperations = async () => {
 
 export const createEvent = (eventData) => {
     const userElemento = localStorage.getItem('elemento');
-    const latVal = eventData.ubicacion?.lat !== undefined ? Number(eventData.ubicacion.lat) : 0;
-    const lngVal = eventData.ubicacion?.lng !== undefined ? Number(eventData.ubicacion.lng) : 0;
+    
+    // Normalización de Coordenadas de Origen
+    const latOri = eventData.origen?.lat !== undefined ? Number(eventData.origen.lat) : 0;
+    const lngOri = eventData.origen?.lng !== undefined ? Number(eventData.origen.lng) : 0;
+
+    // Normalización de Coordenadas de Destino
+    const latDes = eventData.destino?.lat !== undefined ? Number(eventData.destino.lat) : 0;
+    const lngDes = eventData.destino?.lng !== undefined ? Number(eventData.destino.lng) : 0;
 
     const dataNormalized = {
         ...eventData,
@@ -90,12 +96,24 @@ export const createEvent = (eventData) => {
         matricula: eventData.matricula?.toUpperCase().trim() || "",
         status: eventData.status || 'programado',
         notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
-        lat: latVal,
-        lng: lngVal,
+        // Mantenemos lat/lng raíz para compatibilidad con el radar actual
+        lat: latOri,
+        lng: lngOri,
+        // Estructura duplicada para origen y destino
+        origen: {
+            nombre: (eventData.origen?.nombre || "ORIGEN PENDIENTE").toUpperCase(),
+            lat: latOri,
+            lng: lngOri
+        },
+        destino: {
+            nombre: (eventData.destino?.nombre || "DESTINO PENDIENTE").toUpperCase(),
+            lat: latDes,
+            lng: lngDes
+        },
         ubicacion: {
-            nombre: (eventData.ubicacion?.nombre || "POSICIÓN POR COORDENADAS").toUpperCase(),
-            lat: latVal,
-            lng: lngVal
+            nombre: (eventData.origen?.nombre || "POSICIÓN TÁCTICA").toUpperCase(),
+            lat: latOri,
+            lng: lngOri
         },
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
     };
@@ -103,8 +121,10 @@ export const createEvent = (eventData) => {
 };
 
 export const updateEvent = (id, eventData) => {
-    const latVal = eventData.ubicacion?.lat !== undefined ? Number(eventData.ubicacion.lat) : undefined;
-    const lngVal = eventData.ubicacion?.lng !== undefined ? Number(eventData.ubicacion.lng) : undefined;
+    const latOri = eventData.origen?.lat !== undefined ? Number(eventData.origen.lat) : undefined;
+    const lngOri = eventData.origen?.lng !== undefined ? Number(eventData.origen.lng) : undefined;
+    const latDes = eventData.destino?.lat !== undefined ? Number(eventData.destino.lat) : undefined;
+    const lngDes = eventData.destino?.lng !== undefined ? Number(eventData.destino.lng) : undefined;
 
     const dataNormalized = {
         ...eventData,
@@ -113,12 +133,22 @@ export const updateEvent = (id, eventData) => {
         aeronave: eventData.aeronave?.toUpperCase().trim(),
         matricula: eventData.matricula?.toUpperCase().trim(),
         notasMarginales: (eventData.notasMarginales || "").toUpperCase(),
-        lat: latVal,
-        lng: lngVal,
-        ubicacion: eventData.ubicacion ? {
-            nombre: (eventData.ubicacion.nombre || "").toUpperCase(),
-            lat: latVal,
-            lng: lngVal
+        lat: latOri,
+        lng: lngOri,
+        origen: latOri !== undefined ? {
+            nombre: (eventData.origen?.nombre || "").toUpperCase(),
+            lat: latOri,
+            lng: lngOri
+        } : undefined,
+        destino: latDes !== undefined ? {
+            nombre: (eventData.destino?.nombre || "").toUpperCase(),
+            lat: latDes,
+            lng: lngDes
+        } : undefined,
+        ubicacion: latOri !== undefined ? {
+            nombre: (eventData.origen?.nombre || "").toUpperCase(),
+            lat: latOri,
+            lng: lngOri
         } : undefined,
         sdaListado: eventData.sdaListado?.map(s => s.toUpperCase().trim()) || []
     };
@@ -222,7 +252,6 @@ export const getAstronomyData = async (lat, lng) => {
 
 /**
  * SERVICIOS DE LÓGICA DE NEGOCIO (SINCRO JOKER - ESTÁNDAR DE SEGURIDAD)
- * Implementación de auditoría y validación de transacciones.
  */
 export const getJackpotStatus = () => API.get('/casino/jackpot');
 
@@ -231,10 +260,8 @@ export const processBet = async (betData) => {
         ...betData,
         amount: Number(betData.amount),
         timestamp: new Date(),
-        // Aplicación de regla: 1% contribución neta al pozo
         jackpotContribution: Number(betData.amount) * 0.01
     };
-    // Implementación de actualización atómica según estándar MongoDB definido
     return API.post('/casino/bet', dataNormalized);
 };
 
