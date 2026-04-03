@@ -59,7 +59,7 @@ const CargaTactica = () => {
             title: title.toUpperCase().trim(),
             elemento: aeroInfo.unidad || aeroInfo.elemento || userElemento,
             isRealTime: true,
-            estado: 'E/S',
+            status: 'E/S',
             // Datos críticos extraídos de la base de datos:
             tipoIcono: aeroInfo.tipoIcono, 
             matricula: aeroInfo.matricula,
