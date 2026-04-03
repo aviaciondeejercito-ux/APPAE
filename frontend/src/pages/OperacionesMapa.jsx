@@ -11,15 +11,18 @@ const crearIconoTactico = (tipo) => {
     const tipoNormalizado = tipo?.toLowerCase().trim();
     const color = tipoNormalizado === 'ala_fija' ? '#3498db' : '#e67e22';
     
+    // SVG centrado exactamente en el viewport 100x100
     const svg = tipoNormalizado === 'ala_fija' 
-        ? `<polygon points="50,15 90,85 50,70 10,85" fill="${color}" stroke="white" stroke-width="5"/>`
-        : `<circle cx="50" cy="50" r="35" fill="${color}" stroke="white" stroke-width="5"/><line x1="10" y1="50" x2="90" y2="50" stroke="white" stroke-width="8"/><line x1="50" y1="10" x2="50" y2="90" stroke="white" stroke-width="8"/>`;
+        ? `<polygon points="50,20 85,80 50,65 15,80" fill="${color}" stroke="white" stroke-width="5"/>`
+        : `<circle cx="50" cy="50" r="30" fill="${color}" stroke="white" stroke-width="5"/><line x1="15" y1="50" x2="85" y2="50" stroke="white" stroke-width="8"/><line x1="50" y1="15" x2="50" y2="85" stroke="white" stroke-width="8"/>`;
 
     return L.divIcon({
         className: 'label-tactica-custom',
-        html: `<svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">${svg}</svg>`,
+        html: `<div style="display:flex; justify-content:center; align-items:center; width:30px; height:30px;">
+                <svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">${svg}</svg>
+               </div>`,
         iconSize: [30, 30],
-        iconAnchor: [15, 15],
+        iconAnchor: [15, 15], // Anclaje exacto en el centro para evitar desplazamientos con el zoom
     });
 };
 
@@ -151,7 +154,6 @@ const OperacionesMapa = () => {
             <style>{`
                 .label-tactica-custom { background: transparent !important; border: none !important; }
                 
-                /* Estilo mejorado para el Tooltip (Matrícula) */
                 .custom-tooltip-radar {
                     background: rgba(0, 20, 30, 0.85) !important;
                     border: 1px solid #00d4ff !important;
@@ -175,7 +177,6 @@ const styles = {
     header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.95)', color: '#00d4ff', padding: '12px 30px', border: '1px solid #00d4ff', textAlign: 'center', borderRadius: '4px', boxShadow: '0 0 20px rgba(0,0,0,0.8)' },
     subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #333', paddingTop: '4px', letterSpacing: '1px' },
     
-    // Estilos internos del Tooltip
     tooltipContent: { display: 'flex', alignItems: 'center', gap: '5px', pointerEvents: 'none' },
     tooltipText: { color: '#00f2ff', fontWeight: 'bold', fontSize: '11px', fontFamily: 'monospace', textShadow: '0 0 5px rgba(0, 242, 255, 0.5)' },
     tooltipIcon: { fontSize: '10px' },
