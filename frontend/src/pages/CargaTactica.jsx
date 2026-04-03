@@ -65,9 +65,14 @@ const CargaTactica = () => {
         return () => clearInterval(interval);
     }, [cargarDatos]);
 
+    // Función de conversión robustecida
     const toDec = (g, m, s, dir) => {
-        const d = Math.abs(parseFloat(g || 0)) + (parseFloat(m || 0) / 60) + (parseFloat(s || 0) / 3600);
-        return (dir === 'S' || dir === 'W') ? d * -1 : d;
+        const deg = Math.abs(parseFloat(g) || 0);
+        const min = (parseFloat(m) || 0) / 60;
+        const sec = (parseFloat(s) || 0) / 3600;
+        let dec = deg + min + sec;
+        if (dir === 'S' || dir === 'W') dec = dec * -1;
+        return parseFloat(dec.toFixed(6));
     };
 
     const fromDec = (dec, type) => {
@@ -149,11 +154,11 @@ const CargaTactica = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // CÁLCULO SEGURO DE COORDENADAS
+        // CÁLCULO EXPLÍCITO ANTES DEL ENVÍO
         const currentLat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const currentLng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
-        const destLat = showDestino ? toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir) : 0;
-        const destLng = showDestino ? toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) : 0;
+        const destLat = showDestino ? toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir) : currentLat;
+        const destLng = showDestino ? toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) : currentLng;
         
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
 
@@ -166,17 +171,19 @@ const CargaTactica = () => {
             lat: currentLat, 
             lng: currentLng,
             ubicacion: { 
-                nombre: form.locNombre || "POSICIÓN MANUAL", 
+                nombre: (form.locNombre || "POSICIÓN MANUAL").toUpperCase(), 
                 salida: { 
-                    nombre: form.locNombre || "ORIGEN", 
+                    nombre: (form.locNombre || "ORIGEN").toUpperCase(), 
                     lat: currentLat, 
                     lng: currentLng 
                 },
                 llegada: { 
-                    nombre: showDestino ? (form.dNombre || "DESTINO") : "", 
+                    nombre: showDestino ? (form.dNombre || "DESTINO").toUpperCase() : (form.locNombre || "ORIGEN").toUpperCase(), 
                     lat: destLat, 
                     lng: destLng 
-                }
+                },
+                lat: currentLat,
+                lng: currentLng
             },
             misionDetalle: { 
                 aeronave: form.sda, 
@@ -191,8 +198,13 @@ const CargaTactica = () => {
         try {
             editingId ? await updateEvent(editingId, payload) : await createEvent(payload);
             Swal.fire('ÉXITO', editingId ? 'Vector actualizado' : 'Operación lanzada', 'success');
-            setForm(initialState); setEditingId(null); setShowDestino(false); cargarDatos();
-        } catch (err) { Swal.fire('Error', 'Falla en el envío del despacho', 'error'); }
+            setForm(initialState); 
+            setEditingId(null); 
+            setShowDestino(false); 
+            cargarDatos();
+        } catch (err) { 
+            Swal.fire('Error', 'Falla en el envío del despacho', 'error'); 
+        }
     };
 
     const handleFinalizar = async (id) => {
