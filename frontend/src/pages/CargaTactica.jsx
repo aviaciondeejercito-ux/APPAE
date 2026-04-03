@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getActiveOperations, createEvent, deleteEvent, getAircrafts } from '../services/api';
+import { getActiveOperations, createEvent, updateEvent, deleteEvent, getAircrafts } from '../services/api';
 import { AEROPUERTOS } from '../constants/TacticalData';
 import Swal from 'sweetalert2';
 
@@ -21,17 +21,18 @@ const CargaTactica = () => {
     const [misiones, setMisiones] = useState([]);
     const [aeronaves, setAeronaves] = useState([]); 
     const [loading, setLoading] = useState(false);
+    
+    // Estados del Formulario
+    const [editingId, setEditingId] = useState(null); // Para saber si editamos o creamos
     const [title, setTitle] = useState('');
     const [selectedMatricula, setSelectedMatricula] = useState('');
     const [notasMarginales, setNotasMarginales] = useState('');
 
-    // Estado para Coordenadas de Origen
     const [coordOri, setCoordOri] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
-    
-    // Estado para Coordenadas de Destino
     const [coordDes, setCoordDes] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
 
     const fromDecimal = (decimal) => {
+        if (!decimal) return { g: '', m: '', s: '' };
         const absVal = Math.abs(decimal);
         const g = Math.floor(absVal);
         const m = Math.floor((absVal - g) * 60);
@@ -39,9 +40,9 @@ const CargaTactica = () => {
         return { g, m, s };
     };
 
-    // Manejador de selección Dinámico
-    const handleSelectLugar = (valor, tipo) => {
-        const aero = AEROPUERTOS.find(a => a.nombre === valor);
+    const handleSelectLugar = (nombreAero, tipo) => {
+        if (!nombreAero) return;
+        const aero = AEROPUERTOS.find(a => a.nombre === nombreAero);
         const setter = tipo === 'origen' ? setCoordOri : setCoordDes;
 
         if (aero) {
@@ -52,14 +53,11 @@ const CargaTactica = () => {
                 latG: latGMS.g, latM: latGMS.m, latS: latGMS.s,
                 lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s
             });
-        } else {
-            // Permite el cambio manual sin borrar
-            setter(prev => ({ ...prev, nombre: valor.toUpperCase() }));
         }
     };
 
     const toDecimal = (g, m, s) => {
-        if (!g && g !== 0) return null;
+        if (g === '' || g === null) return null;
         const dec = Math.abs(parseFloat(g)) + (parseFloat(m || 0) / 60) + (parseFloat(s || 0) / 3600);
         return dec * -1; 
     };
@@ -69,7 +67,6 @@ const CargaTactica = () => {
         try {
             const evRes = await getActiveOperations();
             const events = Array.isArray(evRes) ? evRes : [];
-            // Reflejamos todos los vuelos operativos/en curso según permisos
             setMisiones(events.filter(ev => isMando || ev.elemento === userElemento));
 
             const airRes = await getAircrafts();
@@ -85,23 +82,58 @@ const CargaTactica = () => {
         cargarDatos();
     }, [cargarDatos]);
 
+    // Función para cargar datos en el formulario para editar
+    const prepararEdicion = (m) => {
+        setEditingId(m._id);
+        setTitle(m.title);
+        setSelectedMatricula(m.matricula);
+        setNotasMarginales(m.notasMarginales || '');
+        
+        const latOri = fromDecimal(m.origen?.lat);
+        const lngOri = fromDecimal(m.origen?.lng);
+        setCoordOri({
+            nombre: m.origen?.nombre || '',
+            latG: latOri.g, latM: latOri.m, latS: latOri.s,
+            lngG: lngOri.g, lngM: lngOri.m, lngS: lngOri.s
+        });
+
+        const latDes = fromDecimal(m.destino?.lat);
+        const lngDes = fromDecimal(m.destino?.lng);
+        setCoordDes({
+            nombre: m.destino?.nombre || '',
+            latG: latDes.g, latM: latDes.m, latS: latDes.s,
+            lngG: lngDes.g, lngM: lngDes.m, lngS: lngDes.s
+        });
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const resetForm = () => {
+        setEditingId(null);
+        setTitle('');
+        setSelectedMatricula('');
+        setNotasMarginales('');
+        setCoordOri({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
+        setCoordDes({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         const aeroInfo = aeronaves.find(a => a.matricula === selectedMatricula);
 
-        if (!title.trim() || !selectedMatricula || !aeroInfo) {
+        if (!title.trim() || !selectedMatricula) {
             Swal.fire('Atención', 'Complete los datos básicos', 'warning');
             return;
         }
 
         const payload = {
             title: title.toUpperCase().trim(),
-            elemento: aeroInfo.unidad || aeroInfo.elemento || userElemento,
+            elemento: aeroInfo ? (aeroInfo.unidad || aeroInfo.elemento) : userElemento,
             isRealTime: true,
             status: 'operativo', 
-            tipoIcono: aeroInfo.tipoIcono, 
-            matricula: aeroInfo.matricula,
-            aeronave: aeroInfo.sda,
+            matricula: selectedMatricula,
+            aeronave: aeroInfo ? aeroInfo.sda : '',
+            tipoIcono: aeroInfo ? aeroInfo.tipoIcono : 'ala_rotativa',
             notasMarginales: notasMarginales.toUpperCase().trim(),
             origen: {
                 nombre: (coordOri.nombre || "ORIGEN").toUpperCase(),
@@ -116,23 +148,17 @@ const CargaTactica = () => {
         };
 
         try {
-            await createEvent(payload);
-            Swal.fire({ 
-                title: 'OPERACIÓN LANZADA', 
-                icon: 'success', 
-                timer: 1500, 
-                showConfirmButton: false,
-                background: '#1a1a1a',
-                color: '#fff'
-            });
-            setTitle('');
-            setSelectedMatricula('');
-            setNotasMarginales('');
-            setCoordOri({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
-            setCoordDes({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
+            if (editingId) {
+                await updateEvent(editingId, payload);
+                Swal.fire({ title: 'VUELO ACTUALIZADO', icon: 'success', timer: 1500, showConfirmButton: false, background: '#1a1a1a', color: '#fff' });
+            } else {
+                await createEvent(payload);
+                Swal.fire({ title: 'OPERACIÓN LANZADA', icon: 'success', timer: 1500, showConfirmButton: false, background: '#1a1a1a', color: '#fff' });
+            }
+            resetForm();
             cargarDatos();
         } catch (err) {
-            Swal.fire('Error', 'No se pudo registrar el vuelo.', 'error');
+            Swal.fire('Error', 'No se pudo procesar la operación.', 'error');
         }
     };
 
@@ -174,50 +200,72 @@ const CargaTactica = () => {
             <div style={styles.container}>
                 <div style={styles.card}>
                     <div style={styles.headerDecoration}></div>
-                    <h2 style={styles.headerTitle}>🛩️ CARGA DE VUELOS</h2>
+                    <h2 style={styles.headerTitle}>{editingId ? '📝 EDITAR VUELO' : '🛩️ CARGA DE VUELOS'}</h2>
                     <p style={styles.subHeader}>OPERACIONES DE VUELO - {userElemento}</p>
                     
                     <form onSubmit={handleSubmit}>
-                        <div style={styles.fieldGroup}>
-                            <label style={styles.label}>INDICATIVO (CALLSIGN)</label>
-                            <input style={styles.input} value={title} onChange={e => setTitle(e.target.value)} placeholder="EJ: HALCON 1" required />
-                        </div>
+                        <div style={styles.fieldGrid}>
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.label}>INDICATIVO (CALLSIGN)</label>
+                                <input style={styles.input} value={title} onChange={e => setTitle(e.target.value)} placeholder="EJ: HALCON 1" required />
+                            </div>
 
-                        <div style={styles.fieldGroup}>
-                            <label style={styles.label}>AERONAVE</label>
-                            <select style={styles.select} value={selectedMatricula} onChange={e => setSelectedMatricula(e.target.value)} required>
-                                <option value="">-- SELECCIONE MATRÍCULA --</option>
-                                {aeronaves.filter(a => a.estado === 'E/S').map(a => (
-                                    <option key={a._id} value={a.matricula}>{a.matricula} | {a.sda}</option>
-                                ))}
-                            </select>
+                            <div style={styles.fieldGroup}>
+                                <label style={styles.label}>AERONAVE</label>
+                                <select style={styles.select} value={selectedMatricula} onChange={e => setSelectedMatricula(e.target.value)} required>
+                                    <option value="">-- SELECCIONE --</option>
+                                    {aeronaves.filter(a => a.estado === 'E/S' || a.matricula === selectedMatricula).map(a => (
+                                        <option key={a._id} value={a.matricula}>{a.matricula} | {a.sda}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
 
                         <div style={styles.coordGrid}>
+                            {/* CAJA ORIGEN */}
                             <div style={styles.coordBox}>
                                 <label style={styles.labelBlue}>PUNTO DE ORIGEN</label>
-                                <input 
-                                    style={styles.inputSmall} 
-                                    list="optsLugares"
-                                    placeholder="ELEGIR O ESCRIBIR ORIGEN" 
-                                    value={coordOri.nombre} 
-                                    onChange={(e) => handleSelectLugar(e.target.value, 'origen')} 
-                                />
+                                <div style={{marginBottom: '10px'}}>
+                                    <select 
+                                        style={styles.selectSmall} 
+                                        onChange={(e) => handleSelectLugar(e.target.value, 'origen')}
+                                        value={AEROPUERTOS.some(a => a.nombre === coordOri.nombre) ? coordOri.nombre : ""}
+                                    >
+                                        <option value="">-- AERÓDROMO PRECARGADO --</option>
+                                        {AEROPUERTOS.map(a => <option key={a.nombre} value={a.nombre}>{a.nombre}</option>)}
+                                    </select>
+                                    <input 
+                                        style={styles.inputSmall} 
+                                        placeholder="O ESCRIBIR NOMBRE PERSONALIZADO" 
+                                        value={coordOri.nombre} 
+                                        onChange={(e) => setCoordOri({...coordOri, nombre: e.target.value.toUpperCase()})} 
+                                    />
+                                </div>
                                 <div style={styles.gmsWrapper}>
                                     <InputGMS label="LATITUD (S)" values={{g: coordOri.latG, m: coordOri.latM, s: coordOri.latS}} onChange={(f, v) => setCoordOri({...coordOri, [`lat${f}`]: v})} />
                                     <InputGMS label="LONGITUD (W)" values={{g: coordOri.lngG, m: coordOri.lngM, s: coordOri.lngS}} onChange={(f, v) => setCoordOri({...coordOri, [`lng${f}`]: v})} />
                                 </div>
                             </div>
 
+                            {/* CAJA DESTINO */}
                             <div style={styles.coordBox}>
                                 <label style={styles.labelRed}>PUNTO DE DESTINO</label>
-                                <input 
-                                    style={styles.inputSmall} 
-                                    list="optsLugares"
-                                    placeholder="ELEGIR O ESCRIBIR DESTINO" 
-                                    value={coordDes.nombre} 
-                                    onChange={(e) => handleSelectLugar(e.target.value, 'destino')} 
-                                />
+                                <div style={{marginBottom: '10px'}}>
+                                    <select 
+                                        style={styles.selectSmall} 
+                                        onChange={(e) => handleSelectLugar(e.target.value, 'destino')}
+                                        value={AEROPUERTOS.some(a => a.nombre === coordDes.nombre) ? coordDes.nombre : ""}
+                                    >
+                                        <option value="">-- AERÓDROMO PRECARGADO --</option>
+                                        {AEROPUERTOS.map(a => <option key={a.nombre} value={a.nombre}>{a.nombre}</option>)}
+                                    </select>
+                                    <input 
+                                        style={styles.inputSmall} 
+                                        placeholder="O ESCRIBIR NOMBRE PERSONALIZADO" 
+                                        value={coordDes.nombre} 
+                                        onChange={(e) => setCoordDes({...coordDes, nombre: e.target.value.toUpperCase()})} 
+                                    />
+                                </div>
                                 <div style={styles.gmsWrapper}>
                                     <InputGMS label="LATITUD (S)" values={{g: coordDes.latG, m: coordDes.latM, s: coordDes.latS}} onChange={(f, v) => setCoordDes({...coordDes, [`lat${f}`]: v})} />
                                     <InputGMS label="LONGITUD (W)" values={{g: coordDes.lngG, m: coordDes.lngM, s: coordDes.lngS}} onChange={(f, v) => setCoordDes({...coordDes, [`lng${f}`]: v})} />
@@ -230,13 +278,14 @@ const CargaTactica = () => {
                             <input style={styles.input} value={notasMarginales} onChange={e => setNotasMarginales(e.target.value)} placeholder="DATOS ADICIONALES DEL VUELO" />
                         </div>
 
-                        <datalist id="optsLugares">
-                            {AEROPUERTOS.map(a => <option key={a.nombre} value={a.nombre} />)}
-                        </datalist>
-
-                        <button type="submit" style={styles.btnLaunch} disabled={loading}>
-                            {loading ? 'PROCESANDO...' : 'LANZAR OPERACIÓN'}
-                        </button>
+                        <div style={{display: 'flex', gap: '10px'}}>
+                            <button type="submit" style={editingId ? styles.btnUpdate : styles.btnLaunch} disabled={loading}>
+                                {loading ? 'PROCESANDO...' : (editingId ? 'GUARDAR CAMBIOS' : 'LANZAR OPERACIÓN')}
+                            </button>
+                            {editingId && (
+                                <button type="button" onClick={resetForm} style={styles.btnCancel}>CANCELAR</button>
+                            )}
+                        </div>
                     </form>
                 </div>
 
@@ -257,11 +306,14 @@ const CargaTactica = () => {
                                     </div>
                                     <div style={styles.misionTitle}>{m.title}</div>
                                     <div style={styles.misionSub}>{m.aeronave}</div>
-                                    {m.notasMarginales && <div style={{fontSize: '0.7rem', color: '#8b949e', fontStyle: 'italic'}}>{m.notasMarginales}</div>}
+                                    {m.notasMarginales && <div style={{fontSize: '0.7rem', color: '#8b949e', fontStyle: 'italic', marginBottom: '5px'}}>{m.notasMarginales}</div>}
                                     <div style={styles.routeText}>
                                         {m.origen?.nombre || '---'} ➔ {m.destino?.nombre || '---'}
                                     </div>
-                                    <button onClick={() => handleFinalizar(m._id)} style={styles.btnFinish}>ARRIBO</button>
+                                    <div style={styles.logActionRow}>
+                                        <button onClick={() => prepararEdicion(m)} style={styles.btnEditLog}>EDITAR</button>
+                                        <button onClick={() => handleFinalizar(m._id)} style={styles.btnFinish}>ARRIBO</button>
+                                    </div>
                                 </div>
                             ))
                         )}
@@ -279,20 +331,24 @@ const styles = {
     headerDecoration: { position: 'absolute', top: 0, left: 0, width: '100%', height: '4px', background: 'linear-gradient(90deg, #0056b3, #00a8ff)' },
     headerTitle: { margin: '0 0 5px 0', fontSize: '1.4rem', color: '#fff', fontWeight: '800' },
     subHeader: { color: '#58a6ff', fontSize: '0.8rem', margin: '0 0 20px 0', fontWeight: '600' },
+    fieldGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '5px' },
     fieldGroup: { marginBottom: '15px' },
     label: { fontSize: '0.7rem', color: '#8b949e', display: 'block', marginBottom: '5px', fontWeight: '700' },
     labelBlue: { fontSize: '0.75rem', color: '#58a6ff', display: 'block', marginBottom: '10px', fontWeight: '800', borderBottom: '1px solid #30363d' },
     labelRed: { fontSize: '0.75rem', color: '#f85149', display: 'block', marginBottom: '10px', fontWeight: '800', borderBottom: '1px solid #30363d' },
     labelSub: { fontSize: '0.65rem', color: '#8b949e', marginBottom: '4px', fontWeight: 'bold' },
     input: { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff', fontSize: '1rem' },
-    inputSmall: { width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff', fontSize: '0.8rem', marginBottom: '10px' },
+    inputSmall: { width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff', fontSize: '0.75rem' },
     select: { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff' },
+    selectSmall: { width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #30363d', backgroundColor: '#161b22', color: '#58a6ff', fontSize: '0.75rem', marginBottom: '5px', fontWeight: 'bold' },
     coordGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' },
     coordBox: { backgroundColor: '#0d1117', padding: '15px', borderRadius: '8px', border: '1px solid #30363d' },
     gmsWrapper: { display: 'flex', flexDirection: 'column', gap: '10px' },
     gmsRow: { display: 'flex', gap: '5px' },
     inputGMS: { width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #30363d', backgroundColor: '#161b22', color: '#fff', fontSize: '0.85rem', textAlign: 'center' },
     btnLaunch: { width: '100%', padding: '16px', backgroundColor: '#1f6feb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '800', fontSize: '1rem', marginTop: '10px' },
+    btnUpdate: { width: '100%', padding: '16px', backgroundColor: '#238636', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '800', fontSize: '1rem', marginTop: '10px' },
+    btnCancel: { padding: '16px', backgroundColor: '#30363d', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '800', marginTop: '10px' },
     logCard: { backgroundColor: '#161b22', borderRadius: '12px', display: 'flex', flexDirection: 'column', height: '85vh', border: '1px solid #30363d' },
     logHeader: { padding: '15px', backgroundColor: '#0d1117', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #30363d' },
     radarText: { color: '#fff', fontWeight: '800', fontSize: '0.85rem' },
@@ -305,7 +361,9 @@ const styles = {
     misionTitle: { fontSize: '1.2rem', fontWeight: '900', color: '#fff' },
     misionSub: { fontSize: '0.75rem', color: '#8b949e', marginBottom: '5px' },
     routeText: { fontSize: '0.7rem', color: '#58a6ff', marginBottom: '10px', fontWeight: 'bold' },
-    btnFinish: { width: '100%', padding: '8px', fontSize: '0.7rem', backgroundColor: 'transparent', color: '#f85149', border: '1px solid #f85149', borderRadius: '4px', fontWeight: 'bold' },
+    logActionRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' },
+    btnEditLog: { padding: '8px', fontSize: '0.7rem', backgroundColor: '#1f6feb', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' },
+    btnFinish: { padding: '8px', fontSize: '0.7rem', backgroundColor: 'transparent', color: '#f85149', border: '1px solid #f85149', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' },
     emptyBox: { height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
     emptyMsg: { color: '#484f58', fontWeight: 'bold', fontSize: '0.8rem' }
 };
