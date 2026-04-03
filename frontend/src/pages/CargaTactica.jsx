@@ -143,7 +143,7 @@ const CargaTactica = () => {
             matricula: m.misionDetalle?.matricula || m.matricula, 
             aeronaveId: 'EDIT', 
             latG: pLa.g, latM: pLa.m, latS: pLa.s, latDir: pLa.dir, 
-            lngG: pLo.g, lngM: pLo.m, lngS: pLo.s, lngDir: pLo.dir, 
+            lngG: pLo.g, lngG: pLo.g, lngM: pLo.m, lngS: pLo.s, lngDir: pLo.dir, 
             locNombre: pos.nombre || 'POSICIÓN MANUAL',
             ...desData 
         });
@@ -153,13 +153,11 @@ const CargaTactica = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // 1. OBTENEMOS LOS VALORES DIRECTOS DEL FORMULARIO
         const latSalida = toDec(form.latG, form.latM, form.latS, form.latDir);
         const lngSalida = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
         
-        // 2. SI SHOWDESTINO ES FALSE, USAMOS LOS MISMOS DE SALIDA
-        const latLlegada = showDestino ? toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir) : latSalida;
-        const lngLlegada = showDestino ? toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) : lngSalida;
+        const latLlegada = showDestino ? toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir) : 0;
+        const lngLlegada = showDestino ? toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) : 0;
         
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
 
@@ -172,27 +170,22 @@ const CargaTactica = () => {
             lat: latSalida, 
             lng: lngSalida,
             ubicacion: { 
-                nombre: (form.locNombre || "POSICIÓN MANUAL").toUpperCase(), 
                 salida: { 
                     nombre: (form.locNombre || "ORIGEN").toUpperCase(), 
                     lat: latSalida, 
                     lng: lngSalida 
                 },
                 llegada: { 
-                    nombre: showDestino ? (form.dNombre || "DESTINO").toUpperCase() : (form.locNombre || "ORIGEN").toUpperCase(), 
+                    nombre: showDestino ? (form.dNombre || "DESTINO").toUpperCase() : "SIN DESTINO", 
                     lat: latLlegada, 
                     lng: lngLlegada 
-                },
-                lat: latSalida,
-                lng: lngSalida
+                }
             },
             misionDetalle: { 
                 aeronave: form.sda, 
                 matricula: form.matricula, 
                 tipoIcono: icono, 
-                isRealTime: true, 
-                lat: latSalida, 
-                lng: lngSalida 
+                isRealTime: true
             }
         };
 
