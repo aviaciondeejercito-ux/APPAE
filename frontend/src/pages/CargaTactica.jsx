@@ -23,6 +23,17 @@ const CargaTactica = () => {
     const [title, setTitle] = useState('');
     const [selectedMatricula, setSelectedMatricula] = useState('');
 
+    // Estados para Coordenadas (Grados, Minutos, Segundos)
+    const [coordOri, setCoordOri] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
+    const [coordDes, setCoordDes] = useState({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
+
+    // Función de conversión GMS a Decimal (considerando Sur y Oeste como negativos por defecto para Argentina)
+    const toDecimal = (g, m, s) => {
+        if (!g) return 0;
+        const dec = Math.abs(parseFloat(g)) + (parseFloat(m) / 60) + (parseFloat(s) / 3600);
+        return dec * -1; // Multiplicamos por -1 asumiendo coordenadas en Argentina (S y W)
+    };
+
     const cargarDatos = useCallback(async () => {
         setLoading(true);
         try {
@@ -49,7 +60,7 @@ const CargaTactica = () => {
         const aeroInfo = aeronaves.find(a => a.matricula === selectedMatricula);
 
         if (!title.trim() || !selectedMatricula || !aeroInfo) {
-            Swal.fire('Atención', 'Debe completar el indicativo y seleccionar una aeronave', 'warning');
+            Swal.fire('Atención', 'Complete los datos básicos', 'warning');
             return;
         }
 
@@ -60,14 +71,24 @@ const CargaTactica = () => {
             status: aeroInfo.estado, 
             tipoIcono: aeroInfo.tipoIcono, 
             matricula: aeroInfo.matricula,
-            aeronave: aeroInfo.sda
+            aeronave: aeroInfo.sda,
+            origen: {
+                nombre: coordOri.nombre.toUpperCase() || "ORIGEN",
+                lat: toDecimal(coordOri.latG, coordOri.latM, coordOri.latS),
+                lng: toDecimal(coordOri.lngG, coordOri.lngM, coordOri.lngS)
+            },
+            destino: {
+                nombre: coordDes.nombre.toUpperCase() || "DESTINO",
+                lat: toDecimal(coordDes.latG, coordDes.latM, coordDes.latS),
+                lng: toDecimal(coordDes.lngG, coordDes.lngM, coordDes.lngS)
+            }
         };
 
         try {
             await createEvent(payload);
             Swal.fire({ 
                 title: 'OPERACIÓN LANZADA', 
-                text: 'Vuelo registrado en el sistema de seguimiento', 
+                text: 'Vuelo registrado con plan de ruta', 
                 icon: 'success', 
                 timer: 1500, 
                 showConfirmButton: false,
@@ -76,6 +97,8 @@ const CargaTactica = () => {
             });
             setTitle('');
             setSelectedMatricula('');
+            setCoordOri({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
+            setCoordDes({ latG: '', latM: '', latS: '', lngG: '', lngM: '', lngS: '', nombre: '' });
             cargarDatos();
         } catch (err) {
             Swal.fire('Error', 'No se pudo registrar el vuelo.', 'error');
@@ -89,7 +112,6 @@ const CargaTactica = () => {
             icon: 'warning', 
             showCancelButton: true, 
             confirmButtonColor: '#c62828', 
-            cancelButtonColor: '#444',
             confirmButtonText: 'CONFIRMAR ARRIBO',
             background: '#1a1a1a',
             color: '#fff'
@@ -105,46 +127,59 @@ const CargaTactica = () => {
         }
     };
 
+    const InputGMS = ({ label, values, onChange }) => (
+        <div style={styles.gmsContainer}>
+            <label style={styles.labelSub}>{label}</label>
+            <div style={styles.gmsRow}>
+                <input style={styles.inputGMS} type="number" placeholder="G" value={values.g} onChange={e => onChange('G', e.target.value)} />
+                <input style={styles.inputGMS} type="number" placeholder="M" value={values.m} onChange={e => onChange('M', e.target.value)} />
+                <input style={styles.inputGMS} type="number" placeholder="S" value={values.s} onChange={e => onChange('S', e.target.value)} />
+            </div>
+        </div>
+    );
+
     return (
         <div style={styles.page}>
             <div style={styles.container}>
-                
-                {/* SECCIÓN IZQUIERDA: FORMULARIO DE DESPACHO */}
                 <div style={styles.card}>
                     <div style={styles.headerDecoration}></div>
-                    <h2 style={styles.headerTitle}>🛩️ DESPACHO TÁCTICO</h2>
-                    <p style={styles.subHeader}>SISTEMA DE GESTIÓN DE VUELO - {userElemento}</p>
+                    <h2 style={styles.headerTitle}>🛩️ CARGA DE VUELOS</h2>
+                    <p style={styles.subHeader}>OPERACIONES DE VUELO - {userElemento}</p>
                     
-                    <form onSubmit={handleSubmit} style={styles.form}>
+                    <form onSubmit={handleSubmit}>
                         <div style={styles.fieldGroup}>
-                            <label style={styles.label}>INDICATIVO DE VUELO (CALLSIGN)</label>
-                            <input 
-                                style={styles.input} 
-                                value={title} 
-                                onChange={e => setTitle(e.target.value)} 
-                                placeholder="EJ: HALCON 1" 
-                                required 
-                            />
+                            <label style={styles.label}>INDICATIVO (CALLSIGN)</label>
+                            <input style={styles.input} value={title} onChange={e => setTitle(e.target.value)} placeholder="EJ: HALCON 1" required />
                         </div>
 
                         <div style={styles.fieldGroup}>
-                            <label style={styles.label}>AERONAVE DISPONIBLE (SdA)</label>
-                            <select 
-                                style={styles.select}
-                                value={selectedMatricula}
-                                onChange={e => setSelectedMatricula(e.target.value)}
-                                required
-                            >
+                            <label style={styles.label}>AERONAVE</label>
+                            <select style={styles.select} value={selectedMatricula} onChange={e => setSelectedMatricula(e.target.value)} required>
                                 <option value="">-- SELECCIONE MATRÍCULA --</option>
-                                {aeronaves
-                                    .filter(a => a.estado === 'E/S') 
-                                    .map(a => (
-                                        <option key={a._id} value={a.matricula}>
-                                            {a.matricula} | {a.sda} ({a.unidad})
-                                        </option>
-                                    ))
-                                }
+                                {aeronaves.filter(a => a.estado === 'E/S').map(a => (
+                                    <option key={a._id} value={a.matricula}>{a.matricula} | {a.sda}</option>
+                                ))}
                             </select>
+                        </div>
+
+                        {/* BLOQUE COORDENADAS ORIGEN */}
+                        <div style={styles.coordBox}>
+                            <label style={styles.labelBlue}>PUNTO DE ORIGEN / SALIDA</label>
+                            <input style={styles.inputSmall} placeholder="NOMBRE LUGAR" value={coordOri.nombre} onChange={e => setCoordOri({...coordOri, nombre: e.target.value})} />
+                            <div style={styles.gmsWrapper}>
+                                <InputGMS label="LATITUD (S)" values={{g: coordOri.latG, m: coordOri.latM, s: coordOri.latS}} onChange={(f, v) => setCoordOri({...coordOri, [`lat${f}`]: v})} />
+                                <InputGMS label="LONGITUD (W)" values={{g: coordOri.lngG, m: coordOri.lngM, s: coordOri.lngS}} onChange={(f, v) => setCoordOri({...coordOri, [`lng${f}`]: v})} />
+                            </div>
+                        </div>
+
+                        {/* BLOQUE COORDENADAS DESTINO */}
+                        <div style={styles.coordBox}>
+                            <label style={styles.labelBlue}>PUNTO DE DESTINO / ARRIBO</label>
+                            <input style={styles.inputSmall} placeholder="NOMBRE LUGAR" value={coordDes.nombre} onChange={e => setCoordDes({...coordDes, nombre: e.target.value})} />
+                            <div style={styles.gmsWrapper}>
+                                <InputGMS label="LATITUD (S)" values={{g: coordDes.latG, m: coordDes.latM, s: coordDes.latS}} onChange={(f, v) => setCoordDes({...coordDes, [`lat${f}`]: v})} />
+                                <InputGMS label="LONGITUD (W)" values={{g: coordDes.lngG, m: coordDes.lngM, s: coordDes.lngS}} onChange={(f, v) => setCoordDes({...coordDes, [`lng${f}`]: v})} />
+                            </div>
                         </div>
 
                         <button type="submit" style={styles.btnLaunch} disabled={loading}>
@@ -153,20 +188,14 @@ const CargaTactica = () => {
                     </form>
                 </div>
 
-                {/* SECCIÓN DERECHA: RADAR / LOG */}
                 <div style={styles.logCard}>
                     <div style={styles.logHeader}>
                         <span style={styles.radarText}>📡 MONITOR DE OPERACIONES</span>
-                        <button onClick={cargarDatos} style={styles.btnRefresh} disabled={loading}>
-                            {loading ? '...' : 'SINCRO'}
-                        </button>
+                        <button onClick={cargarDatos} style={styles.btnRefresh}>SINCRO</button>
                     </div>
-                    
                     <div style={styles.scrollArea}>
                         {misiones.length === 0 ? (
-                            <div style={styles.emptyBox}>
-                                <p style={styles.emptyMsg}>SIN ACTIVIDAD EN EL RADAR</p>
-                            </div>
+                            <div style={styles.emptyBox}><p style={styles.emptyMsg}>SIN ACTIVIDAD</p></div>
                         ) : (
                             misiones.map(m => (
                                 <div key={m._id} style={styles.misionItem}>
@@ -176,203 +205,50 @@ const CargaTactica = () => {
                                     </div>
                                     <div style={styles.misionTitle}>{m.title}</div>
                                     <div style={styles.misionSub}>{m.aeronave}</div>
-                                    <button onClick={() => handleFinalizar(m._id)} style={styles.btnFinish}>
-                                        NOTIFICAR ARRIBO
-                                    </button>
+                                    <button onClick={() => handleFinalizar(m._id)} style={styles.btnFinish}>ARRIBO</button>
                                 </div>
                             ))
                         )}
                     </div>
-                    <div style={styles.logFooter}>
-                        MODO: TÁCTICO REAL-TIME
-                    </div>
                 </div>
-
             </div>
         </div>
     );
 };
 
 const styles = {
-    page: { 
-        padding: '30px', 
-        backgroundColor: '#0d1117', // Negro azulado profundo
-        minHeight: '100vh', 
-        color: '#e6edf3', 
-        fontFamily: "'Segoe UI', Tahoma, sans-serif" 
-    },
-    container: { 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 380px', 
-        gap: '25px', 
-        maxWidth: '1300px', 
-        margin: '0 auto' 
-    },
-    // Estilo de la Carta de Despacho
-    card: { 
-        backgroundColor: '#161b22', 
-        padding: '30px', 
-        borderRadius: '12px', 
-        boxShadow: '0 10px 30px rgba(0,0,0,0.7)', 
-        height: 'fit-content',
-        border: '1px solid #30363d',
-        position: 'relative',
-        overflow: 'hidden'
-    },
-    headerDecoration: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '4px',
-        background: 'linear-gradient(90deg, #0056b3, #00a8ff)'
-    },
-    headerTitle: { 
-        margin: '0 0 5px 0', 
-        fontSize: '1.6rem', 
-        color: '#fff', 
-        fontWeight: '800',
-        letterSpacing: '1px'
-    },
-    subHeader: {
-        color: '#58a6ff',
-        fontSize: '0.85rem',
-        margin: '0 0 25px 0',
-        fontWeight: '600',
-        textTransform: 'uppercase'
-    },
-    fieldGroup: { marginBottom: '20px' },
-    label: { 
-        fontSize: '0.75rem', 
-        color: '#8b949e', 
-        display: 'block', 
-        marginBottom: '8px', 
-        fontWeight: '700',
-        letterSpacing: '0.5px'
-    },
-    input: { 
-        width: '100%', 
-        padding: '14px', 
-        borderRadius: '6px', 
-        border: '1px solid #30363d', 
-        backgroundColor: '#0d1117', 
-        color: '#fff', 
-        fontSize: '1.1rem', 
-        boxSizing: 'border-box',
-        outline: 'none',
-        transition: 'border-color 0.3s'
-    },
-    select: { 
-        width: '100%', 
-        padding: '14px', 
-        borderRadius: '6px', 
-        border: '1px solid #30363d', 
-        backgroundColor: '#0d1117', 
-        color: '#fff', 
-        fontSize: '1rem', 
-        boxSizing: 'border-box',
-        cursor: 'pointer'
-    },
-    btnLaunch: { 
-        width: '100%', 
-        padding: '16px', 
-        backgroundColor: '#1f6feb', 
-        color: '#fff', 
-        border: 'none', 
-        borderRadius: '6px', 
-        cursor: 'pointer', 
-        fontWeight: '800', 
-        fontSize: '1.1rem', 
-        marginTop: '10px',
-        boxShadow: '0 4px 14px 0 rgba(0,118,255,0.39)',
-        transition: 'all 0.2s ease'
-    },
-
-    // Estilo del Monitor (Radar)
-    logCard: { 
-        backgroundColor: '#161b22', 
-        borderRadius: '12px', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        height: '80vh', 
-        border: '1px solid #30363d',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-    },
-    logHeader: { 
-        padding: '15px 20px', 
-        backgroundColor: '#0d1117', 
-        borderRadius: '12px 12px 0 0', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        borderBottom: '1px solid #30363d'
-    },
-    radarText: { color: '#fff', fontWeight: '800', fontSize: '0.9rem', letterSpacing: '1px' },
-    btnRefresh: { 
-        padding: '6px 15px', 
-        fontSize: '0.7rem', 
-        backgroundColor: '#30363d', 
-        color: '#c9d1d9', 
-        border: '1px solid #8b949e', 
-        borderRadius: '20px', 
-        cursor: 'pointer',
-        fontWeight: 'bold'
-    },
+    page: { padding: '30px', backgroundColor: '#0d1117', minHeight: '100vh', color: '#e6edf3', fontFamily: "'Segoe UI', sans-serif" },
+    container: { display: 'grid', gridTemplateColumns: '1fr 380px', gap: '25px', maxWidth: '1300px', margin: '0 auto' },
+    card: { backgroundColor: '#161b22', padding: '25px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.7)', border: '1px solid #30363d', position: 'relative' },
+    headerDecoration: { position: 'absolute', top: 0, left: 0, width: '100%', height: '4px', background: 'linear-gradient(90deg, #0056b3, #00a8ff)' },
+    headerTitle: { margin: '0 0 5px 0', fontSize: '1.4rem', color: '#fff', fontWeight: '800' },
+    subHeader: { color: '#58a6ff', fontSize: '0.8rem', margin: '0 0 20px 0', fontWeight: '600' },
+    fieldGroup: { marginBottom: '15px' },
+    label: { fontSize: '0.7rem', color: '#8b949e', display: 'block', marginBottom: '5px', fontWeight: '700' },
+    labelBlue: { fontSize: '0.75rem', color: '#58a6ff', display: 'block', marginBottom: '10px', fontWeight: '800', borderBottom: '1px solid #30363d' },
+    labelSub: { fontSize: '0.65rem', color: '#8b949e', marginBottom: '4px', fontWeight: 'bold' },
+    input: { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff', fontSize: '1rem' },
+    inputSmall: { width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff', fontSize: '0.8rem', marginBottom: '10px' },
+    select: { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #30363d', backgroundColor: '#0d1117', color: '#fff' },
+    coordBox: { backgroundColor: '#0d1117', padding: '15px', borderRadius: '8px', border: '1px solid #30363d', marginBottom: '15px' },
+    gmsWrapper: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' },
+    gmsRow: { display: 'flex', gap: '5px' },
+    inputGMS: { width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #30363d', backgroundColor: '#161b22', color: '#fff', fontSize: '0.85rem', textAlign: 'center' },
+    btnLaunch: { width: '100%', padding: '16px', backgroundColor: '#1f6feb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '800', fontSize: '1rem', marginTop: '10px' },
+    logCard: { backgroundColor: '#161b22', borderRadius: '12px', display: 'flex', flexDirection: 'column', height: '85vh', border: '1px solid #30363d' },
+    logHeader: { padding: '15px', backgroundColor: '#0d1117', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #30363d' },
+    radarText: { color: '#fff', fontWeight: '800', fontSize: '0.85rem' },
+    btnRefresh: { padding: '5px 12px', fontSize: '0.7rem', backgroundColor: '#30363d', color: '#fff', border: 'none', borderRadius: '20px', cursor: 'pointer' },
     scrollArea: { flex: 1, overflowY: 'auto', padding: '15px' },
-    emptyBox: {
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        border: '2px dashed #30363d',
-        borderRadius: '8px'
-    },
-    emptyMsg: { color: '#484f58', fontWeight: 'bold', fontSize: '0.8rem' },
-    
-    // Items de misión en el log
-    misionItem: { 
-        backgroundColor: '#0d1117', 
-        padding: '15px', 
-        borderRadius: '8px', 
-        marginBottom: '15px', 
-        border: '1px solid #30363d',
-        borderLeft: '5px solid #58a6ff'
-    },
-    misionHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '10px' },
-    badgeMatricula: { 
-        backgroundColor: '#30363d', 
-        color: '#58a6ff', 
-        padding: '3px 10px', 
-        borderRadius: '4px', 
-        fontSize: '0.75rem', 
-        fontWeight: '800',
-        border: '1px solid #58a6ff'
-    },
-    tagElemento: { color: '#8b949e', fontSize: '0.7rem', fontWeight: '700' },
-    misionTitle: { fontSize: '1.3rem', fontWeight: '900', color: '#fff', marginBottom: '2px' },
-    misionSub: { fontSize: '0.8rem', color: '#8b949e', marginBottom: '12px', fontWeight: '500' },
-    btnFinish: { 
-        width: '100%', 
-        padding: '10px', 
-        fontSize: '0.75rem', 
-        backgroundColor: 'transparent', 
-        color: '#f85149', 
-        border: '1px solid #f85149', 
-        borderRadius: '4px', 
-        cursor: 'pointer', 
-        fontWeight: 'bold',
-        transition: 'all 0.2s'
-    },
-    logFooter: {
-        padding: '10px',
-        backgroundColor: '#0d1117',
-        textAlign: 'center',
-        fontSize: '0.65rem',
-        color: '#484f58',
-        borderRadius: '0 0 12px 12px',
-        borderTop: '1px solid #30363d',
-        fontWeight: 'bold'
-    }
+    misionItem: { backgroundColor: '#0d1117', padding: '15px', borderRadius: '8px', marginBottom: '12px', borderLeft: '5px solid #58a6ff' },
+    misionHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '5px' },
+    badgeMatricula: { backgroundColor: '#30363d', color: '#58a6ff', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '800' },
+    tagElemento: { color: '#8b949e', fontSize: '0.65rem' },
+    misionTitle: { fontSize: '1.2rem', fontWeight: '900', color: '#fff' },
+    misionSub: { fontSize: '0.75rem', color: '#8b949e', marginBottom: '10px' },
+    btnFinish: { width: '100%', padding: '8px', fontSize: '0.7rem', backgroundColor: 'transparent', color: '#f85149', border: '1px solid #f85149', borderRadius: '4px', fontWeight: 'bold' },
+    emptyBox: { height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    emptyMsg: { color: '#484f58', fontWeight: 'bold', fontSize: '0.8rem' }
 };
 
 export default CargaTactica;
