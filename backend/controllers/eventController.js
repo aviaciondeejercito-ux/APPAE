@@ -4,7 +4,7 @@ const Aircraft = require('../models/Aircraft');
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: SINCRO JOKER (Optimizado)
- * Acción: Auditoría de identidad y Validación de Flota E/S
+ * Acción: Segregación de Vuelos (Radar) vs Actividades (Calendario)
  */
 
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
@@ -25,21 +25,22 @@ const getAvailableAircraft = async (req, res) => {
     }
 };
 
-// @desc    Obtener eventos para CALENDARIO Y LOG
+// @desc    Obtener eventos para CALENDARIO (Excluye Vuelos en Tiempo Real)
 const getEvents = async (req, res) => {
     try {
         const { elemento } = req.user; 
         const isMando = req.isMando; 
         
-        // MODIFICACIÓN: Se elimina el filtro isRealTime: false para que el Log vea todo.
-        let query = {}; 
+        // FILTRO: Solo traer lo que NO es tiempo real para mantener limpio el Calendario
+        let query = { isRealTime: false }; 
 
         if (!isMando) {
             query.$or = [
-                { elemento: { $regex: elemento, $options: 'i' } },
+                { elemento: { $regex: elemento, $options: 'i' }, isRealTime: false },
                 { 
                     $and: [
                         { etapa: 'ordenada' }, 
+                        { isRealTime: false },
                         { 
                             $or: [
                                 { esGlobal: true }, 
@@ -59,7 +60,7 @@ const getEvents = async (req, res) => {
     }
 };
 
-// @desc    Obtener operaciones activas para el MAPA TÁCTICO
+// @desc    Obtener operaciones activas para el MAPA TÁCTICO Y LOG
 const getActiveOperations = async (req, res) => {
     try {
         const { elemento } = req.user;
@@ -67,14 +68,14 @@ const getActiveOperations = async (req, res) => {
 
         let query = { 
             isRealTime: true,
-            status: { $in: ['en_curso', 'en_desarrollo', 'operativo', 'emergencia'] } 
+            status: { $in: ['en_curso', 'en_desarrollo', 'operativo', 'emergencia', 'programado'] } 
         };
 
         if (!isMando) {
             query.$or = [
-                { elemento: { $regex: elemento, $options: 'i' } },
-                { esGlobal: true },
-                { etapa: 'operativo' }
+                { elemento: { $regex: elemento, $options: 'i' }, isRealTime: true },
+                { esGlobal: true, isRealTime: true },
+                { etapa: 'operativo', isRealTime: true }
             ];
         }
 
@@ -113,7 +114,6 @@ const createEvent = async (req, res) => {
         const eventData = {
             title: (title || '').toString().toUpperCase(),
             notes: (notes || '').toString().toUpperCase(),
-            // Persistencia específica de notasMarginales
             notasMarginales: (notasMarginales || notes || '').toString().toUpperCase(),
             color: color || '#1b3a57',
             createdBy: req.user._id,
@@ -127,7 +127,7 @@ const createEvent = async (req, res) => {
             aeronave: (aeronave || misionDetalle?.aeronave || '').toUpperCase(),
             tipoIcono: tipoIcono || misionDetalle?.tipoIcono || 'ala_rotativa',
 
-            // 2. Coordenadas Independientes (Lógica Nueva)
+            // 2. Coordenadas Independientes
             origen: {
                 nombre: (origen?.nombre || 'ORIGEN').toUpperCase(),
                 lat: origen?.lat ? parseFloat(origen.lat) : null,
@@ -139,7 +139,6 @@ const createEvent = async (req, res) => {
                 lng: destino?.lng ? parseFloat(destino.lng) : null
             },
 
-            // Detalle de misión (Compatibilidad con otros módulos)
             misionDetalle: {
                 ...misionDetalle,
                 matricula: (matricula || misionDetalle?.matricula || '').toUpperCase(),
@@ -188,11 +187,9 @@ const updateEvent = async (req, res) => {
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        // Procesamiento de Notas Marginales en Update
         if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
         if (updateData.notes) updateData.notes = updateData.notes.toUpperCase();
 
-        // Procesamiento de Origen/Destino en Update
         if (updateData.origen) {
             updateData.origen.nombre = (updateData.origen.nombre || '').toUpperCase();
             if (updateData.origen.lat) updateData.origen.lat = parseFloat(updateData.origen.lat);
