@@ -7,7 +7,7 @@ const EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx'];
 
 /**
  * ESCÁNER DE DEPENDENCIAS - ESTÁNDAR DE SEGURIDAD AE
- * Este script mapea las conexiones entre archivos del sistema.
+ * Versión 2.0: Soporte mejorado para Imports de React (SINCRO JOKER)
  */
 
 function scanDirectory(dir, fileList = []) {
@@ -28,8 +28,9 @@ function scanDirectory(dir, fileList = []) {
 }
 
 function analyzeConnections() {
-    console.log("=== INICIANDO AUDITORÍA DE INTERCONEXIONES TÁCTICAS ===");
-    const rootDir = path.join(__dirname, '../'); // Ajusta según la ubicación del script
+    console.log("=== INICIANDO AUDITORÍA DE INTERCONEXIONES TÁCTICAS (V2.0) ===");
+    // Ajuste de ruta raíz: sube un nivel desde 'tools/' para llegar a la raíz del proyecto
+    const rootDir = path.resolve(__dirname, '..'); 
     const allFiles = scanDirectory(rootDir);
     const graph = {};
 
@@ -37,18 +38,25 @@ function analyzeConnections() {
         const content = fs.readFileSync(file, 'utf-8');
         const fileName = path.relative(rootDir, file);
         
-        // Regex para capturar imports y requires
-        const importRegex = /(?:import|require)\s*\(?['"](.+?)['"]\)?/g;
+        /**
+         * REGEX TÁCTICA OPTIMIZADA:
+         * 1. Captura 'require("...")'
+         * 2. Captura 'import ... from "..."'
+         * 3. Captura 'import "..."'
+         */
+        const importRegex = /(?:import|require).*?['"](.+?)['"]/g;
+        
         let match;
-        const dependencies = [];
+        const dependencies = new Set(); // Usamos Set para evitar duplicados en el mismo archivo
 
         while ((match = importRegex.exec(content)) !== null) {
-            // Limpiamos la ruta del import para que sea legible
-            dependencies.push(match[1]);
+            // Limpiamos la ruta para omitir librerías de node_modules y solo ver archivos locales
+            const depPath = match[1];
+            dependencies.add(depPath);
         }
 
-        if (dependencies.length > 0) {
-            graph[fileName] = dependencies;
+        if (dependencies.size > 0) {
+            graph[fileName] = Array.from(dependencies);
         }
     });
 
@@ -56,12 +64,15 @@ function analyzeConnections() {
     console.log(`\nArchivos analizados: ${allFiles.length}`);
     console.log("--------------------------------------------------");
     
-    for (const [file, deps] of Object.entries(graph)) {
+    // Ordenamos alfabéticamente para facilitar la lectura
+    const sortedFiles = Object.keys(graph).sort();
+
+    sortedFiles.forEach(file => {
         console.log(`\n📄 [ARCHIVO]: ${file}`);
-        deps.forEach(dep => {
+        graph[file].forEach(dep => {
             console.log(`   └── 🔗 Conecta con: ${dep}`);
         });
-    }
+    });
     
     console.log("\n=== FIN DE AUDITORÍA ===");
 }

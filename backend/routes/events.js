@@ -3,7 +3,6 @@ const router = express.Router();
 
 /**
  * IMPORTACIÓN DE CONTROLADORES - SISTEMA GESTIÓN AE
- * Estándar de Seguridad: SINCRO JOKER (Fase Rutas)
  * - Despacho Táctico: getActiveOperations para Mapa en Tiempo Real.
  * - Gestión Técnica: getAvailableAircraft para disponibilidad E/S.
  * - Separación de Dominios: Rutas blindadas para Calendario y Mapa.

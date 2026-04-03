@@ -65,6 +65,13 @@ const UNIDADES_AE = [
     "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9"
 ];
 
+/** CLASIFICACIÓN TÁCTICA DE ICONOS POR SDA */
+const CLASIFICACION_SDA = {
+    'C-212': 'ala_fija', 'C-208': 'ala_fija', 'C-550': 'ala_fija', 'DA-62': 'ala_fija', 'DHC-6': 'ala_fija',
+    'UH-1H': 'ala_rotativa', 'UH-1H/II': 'ala_rotativa', 'BELL 212': 'ala_rotativa', 'AS-332B': 'ala_rotativa',
+    'AB206B1': 'ala_rotativa', 'AB206B3': 'ala_rotativa', 'SA-315 B LAMA': 'ala_rotativa', '407 GXi': 'ala_rotativa'
+};
+
 const CargaTactica = () => {
     const rawUser = localStorage.getItem('user');
     const user = rawUser ? JSON.parse(rawUser) : { elemento: '', role: '', id: '', name: 'OPERADOR_DESCONOCIDO' };
@@ -186,7 +193,6 @@ const CargaTactica = () => {
     };
 
     const handleEdit = (mision) => {
-        // Obtenemos la posición de salida actual (donde está el icono)
         const latVal = mision.ubicacion?.salida?.lat ?? mision.ubicacion?.lat ?? mision.lat ?? 0;
         const lngVal = mision.ubicacion?.salida?.lng ?? mision.ubicacion?.lng ?? mision.lng ?? 0;
         const latGMS = fromDecimal(latVal, 'lat');
@@ -198,7 +204,6 @@ const CargaTactica = () => {
             destLngG: 0, destLngM: 0, destLngS: 0, destLngDir: 'W' 
         };
         
-        // Verificamos si existe destino en el nuevo formato (ubicacion.llegada) o viejo (destino)
         const destinoObj = mision.ubicacion?.llegada || mision.destino;
 
         if (destinoObj && typeof destinoObj.lat === 'number') {
@@ -242,6 +247,9 @@ const CargaTactica = () => {
         const latDec = Number(toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir).toFixed(6));
         const lngDec = Number(toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir).toFixed(6));
 
+        // Determinar icono según SDA exacto
+        const tipoIcono = CLASIFICACION_SDA[formData.sda] || (formData.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
+
         const payload = {
             title: formData.title.toUpperCase().trim(),
             elemento: formData.elemento.toUpperCase().trim(),
@@ -256,8 +264,7 @@ const CargaTactica = () => {
             lat: latDec, 
             lng: lngDec,
             ubicacion: {
-                nombre: (formData.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
-                // Nuevo Formato Trayecto:
+                nombre: `${(formData.locNombre || 'POSICIÓN').toUpperCase()} - ${(formData.destNombre || 'DESTINO').toUpperCase()}`,
                 salida: {
                     nombre: (formData.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
                     lat: latDec,
@@ -269,7 +276,7 @@ const CargaTactica = () => {
             misionDetalle: {
                 aeronave: formData.sda.toUpperCase(),
                 matricula: formData.matricula.toUpperCase(),
-                tipoIcono: (formData.sda.includes('AE') || formData.sda.includes('C-') || formData.sda.includes('T-')) ? 'ala_fija' : 'ala_rotativa',
+                tipoIcono: tipoIcono,
                 isRealTime: true,
                 lat: latDec,
                 lng: lngDec,
@@ -290,7 +297,6 @@ const CargaTactica = () => {
                 lat: dLatDec,
                 lng: dLngDec
             };
-            // Retrocompatibilidad
             payload.destino = payload.ubicacion.llegada;
         } else {
             payload.ubicacion.llegada = null;
