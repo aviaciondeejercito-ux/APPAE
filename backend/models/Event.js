@@ -38,16 +38,6 @@ const eventSchema = new mongoose.Schema({
         aeronave: { type: String, uppercase: true, trim: true, default: '' },
         tipoIcono: { type: String, default: 'ala_rotativa' }
     },
-    
-    // UBICACIÓN (ESTRUCTURA MANTENIDA - SIN AUTO-LLENADO)
-    ubicacion: {
-        nombre: { type: String, uppercase: true },
-        salida: {
-            nombre: { type: String, uppercase: true, default: 'ORIGEN' },
-            lat: { type: Number },
-            lng: { type: Number }
-        }
-    },
 
     // Campos de respaldo
     matricula: { type: String, uppercase: true, trim: true },
@@ -56,6 +46,13 @@ const eventSchema = new mongoose.Schema({
 
     // 3. ORIGEN (Entrada de datos principal)
     origen: {
+        nombre: { type: String, uppercase: true },
+        lat: { type: Number },
+        lng: { type: Number }
+    },
+
+    // 4. DESTINO (Entrada de datos independiente)
+    destino: {
         nombre: { type: String, uppercase: true },
         lat: { type: Number },
         lng: { type: Number }
@@ -90,12 +87,16 @@ const eventSchema = new mongoose.Schema({
  * MIDDLEWARE PRE-SAVE: LIMPIEZA Y FORMATEO
  */
 eventSchema.pre('validate', function(next) {
-    // Solo formateo de strings, sin lógica de radar por ahora
+    // Solo formateo de strings
     if (this.title) this.title = this.title.toUpperCase();
     if (this.elemento) this.elemento = this.elemento.toUpperCase();
     
     if (this.origen && this.origen.nombre) {
         this.origen.nombre = this.origen.nombre.toUpperCase();
+    }
+
+    if (this.destino && this.destino.nombre) {
+        this.destino.nombre = this.destino.nombre.toUpperCase();
     }
 
     next();
