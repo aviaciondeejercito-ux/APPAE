@@ -41,7 +41,7 @@ const eventSchema = new mongoose.Schema({
     status: { 
         type: String, 
         enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado', 'operativo', 'disponible', 'emergencia'], 
-        default: 'programado',
+        default: 'operativo',
         lowercase: true
     },
 
@@ -138,7 +138,7 @@ const eventSchema = new mongoose.Schema({
     etapa: {
         type: String,
         enum: ['recepcion', 'revision', 'ordenada', 'solicitud', 'operativo'],
-        default: 'recepcion',
+        default: 'operativo',
         required: true,
         index: true
     },
@@ -157,7 +157,7 @@ const eventSchema = new mongoose.Schema({
     createdBy: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'User', 
-        required: true 
+        required: false // Cambiado a false para evitar Error 400 si el ID no es válido
     },
     updatedBy: { 
         type: mongoose.Schema.Types.ObjectId, 
@@ -165,7 +165,8 @@ const eventSchema = new mongoose.Schema({
     },
     userName: { 
         type: String, 
-        required: true 
+        required: true,
+        default: 'OPERADOR'
     }
 }, { 
     timestamps: true 
@@ -175,15 +176,21 @@ const eventSchema = new mongoose.Schema({
  * MIDDLEWARE PRE-SAVE: VALIDACIÓN Y ESTANDARIZACIÓN MILITAR
  */
 eventSchema.pre('validate', function(next) {
-    // 1. Manejo de entrada desde CargaTactica (Mapeo de campos sueltos a estructura interna)
+    // 0. Asegurar existencia de sub-objetos
+    if (!this.ubicacion) this.ubicacion = {};
+    if (!this.ubicacion.salida) this.ubicacion.salida = {};
+    if (!this.ubicacion.llegada) this.ubicacion.llegada = {};
+    if (!this.misionDetalle) this.misionDetalle = {};
+
+    // 1. Manejo de entrada desde CargaTactica
     if (this.origen) {
-        this.ubicacion.salida.nombre = this.origen.nombre || this.ubicacion.salida.nombre;
+        this.ubicacion.salida.nombre = (this.origen.nombre || 'ORIGEN').toUpperCase();
         this.ubicacion.salida.lat = this.origen.lat ?? this.ubicacion.salida.lat;
         this.ubicacion.salida.lng = this.origen.lng ?? this.ubicacion.salida.lng;
     }
 
     if (this.destino) {
-        // Lógica Aeronave Estática: Si no se pone destino (lat/lng son 0 o iguales al default), se duplica el origen
+        // Lógica Aeronave Estática: Si no se pone destino (lat 0 o vacío), se duplica el origen
         const destinoVacio = !this.destino.lat || this.destino.lat === 0;
         
         if (destinoVacio && this.origen) {
@@ -191,13 +198,13 @@ eventSchema.pre('validate', function(next) {
             this.ubicacion.llegada.lat = this.origen.lat;
             this.ubicacion.llegada.lng = this.origen.lng;
         } else {
-            this.ubicacion.llegada.nombre = this.destino.nombre || this.ubicacion.llegada.nombre;
+            this.ubicacion.llegada.nombre = (this.destino.nombre || 'DESTINO').toUpperCase();
             this.ubicacion.llegada.lat = this.destino.lat ?? this.ubicacion.llegada.lat;
             this.ubicacion.llegada.lng = this.destino.lng ?? this.ubicacion.llegada.lng;
         }
     }
 
-    // Sincronizar campos tácticos raíz si vienen sueltos
+    // Sincronizar campos tácticos raíz a misionDetalle
     if (this.matricula) this.misionDetalle.matricula = this.matricula;
     if (this.aeronave) this.misionDetalle.aeronave = this.aeronave;
     if (this.tipoIcono) this.misionDetalle.tipoIcono = this.tipoIcono;
@@ -209,42 +216,29 @@ eventSchema.pre('validate', function(next) {
         }
     }
     
-    // 3. Lógica de Trayecto Priorizada para Despacho Táctico
+    // 3. Lógica de Trayecto Priorizada (Sincronización de la posición viva)
     let finalLat = this.lat;
     let finalLng = this.lng;
 
-    const isDefaultRaiz = (this.lat === -34.61315 && this.lng === -58.37723) || (this.lat === 0) || !this.lat;
+    const isDefaultRaiz = (this.lat === -34.61315 && this.lng === -58.37723) || !this.lat || this.lat === 0;
     
-    if (isDefaultRaiz && this.ubicacion?.salida?.lat !== undefined && this.ubicacion?.salida?.lat !== 0 && this.ubicacion?.salida?.lat !== -34.61315) {
+    if (isDefaultRaiz && this.ubicacion.salida?.lat) {
         finalLat = this.ubicacion.salida.lat;
         finalLng = this.ubicacion.salida.lng;
-    } else if (isDefaultRaiz && this.misionDetalle?.lat !== -34.61315 && this.misionDetalle?.lat !== 0) {
-        finalLat = this.misionDetalle.lat;
-        finalLng = this.misionDetalle.lng;
     }
 
-    // 4. Atomic Mirroring (Sincronización de espejos)
+    // 4. Atomic Mirroring
     this.lat = finalLat;
     this.lng = finalLng;
+    this.ubicacion.lat = finalLat;
+    this.ubicacion.lng = finalLng;
+    this.misionDetalle.lat = finalLat;
+    this.misionDetalle.lng = finalLng;
+    this.misionDetalle.isRealTime = this.isRealTime;
 
-    if (this.ubicacion) {
-        this.ubicacion.lat = finalLat;
-        this.ubicacion.lng = finalLng;
-        if (this.ubicacion.salida?.nombre) this.ubicacion.salida.nombre = this.ubicacion.salida.nombre.toUpperCase();
-        if (this.ubicacion.llegada?.nombre) this.ubicacion.llegada.nombre = this.ubicacion.llegada.nombre.toUpperCase();
-    }
-
-    if (this.misionDetalle) {
-        this.misionDetalle.lat = finalLat;
-        this.misionDetalle.lng = finalLng;
-        this.misionDetalle.isRealTime = this.isRealTime;
-
-        ['aeronave', 'matricula', 'comandante', 'copiloto', 'mecanico'].forEach(key => {
-            if (this.misionDetalle[key]) {
-                this.misionDetalle[key] = this.misionDetalle[key].toString().toUpperCase().trim();
-            }
-        });
-    }
+    // Normalización Final
+    if (this.title) this.title = this.title.toUpperCase();
+    if (this.elemento) this.elemento = this.elemento.toUpperCase();
     
     next();
 });
@@ -254,7 +248,6 @@ eventSchema.pre('validate', function(next) {
  */
 eventSchema.index({ isRealTime: 1, status: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
-eventSchema.index({ lat: 1, lng: 1 }); 
 eventSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Event', eventSchema);
