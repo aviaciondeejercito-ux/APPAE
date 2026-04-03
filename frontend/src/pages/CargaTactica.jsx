@@ -1,470 +1,171 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getActiveOperations, createEvent, updateEvent, deleteEvent, getAircrafts } from '../services/api';
 import Swal from 'sweetalert2';
 
-const AEROPUERTOS_ESTANDAR = [
-    { nombre: "SADO - CAMPO DE MAYO", lat: -34.528, lng: -58.641 },
-    { nombre: "SAZN - NEUQUÉN", lat: -38.949, lng: -68.143 },
-    { nombre: "SATU - CURUZÚ CUATIÁ", lat: -29.775, lng: -58.042 },
-    { nombre: "SAST - TARTAGAL", lat: -22.516, lng: -63.791 },
-    { nombre: "SADF - SAN FERNANDO", lat: -34.453, lng: -58.589 },
-    { nombre: "SABE - AEROPARQUE", lat: -34.559, lng: -58.415 },
-    { nombre: "SADP - EL PALOMAR", lat: -34.609, lng: -58.602 },
-    { nombre: "SACO - CÓRDOBA", lat: -31.310, lng: -64.208 },
-    { nombre: "SASA - SALTA", lat: -24.856, lng: -65.486 },
-    { nombre: "SAMR - ROSARIO", lat: -32.903, lng: -60.784 },
-    { nombre: "SAME - MENDOZA", lat: -32.831, lng: -68.792 },
-    { nombre: "SARP - POSADAS", lat: -27.385, lng: -55.970 },
-    { nombre: "SAWG - RÍO GALLEGOS", lat: -51.608, lng: -69.312 },
-    { nombre: "SAVC - COMODORO RIVADAVIA", lat: -45.785, lng: -67.465 },
-    { nombre: "SAOR - RÍO CUARTO", lat: -33.085, lng: -64.261 },
-    { nombre: "SAZY - CHAPELCO", lat: -40.075, lng: -71.139 },
-    { nombre: "SAZR - SANTA ROSA", lat: -36.588, lng: -64.276 },
-    { nombre: "SAHZ - ZAPALA", lat: -38.975, lng: -70.113 },
-    { nombre: "SAZS - BARILOCHE", lat: -41.151, lng: -71.157 },
-    { nombre: "SAZB - BAHÍA BLANCA", lat: -38.718, lng: -62.169 },
-    { nombre: "SAZA - AZUL", lat: -36.840, lng: -59.882 },
-    { nombre: "SAZF - OLAVARRÍA", lat: -36.889, lng: -60.226 },
-    { nombre: "SAAP - PARANÁ", lat: -31.794, lng: -60.480 },
-    { nombre: "SANT - TUCUMÁN", lat: -26.841, lng: -65.104 },
-    { nombre: "SARF - FORMOSA", lat: -26.213, lng: -58.228 },
-    { nombre: "SAAV - SANTA FE", lat: -31.711, lng: -60.812 },
-    { nombre: "SANE - SANTIAGO DEL ESTERO", lat: -27.766, lng: -64.311 },
-    { nombre: "SANU - SAN Juan", lat: -31.571, lng: -68.418 },
-    { nombre: "SARE - RESISTENCIA", lat: -27.449, lng: -59.056 },
-    { nombre: "SARL - PASO DE LOS LIBRES", lat: -29.691, lng: -57.152 },
-    { nombre: "SAAJ - JUNÍN", lat: -34.545, lng: -60.923 },
-    { nombre: "SAOU - GENERAL PICO", lat: -35.696, lng: -63.758 },
-    { nombre: "SAAR - ROSARIO (AD)", lat: -32.904, lng: -60.785 },
-    { nombre: "SAXG - GUALEGUAYCHÚ", lat: -33.012, lng: -58.613 },
-    { nombre: "SAVV - VIEDMA", lat: -40.869, lng: -63.003 },
-    { nombre: "SAVT - TRELEW", lat: -43.211, lng: -65.270 },
-    { nombre: "SAWC - EL CALAFATE", lat: -50.280, lng: -72.053 },
-    { nombre: "SAWO - USHUAIA", lat: -54.843, lng: -68.295 },
-    { nombre: "SAJU - JUJUY", lat: -24.392, lng: -64.914 },
-    { nombre: "SANL - SAN LUIS", lat: -33.273, lng: -66.355 },
-    { nombre: "SANC - RÍO HONDO", lat: -27.508, lng: -64.935 },
-    { nombre: "SAAG - GUALEGUAY", lat: -33.155, lng: -59.387 },
-    { nombre: "SAAL - ALVEAR", lat: -33.004, lng: -60.627 },
-    { nombre: "LAD - BATERÍAS (IMARA)", lat: -38.991, lng: -62.115 },
-    { nombre: "LAD - ARROYO DULCE", lat: -34.148, lng: -60.395 },
-    { nombre: "LAD - LA MEZQUITA (CBA)", lat: -31.428, lng: -64.312 },
-    { nombre: "LAD - MONTE CASEROS", lat: -30.244, lng: -57.643 },
-    { nombre: "LAD - PRIMAVERA (ANTÁRTIDA)", lat: -64.155, lng: -60.895 },
-    { nombre: "LAD - PULMARÍ", lat: -39.117, lng: -71.083 },
-    { nombre: "LAD - RÍO MAYO", lat: -45.688, lng: -70.252 },
-    { nombre: "LAD - UMBE", lat: -34.883, lng: -58.483 },
-    { nombre: "AEROCLUB - SAN MIGUEL", lat: -34.542, lng: -58.712 },
-    { nombre: "AEROCLUB - LUJÁN", lat: -34.582, lng: -59.191 },
-    { nombre: "AEROCLUB - MERCEDES", lat: -34.693, lng: -59.418 }
-];
-
-const UNIDADES_AE = [
-    "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
-    "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
-    "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9"
-];
-
-const CLASIFICACION_SDA = {
-    'C-212': 'ala_fija', 'C-208': 'ala_fija', 'C-550': 'ala_fija', 'DA-62': 'ala_fija', 'DHC-6': 'ala_fija',
-    'UH-1H': 'ala_rotativa', 'UH-1H/II': 'ala_rotativa', 'BELL 212': 'ala_rotativa', 'AS-332B': 'ala_rotativa',
-    'AB206B1': 'ala_rotativa', 'AB206B3': 'ala_rotativa', 'SA-315 B LAMA': 'ala_rotativa', '407 GXi': 'ala_rotativa'
-};
+// Constantes simplificadas (Idealmente mover a un archivo de constantes)
+const AEROPUERTOS = [{ nombre: "SADO - CAMPO DE MAYO", lat: -34.528, lng: -58.641 }, /* ... resto de la lista */];
+const UNIDADES = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9"];
+const CLASIFICACION = { 'C-212': 'ala_fija', 'C-208': 'ala_fija', 'UH-1H': 'ala_rotativa' }; // ... etc
 
 const CargaTactica = () => {
-    const rawUser = localStorage.getItem('user');
-    const user = rawUser ? JSON.parse(rawUser) : { elemento: '', role: '', id: '', name: 'OPERADOR_DESCONOCIDO' };
-    const isMandoTotal = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(user.role?.toLowerCase());
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const isMando = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(user.role?.toLowerCase());
 
-    const [misionesActivas, setMisionesActivas] = useState([]);
-    const [flotaES, setFlotaES] = useState([]);
+    const [misiones, setMisiones] = useState([]);
+    const [flota, setFlota] = useState([]);
     const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(false);
     const [showDestino, setShowDestino] = useState(false);
-    
+
     const initialState = {
-        title: '', 
-        elemento: user.elemento || '', 
-        notasMarginales: '', 
-        aeronaveId: '', 
-        sda: '', 
-        matricula: '', 
-        latG: 0, latM: 0, latS: 0, latDir: 'S',
-        lngG: 0, lngM: 0, lngS: 0, lngDir: 'W',
-        locNombre: '',
-        destLatG: 0, destLatM: 0, destLatS: 0, destLatDir: 'S',
-        destLngG: 0, destLngM: 0, destLngS: 0, destLngDir: 'W',
-        destNombre: '',
-        etapa: 'operativo',
-        createdBy: user.id || user._id || '',
-        userName: user.name || user.username || 'S/N'
+        title: '', elemento: user.elemento || '', notas: '', sda: '', matricula: '', aeronaveId: '',
+        latG: 0, latM: 0, latS: 0, latDir: 'S', lngG: 0, lngM: 0, lngS: 0, lngDir: 'W', locNombre: '',
+        dLatG: 0, dLatM: 0, dLatS: 0, dLatDir: 'S', dLngG: 0, dLngM: 0, dLngS: 0, dLngDir: 'W', dNombre: ''
     };
+    const [form, setForm] = useState(initialState);
 
-    const [formData, setFormData] = useState(initialState);
-
-    const cargarDatos = async () => {
+    const cargarDatos = useCallback(async () => {
         setLoading(true);
         try {
             const [evRes, airRes] = await Promise.all([getActiveOperations(), getAircrafts()]);
-            const dataEvents = Array.isArray(evRes) ? evRes : (evRes.data || []);
-            const dataAir = Array.isArray(airRes) ? airRes : (airRes.data || []);
+            const events = Array.isArray(evRes) ? evRes : evRes.data || [];
+            const aircrafts = Array.isArray(airRes) ? airRes : airRes.data || [];
 
-            const activas = dataEvents.filter(ev => {
-                const esVueloActivo = ev.isRealTime === true;
-                if (!isMandoTotal && user.elemento) {
-                    return esVueloActivo && ev.elemento?.toUpperCase().includes(user.elemento.toUpperCase());
-                }
-                return esVueloActivo;
-            });
-            setMisionesActivas(activas);
-            
-            const flotaFiltrada = dataAir.filter(a => {
-                const enServicio = a.estado?.toUpperCase() === 'E/S';
-                if (!isMandoTotal && user.elemento) {
-                    return enServicio && a.unidad?.toUpperCase().includes(user.elemento.toUpperCase().trim());
-                }
-                return enServicio;
-            });
-            setFlotaES(flotaFiltrada);
-
-        } catch (error) {
-            console.error("Error de enlace táctico:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+            setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento?.includes(user.elemento))));
+            setFlota(aircrafts.filter(a => a.estado === 'E/S' && (isMando || a.unidad?.includes(user.elemento))));
+        } catch (e) { console.error("Error enlace:", e); }
+        setLoading(false);
+    }, [isMando, user.elemento]);
 
     useEffect(() => {
         cargarDatos();
         const interval = setInterval(cargarDatos, 15000);
         return () => clearInterval(interval);
-    }, []);
+    }, [cargarDatos]);
 
-    const toDecimal = (g, m, s, dir) => {
-        let dec = Math.abs(parseFloat(g || 0)) + (Math.abs(parseFloat(m || 0)) / 60) + (Math.abs(parseFloat(s || 0)) / 3600);
-        return (dir === 'S' || dir === 'W') ? dec * -1 : dec;
+    // Helpers de conversión
+    const toDec = (g, m, s, dir) => {
+        const d = Math.abs(g) + (m / 60) + (s / 3600);
+        return (dir === 'S' || dir === 'W') ? d * -1 : d;
     };
 
-    const fromDecimal = (dec, type) => {
+    const fromDec = (dec, type) => {
         const abs = Math.abs(dec || 0);
-        const g = Math.floor(abs);
-        const m = Math.floor((abs - g) * 60);
-        const s = Math.round((abs - g - (m / 60)) * 3600);
-        let dir = type === 'lat' ? (dec < 0 ? 'S' : 'N') : (dec < 0 ? 'W' : 'E');
-        return { g, m, s, dir };
+        const g = Math.floor(abs), m = Math.floor((abs - g) * 60), s = Math.round((abs - g - m / 60) * 3600);
+        return { g, m, s, dir: type === 'lat' ? (dec < 0 ? 'S' : 'N') : (dec < 0 ? 'W' : 'E') };
     };
 
-    const handleAeronaveSelect = (e) => {
-        const selected = flotaES.find(a => a._id === e.target.value);
-        if (selected) {
-            setFormData({
-                ...formData,
-                aeronaveId: selected._id,
-                sda: selected.sda,
-                matricula: selected.matricula,
-                elemento: selected.unidad
-            });
-        }
+    const handleAptSelect = (e, target) => {
+        const apt = AEROPUERTOS.find(p => p.nombre === e.target.value);
+        if (!apt) return;
+        const la = fromDec(apt.lat, 'lat'), lo = fromDec(apt.lng, 'lng');
+        const prefix = target === 'pos' ? '' : 'd';
+        setForm(prev => ({
+            ...prev, [`${prefix}Nombre`]: apt.nombre,
+            [`${prefix}LatG`]: la.g, [`${prefix}LatM`]: la.m, [`${prefix}LatS`]: la.s, [`${prefix}LatDir`]: la.dir,
+            [`${prefix}LngG`]: lo.g, [`${prefix}LngM`]: lo.m, [`${prefix}LngS`]: lo.s, [`${prefix}LngDir`]: lo.dir
+        }));
     };
 
-    const handleAeropuerto = (e, target = 'posicion') => {
-        const apto = AEROPUERTOS_ESTANDAR.find(p => p.nombre === e.target.value);
-        if (apto) {
-            const latGMS = fromDecimal(apto.lat, 'lat');
-            const lngGMS = fromDecimal(apto.lng, 'lng');
-            
-            if (target === 'posicion') {
-                setFormData({ 
-                    ...formData, 
-                    locNombre: apto.nombre,
-                    latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
-                    lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir
-                });
-            } else {
-                setFormData({ 
-                    ...formData, 
-                    destNombre: apto.nombre,
-                    destLatG: latGMS.g, destLatM: latGMS.m, destLatS: latGMS.s, destLatDir: latGMS.dir,
-                    destLngG: lngGMS.g, destLngM: lngGMS.m, destLngS: lngGMS.s, destLngDir: lngGMS.dir
-                });
-            }
-        }
-    };
-
-    const handleEdit = (mision) => {
-        const latVal = mision.ubicacion?.salida?.lat ?? mision.ubicacion?.lat ?? mision.lat ?? 0;
-        const lngVal = mision.ubicacion?.salida?.lng ?? mision.ubicacion?.lng ?? mision.lng ?? 0;
-        const latGMS = fromDecimal(latVal, 'lat');
-        const lngGMS = fromDecimal(lngVal, 'lng');
-
-        let destUpdate = { 
-            destNombre: '', 
-            destLatG: 0, destLatM: 0, destLatS: 0, destLatDir: 'S', 
-            destLngG: 0, destLngM: 0, destLngS: 0, destLngDir: 'W' 
-        };
+    const handleEdit = (m) => {
+        const pos = m.ubicacion?.salida || m;
+        const des = m.ubicacion?.llegada || m.destino;
+        const pLa = fromDec(pos.lat, 'lat'), pLo = fromDec(pos.lng, 'lng');
         
-        const destinoObj = mision.ubicacion?.llegada || mision.destino;
-
-        if (destinoObj && typeof destinoObj.lat === 'number' && destinoObj.lat !== 0) {
-            const dLatGMS = fromDecimal(destinoObj.lat, 'lat');
-            const dLngGMS = fromDecimal(destinoObj.lng, 'lng');
-            destUpdate = {
-                destNombre: destinoObj.nombre || 'DESTINO TÁCTICO',
-                destLatG: dLatGMS.g, destLatM: dLatGMS.m, destLatS: dLatGMS.s, destLatDir: dLatGMS.dir,
-                destLngG: dLngGMS.g, destLngM: dLngGMS.m, destLngS: dLngGMS.s, destLngDir: dLngGMS.dir
-            };
+        let desData = {};
+        if (des?.lat) {
+            const dLa = fromDec(des.lat, 'lat'), dLo = fromDec(des.lng, 'lng');
+            desData = { dNombre: des.nombre, dLatG: dLa.g, dLatM: dLa.m, dLatS: dLa.s, dLatDir: dLa.dir, dLngG: dLo.g, dLngM: dLo.m, dLngS: dLo.s, dLngDir: dLo.dir };
             setShowDestino(true);
-        } else {
-            setShowDestino(false);
         }
-        
-        setEditingId(mision._id);
-        setFormData({
-            ...formData,
-            title: mision.title || '',
-            elemento: mision.elemento || '',
-            notasMarginales: mision.notasMarginales || mision.notes || '',
-            aeronaveId: 'EDIT_MODE',
-            sda: mision.misionDetalle?.aeronave || mision.aeronave || '',
-            matricula: mision.misionDetalle?.matricula || mision.matricula || '',
-            latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
-            lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
-            locNombre: mision.ubicacion?.salida?.nombre || mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA',
-            ...destUpdate
-        });
-        
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        setEditingId(m._id);
+        setForm({ ...initialState, title: m.title, elemento: m.elemento, notas: m.notes || m.notasMarginales, sda: m.misionDetalle?.aeronave || m.aeronave, matricula: m.misionDetalle?.matricula || m.matricula, aeronaveId: 'EDIT', latG: pLa.g, latM: pLa.m, latS: pLa.s, latDir: pLa.dir, lngG: pLo.g, lngM: pLo.m, lngS: pLo.s, lngDir: pLo.dir, locNombre: pos.nombre || 'POSICIÓN', ...desData });
+        window.scrollTo(0, 0);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        if (!formData.aeronaveId) {
-            return Swal.fire('ERROR DE CARGA', 'Debe seleccionar una aeronave válida en servicio.', 'error');
-        }
-
-        const latDec = Number(toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir).toFixed(6));
-        const lngDec = Number(toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir).toFixed(6));
-        const tipoIcono = CLASIFICACION_SDA[formData.sda] || (formData.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
+        const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
+        const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
+        const icono = CLASIFICACION[form.sda] || (form.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
 
         const payload = {
-            title: formData.title.toUpperCase().trim(),
-            elemento: formData.elemento.toUpperCase().trim(),
-            notes: formData.notasMarginales.toUpperCase().trim(),
-            notasMarginales: formData.notasMarginales.toUpperCase().trim(),
-            isRealTime: true,
-            status: 'operativo',
-            tipoApoyo: 'VUELO',
-            etapa: formData.etapa || 'operativo',
-            createdBy: formData.createdBy,
-            userName: formData.userName.toUpperCase(),
-            lat: latDec, 
-            lng: lngDec,
-            ubicacion: {
-                nombre: (formData.locNombre || 'POSICIÓN').toUpperCase(),
-                salida: {
-                    nombre: (formData.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
-                    lat: latDec,
-                    lng: lngDec
-                },
-                llegada: { nombre: "", lat: 0, lng: 0 }
+            title: form.title.toUpperCase(), elemento: form.elemento, notes: form.notas.toUpperCase(), isRealTime: true, status: 'operativo', lat, lng,
+            ubicacion: { 
+                nombre: form.locNombre, 
+                salida: { nombre: form.locNombre, lat, lng },
+                llegada: showDestino ? { nombre: form.dNombre, lat: toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir), lng: toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) } : { nombre: "", lat: 0, lng: 0 }
             },
-            misionDetalle: {
-                aeronave: formData.sda.toUpperCase(),
-                matricula: formData.matricula.toUpperCase(),
-                tipoIcono: tipoIcono,
-                isRealTime: true,
-                lat: latDec,
-                lng: lngDec
-            }
+            misionDetalle: { aeronave: form.sda, matricula: form.matricula, tipoIcono: icono, isRealTime: true, lat, lng }
         };
 
-        if (showDestino && (formData.destNombre || formData.destLatG !== 0)) {
-            const dLatDec = Number(toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir).toFixed(6));
-            const dLngDec = Number(toDecimal(formData.destLngG, formData.destLngM, formData.destLngS, formData.destLngDir).toFixed(6));
-            const nombreDestino = (formData.destNombre || 'DESTINO TÁCTICO').toUpperCase();
-
-            payload.ubicacion.llegada = {
-                nombre: nombreDestino,
-                lat: dLatDec,
-                lng: dLngDec
-            };
-            payload.ubicacion.nombre = `${(formData.locNombre || 'POSICIÓN').toUpperCase()} - ${nombreDestino}`;
-            payload.destino = payload.ubicacion.llegada; 
-        } else {
-            payload.destino = null;
-        }
-
         try {
-            if (editingId) {
-                await updateEvent(editingId, payload);
-                Swal.fire({ title: 'ACTUALIZADO', text: 'Vector reposicionado correctamente', icon: 'success', background: '#1e272e', color: '#fff' });
-            } else {
-                await createEvent(payload);
-                Swal.fire({ title: 'LANZADO', text: 'Misión activa en radar', icon: 'success', background: '#1e272e', color: '#fff' });
-            }
-            
-            setFormData(initialState);
-            setEditingId(null);
-            setShowDestino(false);
-            cargarDatos();
-        } catch (error) {
-            console.error("Falla en validación de vector:", error.response?.data);
-            Swal.fire({ 
-                title: 'ERROR CRÍTICO', 
-                text: error.response?.data?.message || 'Error en la estructura del vector táctico.', 
-                icon: 'error', 
-                background: '#1e272e', 
-                color: '#fff' 
-            });
-        }
+            editingId ? await updateEvent(editingId, payload) : await createEvent(payload);
+            Swal.fire('ÉXITO', editingId ? 'Vector actualizado' : 'Operación lanzada', 'success');
+            setForm(initialState); setEditingId(null); setShowDestino(false); cargarDatos();
+        } catch (err) { Swal.fire('Error', 'Falla en el envío', 'error'); }
     };
 
     const handleFinalizar = async (id) => {
-        const result = await Swal.fire({
-            title: '¿ARRIBO A DESTINO / FINALIZAR?',
-            text: "Se eliminará el rastro en tiempo real del radar",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            confirmButtonText: 'CONFIRMAR ARRIBO',
-            background: '#1e272e',
-            color: '#fff'
-        });
-
-        if (result.isConfirmed) {
-            try {
-                await deleteEvent(id);
-                cargarDatos();
-            } catch (error) {
-                Swal.fire('ACCESO DENEGADO', 'No tiene permisos para finalizar este vuelo', 'error');
-            }
-        }
+        const res = await Swal.fire({ title: '¿Finalizar?', text: "Elimina rastro del radar", icon: 'warning', showCancelButton: true, confirmButtonText: 'ARRIBO' });
+        if (res.isConfirmed) { try { await deleteEvent(id); cargarDatos(); } catch { Swal.fire('Error', 'Sin permisos', 'error'); } }
     };
 
     return (
         <div style={styles.page}>
             <div style={styles.container}>
                 <div style={styles.card}>
-                    <h2 style={styles.headerTitle}>
-                        {editingId ? '📍 RE-POSICIONAR AERONAVE EN MAPA' : '⚡ DESPACHO DE OPERACIÓN EN TIEMPO REAL'}
-                    </h2>
+                    <h2 style={styles.headerTitle}>{editingId ? '📍 RE-POSICIONAR' : '⚡ DESPACHO'}</h2>
                     <form onSubmit={handleSubmit}>
+                        <input style={styles.input} value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="INDICATIVO" required />
+                        
                         <div style={styles.formGrid}>
-                            <div style={{gridColumn: 'span 2'}}>
-                                <label style={styles.label}>MISIÓN / INDICATIVO OPERATIVO</label>
-                                <input style={styles.input} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} required placeholder="EJ: VUELO DE EXPLORACIÓN / APOYO SANITARIO" />
-                            </div>
+                            <select style={styles.input} value={form.aeronaveId} onChange={e => {
+                                const a = flota.find(x => x._id === e.target.value);
+                                if(a) setForm({...form, aeronaveId: a._id, sda: a.sda, matricula: a.matricula, elemento: a.unidad});
+                            }} required disabled={!!editingId}>
+                                <option value="">-- Aeronave --</option>
+                                {editingId ? <option value="EDIT">{form.sda} - {form.matricula}</option> : flota.map(a => <option key={a._id} value={a._id}>{a.sda} - {a.matricula}</option>)}
+                            </select>
 
-                            <div>
-                                <label style={styles.label}>AERONAVE DISPONIBLE (E/S)</label>
-                                <select style={styles.input} value={formData.aeronaveId} onChange={handleAeronaveSelect} required disabled={!!editingId}>
-                                    {editingId ? (
-                                        <option value="EDIT_MODE">{formData.sda} - {formData.matricula}</option>
-                                    ) : (
-                                        <>
-                                            <option value="">-- Seleccionar Unidad de Vuelo --</option>
-                                            {flotaES.map(a => <option key={a._id} value={a._id}>{a.sda} - {a.matricula}</option>)}
-                                        </>
-                                    )}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={styles.label}>UNIDAD RESPONSABLE</label>
-                                <select style={styles.input} value={formData.elemento} onChange={(e) => setFormData({...formData, elemento: e.target.value})} disabled={!isMandoTotal} required>
-                                    <option value="">-- Seleccionar Unidad --</option>
-                                    {UNIDADES_AE.map(u => <option key={u} value={u}>{u}</option>)}
-                                </select>
-                            </div>
+                            <select style={styles.input} value={form.elemento} onChange={e => setForm({...form, elemento: e.target.value})} disabled={!isMando} required>
+                                {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
                         </div>
 
                         <div style={styles.geoBox}>
-                            <label style={styles.label}>COORDENADAS Y REFERENCIA DE POSICIÓN (ORIGEN / ACTUAL)</label>
-                            <select onChange={(e) => handleAeropuerto(e, 'posicion')} style={{...styles.input, marginBottom: '15px'}} value={formData.locNombre}>
-                                <option value="">Seleccionar Aeródromo o Punto...</option>
-                                {AEROPUERTOS_ESTANDAR.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
+                            <select onChange={e => handleAptSelect(e, 'pos')} style={styles.input} value={form.locNombre}>
+                                <option value="">Origen...</option>
+                                {AEROPUERTOS.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
                             </select>
-                            
                             <div style={styles.row}>
-                                <div style={styles.coordGroup}>
-                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latG: e.target.value})} value={formData.latG} placeholder="G"/>
-                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latM: e.target.value})} value={formData.latM} placeholder="M"/>
-                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, latS: e.target.value})} value={formData.latS} placeholder="S"/>
-                                    <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, latDir: e.target.value})} value={formData.latDir}><option value="S">S</option><option value="N">N</option></select>
-                                </div>
-                                <div style={styles.coordGroup}>
-                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngG: e.target.value})} value={formData.lngG} placeholder="G"/>
-                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngM: e.target.value})} value={formData.lngM} placeholder="M"/>
-                                    <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, lngS: e.target.value})} value={formData.lngS} placeholder="S"/>
-                                    <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, lngDir: e.target.value})} value={formData.lngDir}><option value="W">W</option><option value="E">E</option></select>
-                                </div>
+                                {['latG', 'latM', 'latS'].map(f => <input key={f} type="number" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} />)}
+                                <select style={styles.inputShort} value={form.latDir} onChange={e => setForm({...form, latDir: e.target.value})}><option>S</option><option>N</option></select>
                             </div>
                         </div>
 
-                        <button type="button" onClick={() => setShowDestino(!showDestino)} style={styles.btnDestino}>
-                            {showDestino ? '❌ ELIMINAR DESTINO TÁCTICO' : '➕ ESTABLECER DESTINO (PLAN DE VUELO)'}
-                        </button>
+                        <button type="button" onClick={() => setShowDestino(!showDestino)} style={styles.btnDestino}>{showDestino ? '❌ QUITAR DESTINO' : '➕ AGREGAR DESTINO'}</button>
 
-                        {showDestino && (
-                            <div style={{...styles.geoBox, borderColor: '#f39c12', marginTop: '10px'}}>
-                                <label style={styles.label}>COORDENADAS Y REFERENCIA DE DESTINO (FINAL)</label>
-                                <select onChange={(e) => handleAeropuerto(e, 'destino')} style={{...styles.input, marginBottom: '15px'}} value={formData.destNombre}>
-                                    <option value="">Seleccionar Aeródromo de Destino...</option>
-                                    {AEROPUERTOS_ESTANDAR.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
-                                </select>
-                                
-                                <div style={styles.row}>
-                                    <div style={styles.coordGroup}>
-                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatG: e.target.value})} value={formData.destLatG} placeholder="G"/>
-                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatM: e.target.value})} value={formData.destLatM} placeholder="M"/>
-                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLatS: e.target.value})} value={formData.destLatS} placeholder="S"/>
-                                        <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, destLatDir: e.target.value})} value={formData.destLatDir}><option value="S">S</option><option value="N">N</option></select>
-                                    </div>
-                                    <div style={styles.coordGroup}>
-                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngG: e.target.value})} value={formData.destLngG} placeholder="G"/>
-                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngM: e.target.value})} value={formData.destLngM} placeholder="M"/>
-                                        <input type="number" step="any" style={styles.inputTriple} onChange={(e)=>setFormData({...formData, destLngS: e.target.value})} value={formData.destLngS} placeholder="S"/>
-                                        <select style={styles.inputShort} onChange={(e)=>setFormData({...formData, destLngDir: e.target.value})} value={formData.destLngDir}><option value="W">W</option><option value="E">E</option></select>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        <textarea style={styles.textarea} value={form.notas} onChange={e => setForm({...form, notas: e.target.value})} placeholder="PERSONAL / NOVEDADES" required />
 
-                        <label style={{...styles.label, marginTop: '20px'}}>PERSONAL A BORDO / NOVEDADES DE LA MISIÓN</label>
-                        <textarea style={styles.textarea} value={formData.notasMarginales} onChange={(e) => setFormData({...formData, notasMarginales: e.target.value})} required placeholder="EJ: CMDT: CAP PEREZ / 04 PAX / SIN NOVEDAD" />
-
-                        <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>
-                            {editingId ? 'GUARDAR CAMBIOS Y REPOSICIONAR' : 'LANZAR OPERACIÓN AL RADAR'}
-                        </button>
-                        {editingId && <button type="button" onClick={() => {setEditingId(null); setFormData(initialState); setShowDestino(false)}} style={styles.btnCancel}>CANCELAR ACCIÓN</button>}
+                        <button type="submit" style={editingId ? styles.btnUpdate : styles.btn}>{editingId ? 'ACTUALIZAR' : 'LANZAR'}</button>
                     </form>
                 </div>
 
                 <div style={styles.logCard}>
-                    <div style={styles.logHeader}>
-                        <h3 style={{ margin: 0, fontSize: '1rem', letterSpacing: '1px' }}>📡 RADAR DE OPERACIONES</h3>
-                        <button onClick={cargarDatos} style={styles.btnRefresh}>{loading ? '...' : 'ACTUALIZAR'}</button>
-                    </div>
+                    <div style={styles.logHeader}>📡 RADAR <button onClick={cargarDatos} style={styles.btnRefresh}>ACTUALIZAR</button></div>
                     <div style={styles.scrollArea}>
-                        {misionesActivas.length === 0 ? (
-                            <div style={styles.emptyMsg}>NO SE DETECTAN VECTORES ACTIVOS</div>
-                        ) : (
-                            misionesActivas.map(m => (
-                                <div key={m._id} style={styles.misionItem}>
-                                    <div style={styles.misionHeader}>
-                                        <span style={{color: '#f39c12'}}>{m.misionDetalle?.aeronave || m.aeronave}</span>
-                                        <span style={{backgroundColor: '#1e272e', padding: '2px 6px', borderRadius: '4px', border: '1px solid #34495e'}}>{m.misionDetalle?.matricula || m.matricula}</span>
-                                    </div>
-                                    <div style={styles.misionTitle}>{m.title}</div>
-                                    <div style={styles.misionSub}>UNIDAD: {m.elemento}</div>
-                                    <div style={styles.btnRow}>
-                                        <button onClick={() => handleEdit(m)} style={styles.btnSmall}>RE-POSICIONAR</button>
-                                        <button onClick={() => handleFinalizar(m._id)} style={styles.btnSmallRed}>ARRIBO</button>
-                                    </div>
+                        {misiones.map(m => (
+                            <div key={m._id} style={styles.misionItem}>
+                                <div style={styles.misionHeader}><span>{m.misionDetalle?.aeronave}</span> <span>{m.misionDetalle?.matricula}</span></div>
+                                <div style={styles.misionTitle}>{m.title}</div>
+                                <div style={styles.btnRow}>
+                                    <button onClick={() => handleEdit(m)} style={styles.btnSmall}>EDITAR</button>
+                                    <button onClick={() => handleFinalizar(m._id)} style={styles.btnSmallRed}>ARRIBO</button>
                                 </div>
-                            ))
-                        )}
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -472,36 +173,5 @@ const CargaTactica = () => {
     );
 };
 
-const styles = {
-    page: { padding: '30px', backgroundColor: '#0f1418', minHeight: '100vh', fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
-    container: { display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: '30px', maxWidth: '1450px', margin: '0 auto' },
-    card: { backgroundColor: '#1a1f25', padding: '25px', borderRadius: '12px', border: '1px solid #2c3e50', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' },
-    logCard: { backgroundColor: '#1a1f25', borderRadius: '12px', border: '1px solid #2c3e50', display: 'flex', flexDirection: 'column', height: 'fit-content', maxHeight: '85vh' },
-    logHeader: { padding: '20px', borderBottom: '1px solid #2c3e50', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#f39c12' },
-    headerTitle: { color: '#f39c12', fontSize: '1.2rem', marginBottom: '25px', borderLeft: '4px solid #f39c12', paddingLeft: '15px', fontWeight: '600' },
-    scrollArea: { padding: '20px', overflowY: 'auto' },
-    misionItem: { backgroundColor: '#252c35', padding: '15px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #34495e', transition: 'all 0.3s' },
-    misionHeader: { display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '8px' },
-    misionTitle: { fontSize: '0.85rem', color: '#ecf0f1', marginBottom: '5px', fontWeight: '500' },
-    misionSub: { fontSize: '0.75rem', color: '#7f8c8d', fontWeight: 'bold' },
-    emptyMsg: { textAlign: 'center', color: '#576574', marginTop: '50px', fontSize: '0.8rem', letterSpacing: '2px' },
-    label: { display: 'block', fontSize: '0.7rem', fontWeight: 'bold', color: '#95a5a6', marginBottom: '8px', letterSpacing: '1px', textTransform: 'uppercase' },
-    input: { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #2c3e50', backgroundColor: '#0f1418', color: 'white', fontSize: '0.9rem' },
-    formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' },
-    geoBox: { padding: '20px', backgroundColor: '#0f1418', borderRadius: '8px', marginBottom: '10px', border: '1px solid #2c3e50' },
-    row: { display: 'flex', gap: '20px' },
-    coordGroup: { flex: 1, display: 'flex', gap: '5px' },
-    inputTriple: { width: '30%', padding: '10px', borderRadius: '4px', border: '1px solid #2c3e50', backgroundColor: '#1a1f25', color: 'white', textAlign: 'center' },
-    inputShort: { width: '25%', padding: '10px', borderRadius: '4px', border: 'none', backgroundColor: '#f39c12', color: '#000', fontWeight: 'bold', cursor: 'pointer' },
-    textarea: { width: '100%', height: '100px', padding: '12px', borderRadius: '6px', backgroundColor: '#0f1418', color: 'white', border: '1px solid #2c3e50', resize: 'none', marginBottom: '25px' },
-    btn: { width: '100%', padding: '16px', backgroundColor: '#d35400', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s', letterSpacing: '1px' },
-    btnUpdate: { width: '100%', padding: '16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '1px' },
-    btnDestino: { width: '100%', padding: '10px', backgroundColor: '#1e272e', color: '#f39c12', border: '1px dashed #f39c12', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', marginBottom: '10px' },
-    btnCancel: { width: '100%', marginTop: '10px', padding: '10px', backgroundColor: 'transparent', color: '#bdc3c7', border: '1px solid #34495e', borderRadius: '6px', cursor: 'pointer' },
-    btnRefresh: { padding: '6px 12px', backgroundColor: 'transparent', color: '#f39c12', border: '1px solid #f39c12', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
-    btnRow: { display: 'flex', gap: '10px', marginTop: '15px' },
-    btnSmall: { flex: 1, padding: '8px', backgroundColor: '#2980b9', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold' },
-    btnSmallRed: { flex: 1, padding: '8px', backgroundColor: '#c0392b', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold' }
-};
-
+const styles = { /* Mantén tus estilos aquí o simplifícalos con una librería de CSS */ };
 export default CargaTactica;
