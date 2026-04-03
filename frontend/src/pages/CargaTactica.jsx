@@ -184,8 +184,8 @@ const CargaTactica = () => {
                 setFormData({ 
                     ...formData, 
                     destNombre: apto.nombre,
-                    destLatG: dLatGMS.g, destLatM: dLatGMS.m, destLatS: dLatGMS.s, destLatDir: dLatGMS.dir,
-                    destLngG: dLngGMS.g, destLngM: dLngGMS.m, destLngS: dLngGMS.s, destLngDir: dLngGMS.dir
+                    destLatG: latGMS.g, destLatM: latGMS.m, destLatS: latGMS.s, destLatDir: latGMS.dir,
+                    destLngG: lngGMS.g, destLngM: lngGMS.m, destLngS: lngGMS.s, destLngDir: lngGMS.dir
                 });
             }
         }
@@ -205,7 +205,7 @@ const CargaTactica = () => {
         
         const destinoObj = mision.ubicacion?.llegada || mision.destino;
 
-        if (destinoObj && typeof destinoObj.lat === 'number') {
+        if (destinoObj && typeof destinoObj.lat === 'number' && destinoObj.lat !== 0) {
             const dLatGMS = fromDecimal(destinoObj.lat, 'lat');
             const dLngGMS = fromDecimal(destinoObj.lng, 'lng');
             destUpdate = {
@@ -245,7 +245,6 @@ const CargaTactica = () => {
 
         const latDec = Number(toDecimal(formData.latG, formData.latM, formData.latS, formData.latDir).toFixed(6));
         const lngDec = Number(toDecimal(formData.lngG, formData.lngM, formData.lngS, formData.lngDir).toFixed(6));
-
         const tipoIcono = CLASIFICACION_SDA[formData.sda] || (formData.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
 
         const payload = {
@@ -262,15 +261,13 @@ const CargaTactica = () => {
             lat: latDec, 
             lng: lngDec,
             ubicacion: {
-                nombre: `${(formData.locNombre || 'POSICIÓN').toUpperCase()} - ${(formData.destNombre || 'DESTINO').toUpperCase()}`,
+                nombre: (formData.locNombre || 'POSICIÓN').toUpperCase(),
                 salida: {
                     nombre: (formData.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
                     lat: latDec,
                     lng: lngDec
                 },
-                // Mantenemos lat/lng en el root de ubicacion por compatibilidad
-                lat: latDec,
-                lng: lngDec
+                llegada: { nombre: "", lat: 0, lng: 0 }
             },
             misionDetalle: {
                 aeronave: formData.sda.toUpperCase(),
@@ -279,22 +276,22 @@ const CargaTactica = () => {
                 isRealTime: true,
                 lat: latDec,
                 lng: lngDec
-                // Se eliminan comandante, copiloto, mecanico, pax y carga
             }
         };
 
         if (showDestino && (formData.destNombre || formData.destLatG !== 0)) {
             const dLatDec = Number(toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir).toFixed(6));
             const dLngDec = Number(toDecimal(formData.destLngG, formData.destLngM, formData.destLngS, formData.destLngDir).toFixed(6));
-            
+            const nombreDestino = (formData.destNombre || 'DESTINO TÁCTICO').toUpperCase();
+
             payload.ubicacion.llegada = {
-                nombre: (formData.destNombre || 'DESTINO TÁCTICO').toUpperCase(),
+                nombre: nombreDestino,
                 lat: dLatDec,
                 lng: dLngDec
             };
-            payload.destino = payload.ubicacion.llegada;
+            payload.ubicacion.nombre = `${(formData.locNombre || 'POSICIÓN').toUpperCase()} - ${nombreDestino}`;
+            payload.destino = payload.ubicacion.llegada; 
         } else {
-            payload.ubicacion.llegada = null;
             payload.destino = null;
         }
 
