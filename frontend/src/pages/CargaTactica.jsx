@@ -186,8 +186,9 @@ const CargaTactica = () => {
     };
 
     const handleEdit = (mision) => {
-        const latVal = mision.ubicacion?.lat ?? mision.lat ?? 0;
-        const lngVal = mision.ubicacion?.lng ?? mision.lng ?? 0;
+        // Obtenemos la posición de salida actual (donde está el icono)
+        const latVal = mision.ubicacion?.salida?.lat ?? mision.ubicacion?.lat ?? mision.lat ?? 0;
+        const lngVal = mision.ubicacion?.salida?.lng ?? mision.ubicacion?.lng ?? mision.lng ?? 0;
         const latGMS = fromDecimal(latVal, 'lat');
         const lngGMS = fromDecimal(lngVal, 'lng');
 
@@ -197,11 +198,14 @@ const CargaTactica = () => {
             destLngG: 0, destLngM: 0, destLngS: 0, destLngDir: 'W' 
         };
         
-        if (mision.destino && typeof mision.destino.lat === 'number') {
-            const dLatGMS = fromDecimal(mision.destino.lat, 'lat');
-            const dLngGMS = fromDecimal(mision.destino.lng, 'lng');
+        // Verificamos si existe destino en el nuevo formato (ubicacion.llegada) o viejo (destino)
+        const destinoObj = mision.ubicacion?.llegada || mision.destino;
+
+        if (destinoObj && typeof destinoObj.lat === 'number') {
+            const dLatGMS = fromDecimal(destinoObj.lat, 'lat');
+            const dLngGMS = fromDecimal(destinoObj.lng, 'lng');
             destUpdate = {
-                destNombre: mision.destino.nombre || 'DESTINO TÁCTICO',
+                destNombre: destinoObj.nombre || 'DESTINO TÁCTICO',
                 destLatG: dLatGMS.g, destLatM: dLatGMS.m, destLatS: dLatGMS.s, destLatDir: dLatGMS.dir,
                 destLngG: dLngGMS.g, destLngM: dLngGMS.m, destLngS: dLngGMS.s, destLngDir: dLngGMS.dir
             };
@@ -221,7 +225,7 @@ const CargaTactica = () => {
             matricula: mision.misionDetalle?.matricula || mision.matricula || '',
             latG: latGMS.g, latM: latGMS.m, latS: latGMS.s, latDir: latGMS.dir,
             lngG: lngGMS.g, lngM: lngGMS.m, lngS: lngGMS.s, lngDir: lngGMS.dir,
-            locNombre: mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA',
+            locNombre: mision.ubicacion?.salida?.nombre || mision.ubicacion?.nombre || 'POSICIÓN TÁCTICA',
             ...destUpdate
         });
         
@@ -231,7 +235,6 @@ const CargaTactica = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // Bloqueo de seguridad: Validar selección de aeronave
         if (!formData.aeronaveId) {
             return Swal.fire('ERROR DE CARGA', 'Debe seleccionar una aeronave válida en servicio.', 'error');
         }
@@ -254,6 +257,12 @@ const CargaTactica = () => {
             lng: lngDec,
             ubicacion: {
                 nombre: (formData.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+                // Nuevo Formato Trayecto:
+                salida: {
+                    nombre: (formData.locNombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+                    lat: latDec,
+                    lng: lngDec
+                },
                 lat: latDec,
                 lng: lngDec
             },
@@ -276,12 +285,15 @@ const CargaTactica = () => {
             const dLatDec = Number(toDecimal(formData.destLatG, formData.destLatM, formData.destLatS, formData.destLatDir).toFixed(6));
             const dLngDec = Number(toDecimal(formData.destLngG, formData.destLngM, formData.destLngS, formData.destLngDir).toFixed(6));
             
-            payload.destino = {
+            payload.ubicacion.llegada = {
                 nombre: (formData.destNombre || 'DESTINO TÁCTICO').toUpperCase(),
                 lat: dLatDec,
                 lng: dLngDec
             };
+            // Retrocompatibilidad
+            payload.destino = payload.ubicacion.llegada;
         } else {
+            payload.ubicacion.llegada = null;
             payload.destino = null;
         }
 

@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, LayersControl, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { getWeatherData, getEvents } from '../services/api';
+import EventService from '../services/EventService'; // Importación corregida al servicio unificado
 
 const { BaseLayer } = LayersControl;
 
 /** HELPER: ICONOS DE FASE LUNAR */
 const getMoonIcon = (phase) => {
-    const p = phase.toLowerCase();
+    const p = phase?.toLowerCase() || '';
     if (p.includes('new')) return '🌑';
     if (p.includes('waxing crescent')) return '🌒';
     if (p.includes('first quarter')) return '🌓';
@@ -115,7 +115,7 @@ const MetarWidget = ({ selectedStation, setSelectedStation, astronomyData, setAs
         if (!icao) return;
         setLoading(true);
         try {
-            const response = await getWeatherData(icao);
+            const response = await EventService.getWeatherData(icao);
             if (response.data) {
                 setAstronomyData(response.data.astronomy || null);
                 setWeatherData({
@@ -203,7 +203,7 @@ const OperacionesMapa = () => {
 
     const fetchMisiones = async () => {
         try {
-            const data = await getEvents();
+            const data = await EventService.getEvents();
             const role = localStorage.getItem('role');
             const userElemento = localStorage.getItem('elemento'); 
             
@@ -258,25 +258,22 @@ const OperacionesMapa = () => {
                 </LayersControl>
 
                 {misiones.map((m) => {
-                    const hasDetailPos = m.misionDetalle && m.misionDetalle.lat && m.misionDetalle.lng;
-                    const isMoving = hasDetailPos && (m.misionDetalle.lat !== m.ubicacion.lat || m.misionDetalle.lng !== m.ubicacion.lng);
+                    // ESTRUCTURA CORREGIDA: Sincronizada con el modelo de Salida/Llegada
+                    const salidaPos = [m.ubicacion?.salida?.lat || -34.6, m.ubicacion?.salida?.lng || -58.4];
+                    const llegadaPos = [m.ubicacion?.llegada?.lat || -34.6, m.ubicacion?.llegada?.lng || -58.4];
+                    const actualPos = [m.ubicacion?.lat || salidaPos[0], m.ubicacion?.lng || salidaPos[1]];
                     
-                    const startPos = [m.ubicacion.lat, m.ubicacion.lng];
-                    const endPos = isMoving ? [m.misionDetalle.lat, m.misionDetalle.lng] : startPos;
-                    
-                    const markerPos = isMoving 
-                        ? [(startPos[0] + endPos[0]) / 2, (startPos[1] + endPos[1]) / 2]
-                        : startPos;
+                    // Se considera en trayecto si la posición actual no es igual a la de salida o llegada
+                    const isMoving = m.ubicacion?.lat !== m.ubicacion?.salida?.lat;
 
                     return (
                         <React.Fragment key={m._id}>
-                            {isMoving && (
-                                <Polyline 
-                                    positions={[startPos, endPos]} 
-                                    pathOptions={{ color: '#f39c12', weight: 2, dashArray: '5, 10', opacity: 0.6 }} 
-                                />
-                            )}
-                            <Marker position={markerPos} icon={crearIconoTactico(m.tipoIcono || 'ala_rotativa')}>
+                            <Polyline 
+                                positions={[salidaPos, llegadaPos]} 
+                                pathOptions={{ color: '#f39c12', weight: 1, dashArray: '10, 10', opacity: 0.3 }} 
+                            />
+                            
+                            <Marker position={actualPos} icon={crearIconoTactico(m.tipoIcono || 'ala_rotativa')}>
                                 <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
                                     <span style={{color: isMoving ? '#3498db' : '#f39c12', fontWeight: 'bold'}}>
                                         {m.matricula} {isMoving ? '✈️' : ''}
@@ -285,11 +282,11 @@ const OperacionesMapa = () => {
                                 <Popup>
                                     <div style={{padding: '10px', minWidth: '220px', backgroundColor: '#1a1a1a', color: 'white'}}>
                                         <div style={{color: '#f39c12', fontWeight: 'bold', borderBottom: '1px solid #f39c12', marginBottom: '8px', paddingBottom: '4px'}}>{m.aeronave} | {m.matricula}</div>
-                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>ESTADO:</strong> {isMoving ? "EN TRAYECTO" : "DESPLEGADO"}</div>
+                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>ESTADO:</strong> {isMoving ? "EN TRAYECTO" : "EN POSICIÓN"}</div>
                                         <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>OPERACIÓN:</strong> {m.title}</div>
                                         <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>UNIDAD:</strong> {m.elemento}</div>
-                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>POSICIÓN:</strong> {m.ubicacion.nombre || "COORDENADAS"}</div>
-                                        <div style={styles.popupNoteBox}><strong style={{color: '#f39c12', fontSize: '9px'}}>INFORMACIÓN ADICIONAL:</strong><br/>{m.notasMarginales || m.notes || "SIN NOVEDAD"}</div>
+                                        <div style={styles.popupRow}><strong style={{color: '#bdc3c7'}}>RUTA:</strong> {m.ubicacion?.salida?.nombre} ➔ {m.ubicacion?.llegada?.nombre}</div>
+                                        <div style={styles.popupNoteBox}><strong style={{color: '#f39c12', fontSize: '9px'}}>NOTAS MARGINALES:</strong><br/>{m.notasMarginales || "SIN NOVEDAD"}</div>
                                         <div style={{fontSize: '9px', marginTop: '10px', color: '#27ae60', textAlign: 'right', borderTop: '1px solid #333', paddingTop: '4px'}}>ACTUALIZADO: {new Date(m.updatedAt).toLocaleTimeString()}</div>
                                     </div>
                                 </Popup>

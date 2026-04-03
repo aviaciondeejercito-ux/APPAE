@@ -69,8 +69,13 @@ const getActiveOperations = async (req, res) => {
             status: { $in: ['en_curso', 'en_desarrollo', 'operativo', 'emergencia'] } 
         };
 
+        // MODIFICACIÓN SINCRO JOKER: Permitir visualización de eventos globales en el mapa
         if (!isMando) {
-            query.elemento = { $regex: elemento, $options: 'i' };
+            query.$or = [
+                { elemento: { $regex: elemento, $options: 'i' } },
+                { esGlobal: true },
+                { etapa: 'operativo' }
+            ];
         }
 
         const activeOps = await Event.find(query).sort({ updatedAt: -1 });
@@ -94,7 +99,6 @@ const createEvent = async (req, res) => {
 
         if (!title) return res.status(400).json({ message: 'El título es obligatorio.' });
 
-        // SEGURIDAD: Validación de aeronave si es un vuelo operativo
         if (isRealTime || tipoApoyo === 'VUELO') {
             const targetMatricula = matricula || misionDetalle?.matricula;
             const aircraftExists = await Aircraft.findOne({ matricula: targetMatricula?.toUpperCase() });
@@ -106,7 +110,6 @@ const createEvent = async (req, res) => {
         const isMando = req.isMando;
         const notasProcesadas = (notasMarginales || notes || '').toString().toUpperCase();
         
-        // Normalización de coordenadas principales
         const finalLat = parseFloat(ubicacion?.salida?.lat ?? lat ?? misionDetalle?.lat ?? -34.61315);
         const finalLng = parseFloat(ubicacion?.salida?.lng ?? lng ?? misionDetalle?.lng ?? -58.37723);
 
@@ -115,8 +118,8 @@ const createEvent = async (req, res) => {
             notes: notasProcesadas,
             notasMarginales: notasProcesadas,
             color: color || '#1b3a57',
-            createdBy: req.user._id, // SEGURIDAD: Auditoría real desde el token
-            userName: req.user.username || req.user.name, // SEGURIDAD: Nombre real desde el token
+            createdBy: req.user._id,
+            userName: req.user.username || req.user.name,
             elemento: ((isMando && elemento) ? elemento : req.user.elemento).toUpperCase(),
             status: (status || 'programado').toLowerCase(),
             isRealTime: isRealTime || false,
@@ -196,14 +199,12 @@ const updateEvent = async (req, res) => {
         delete updateData.createdBy;
         updateData.updatedBy = req.user._id; 
 
-        // Normalización de Strings
         ['title', 'elemento', 'tipoApoyo', 'notasMarginales', 'notes', 'status'].forEach(field => {
             if (updateData[field] !== undefined) {
                 updateData[field] = (updateData[field] || '').toString().toUpperCase();
             }
         });
 
-        // Manejo Atómico de Coordenadas
         const nLat = parseFloat(updateData.ubicacion?.salida?.lat ?? updateData.lat ?? updateData.misionDetalle?.lat ?? event.lat);
         const nLng = parseFloat(updateData.ubicacion?.salida?.lng ?? updateData.lng ?? updateData.misionDetalle?.lng ?? event.lng);
 
@@ -267,7 +268,7 @@ const deleteEvent = async (req, res) => {
         const isOwner = event.createdBy.toString() === req.user._id.toString();
 
         if (!isMando && !isOwner) {
-            return res.status(403).json({ message: 'Acceso denegado. Solo el creador o mando superior pueden finalizar.' });
+            return res.status(403).json({ message: 'Acceso denegado.' });
         }
 
         const isRealTime = event.isRealTime;

@@ -10,12 +10,11 @@ import API from './api';
 export const getActiveOperations = async () => {
     try {
         const response = await API.get('/events/active-map');
-        // Validamos que la respuesta sea un array para evitar errores en el .map del frontend
         return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
         console.error("❌ Error al obtener operaciones en desarrollo:", 
             error.response?.data?.message || error.message);
-        return []; // Retornamos array vacío para no romper el mapa
+        return [];
     }
 };
 
@@ -34,7 +33,6 @@ export const getAvailableAircraft = async (elemento) => {
 
 // --- 3. FUNCIONES DE CALENDARIO OPERATIVO ---
 
-// Obtener todos los eventos filtrados
 export const getEvents = async () => {
     try {
         const response = await API.get('/events');
@@ -51,21 +49,29 @@ export const createEvent = async (eventData) => {
     try {
         const payload = {
             ...eventData,
-            // CORRECCIÓN HORARIA: Se envían los strings directamente para evitar conversión a UTC/Z
             start: eventData.start || null,
             end: eventData.end || null,
-            
-            // --- CAMPOS CRÍTICOS PARA EL MAPA ---
             isRealTime: eventData.isRealTime || false,
+            
+            // --- SINCRONIZACIÓN ESTRUCTURA MONGODB ---
             ubicacion: {
-                nombre: (eventData.ubicacion?.nombre || 'POSICIÓN NO DEFINIDA').toUpperCase(),
-                lat: parseFloat(eventData.ubicacion?.lat) || 0,
-                lng: parseFloat(eventData.ubicacion?.lng) || 0
+                nombre: (eventData.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+                salida: {
+                    nombre: (eventData.ubicacion?.salida?.nombre || 'ORIGEN').toUpperCase(),
+                    lat: parseFloat(eventData.ubicacion?.salida?.lat || eventData.lat || -34.61315),
+                    lng: parseFloat(eventData.ubicacion?.salida?.lng || eventData.lng || -58.37723)
+                },
+                llegada: {
+                    nombre: (eventData.ubicacion?.llegada?.nombre || 'DESTINO').toUpperCase(),
+                    lat: parseFloat(eventData.ubicacion?.llegada?.lat || eventData.lat || -34.61315),
+                    lng: parseFloat(eventData.ubicacion?.llegada?.lng || eventData.lng || -58.37723)
+                },
+                lat: parseFloat(eventData.lat || eventData.ubicacion?.lat || -34.61315),
+                lng: parseFloat(eventData.lng || eventData.ubicacion?.lng || -58.37723)
             },
-            notasMarginales: (eventData.notasMarginales || '').toUpperCase()
+            notasMarginales: (eventData.notasMarginales || eventData.notes || '').toUpperCase()
         };
         
-        // Limpiamos el payload de fechas nulas para que el calendario no lo visualice
         if (!payload.start) delete payload.start;
         if (!payload.end) delete payload.end;
 
@@ -81,30 +87,35 @@ export const createEvent = async (eventData) => {
 // Actualizar un evento (Posición táctica o datos de calendario)
 export const updateEvent = async (id, eventData) => {
     try {
-        // Clonamos para no mutar el estado original de la UI
         const cleanData = JSON.parse(JSON.stringify(eventData));
 
-        // Sanitización estricta de coordenadas para el radar
+        // Sanitización estricta de coordenadas para el radar y trayecto
         if (cleanData.ubicacion) {
             cleanData.ubicacion = {
                 nombre: (cleanData.ubicacion.nombre || 'ACTUALIZACIÓN DE POSICIÓN').toUpperCase(),
-                lat: parseFloat(cleanData.ubicacion.lat) || 0,
-                lng: parseFloat(cleanData.ubicacion.lng) || 0
+                salida: {
+                    nombre: (cleanData.ubicacion.salida?.nombre || 'ORIGEN').toUpperCase(),
+                    lat: parseFloat(cleanData.ubicacion.salida?.lat ?? cleanData.lat),
+                    lng: parseFloat(cleanData.ubicacion.salida?.lng ?? cleanData.lng)
+                },
+                llegada: {
+                    nombre: (cleanData.ubicacion.llegada?.nombre || 'DESTINO').toUpperCase(),
+                    lat: parseFloat(cleanData.ubicacion.llegada?.lat ?? cleanData.lat),
+                    lng: parseFloat(cleanData.ubicacion.llegada?.lng ?? cleanData.lng)
+                },
+                lat: parseFloat(cleanData.lat || cleanData.ubicacion.lat),
+                lng: parseFloat(cleanData.lng || cleanData.ubicacion.lng)
             };
         }
 
-        // CORRECCIÓN HORARIA: Mantenemos el string local elegido por el usuario
         if (cleanData.start) cleanData.start = eventData.start;
         if (cleanData.end) cleanData.end = eventData.end;
 
-        // Normalización militar de textos
         if (cleanData.title) cleanData.title = cleanData.title.toUpperCase();
         if (cleanData.notasMarginales) cleanData.notasMarginales = cleanData.notasMarginales.toUpperCase();
         if (cleanData.aeronave) cleanData.aeronave = cleanData.aeronave.toUpperCase();
         if (cleanData.matricula) cleanData.matricula = cleanData.matricula.toUpperCase();
 
-        // --- PROTECCIÓN DE BASE DE DATOS ---
-        // Eliminamos campos internos de MongoDB y metadatos que el backend no debe re-escribir
         const forbidden = ['_id', '__v', 'createdAt', 'updatedAt', 'createdBy', 'userName'];
         forbidden.forEach(field => delete cleanData[field]);
 
@@ -117,7 +128,6 @@ export const updateEvent = async (id, eventData) => {
     }
 };
 
-// Eliminar un evento
 export const deleteEvent = async (id) => {
     try {
         const response = await API.delete(`/events/${id}`);
@@ -129,9 +139,6 @@ export const deleteEvent = async (id) => {
     }
 };
 
-/**
- * SERVICIOS DE METEOROLOGÍA OPERATIVA (METAR/TAF)
- */
 export const getWeatherData = async (icao) => {
     try {
         const response = await API.get('/weather/data', { params: { ids: icao } });
@@ -147,9 +154,6 @@ export const getWeatherData = async (icao) => {
     }
 };
 
-/**
- * SERVICIOS DE ASTRONOMÍA TÁCTICA
- */
 export const getAstronomyData = async (lat, lng) => {
     try {
         const response = await API.get('/astronomy/data', { params: { lat, lng } });
@@ -160,9 +164,6 @@ export const getAstronomyData = async (lat, lng) => {
     }
 };
 
-/**
- * EXPORTACIÓN UNIFICADA
- */
 const EventService = {
     getEvents,
     getActiveOperations, 
