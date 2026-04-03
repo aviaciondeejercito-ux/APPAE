@@ -5,38 +5,21 @@ const mongoose = require('mongoose');
  * Estándar de Seguridad: SINCRO JOKER (Persistencia Atómica)
  */
 const eventSchema = new mongoose.Schema({
+    // 1. NOMBRE DE LA OPERACIÓN (Título del evento)
     title: { 
         type: String, 
         required: [true, 'El nombre del evento es obligatorio'], 
         trim: true,
         uppercase: true
     },
-    notes: { 
-        type: String, 
-        trim: true,
-        default: '' 
-    },
-    start: { 
-        type: Date,
-        required: false,
-        default: Date.now 
-    },
-    end: { 
-        type: Date,
-        required: false 
-    },
-    allDay: {
-        type: Boolean,
-        default: false 
-    },
-    color: { 
-        type: String, 
-        default: '#1b3a57' 
-    },
-    type: { 
-        type: String, 
-        default: 'operativo' 
-    },
+    
+    // --- CAMPOS DE CALENDARIO (NO TOCAR - FUNCIONALIDAD EXISTENTE) ---
+    notes: { type: String, trim: true, default: '' },
+    start: { type: Date, required: false, default: Date.now },
+    end: { type: Date, required: false },
+    allDay: { type: Boolean, default: false },
+    color: { type: String, default: '#1b3a57' },
+    type: { type: String, default: 'operativo' },
     status: { 
         type: String, 
         enum: ['programado', 'en_curso', 'en_desarrollo', 'finalizado', 'cancelado', 'operativo', 'disponible', 'emergencia'], 
@@ -51,32 +34,21 @@ const eventSchema = new mongoose.Schema({
         default: 'SOSTENIMIENTO',
         uppercase: true
     },
-    
     sdaListado: {
         type: [String],
         default: []
     },
 
-    // --- SECCIÓN TÁCTICA Y DETALLE ---
+    // --- SECCIÓN TÁCTICA Y DETALLE (LIMPIEZA SOLICITADA) ---
     misionDetalle: {
-        comandante: { type: String, uppercase: true, trim: true, default: '' },
-        copiloto: { type: String, uppercase: true, trim: true, default: '' },
-        mecanico: { type: String, uppercase: true, trim: true, default: '' },
-        pax: { type: String, uppercase: true, trim: true, default: '' },
-        carga: { type: String, uppercase: true, trim: true, default: '' },
-        aeronave: { type: String, uppercase: true, trim: true, default: '' },
+        // 2. MATRÍCULA (Aeronave)
         matricula: { type: String, uppercase: true, trim: true, default: '' },
-        tipoIcono: { 
-            type: String, 
-            enum: ['ala_fija', 'ala_rotativa'],
-            default: 'ala_rotativa' 
-        },
-        isRealTime: { type: Boolean, default: false },
+        aeronave: { type: String, uppercase: true, trim: true, default: '' },
+        tipoIcono: { type: String, default: 'ala_rotativa' },
         lat: { type: Number, default: -34.61315 },
         lng: { type: Number, default: -58.37723 }
     },
 
-    isRealTime: { type: Boolean, default: false },
     lat: { type: Number, default: -34.61315 }, 
     lng: { type: Number, default: -58.37723 }, 
     
@@ -94,6 +66,8 @@ const eventSchema = new mongoose.Schema({
     matricula: { type: String, uppercase: true, trim: true },
     aeronave: { type: String, uppercase: true, trim: true },
     tipoIcono: { type: String },
+
+    // 3. ORIGEN (Con sus coordenadas)
     origen: {
         nombre: { type: String, uppercase: true },
         lat: { type: Number },
@@ -129,17 +103,14 @@ const eventSchema = new mongoose.Schema({
  * MIDDLEWARE PRE-SAVE: FIJACIÓN DE POSICIÓN ÚNICA
  */
 eventSchema.pre('validate', function(next) {
-    // Asegurar estructura
     if (!this.ubicacion) this.ubicacion = {};
     if (!this.ubicacion.salida) this.ubicacion.salida = {};
 
-    // Sincronización desde el objeto 'origen' (Enviado por el formulario)
     if (this.origen && this.origen.lat) {
         this.ubicacion.salida.nombre = (this.origen.nombre || "ORIGEN").toUpperCase();
         this.ubicacion.salida.lat = this.origen.lat;
         this.ubicacion.salida.lng = this.origen.lng;
 
-        // Actualizar coordenadas raíz para el Radar
         this.lat = this.origen.lat;
         this.lng = this.origen.lng;
         this.ubicacion.lat = this.origen.lat;
@@ -151,14 +122,13 @@ eventSchema.pre('validate', function(next) {
         }
     }
 
-    // Limpieza de strings
     if (this.title) this.title = this.title.toUpperCase();
     if (this.elemento) this.elemento = this.elemento.toUpperCase();
 
     next();
 });
 
-eventSchema.index({ isRealTime: 1, status: 1 });
+eventSchema.index({ status: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
 eventSchema.index({ createdAt: -1 });
 
