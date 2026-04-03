@@ -4,7 +4,6 @@ import { AEROPUERTOS } from '../constants/TacticalData';
 import Swal from 'sweetalert2';
 
 const CargaTactica = () => {
-    // Intentamos obtener el usuario de forma segura
     const getUser = () => {
         try {
             const u = localStorage.getItem('user');
@@ -13,11 +12,9 @@ const CargaTactica = () => {
     };
 
     const user = getUser();
-    
-    // Si el rol es undefined, pero estamos en desarrollo o sos vos, forzamos permisos de mando para ver qué llega
     const isMando = user.role === 'admin' || user.role === 'OTO' || 
                     ['boss', 'director', 'otoae'].includes(user.role?.toLowerCase()) ||
-                    !user.role; // Si el rol falla, permitimos ver para diagnosticar
+                    !user.role;
 
     const [misiones, setMisiones] = useState([]);
     const [flota, setFlota] = useState([]); 
@@ -26,9 +23,20 @@ const CargaTactica = () => {
     const [showDestino, setShowDestino] = useState(false);
 
     const initialState = {
-        title: '', elemento: user.elemento || '', notas: '', sda: '', matricula: '', aeronaveId: '',
-        latG: 0, latM: 0, latS: 0, latDir: 'S', lngG: 0, lngM: 0, lngS: 0, lngDir: 'W', locNombre: '',
-        dLatG: 0, dLatM: 0, dLatS: 0, dLatDir: 'S', dLngG: 0, dLngM: 0, dLngS: 0, dLngDir: 'W', dNombre: ''
+        title: '', 
+        elemento: user.elemento || '', 
+        notas: '', 
+        sda: '', 
+        matricula: '', 
+        aeronaveId: '',
+        // Bloque Origen
+        locNombre: '',
+        latG: 0, latM: 0, latS: 0, latDir: 'S',
+        lngG: 0, lngM: 0, lngS: 0, lngDir: 'W',
+        // Bloque Destino
+        dNombre: '',
+        dLatG: 0, dLatM: 0, dLatS: 0, dLatDir: 'S',
+        dLngG: 0, dLngM: 0, dLngS: 0, dLngDir: 'W'
     };
     const [form, setForm] = useState(initialState);
 
@@ -36,26 +44,17 @@ const CargaTactica = () => {
         setLoading(true);
         try {
             const [evRes, airRes] = await Promise.all([getActiveOperations(), getAircrafts()]);
-            
             const events = Array.isArray(evRes) ? evRes : evRes.data || [];
             const aircrafts = Array.isArray(airRes) ? airRes : airRes.data || [];
 
             setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === user.elemento)));
             
-            // FILTRO CORREGIDO:
             const filtradas = aircrafts.filter(a => {
-                // 1. Solo aeronaves En Servicio
                 const enServicio = a.estado === 'E/S';
-                
-                // 2. Si el rol es indefinido o es mando, ve todas las E/S. 
-                // Si tiene unidad definida, filtramos por la suya.
                 const tieneAcceso = isMando || (user.elemento && a.unidad === user.elemento);
-                
                 return enServicio && tieneAcceso;
             });
-            
             setFlota(filtradas);
-            
         } catch (e) { 
             console.error("Error en la carga de datos:", e); 
         }
@@ -68,9 +67,8 @@ const CargaTactica = () => {
         return () => clearInterval(interval);
     }, [cargarDatos]);
 
-    // ... (Mantengo todas tus funciones de conversión y selección igual)
     const toDec = (g, m, s, dir) => {
-        const d = Math.abs(parseFloat(g)) + (parseFloat(m) / 60) + (parseFloat(s) / 3600);
+        const d = Math.abs(parseFloat(g || 0)) + (parseFloat(m || 0) / 60) + (parseFloat(s || 0) / 3600);
         return (dir === 'S' || dir === 'W') ? d * -1 : d;
     };
 
@@ -83,17 +81,34 @@ const CargaTactica = () => {
     };
 
     const handleAptSelect = (e, target) => {
-        const apt = AEROPUERTOS.find(p => p.nombre === e.target.value);
-        if (!apt) return;
-        const la = fromDec(apt.lat, 'lat');
-        const lo = fromDec(apt.lng, 'lng');
-        const prefix = target === 'pos' ? '' : 'd';
-        setForm(prev => ({
-            ...prev, 
-            [`${prefix}Nombre`]: apt.nombre,
-            [`${prefix}LatG`]: la.g, [`${prefix}LatM`]: la.m, [`${prefix}LatS`]: la.s, [`${prefix}LatDir`]: la.dir,
-            [`${prefix}LngG`]: lo.g, [`${prefix}LngM`]: lo.m, [`${prefix}LngS`]: lo.s, [`${prefix}LngDir`]: lo.dir
-        }));
+        const nombreSel = e.target.value;
+        const apt = AEROPUERTOS.find(p => p.nombre === nombreSel);
+        
+        if (target === 'pos') {
+            if (!apt) {
+                setForm(prev => ({ ...prev, locNombre: '' }));
+                return;
+            }
+            const la = fromDec(apt.lat, 'lat');
+            const lo = fromDec(apt.lng, 'lng');
+            setForm(prev => ({
+                ...prev, locNombre: apt.nombre,
+                latG: la.g, latM: la.m, latS: la.s, latDir: la.dir,
+                lngG: lo.g, lngM: lo.m, lngS: lo.s, lngDir: lo.dir
+            }));
+        } else {
+            if (!apt) {
+                setForm(prev => ({ ...prev, dNombre: '' }));
+                return;
+            }
+            const la = fromDec(apt.lat, 'lat');
+            const lo = fromDec(apt.lng, 'lng');
+            setForm(prev => ({
+                ...prev, dNombre: apt.nombre,
+                dLatG: la.g, dLatM: la.m, dLatS: la.s, dLatDir: la.dir,
+                dLngG: lo.g, dLngM: lo.m, dLngS: lo.s, dLngDir: lo.dir
+            }));
+        }
     };
 
     const handleEdit = (m) => {
@@ -101,15 +116,35 @@ const CargaTactica = () => {
         const des = m.ubicacion?.llegada || m.destino;
         const pLa = fromDec(pos.lat, 'lat');
         const pLo = fromDec(pos.lng, 'lng');
+        
         let desData = {};
-        if (des?.lat) {
+        if (des && (des.lat !== 0 || des.lng !== 0)) {
             const dLa = fromDec(des.lat, 'lat');
             const dLo = fromDec(des.lng, 'lng');
-            desData = { dNombre: des.nombre, dLatG: dLa.g, dLatM: dLa.m, dLatS: dLa.s, dLatDir: dLa.dir, dLngG: dLo.g, dLngM: dLo.m, dLngS: dLo.s, dLngDir: dLo.dir };
+            desData = { 
+                dNombre: des.nombre || '', 
+                dLatG: dLa.g, dLatM: dLa.m, dLatS: dLa.s, dLatDir: dLa.dir, 
+                dLngG: dLo.g, dLngM: dLo.m, dLngS: dLo.s, dLngDir: dLo.dir 
+            };
             setShowDestino(true);
+        } else {
+            setShowDestino(false);
         }
+
         setEditingId(m._id);
-        setForm({ ...initialState, title: m.title, elemento: m.elemento, notas: m.notes || m.notasMarginales || '', sda: m.misionDetalle?.aeronave || m.aeronave, matricula: m.misionDetalle?.matricula || m.matricula, aeronaveId: 'EDIT', latG: pLa.g, latM: pLa.m, latS: pLa.s, latDir: pLa.dir, lngG: pLo.g, lngM: pLo.m, lngS: pLo.s, lngDir: pLo.dir, locNombre: pos.nombre || 'POSICIÓN', ...desData });
+        setForm({ 
+            ...initialState, 
+            title: m.title, 
+            elemento: m.elemento, 
+            notas: m.notes || m.notasMarginales || '', 
+            sda: m.misionDetalle?.aeronave || m.aeronave, 
+            matricula: m.misionDetalle?.matricula || m.matricula, 
+            aeronaveId: 'EDIT', 
+            latG: pLa.g, latM: pLa.m, latS: pLa.s, latDir: pLa.dir, 
+            lngG: pLo.g, lngM: pLo.m, lngS: pLo.s, lngDir: pLo.dir, 
+            locNombre: pos.nombre || 'POSICIÓN',
+            ...desData 
+        });
         window.scrollTo(0, 0);
     };
 
@@ -118,6 +153,7 @@ const CargaTactica = () => {
         const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
         const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
+
         const payload = {
             title: form.title.toUpperCase(),
             elemento: form.elemento,
@@ -126,12 +162,17 @@ const CargaTactica = () => {
             status: 'operativo',
             lat, lng,
             ubicacion: { 
-                nombre: form.locNombre, 
-                salida: { nombre: form.locNombre, lat, lng },
-                llegada: showDestino ? { nombre: form.dNombre, lat: toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir), lng: toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) } : { nombre: "", lat: 0, lng: 0 }
+                nombre: form.locNombre || "POSICIÓN MANUAL", 
+                salida: { nombre: form.locNombre || "ORIGEN", lat, lng },
+                llegada: showDestino ? { 
+                    nombre: form.dNombre || "DESTINO", 
+                    lat: toDec(form.dLatG, form.dLatM, form.dLatS, form.dLatDir), 
+                    lng: toDec(form.dLngG, form.dLngM, form.dLngS, form.dLngDir) 
+                } : { nombre: "", lat: 0, lng: 0 }
             },
             misionDetalle: { aeronave: form.sda, matricula: form.matricula, tipoIcono: icono, isRealTime: true, lat, lng }
         };
+
         try {
             editingId ? await updateEvent(editingId, payload) : await createEvent(payload);
             Swal.fire('ÉXITO', editingId ? 'Vector actualizado' : 'Operación lanzada', 'success');
@@ -168,9 +209,7 @@ const CargaTactica = () => {
                                     <option value="EDIT">{form.sda} - {form.matricula}</option>
                                 ) : (
                                     flota.map(a => (
-                                        <option key={a._id} value={a._id}>
-                                            {a.sda} - {a.matricula} ({a.unidad})
-                                        </option>
+                                        <option key={a._id} value={a._id}>{a.sda} - {a.matricula} ({a.unidad})</option>
                                     ))
                                 )}
                             </select>
@@ -181,6 +220,7 @@ const CargaTactica = () => {
                             <span style={{color: '#ffd700', fontWeight: 'bold'}}>{form.elemento || '---'}</span>
                         </div>
 
+                        {/* BLOQUE ORIGEN */}
                         <div style={styles.geoBox}>
                             <label style={styles.label}>POSICIÓN / ORIGEN</label>
                             <select onChange={e => handleAptSelect(e, 'pos')} style={styles.input} value={form.locNombre}>
@@ -189,7 +229,7 @@ const CargaTactica = () => {
                             </select>
                             <div style={styles.row}>
                                 {['latG', 'latM', 'latS'].map(f => (
-                                    <input key={f} type="number" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
+                                    <input key={f} type="number" step="any" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
                                 ))}
                                 <select style={styles.inputShort} value={form.latDir} onChange={e => setForm({...form, latDir: e.target.value})}>
                                     <option>S</option><option>N</option>
@@ -197,7 +237,7 @@ const CargaTactica = () => {
                             </div>
                             <div style={{...styles.row, marginTop: '5px'}}>
                                 {['lngG', 'lngM', 'lngS'].map(f => (
-                                    <input key={f} type="number" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
+                                    <input key={f} type="number" step="any" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
                                 ))}
                                 <select style={styles.inputShort} value={form.lngDir} onChange={e => setForm({...form, lngDir: e.target.value})}>
                                     <option>W</option><option>E</option>
@@ -209,6 +249,7 @@ const CargaTactica = () => {
                             {showDestino ? '❌ QUITAR DESTINO' : '➕ AGREGAR DESTINO'}
                         </button>
 
+                        {/* BLOQUE DESTINO */}
                         {showDestino && (
                             <div style={styles.geoBox}>
                                 <label style={styles.label}>DESTINO PREVISTO</label>
@@ -216,6 +257,22 @@ const CargaTactica = () => {
                                     <option value="">Seleccionar Aeródromo...</option>
                                     {AEROPUERTOS.map(p => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
                                 </select>
+                                <div style={styles.row}>
+                                    {['dLatG', 'dLatM', 'dLatS'].map(f => (
+                                        <input key={f} type="number" step="any" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
+                                    ))}
+                                    <select style={styles.inputShort} value={form.dLatDir} onChange={e => setForm({...form, dLatDir: e.target.value})}>
+                                        <option>S</option><option>N</option>
+                                    </select>
+                                </div>
+                                <div style={{...styles.row, marginTop: '5px'}}>
+                                    {['dLngG', 'dLngM', 'dLngS'].map(f => (
+                                        <input key={f} type="number" step="any" style={styles.inputTriple} value={form[f]} onChange={e => setForm({...form, [f]: e.target.value})} placeholder="00" />
+                                    ))}
+                                    <select style={styles.inputShort} value={form.dLngDir} onChange={e => setForm({...form, dLngDir: e.target.value})}>
+                                        <option>W</option><option>E</option>
+                                    </select>
+                                </div>
                             </div>
                         )}
 
