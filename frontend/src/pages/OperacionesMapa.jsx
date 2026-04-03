@@ -8,8 +8,11 @@ const { BaseLayer } = LayersControl;
 
 /** SIMBOLOGÍA TÁCTICA */
 const crearIconoTactico = (tipo) => {
-    const color = tipo === 'ala_fija' ? '#3498db' : '#e67e22';
-    const svg = tipo === 'ala_fija' 
+    // Aseguramos que el tipo sea comparado correctamente (limpiando espacios o mayúsculas)
+    const tipoNormalizado = tipo?.toLowerCase().trim();
+    const color = tipoNormalizado === 'ala_fija' ? '#3498db' : '#e67e22';
+    
+    const svg = tipoNormalizado === 'ala_fija' 
         ? `<polygon points="50,15 90,85 50,70 10,85" fill="${color}" stroke="white" stroke-width="5"/>`
         : `<circle cx="50" cy="50" r="35" fill="${color}" stroke="white" stroke-width="5"/><line x1="10" y1="50" x2="90" y2="50" stroke="white" stroke-width="8"/><line x1="50" y1="10" x2="50" y2="90" stroke="white" stroke-width="8"/>`;
 
@@ -68,30 +71,34 @@ const OperacionesMapa = () => {
                     const ori = m.origen || {};
                     const des = m.destino || {};
                     
-                    // Coordenadas base
-                    const latOri = ori.lat;
-                    const lngOri = ori.lng;
-                    const latDes = des.lat;
-                    const lngDes = des.lng;
+                    // Validación estricta de coordenadas para evitar el error de la Polyline
+                    const latOri = parseFloat(ori.lat);
+                    const lngOri = parseFloat(ori.lng);
+                    const latDes = parseFloat(des.lat);
+                    const lngDes = parseFloat(des.lng);
 
-                    const tieneDestino = latDes && lngDes;
+                    const tieneOrigenValido = !isNaN(latOri) && !isNaN(lngOri);
+                    const tieneDestinoValido = !isNaN(latDes) && !isNaN(lngDes);
+
+                    if (!tieneOrigenValido) return null;
 
                     // Posicionamiento: Si tiene destino, va al punto medio. Si no, al origen.
-                    const actualPos = tieneDestino 
+                    const actualPos = tieneDestinoValido 
                         ? [(latOri + latDes) / 2, (lngOri + lngDes) / 2]
                         : [latOri, lngOri];
 
+                    // Obtenemos el tipo de icono del objeto m o de misionDetalle
+                    const iconoARenderizar = m.tipoIcono || m.misionDetalle?.tipoIcono || 'ala_rotativa';
+
                     return (
                         <React.Fragment key={m._id?.$oid || m._id}>
-                            {/* Trayecto con efecto Glow (solo si tiene destino) */}
-                            {tieneDestino && (
+                            {/* Trayecto con efecto Glow (solo si tiene destino válido) */}
+                            {tieneDestinoValido && (
                                 <>
-                                    {/* Línea de resplandor (Glow) */}
                                     <Polyline 
                                         positions={[[latOri, lngOri], [latDes, lngDes]]} 
                                         pathOptions={{ color: '#00d4ff', weight: 8, opacity: 0.15 }} 
                                     />
-                                    {/* Línea sutil central */}
                                     <Polyline 
                                         positions={[[latOri, lngOri], [latDes, lngDes]]} 
                                         pathOptions={{ color: '#00d4ff', weight: 1.5, opacity: 0.6, dashArray: '5, 10' }} 
@@ -99,10 +106,10 @@ const OperacionesMapa = () => {
                                 </>
                             )}
                             
-                            <Marker position={actualPos} icon={crearIconoTactico(m.tipoIcono || 'ala_rotativa')}>
+                            <Marker position={actualPos} icon={crearIconoTactico(iconoARenderizar)}>
                                 <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
-                                    <span style={{color: tieneDestino ? '#00d4ff' : '#f39c12', fontWeight: 'bold', fontSize: '10px', textShadow: '1px 1px 2px black'}}>
-                                        {m.matricula || 'S/M'} {tieneDestino ? '✈️' : '📍'}
+                                    <span style={{color: tieneDestinoValido ? '#00d4ff' : '#f39c12', fontWeight: 'bold', fontSize: '10px', textShadow: '1px 1px 2px black'}}>
+                                        {m.matricula || 'S/M'} {tieneDestinoValido ? '✈️' : '📍'}
                                     </span>
                                 </Tooltip>
                                 <Popup>
@@ -127,7 +134,7 @@ const OperacionesMapa = () => {
                                             <div style={styles.popupRow}>
                                                 <span style={styles.popupLabel}>RUTA:</span> 
                                                 <span style={styles.popupValue}>
-                                                    {ori.nombre || '---'} ➔ {des.nombre || '---'}
+                                                    {ori.nombre || '---'} {tieneDestinoValido ? `➔ ${des.nombre || '---'}` : '(EN PLATAFORMA)'}
                                                 </span>
                                             </div>
                                             
@@ -140,7 +147,7 @@ const OperacionesMapa = () => {
                                         </div>
 
                                         <div style={styles.popupFooter}>
-                                            ACTUALIZADO: {new Date(m.updatedAt).toLocaleTimeString()}
+                                            ACTUALIZADO: {m.updatedAt ? new Date(m.updatedAt).toLocaleTimeString() : '---'}
                                         </div>
                                     </div>
                                 </Popup>
