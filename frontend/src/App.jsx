@@ -55,7 +55,7 @@ function App() {
      * Strings normalizados para coincidir con la lógica del Backend.
      */
     const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
-    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OTO' || role === 'OFICINA_TECNICA' || role === 'BOSS';
+    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OFICINA_TECNICA' || role === 'BOSS';
     const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
     const puedeVerMapa = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'user';
 
