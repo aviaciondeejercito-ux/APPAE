@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getActiveOperations, createEvent, updateEvent, deleteEvent, getAircrafts } from '../services/api';
-import { AEROPUERTOS} from '../constants/TacticalData';
+import { AEROPUERTOS } from '../constants/TacticalData';
 import Swal from 'sweetalert2';
 
 const CargaTactica = () => {
@@ -28,12 +28,9 @@ const CargaTactica = () => {
             const events = Array.isArray(evRes) ? evRes : evRes.data || [];
             const aircrafts = Array.isArray(airRes) ? airRes : airRes.data || [];
 
-            // Filtrar misiones activas
             setMisiones(events.filter(ev => ev.isRealTime && (isMando || ev.elemento === user.elemento)));
             
-            // CORRECCIÓN DE FILTRADO: 
-            // Si es Mando (Admin/Boss), ve todas las E/S de la flota.
-            // Si es Usuario, ve solo las E/S de su unidad.
+            // Filtro: Admin ve todo E/S, Usuario ve su unidad E/S
             const filtradas = aircrafts.filter(a => {
                 const enServicio = a.estado === 'E/S';
                 const tieneAcceso = isMando || (a.unidad && a.unidad === user.elemento);
@@ -43,7 +40,7 @@ const CargaTactica = () => {
             setFlota(filtradas);
             
         } catch (e) { 
-            console.error("Error en la carga de datos de red:", e); 
+            console.error("Error en la carga de datos:", e); 
         }
         setLoading(false);
     }, [isMando, user.elemento]);
@@ -121,11 +118,12 @@ const CargaTactica = () => {
         const lat = toDec(form.latG, form.latM, form.latS, form.latDir);
         const lng = toDec(form.lngG, form.lngM, form.lngS, form.lngDir);
         
-        const icono = CLASIFICACION_SDA[form.sda] || (form.sda.includes('AE') ? 'ala_fija' : 'ala_rotativa');
+        // El icono se decide por el SDA que ya viene en el form desde la aeronave
+        const icono = form.sda?.includes('AE') ? 'ala_fija' : 'ala_rotativa';
 
         const payload = {
             title: form.title.toUpperCase(),
-            elemento: form.elemento,
+            elemento: form.elemento, // Viene de la aeronave seleccionada
             notes: form.notas.toUpperCase(),
             isRealTime: true,
             status: 'operativo',
@@ -197,11 +195,18 @@ const CargaTactica = () => {
                         
                         <div style={styles.formGrid}>
                             <select 
-                                style={styles.input} 
+                                style={{...styles.input, gridColumn: 'span 2'}} 
                                 value={form.aeronaveId} 
                                 onChange={e => {
                                     const a = flota.find(x => x._id === e.target.value);
-                                    if(a) setForm({...form, aeronaveId: a._id, sda: a.sda, matricula: a.matricula, elemento: a.unidad});
+                                    // Al seleccionar, cargamos TODO lo que viene de MongoDB
+                                    if(a) setForm({
+                                        ...form, 
+                                        aeronaveId: a._id, 
+                                        sda: a.sda, 
+                                        matricula: a.matricula, 
+                                        elemento: a.unidad // La unidad viene de la aeronave
+                                    });
                                 }} 
                                 required 
                                 disabled={!!editingId}
@@ -211,21 +216,17 @@ const CargaTactica = () => {
                                     <option value="EDIT">{form.sda} - {form.matricula}</option>
                                 ) : (
                                     flota.map(a => (
-                                        <option key={a._id} value={a._id}>{a.sda} - {a.matricula} ({a.unidad})</option>
+                                        <option key={a._id} value={a._id}>
+                                            {a.sda} - {a.matricula} ({a.unidad})
+                                        </option>
                                     ))
                                 )}
                             </select>
+                        </div>
 
-                            <select 
-                                style={styles.input} 
-                                value={form.elemento} 
-                                onChange={e => setForm({...form, elemento: e.target.value})} 
-                                disabled={!isMando} 
-                                required
-                            >
-                                <option value="">-- Unidad Responsable --</option>
-                                {UNIDADES_EJERCITO.map(u => <option key={u} value={u}>{u}</option>)}
-                            </select>
+                        {/* Muestra la unidad responsable automáticamente al elegir aeronave */}
+                        <div style={{marginBottom: '10px', color: '#ffd700', fontSize: '0.9rem', fontWeight: 'bold'}}>
+                            UNIDAD: {form.elemento || '---'}
                         </div>
 
                         <div style={styles.geoBox}>
