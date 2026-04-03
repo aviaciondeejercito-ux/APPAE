@@ -87,16 +87,19 @@ const eventSchema = new mongoose.Schema({
  * MIDDLEWARE PRE-SAVE: LIMPIEZA Y FORMATEO
  */
 eventSchema.pre('validate', function(next) {
-    // Solo formateo de strings
+    // Formateo de strings generales
     if (this.title) this.title = this.title.toUpperCase();
     if (this.elemento) this.elemento = this.elemento.toUpperCase();
     
-    if (this.origen && this.origen.nombre) {
-        this.origen.nombre = this.origen.nombre.toUpperCase();
+    // Verificación y formateo de ORIGEN
+    if (this.origen) {
+        if (this.origen.nombre) this.origen.nombre = this.origen.nombre.toUpperCase();
+        // Asegurar que si no hay coordenadas, no se guarden como NaN o null si no es necesario
     }
 
-    if (this.destino && this.destino.nombre) {
-        this.destino.nombre = this.destino.nombre.toUpperCase();
+    // Verificación y formateo de DESTINO
+    if (this.destino) {
+        if (this.destino.nombre) this.destino.nombre = this.destino.nombre.toUpperCase();
     }
 
     next();
