@@ -33,25 +33,28 @@ const CalendarPage = () => {
                 // 2. Lógica para DIR AE (Director, Boss, OTO)
                 if (role === 'DIRECTOR' || role === 'BOSS' || role === 'OTO') {
                     const esDeDirAe = evCreador.includes('DIR AE') || evElemento.includes('DIR AE');
-                    const esGlobalOrdenadoSubalterno = ev.esGlobal && etapa === 'ordenada';
-                    return esDeDirAe || esGlobalOrdenadoSubalterno;
+                    // Ven lo que las unidades ya ordenaron para supervisión general
+                    const esUnidadOrdenado = etapa === 'ordenada'; 
+                    return esDeDirAe || esUnidadOrdenado;
                 }
 
                 // 3. Lógica para UNIDADES SUBALTERNAS (User, S4)
                 if (role === 'user' || role === 'S4_UNIDAD') {
                     
-                    // CASO A: Eventos CREADOS por la propia unidad (Sus propios borradores internos)
-                    // Estos los ven siempre, en cualquier etapa.
+                    // REGLA A: Si la unidad es la creadora, lo ve siempre (borrador o final)
                     if (evCreador === unidadUsuario) return true;
 
-                    // CASO B: Eventos donde la unidad es RESPONSABLE (elemento) pero NO los creó ella
-                    // (Ej: Creados por DIR AE para esa unidad).
-                    // SOLO se ven si están en etapa 'ORDENADA'.
-                    if (evElemento === unidadUsuario && etapa === 'ordenada') return true;
+                    // REGLA B: Si la DIR AE lo creó específicamente para esta unidad (elemento responsable)
+                    // Solo se ve cuando está ORDENADA
+                    if (evCreador.includes('DIR AE') && evElemento === unidadUsuario && etapa === 'ordenada') return true;
 
-                    // CASO C: Eventos marcados como GLOBALES.
-                    // SOLO se ven si están en etapa 'ORDENADA'.
-                    if (ev.esGlobal && etapa === 'ordenada') return true;
+                    // REGLA C: Si la DIR AE creó un evento GLOBAL (coordinación lateral oficial)
+                    // Solo se ve cuando está ORDENADA
+                    if (evCreador.includes('DIR AE') && ev.esGlobal && etapa === 'ordenada') return true;
+
+                    // REGLA D: Bloqueo lateral. Si el creador NO es la DIR AE y NO es la propia unidad,
+                    // no se muestra, evitando que unidades vean actividades de sus pares.
+                    return false;
                 }
 
                 return false;
@@ -67,7 +70,7 @@ const CalendarPage = () => {
         const creador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
         const mision = ev.mision ? String(ev.mision).toUpperCase() : '';
 
-        if (creador.includes('SEC AE')) return '#ff0000'; // SEC AE siempre Rojo
+        if (creador.includes('SEC AE')) return '#ff0000'; 
 
         if (mision.includes('SOSTENIMIENTO')) return '#007bff';
         if (mision.includes('FUERZA OPERATIVA')) return '#28a745';
@@ -119,7 +122,6 @@ const CalendarPage = () => {
         if (isWhite) info.el.style.border = '1px solid #ddd';
 
         const evElemento = elemento ? String(elemento).toUpperCase() : '';
-        // Si el evento es propio y no global, borde negro para resaltar
         if (evElemento === userUnidad && !esGlobal) {
             info.el.style.border = '2px solid #000000';
         }
