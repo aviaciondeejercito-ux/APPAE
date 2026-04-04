@@ -12,8 +12,9 @@ const generateToken = (user) => {
     }
 
     // NORMALIZACIÓN SINCRO JOKER: Aseguramos formato para el Payload del Token
-    const roleNormalized = String(user.role).toUpperCase().trim().replace(/\s+/g, '_');
-    const elementoNormalized = String(user.elemento).toUpperCase().trim();
+    // Agregamos fallback (|| '') para evitar que el servidor explote (Error 500) si falta un dato
+    const roleNormalized = String(user.role || 'USER').toUpperCase().trim().replace(/\s+/g, '_');
+    const elementoNormalized = String(user.elemento || 'SIN_UNIDAD').toUpperCase().trim();
 
     return jwt.sign(
         { 
@@ -31,24 +32,28 @@ exports.register = async (req, res) => {
     try {
         const { nombreReal, username, elemento, email, password, role } = req.body;
         
+        // 1. Verificación de campos obligatorios
         if (!nombreReal || !username || !elemento || !email || !password) {
             return res.status(400).json({ message: 'Por favor, complete todos los campos obligatorios' });
         }
 
-        const userExists = await User.findOne({ nombreReal });
-        if (userExists) return res.status(400).json({ message: 'El Nombre de Usuario ya está registrado' });
+        // 2. Verificación de existencia (Normalizada)
+        const userExists = await User.findOne({ username: username.toLowerCase().trim() });
+        if (userExists) return res.status(400).json({ message: 'El Identificador GDE ya existe' });
 
-        const gdeExists = await User.findOne({ username });
-        if (gdeExists) return res.status(400).json({ message: 'El Identificador GDE ya existe' });
+        const emailExists = await User.findOne({ email: email.toLowerCase().trim() });
+        if (emailExists) return res.status(400).json({ message: 'El Email ya está registrado' });
 
-        // Normalización antes de crear en DB
+        // 3. Normalización de campos antes de crear
         const finalRole = (role || 'USER').toUpperCase().trim().replace(/\s+/g, '_');
+        const finalElemento = elemento.toUpperCase().trim();
 
+        // 4. Creación del Usuario
         const user = await User.create({ 
-            nombreReal, 
-            username, 
-            elemento: elemento.toUpperCase().trim(), 
-            email, 
+            nombreReal: nombreReal.trim(), 
+            username: username.toLowerCase().trim(), 
+            elemento: finalElemento, 
+            email: email.toLowerCase().trim(), 
             password,
             role: finalRole
         });
@@ -62,9 +67,16 @@ exports.register = async (req, res) => {
                 role: user.role,
                 token: generateToken(user)
             });
+        } else {
+            res.status(400).json({ message: 'Datos de usuario inválidos' });
         }
+
     } catch (error) {
-        res.status(500).json({ message: 'Error en el servidor al registrar', error: error.message });
+        console.error("🔥 ERROR EN REGISTER:", error.message);
+        res.status(500).json({ 
+            message: 'Error en el servidor al registrar', 
+            error: error.message 
+        });
     }
 };
 
@@ -80,11 +92,11 @@ exports.login = async (req, res) => {
             return res.status(400).json({ message: 'Ingrese sus credenciales' });
         }
 
-        // Buscamos al usuario por nombreReal o email (con soporte para GDE si fuera necesario)
+        // Buscamos al usuario por nombreReal, email o username
         const user = await User.findOne({ 
             $or: [
                 { nombreReal: username }, 
-                { email: username },
+                { email: username.toLowerCase() },
                 { username: username.toLowerCase() } 
             ] 
         });
@@ -110,7 +122,7 @@ exports.login = async (req, res) => {
                 _id: user._id,
                 nombreReal: user.nombreReal,
                 username: user.username,
-                role: user.role, // Ya viene normalizado por el modelo y generateToken
+                role: user.role, 
                 elemento: user.elemento, 
                 token: token
             });
