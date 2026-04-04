@@ -30,9 +30,15 @@ const CalendarPage = () => {
                     const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
                     const evCreador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
                     const unidadUsuario = userUnidad.toUpperCase();
+                    const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
                     
+                    // 1. Es de mi unidad: Lo veo siempre (soy el dueño/creador)
                     const esDeMiUnidad = evElemento.includes(unidadUsuario) || evCreador === unidadUsuario;
-                    const esGlobalVisible = ev.esGlobal && (evElemento === '' || evElemento.includes(unidadUsuario) || evElemento.includes('DIR AE'));
+                    
+                    // 2. Es Global (DIR AE): Solo lo veo si está en etapa "ordenada"
+                    const esGlobalVisible = ev.esGlobal && 
+                                          (evElemento === '' || evElemento.includes(unidadUsuario) || evElemento.includes('DIR AE')) &&
+                                          etapa === 'ordenada';
 
                     return esDeMiUnidad || esGlobalVisible;
                 });
@@ -46,7 +52,6 @@ const CalendarPage = () => {
     const getEventColor = (tipo, creadorUnidad, esGlobal) => {
         const creador = creadorUnidad ? creadorUnidad.toUpperCase() : '';
         
-        // REGLA SOLICITADA: Solo rojo si es GLOBAL y el CREADOR es SEC AE
         if (esGlobal && creador.includes('SEC AE')) return '#dc3545';
 
         if (!tipo) return '#6c757d';

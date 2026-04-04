@@ -164,7 +164,7 @@ const Operaciones = () => {
             esGlobal: publicarGlobal,
             notes: `SdA: ${formData.sdaListado.join(', ')} | Apoyado: ${formData.unidadApoyada} | Obs: ${cleanNotes}`,
             elemento: finalElemento,
-            creadorUnidad: isEditing ? undefined : userUnidad, // No sobreescribir el creador original al editar
+            creadorUnidad: isEditing ? undefined : userUnidad,
             unidadApoyada: formData.unidadApoyada.toUpperCase(),
             pntoContactoNom: formData.pntoContactoNom,
             pntoContactoTel: formData.pntoContactoTel,
@@ -203,7 +203,10 @@ const Operaciones = () => {
         setIsEditing(true);
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
+        
+        // Extraer notas limpias si ya tienen el formato de prefijo
         const parts = ev.notes?.split(' | Obs: ');
+        
         setFormData({
             title: ev.title || '',
             start: parseFromBackend(ev.start),

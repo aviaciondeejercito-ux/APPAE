@@ -14,16 +14,21 @@ const CargaTactica = () => {
     const user = getUser();
     const userElemento = localStorage.getItem('elemento') || user.elemento || "SIN UNIDAD";
 
-    const isMando = user.role === 'admin' || user.role === 'OTO' || 
-                    ['boss', 'director', 'otoae'].includes(user.role?.toLowerCase()) ||
-                    !user.role;
+    // Lógica corregida: admin y user en minúsculas, el resto en MAYÚSCULAS según normalización.
+    const isMando = 
+        user.role === 'admin' || 
+        user.role === 'OTO' || 
+        user.role === 'DIRECTOR' || 
+        user.role === 'BOSS' || 
+        user.role === 'OTOAE' || 
+        user.role === 'OFICINA_TECNICA';
 
     const [misiones, setMisiones] = useState([]);
     const [aeronaves, setAeronaves] = useState([]); 
     const [loading, setLoading] = useState(false);
     
     // Estados del Formulario
-    const [editingId, setEditingId] = useState(null); // Para saber si editamos o creamos
+    const [editingId, setEditingId] = useState(null);
     const [title, setTitle] = useState('');
     const [selectedMatricula, setSelectedMatricula] = useState('');
     const [notasMarginales, setNotasMarginales] = useState('');
@@ -67,7 +72,13 @@ const CargaTactica = () => {
         try {
             const evRes = await getActiveOperations();
             const events = Array.isArray(evRes) ? evRes : [];
-            setMisiones(events.filter(ev => isMando || ev.elemento === userElemento));
+            
+            // Filtro corregido: Si es mando ve TODO, si no, filtra por su elemento.
+            if (isMando) {
+                setMisiones(events);
+            } else {
+                setMisiones(events.filter(ev => ev.elemento === userElemento));
+            }
 
             const airRes = await getAircrafts();
             const dataAeronaves = Array.isArray(airRes) ? airRes : airRes.data || [];
@@ -82,7 +93,6 @@ const CargaTactica = () => {
         cargarDatos();
     }, [cargarDatos]);
 
-    // Función para cargar datos en el formulario para editar
     const prepararEdicion = (m) => {
         setEditingId(m._id);
         setTitle(m.title);
@@ -222,7 +232,6 @@ const CargaTactica = () => {
                         </div>
 
                         <div style={styles.coordGrid}>
-                            {/* CAJA ORIGEN */}
                             <div style={styles.coordBox}>
                                 <label style={styles.labelBlue}>PUNTO DE ORIGEN</label>
                                 <div style={{marginBottom: '10px'}}>
@@ -247,7 +256,6 @@ const CargaTactica = () => {
                                 </div>
                             </div>
 
-                            {/* CAJA DESTINO */}
                             <div style={styles.coordBox}>
                                 <label style={styles.labelRed}>PUNTO DE DESTINO</label>
                                 <div style={{marginBottom: '10px'}}>
