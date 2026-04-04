@@ -77,6 +77,10 @@ const Operaciones = () => {
         fetchAeronaves();
     }, [formData.unidadesInvolucradas, userUnidad, isEditing]);
 
+    /**
+     * LÓGICA DE FILTRADO CORREGIDA:
+     * El admin/mando ahora puede ver todos los eventos para supervisión.
+     */
     const fetchData = async () => {
         try {
             const data = await getEvents();
@@ -84,22 +88,30 @@ const Operaciones = () => {
             const logicFiltered = data.filter(ev => {
                 if (ev.isRealTime) return false;
                 
+                // Si el usuario es ADMIN o MANDO, ve absolutamente TODO
+                if (esMando) return true;
+
                 const creador = ev.creadorUnidad?.toUpperCase() || "";
                 const unidadesResponsables = ev.elemento?.toUpperCase() || "";
-                const esMiPropiaOrden = creador === userUnidad;
-                const soyResponsable = unidadesResponsables.includes(userUnidad);
+                const unidadUsuario = userUnidad.toUpperCase();
+                const esMiPropiaOrden = creador === unidadUsuario;
+                const soyResponsable = unidadesResponsables.includes(unidadUsuario);
+                const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
-                if (ev.etapa === 'recepcion' || ev.etapa === 'revision') {
-                    return esMiPropiaOrden;
-                }
-
-                if (esMando) {
-                    if (esMiPropiaOrden) return true;
-                    return ev.esGlobal === true;
-                }
-
+                // Reglas para unidades (No Mando):
+                // 1. Si soy el creador/dueño, lo veo siempre (cualquier etapa)
                 if (esMiPropiaOrden) return true;
-                return soyResponsable && ev.etapa === 'ordenada';
+
+                // 2. Si soy el responsable pero no el creador, solo lo veo si está ORDENADA
+                if (soyResponsable && etapa === 'ordenada') return true;
+
+                // 3. Si es Global y soy DIR AE (o involucra a mi unidad), verlo según etapa
+                if (ev.esGlobal) {
+                    if (unidadUsuario === 'DIR AE' && unidadesResponsables.includes('DIR AE')) return true;
+                    if (etapa === 'ordenada' && (creador.includes('DIR AE') || unidadesResponsables.includes('DIR AE'))) return true;
+                }
+
+                return false;
             });
             
             setEvents(Array.isArray(logicFiltered) ? logicFiltered : []);
@@ -204,7 +216,6 @@ const Operaciones = () => {
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
         
-        // Extraer notas limpias si ya tienen el formato de prefijo
         const parts = ev.notes?.split(' | Obs: ');
         
         setFormData({
@@ -345,8 +356,9 @@ const Operaciones = () => {
                         filteredEvents.map(ev => {
                             const esCreador = ev.creadorUnidad?.toUpperCase() === userUnidad;
                             const esResponsable = ev.elemento?.toUpperCase().includes(userUnidad);
-                            const puedeEditar = esCreador || (esResponsable && ev.etapa === 'ordenada');
-                            const puedeBorrar = esCreador || esMando;
+                            // Un admin puede editar y borrar cualquier cosa
+                            const puedeEditar = esMando || esCreador || (esResponsable && ev.etapa === 'ordenada');
+                            const puedeBorrar = esMando || esCreador;
 
                             return (
                                 <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
