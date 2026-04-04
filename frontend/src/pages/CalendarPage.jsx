@@ -21,9 +21,6 @@ const CalendarPage = () => {
         try {
             const data = await getEvents();
             
-            /**
-             * LÓGICA DE FILTRADO JERÁRQUICO (PECERA ESTANCA TOTAL)
-             */
             const filteredData = (role === 'admin' || role === 'BOSS' || role === 'DIRECTOR'|| role === 'OTO') 
                 ? data 
                 : data.filter(ev => {
@@ -32,25 +29,19 @@ const CalendarPage = () => {
                     const unidadUsuario = userUnidad.toUpperCase();
                     const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
-                    // 1. Es de mi unidad: Lo veo siempre (soy el dueño/creador o está asignado a mi unidad)
-                    const esDeMiUnidad = evElemento.includes(unidadUsuario) || evCreador === unidadUsuario;
-                    
-                    // 2. Lógica de visibilidad cruzada cruzada (Solo si es Global)
-                    let esGlobalVisible = false;
+                    const soyDueño = evElemento === unidadUsuario || evCreador === unidadUsuario;
+                    const soyInvolucradoOrdenado = evElemento.includes(unidadUsuario) && etapa === 'ordenada';
 
+                    let visibilidadGlobal = false;
                     if (ev.esGlobal) {
                         if (unidadUsuario === 'DIR AE') {
-                            // Si soy DIR AE: Solo veo lo global de otros si me mencionan o si yo lo creé
-                            esGlobalVisible = evElemento.includes('DIR AE');
+                            visibilidadGlobal = evElemento.includes('DIR AE');
                         } else {
-                            // Si soy unidad subordinada: Solo veo lo de DIR AE si está "ordenada" 
-                            // O si el evento global fue creado por mi unidad para que lo vea DIR AE
-                            const deDirAeParaMi = (evCreador.includes('DIR AE') || evElemento.includes('DIR AE')) && etapa === 'ordenada';
-                            esGlobalVisible = deDirAeParaMi;
+                            visibilidadGlobal = (evCreador.includes('DIR AE') || evElemento.includes('DIR AE')) && etapa === 'ordenada';
                         }
                     }
 
-                    return esDeMiUnidad || esGlobalVisible;
+                    return soyDueño || soyInvolucradoOrdenado || visibilidadGlobal;
                 });
 
             setEvents(Array.isArray(filteredData) ? filteredData : []);
@@ -59,19 +50,13 @@ const CalendarPage = () => {
         }
     };
 
-    /**
-     * LÓGICA DE COLOR REVERTIDA:
-     * El color se asigna ÚNICAMENTE según el Tipo de Apoyo.
-     */
     const getEventColor = (tipo) => {
-        if (!tipo) return '#6c757d'; // Color gris por defecto si no hay tipo
-        
+        if (!tipo) return '#6c757d';
         const t = tipo.toUpperCase();
-        if (t.includes('SOSTENIMIENTO')) return '#007bff'; // Azul
-        if (t.includes('FUERZA OPERATIVA')) return '#28a745'; // Verde
-        if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000'; // Bordó
-        
-        return '#6c757d'; // Gris para otros tipos no especificados
+        if (t.includes('SOSTENIMIENTO')) return '#007bff';
+        if (t.includes('FUERZA OPERATIVA')) return '#28a745';
+        if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000';
+        return '#6c757d'; 
     };
 
     const handleEventClick = (info) => {
@@ -92,6 +77,7 @@ const CalendarPage = () => {
             color: event.backgroundColor,
             notes: cleanNotes,
             user: event.extendedProps.user,
+            creadorUnidad: event.extendedProps.creadorUnidad, // Agregado
             origen: event.extendedProps.tipoOrigen,
             elemento: event.extendedProps.elemento,
             etapa: event.extendedProps.etapa,
@@ -150,11 +136,13 @@ const CalendarPage = () => {
         title: { color: '#1b3a57', margin: 0, fontSize: '1.2rem', fontWeight: 'bold' },
         unidadBadge: { fontSize: '0.75rem', background: '#e9ecef', color: '#1b3a57', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
         modeBadge: { fontSize: '0.75rem', background: '#1b3a57', color: 'white', padding: '4px 10px', borderRadius: '4px' },
-        legendBar: { background: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '15px' },
+        legendBar: { background: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '20px' },
         legendGroup: { display: 'flex', alignItems: 'center', gap: '10px' },
         legendGroupTitle: { fontSize: '0.7rem', fontWeight: 'bold', color: '#1b3a57', textTransform: 'uppercase' },
         legendItem: { fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', color: '#444' },
         colorBox: { width: '12px', height: '12px', borderRadius: '2px' },
+        borderSample: { width: '15px', height: '0px', borderBottom: '2px solid #000' },
+        dashedSample: { width: '15px', height: '0px', borderBottom: '2px dashed #333' },
         modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
         modalContent: { background: 'white', borderRadius: '12px', width: '95%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' },
         modalHeader: { padding: '15px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -190,7 +178,6 @@ const CalendarPage = () => {
                     initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
                     locale={esLocale}
                     events={events.map(ev => {
-                        // CORRECCIÓN: Se envían menos parámetros a la función de color
                         const colorBase = getEventColor(ev.tipoApoyo);
                         let prefix = '';
                         if (ev.etapa === 'recepcion') prefix = '🟡 ';
@@ -208,6 +195,7 @@ const CalendarPage = () => {
                             extendedProps: { 
                                 notes: ev.notes, 
                                 user: ev.userName,
+                                creadorUnidad: ev.creadorUnidad,
                                 tipoOrigen: ev.tipoOrigen,
                                 elemento: ev.elemento,
                                 esGlobal: ev.esGlobal,
@@ -237,17 +225,22 @@ const CalendarPage = () => {
 
             <div style={styles.legendBar}>
                 <div style={styles.legendGroup}>
-                    <span style={styles.legendGroupTitle}>MISIONES:</span>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sost.</div>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Op.</div>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Edu.</div>
-                    {/* CORRECCIÓN: Se eliminó la leyenda del color rojo */}
+                    <span style={styles.legendGroupTitle}>Misiones (Colores):</span>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sostenimiento</div>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Operativa</div>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Educación</div>
                 </div>
                 <div style={styles.legendGroup}>
-                    <span style={styles.legendGroupTitle}>ESTADOS:</span>
-                    <div style={styles.legendItem}>🟡 Sol.</div>
-                    <div style={styles.legendItem}>🔵 Rev.</div>
-                    <div style={styles.legendItem}>🟢 Ord.</div>
+                    <span style={styles.legendGroupTitle}>Estados:</span>
+                    <div style={styles.legendItem}>🟡 Solicitud</div>
+                    <div style={styles.legendItem}>🔵 Revisión</div>
+                    <div style={styles.legendItem}>🟢 Ordenada</div>
+                    <div style={styles.legendItem}>🌐 Global</div>
+                </div>
+                <div style={styles.legendGroup}>
+                    <span style={styles.legendGroupTitle}>Ayudas Visuales:</span>
+                    <div style={styles.legendItem}><div style={styles.borderSample}></div> Propio</div>
+                    <div style={styles.legendItem}><div style={styles.dashedSample}></div> Borrador/Rec.</div>
                 </div>
             </div>
 
@@ -266,6 +259,11 @@ const CalendarPage = () => {
                             <div style={styles.infoRow}>
                                 <strong>🏢 Unidades Involucradas:</strong> 
                                 <span style={{ color: '#1b3a57', fontWeight: 'bold' }}>{selectedEvent.elemento}</span>
+                            </div>
+
+                            <div style={styles.infoRow}>
+                                <strong>✍️ Creado por:</strong> 
+                                <span>{selectedEvent.creadorUnidad || 'N/C'} ({selectedEvent.user || 'Usuario'})</span>
                             </div>
 
                             {selectedEvent.unidadApoyada && (
