@@ -44,7 +44,7 @@ const CalendarPage = () => {
 
                     // NUEVA LÓGICA: BOSS y DIRECTOR
                     let visibilidadJerarquia = false;
-                    if (role === 'BOSS' || role === 'DIRECTOR'|| role === 'DIRECTOR') {
+                    if (role === 'BOSS' || role === 'DIRECTOR'|| role === 'OTO') {
                         // 1. Ver elementos GLOBALES en estado ORDENADO
                         const globalOrdenado = ev.esGlobal && etapa === 'ordenada';
                         
