@@ -83,20 +83,34 @@ const Operaciones = () => {
             
             const logicFiltered = data.filter(ev => {
                 if (ev.isRealTime) return false;
-                if (esMando) return true;
+
+                // 1. ADMIN ve absolutamente todo
+                if (role === 'admin') return true;
 
                 const creador = ev.creadorUnidad?.toUpperCase() || "";
                 const unidadesResponsables = ev.elemento?.toUpperCase() || "";
-                const unidadUsuario = userUnidad.toUpperCase();
+                const unidadUsuario = userUnidad?.toUpperCase() || "";
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
+                const esGlobal = ev.esGlobal === true;
 
-                // El creador siempre ve su propia misión
-                if (creador === unidadUsuario) return true;
+                // 2. DIRECTOR - BOSS - OTO (Mando DIR AE)
+                if (['director', 'boss', 'oto'].includes(role)) {
+                    // Ven todo lo de la DIR AE (Internos y Globales de DIR AE en cualquier etapa)
+                    if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
+                    // Ven Globales de subalternos SOLO si están en 'ordenada'
+                    if (esGlobal && etapa === 'ordenada') return true;
+                    return false;
+                }
 
-                // Las unidades responsables y globales SOLO ven si está en 'ordenada'
-                // Se quitó 'revision' de aquí por pedido explícito
-                if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
-                if (ev.esGlobal && etapa === 'ordenada') return true;
+                // 3. USER - S4_UNIDAD (Unidades Subalternas)
+                if (role === 'user' || role === 's4_unidad') {
+                    // Ven todos los eventos internos de su elemento (creados por ellos) en cualquier etapa
+                    if (creador === unidadUsuario) return true;
+                    // Ven eventos donde fueron elegidos como unidad responsable SOLO en 'ordenada'
+                    if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
+                    // Ven eventos globales (de otros) SOLO en 'ordenada'
+                    if (esGlobal && etapa === 'ordenada') return true;
+                }
 
                 return false;
             });
@@ -346,7 +360,6 @@ const Operaciones = () => {
                             const esCreador = ev.creadorUnidad?.toUpperCase() === userUnidad;
                             const esResponsable = ev.elemento?.toUpperCase().includes(userUnidad);
                             
-                            // Solo permite editar si es Mando, Creador o Responsable EN ORDENADA (Se quitó revision de aquí)
                             const puedeEditar = esMando || esCreador || (esResponsable && ev.etapa === 'ordenada');
                             const puedeBorrar = esMando || esCreador;
 
