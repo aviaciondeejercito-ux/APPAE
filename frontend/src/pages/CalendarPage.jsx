@@ -21,41 +21,35 @@ const CalendarPage = () => {
         try {
             const data = await getEvents();
             
-            const filteredData = (role === 'admin' || role === 'OTO') 
-                ? data 
-                : data.filter(ev => {
-                    const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
-                    const evCreador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
-                    const unidadUsuario = userUnidad.toUpperCase();
-                    const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
+            const filteredData = data.filter(ev => {
+                const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
+                const evCreador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
+                const unidadUsuario = userUnidad.toUpperCase();
+                const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
-                    // Lógica existente
-                    const soyDueño = evElemento === unidadUsuario || evCreador === unidadUsuario;
-                    const soyInvolucradoOrdenado = evElemento.includes(unidadUsuario) && etapa === 'ordenada';
+                // 1. ADMIN: Ve todo
+                if (role === 'admin') return true;
 
-                    let visibilidadGlobal = false;
-                    if (ev.esGlobal) {
-                        if (unidadUsuario === 'DIR AE') {
-                            visibilidadGlobal = evElemento.includes('DIR AE');
-                        } else {
-                            visibilidadGlobal = (evCreador.includes('DIR AE') || evElemento.includes('DIR AE')) && etapa === 'ordenada';
-                        }
-                    }
+                // 2. DIRECTOR - BOSS - OTO:
+                // Ver todos los eventos de la DIR AE (internos de DIR AE en cualquier etapa)
+                // Ver eventos Globales de unidades subalternas solo si están en estado 'ordenada'
+                if (role === 'DIRECTOR' || role === 'BOSS' || role === 'OTO') {
+                    const esDeDirAe = evCreador === 'DIR AE' || evElemento === 'DIR AE';
+                    const esGlobalOrdenadoSubalterno = ev.esGlobal && etapa === 'ordenada';
+                    return esDeDirAe || esGlobalOrdenadoSubalterno;
+                }
 
-                    // NUEVA LÓGICA: BOSS y DIRECTOR
-                    let visibilidadJerarquia = false;
-                    if (role === 'BOSS' || role === 'DIRECTOR'|| role === 'OTO') {
-                        // 1. Ver elementos GLOBALES en estado ORDENADO
-                        const globalOrdenado = ev.esGlobal && etapa === 'ordenada';
-                        
-                        // 2. Ver eventos creados por usuarios de DIR AE (internos) en cualquier estado
-                        const creadoPorDirAe = evCreador === 'DIR AE';
+                // 3. USER - S4_UNIDAD:
+                // Ver eventos internos de su propio elemento (en cualquier etapa)
+                // Ver eventos globales donde su elemento fue elegido, solo si están en estado 'ordenada'
+                if (role === 'user' || role === 'S4_UNIDAD') {
+                    const esInternoPropio = !ev.esGlobal && (evElemento === unidadUsuario || evCreador === unidadUsuario);
+                    const esGlobalOrdenadoPropio = ev.esGlobal && evElemento.includes(unidadUsuario) && etapa === 'ordenada';
+                    return esInternoPropio || esGlobalOrdenadoPropio;
+                }
 
-                        visibilidadJerarquia = globalOrdenado || creadoPorDirAe;
-                    }
-
-                    return soyDueño || soyInvolucradoOrdenado || visibilidadGlobal || visibilidadJerarquia;
-                });
+                return false;
+            });
 
             setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
