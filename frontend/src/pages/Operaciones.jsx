@@ -25,6 +25,19 @@ const Operaciones = () => {
         "SEC AE MTE 12", "B AB MANT AERON 601", "SEC AE MTE 3", "SEC AE 9"
     ];
 
+    // Listado de SdA para la DIR AE (según tu imagen)
+    const sdaListadoDirAe = [
+        "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
+        "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
+    ];
+
+    const misionesConfig = {
+        'SOSTENIMIENTO': '#3498db',
+        'FUERZA OPERATIVA': '#e74c3c',
+        'EDUCACION': '#f1c40f',
+        'OTROS': '#95a5a6'
+    };
+
     const etapaColors = {
         recepcion: '#f39c12',
         revision: '#3498db',
@@ -33,6 +46,7 @@ const Operaciones = () => {
 
     const [formData, setFormData] = useState({
         title: '', start: '', end: '', color: '#3498db', notes: '',
+        mision: '', // Nuevo campo solicitado
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
         etapa: 'recepcion', 
         unidadesInvolucradas: [],
@@ -56,17 +70,23 @@ const Operaciones = () => {
 
     useEffect(() => {
         const fetchAeronaves = async () => {
-            const unidadABuscar = userUnidad || (formData.unidadesInvolucradas.length > 0 ? formData.unidadesInvolucradas[0] : null);
+            // Si es mando, no necesita cargar matrículas específicas aquí, usa el listado estático
+            if (esMando) return;
+
+            const unidadABuscar = userUnidad;
             if (!unidadABuscar) return;
             
             setLoadingAircraft(true);
             try {
                 const data = await getAvailableAircraft(unidadABuscar);
-                const cleanData = data.map(a => ({
-                    ...a,
-                    matricula: a.matricula || 'S/M',
-                    modelo: a.modelo || a.sda || 'S/D'
-                }));
+                // FILTRO CRÍTICO: Solo aeronaves En Servicio (E/S)
+                const cleanData = data
+                    .filter(a => a.estado === 'E/S')
+                    .map(a => ({
+                        ...a,
+                        matricula: a.matricula || 'S/M',
+                        modelo: a.modelo || a.sda || 'S/D'
+                    }));
                 setAvailableAircraft(cleanData);
             } catch (err) {
                 console.error("Error cargando aeronaves");
@@ -75,50 +95,35 @@ const Operaciones = () => {
             }
         };
         fetchAeronaves();
-    }, [formData.unidadesInvolucradas, userUnidad, isEditing]);
+    }, [userUnidad, isEditing, esMando]);
 
     const fetchData = async () => {
         try {
             const data = await getEvents();
-            
             const logicFiltered = data.filter(ev => {
                 if (ev.isRealTime) return false;
-
-                // 1. ADMIN ve absolutamente todo
                 if (role === 'admin') return true;
-
                 const creador = ev.creadorUnidad?.toUpperCase() || "";
                 const unidadesResponsables = ev.elemento?.toUpperCase() || "";
                 const unidadUsuario = userUnidad?.toUpperCase() || "";
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
                 const esGlobal = ev.esGlobal === true;
 
-                // 2. DIRECTOR - BOSS - OTO (Mando DIR AE)
                 if (['director', 'boss', 'oto'].includes(role)) {
-                    // Ven todo lo de la DIR AE (Internos y Globales de DIR AE en cualquier etapa)
                     if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
-                    // Ven Globales de subalternos SOLO si están en 'ordenada'
                     if (esGlobal && etapa === 'ordenada') return true;
                     return false;
                 }
 
-                // 3. USER - S4_UNIDAD (Unidades Subalternas)
                 if (role === 'user' || role === 's4_unidad') {
-                    // Ven todos los eventos internos de su elemento (creados por ellos) en cualquier etapa
                     if (creador === unidadUsuario) return true;
-                    // Ven eventos donde fueron elegidos como unidad responsable SOLO en 'ordenada'
                     if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
-                    
-                    // ELIMINADO: Ya no ven eventos globales de otros aunque estén en 'ordenada'
-                    // Solo la DIR AE debe ver eventos globales en estado ordenado de elementos subalternos.
                 }
-
                 return false;
             });
-            
             setEvents(Array.isArray(logicFiltered) ? logicFiltered : []);
         } catch (error) { 
-            console.error("❌ Error de Sincronización Estanca"); 
+            console.error("❌ Error de Sincronización"); 
         }
     };
 
@@ -130,8 +135,8 @@ const Operaciones = () => {
     const toggleUnidad = (unidad) => {
         const current = formData.unidadesInvolucradas;
         const updated = current.includes(unidad) 
-            ? current.filter(u => u !== unidad) 
-            : [...current, unidad];
+             ? current.filter(u => u !== unidad) 
+             : [...current, unidad];
         setFormData({ ...formData, unidadesInvolucradas: updated });
     };
 
@@ -174,6 +179,7 @@ const Operaciones = () => {
             start: formData.start, 
             end: formData.end,
             color: formData.color,
+            mision: formData.mision,
             tipoApoyo: formData.tipoApoyo.toUpperCase(),
             sdaListado: formData.sdaListado,
             etapa: formData.etapa,
@@ -204,6 +210,7 @@ const Operaciones = () => {
     const resetForm = () => {
         setFormData({ 
             title: '', start: '', end: '', color: '#3498db', notes: '', 
+            mision: '',
             tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
             etapa: 'recepcion', unidadesInvolucradas: [], unidadApoyada: '',
             pntoContactoNom: '', pntoContactoTel: '',
@@ -218,14 +225,13 @@ const Operaciones = () => {
         setIsEditing(true);
         setSelectedId(ev._id);
         setPublicarGlobal(ev.esGlobal || false);
-        
         const parts = ev.notes?.split(' | Obs: ');
-        
         setFormData({
             title: ev.title || '',
             start: parseFromBackend(ev.start),
             end: parseFromBackend(ev.end),
             color: ev.color || '#3498db',
+            mision: ev.mision || '',
             notes: parts && parts.length > 1 ? parts[1] : ev.notes || '',
             sdaListado: Array.isArray(ev.sdaListado) ? ev.sdaListado : [], 
             tipoApoyo: ev.tipoApoyo || '',
@@ -277,6 +283,18 @@ const Operaciones = () => {
                     </div>
 
                     <form onSubmit={handleSubmit} style={styles.form}>
+                        {/* SECTOR DE MISIÓN (CAMBIO DE COLOR) */}
+                        <div style={styles.sectionTitle}>CLASIFICACIÓN DE MISIÓN</div>
+                        <select 
+                            value={formData.mision} 
+                            onChange={e => setFormData({...formData, mision: e.target.value, color: misionesConfig[e.target.value] || '#3498db'})} 
+                            style={styles.input} 
+                            required
+                        >
+                            <option value="">Seleccione Misión...</option>
+                            {Object.keys(misionesConfig).map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+
                         <input type="text" required placeholder="Nombre de la Misión" value={formData.title} 
                                onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} />
                         
@@ -327,11 +345,19 @@ const Operaciones = () => {
                                    onChange={e => setFormData({...formData, responsableTel: e.target.value})} style={{...styles.input, flex: 1}} />
                         </div>
 
+                        {/* SELECTOR DE SdA DINÁMICO SEGÚN ROL */}
                         <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA)</div>
                         <div style={styles.sdaBox}>
                             <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
                                 <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar SdA..."}</option>
-                                {availableAircraft.map(air => <option key={air._id} value={air.modelo}>{air.modelo} ({air.matricula})</option>)}
+                                
+                                {esMando ? (
+                                    /* Listado para DIR AE (Genérico por modelo) */
+                                    sdaListadoDirAe.map((sda, idx) => <option key={idx} value={sda}>{sda}</option>)
+                                ) : (
+                                    /* Listado para Unidades (Solo sus aeronaves E/S) */
+                                    availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} - {air.matricula}</option>)
+                                )}
                             </select>
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
                             <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
@@ -360,7 +386,6 @@ const Operaciones = () => {
                         filteredEvents.map(ev => {
                             const esCreador = ev.creadorUnidad?.toUpperCase() === userUnidad;
                             const esResponsable = ev.elemento?.toUpperCase().includes(userUnidad);
-                            
                             const puedeEditar = esMando || esCreador || (esResponsable && ev.etapa === 'ordenada');
                             const puedeBorrar = esMando || esCreador;
 
@@ -368,6 +393,7 @@ const Operaciones = () => {
                                 <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
                                     <div style={{flex: 1}}>
                                         <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.esGlobal && "🌐 "}{ev.title}</div>
+                                        <div style={{fontSize: '0.7rem', color: ev.color, fontWeight: 'bold'}}>{ev.mision || 'SIN CLASIFICAR'}</div>
                                         <div style={{display: 'inline-block', fontSize: '0.65rem', background: '#e1e8ed', color: '#1b3a57', padding: '2px 6px', borderRadius: '4px', marginBottom: '4px'}}>
                                             ORIGEN: {ev.creadorUnidad || 'S/D'}
                                         </div>
