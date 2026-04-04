@@ -32,18 +32,19 @@ const CalendarPage = () => {
                     const unidadUsuario = userUnidad.toUpperCase();
                     const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
-                    // 1. Es de mi unidad: Lo veo siempre (dueño o involucrado)
+                    // 1. Es de mi unidad: Lo veo siempre (soy el dueño/creador o está asignado a mi unidad)
                     const esDeMiUnidad = evElemento.includes(unidadUsuario) || evCreador === unidadUsuario;
                     
-                    // 2. Lógica de visibilidad cruzada Global
+                    // 2. Lógica de visibilidad cruzada cruzada (Solo si es Global)
                     let esGlobalVisible = false;
 
                     if (ev.esGlobal) {
                         if (unidadUsuario === 'DIR AE') {
-                            // DIR AE ve lo global de otros solo si lo involucraron explícitamente
+                            // Si soy DIR AE: Solo veo lo global de otros si me mencionan o si yo lo creé
                             esGlobalVisible = evElemento.includes('DIR AE');
                         } else {
-                            // Subordinada ve lo de DIR AE solo si está "ordenada"
+                            // Si soy unidad subordinada: Solo veo lo de DIR AE si está "ordenada" 
+                            // O si el evento global fue creado por mi unidad para que lo vea DIR AE
                             const deDirAeParaMi = (evCreador.includes('DIR AE') || evElemento.includes('DIR AE')) && etapa === 'ordenada';
                             esGlobalVisible = deDirAeParaMi;
                         }
@@ -59,26 +60,18 @@ const CalendarPage = () => {
     };
 
     /**
-     * CORRECCIÓN DE LÓGICA DE COLOR:
-     * El color Rojo (#dc3545) ahora es EXCLUSIVO para eventos Globales 
-     * creados por Secretarías (SEC AE) que NO son la Dirección (DIR AE).
+     * LÓGICA DE COLOR REVERTIDA:
+     * El color se asigna ÚNICAMENTE según el Tipo de Apoyo.
      */
-    const getEventColor = (tipo, creadorUnidad, esGlobal) => {
-        const creador = creadorUnidad ? creadorUnidad.toUpperCase() : '';
+    const getEventColor = (tipo) => {
+        if (!tipo) return '#6c757d'; // Color gris por defecto si no hay tipo
         
-        // Si es Global y viene de una SEC AE, pero NO es de DIR AE -> ROJO
-        if (esGlobal && creador.includes('SEC AE') && !creador.includes('DIR AE')) {
-            return '#dc3545';
-        }
-
-        // Si no, colores por tipo de misión
-        if (!tipo) return '#6c757d';
         const t = tipo.toUpperCase();
-        if (t.includes('SOSTENIMIENTO')) return '#007bff';
-        if (t.includes('FUERZA OPERATIVA')) return '#28a745';
-        if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000';
+        if (t.includes('SOSTENIMIENTO')) return '#007bff'; // Azul
+        if (t.includes('FUERZA OPERATIVA')) return '#28a745'; // Verde
+        if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000'; // Bordó
         
-        return '#6c757d'; 
+        return '#6c757d'; // Gris para otros tipos no especificados
     };
 
     const handleEventClick = (info) => {
@@ -197,7 +190,8 @@ const CalendarPage = () => {
                     initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
                     locale={esLocale}
                     events={events.map(ev => {
-                        const colorBase = getEventColor(ev.tipoApoyo, ev.creadorUnidad, ev.esGlobal);
+                        // CORRECCIÓN: Se envían menos parámetros a la función de color
+                        const colorBase = getEventColor(ev.tipoApoyo);
                         let prefix = '';
                         if (ev.etapa === 'recepcion') prefix = '🟡 ';
                         if (ev.etapa === 'revision') prefix = '🔵 ';
@@ -247,7 +241,7 @@ const CalendarPage = () => {
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sost.</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Op.</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Edu.</div>
-                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#dc3545'}}></span> Global SEC AE</div>
+                    {/* CORRECCIÓN: Se eliminó la leyenda del color rojo */}
                 </div>
                 <div style={styles.legendGroup}>
                     <span style={styles.legendGroupTitle}>ESTADOS:</span>
