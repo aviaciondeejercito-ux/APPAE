@@ -37,10 +37,13 @@ const CalendarPage = () => {
                     return esDeDirAe || esGlobalOrdenadoSubalterno;
                 }
 
-                // 3. USER - S4_UNIDAD:
+                // 3. USER - S4_UNIDAD (Lógica corregida según pedido):
                 if (role === 'user' || role === 'S4_UNIDAD') {
+                    // Evento Interno: Se ve en cualquier etapa
                     const esInternoPropio = !ev.esGlobal && (evElemento === unidadUsuario || evCreador === unidadUsuario);
-                    const esGlobalOrdenadoPropio = ev.esGlobal && evElemento.includes(unidadUsuario) && etapa === 'ordenada';
+                    // Evento Global: SOLO se ve si está en etapa 'ordenada'
+                    const esGlobalOrdenadoPropio = ev.esGlobal && (evElemento === unidadUsuario || evCreador === unidadUsuario) && etapa === 'ordenada';
+                    
                     return esInternoPropio || esGlobalOrdenadoPropio;
                 }
 
@@ -54,14 +57,20 @@ const CalendarPage = () => {
     };
 
     /**
-     * Define el color basado en el campo 'mision' del modelo
+     * Define el color basado en el creador (SEC AE = ROJO) o en la misión
      */
-    const getEventColor = (mision) => {
-        if (!mision) return '#6c757d';
-        const m = mision.toUpperCase();
-        if (m.includes('SOSTENIMIENTO')) return '#007bff';
-        if (m.includes('FUERZA OPERATIVA')) return '#28a745';
-        if (m.includes('EDUCACION') || m.includes('EDUCACIÓN')) return '#800000';
+    const getEventColor = (ev) => {
+        const creador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
+        const mision = ev.mision ? String(ev.mision).toUpperCase() : '';
+
+        // Prioridad 1: Si fue creado por SEC AE (Cualquiera), siempre Rojo
+        if (creador.includes('SEC AE')) return '#ff0000';
+
+        // Prioridad 2: Colores por Misión
+        if (mision.includes('SOSTENIMIENTO')) return '#007bff';
+        if (mision.includes('FUERZA OPERATIVA')) return '#28a745';
+        if (mision.includes('EDUCACION') || mision.includes('EDUCACIÓN')) return '#800000';
+        
         return '#6c757d'; 
     };
 
@@ -82,7 +91,7 @@ const CalendarPage = () => {
             etapa: event.extendedProps.etapa,
             tipoApoyo: event.extendedProps.tipoApoyo,
             esGlobal: event.extendedProps.esGlobal,
-            sdaListado: event.extendedProps.sdaListado || [], // Ahora es un array de objetos
+            sdaListado: event.extendedProps.sdaListado || [],
             unidadApoyada: event.extendedProps.unidadApoyada,
             pntoContactoNom: event.extendedProps.pntoContactoNom,
             pntoContactoTel: event.extendedProps.pntoContactoTel,
@@ -134,7 +143,7 @@ const CalendarPage = () => {
         mainCard: { background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', flex: 1, overflow: 'hidden' },
         headerMonitor: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
         title: { color: '#1b3a57', margin: 0, fontSize: '1.2rem', fontWeight: 'bold' },
-        unidadBadge: { fontSize: '0.75rem', background: '#e9ecef', color: '#1b3a57', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
+        badge: { fontSize: '0.75rem', background: '#e9ecef', color: '#1b3a57', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #1b3a57' },
         modeBadge: { fontSize: '0.75rem', background: '#1b3a57', color: 'white', padding: '4px 10px', borderRadius: '4px' },
         legendBar: { background: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '20px' },
         legendGroup: { display: 'flex', alignItems: 'center', gap: '10px' },
@@ -178,8 +187,8 @@ const CalendarPage = () => {
                     initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
                     locale={esLocale}
                     events={events.map(ev => {
-                        // Usamos el campo 'mision' para el color
-                        const colorBase = getEventColor(ev.mision);
+                        // Pasamos el objeto evento completo para evaluar creador y misión
+                        const colorBase = getEventColor(ev);
                         let prefix = '';
                         if (ev.etapa === 'recepcion') prefix = '🟡 ';
                         if (ev.etapa === 'revision') prefix = '🔵 ';
@@ -230,6 +239,7 @@ const CalendarPage = () => {
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sostenimiento</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Operativa</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Educación</div>
+                    <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#ff0000'}}></span> SEC AE</div>
                 </div>
                 <div style={styles.legendGroup}>
                     <span style={styles.legendGroupTitle}>Estados:</span>
