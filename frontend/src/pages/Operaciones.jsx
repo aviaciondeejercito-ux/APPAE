@@ -16,7 +16,7 @@ const Operaciones = () => {
     const [availableAircraft, setAvailableAircraft] = useState([]);
     const [loadingAircraft, setLoadingAircraft] = useState(false);
 
-    const rolesMando = ['admin', 'boss', 'director', 'oto', 'otoae'];
+    const rolesMando = ['admin', 'boss', 'director', 'oto'];
     const esMando = rolesMando.includes(role);
 
     const unidadesAE = [
@@ -77,10 +77,6 @@ const Operaciones = () => {
         fetchAeronaves();
     }, [formData.unidadesInvolucradas, userUnidad, isEditing]);
 
-    /**
-     * LÓGICA DE FILTRADO CORREGIDA:
-     * El admin/mando ahora puede ver todos los eventos para supervisión.
-     */
     const fetchData = async () => {
         try {
             const data = await getEvents();
@@ -94,22 +90,17 @@ const Operaciones = () => {
                 const creador = ev.creadorUnidad?.toUpperCase() || "";
                 const unidadesResponsables = ev.elemento?.toUpperCase() || "";
                 const unidadUsuario = userUnidad.toUpperCase();
-                const esMiPropiaOrden = creador === unidadUsuario;
-                const soyResponsable = unidadesResponsables.includes(unidadUsuario);
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
-                // Reglas para unidades (No Mando):
-                // 1. Si soy el creador/dueño, lo veo siempre (cualquier etapa)
-                if (esMiPropiaOrden) return true;
+                // 1. Si soy el creador/dueño (Evento Interno), lo veo siempre
+                if (creador === unidadUsuario) return true;
 
-                // 2. Si soy el responsable pero no el creador, solo lo veo si está ORDENADA
-                if (soyResponsable && etapa === 'ordenada') return true;
+                // 2. Si soy el responsable asignado, lo veo solo si está ORDENADA
+                if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
 
-                // 3. Si es Global y soy DIR AE (o involucra a mi unidad), verlo según etapa
-                if (ev.esGlobal) {
-                    if (unidadUsuario === 'DIR AE' && unidadesResponsables.includes('DIR AE')) return true;
-                    if (etapa === 'ordenada' && (creador.includes('DIR AE') || unidadesResponsables.includes('DIR AE'))) return true;
-                }
+                // 3. REGLA SOLICITADA: Eventos insertados por la DIR AE con condición "ORDENADA" 
+                // son visibles para todas las unidades.
+                if (creador === 'DIR AE' && etapa === 'ordenada') return true;
 
                 return false;
             });
@@ -356,7 +347,6 @@ const Operaciones = () => {
                         filteredEvents.map(ev => {
                             const esCreador = ev.creadorUnidad?.toUpperCase() === userUnidad;
                             const esResponsable = ev.elemento?.toUpperCase().includes(userUnidad);
-                            // Un admin puede editar y borrar cualquier cosa
                             const puedeEditar = esMando || esCreador || (esResponsable && ev.etapa === 'ordenada');
                             const puedeBorrar = esMando || esCreador;
 
