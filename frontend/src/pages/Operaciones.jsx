@@ -108,8 +108,9 @@ const Operaciones = () => {
                     if (creador === unidadUsuario) return true;
                     // Ven eventos donde fueron elegidos como unidad responsable SOLO en 'ordenada'
                     if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
-                    // Ven eventos globales (de otros) SOLO en 'ordenada'
-                    if (esGlobal && etapa === 'ordenada') return true;
+                    
+                    // ELIMINADO: Ya no ven eventos globales de otros aunque estén en 'ordenada'
+                    // Solo la DIR AE debe ver eventos globales en estado ordenado de elementos subalternos.
                 }
 
                 return false;
