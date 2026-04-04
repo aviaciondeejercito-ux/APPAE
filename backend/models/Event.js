@@ -13,12 +13,24 @@ const eventSchema = new mongoose.Schema({
         uppercase: true
     },
     
-    // --- CAMPOS DE CALENDARIO (NO TOCAR) ---
+    // --- CAMPOS DE CALENDARIO Y CLASIFICACIÓN ---
     notes: { type: String, trim: true, default: '' },
     start: { type: Date, required: false, default: Date.now },
     end: { type: Date, required: false },
     allDay: { type: Boolean, default: false },
     color: { type: String, default: '#1b3a57' },
+    
+    /**
+     * CLASIFICACIÓN DE LA MISIÓN
+     * Determina el color y tipo de actividad (SOSTENIMIENTO, FUERZA OPERATIVA, EDUCACION, OTROS)
+     */
+    mision: { 
+        type: String, 
+        uppercase: true, 
+        trim: true, 
+        default: 'OTROS' 
+    },
+
     type: { type: String, default: 'operativo' },
     status: { 
         type: String, 
@@ -33,6 +45,7 @@ const eventSchema = new mongoose.Schema({
     /**
      * REQUERIMIENTO TÉCNICO (SDA Y CANTIDAD)
      * Permite que DIR AE solicite material (ej: 2x C-208) sin conocer matrículas.
+     * También almacena las matrículas seleccionadas por las unidades.
      */
     sdaListado: { 
         type: [{
@@ -44,7 +57,7 @@ const eventSchema = new mongoose.Schema({
 
     // --- SECCIÓN TÁCTICA Y DETALLE SIMPLIFICADA ---
     misionDetalle: {
-        // 2. MATRÍCULA (Asignada por la Unidad Responsable)
+        // MATRÍCULA (Asignada por la Unidad Responsable)
         matricula: { type: String, uppercase: true, trim: true, default: '' },
         aeronave: { type: String, uppercase: true, trim: true, default: '' },
         tipoIcono: { type: String, default: 'ala_rotativa' }
@@ -56,14 +69,12 @@ const eventSchema = new mongoose.Schema({
     tipoIcono: { type: String },
     isRealTime: { type: Boolean, default: false }, 
 
-    // 3. ORIGEN
+    // ORIGEN Y DESTINO
     origen: {
         nombre: { type: String, uppercase: true },
         lat: { type: Number },
         lng: { type: Number }
     },
-
-    // 4. DESTINO
     destino: {
         nombre: { type: String, uppercase: true },
         lat: { type: Number },
@@ -79,6 +90,7 @@ const eventSchema = new mongoose.Schema({
         index: true,
         uppercase: true
     },
+
     etapa: {
         type: String,
         enum: ['recepcion', 'revision', 'ordenada', 'solicitud', 'operativo'],
@@ -86,6 +98,7 @@ const eventSchema = new mongoose.Schema({
         required: true,
         index: true
     },
+
     tipoOrigen: { type: String, enum: ['LOCAL', 'COMANDO'], default: 'LOCAL', required: true },
     esGlobal: { type: Boolean, default: false },
 
@@ -109,6 +122,7 @@ const eventSchema = new mongoose.Schema({
  */
 eventSchema.pre('validate', function(next) {
     if (this.title) this.title = this.title.toUpperCase();
+    if (this.mision) this.mision = this.mision.toUpperCase();
     if (this.elemento) this.elemento = this.elemento.toUpperCase();
     if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
     if (this.creadorUnidad) this.creadorUnidad = this.creadorUnidad.toUpperCase();
@@ -134,5 +148,6 @@ eventSchema.index({ elemento: 1, etapa: 1 });
 eventSchema.index({ creadorUnidad: 1 }); 
 eventSchema.index({ createdAt: -1 });
 eventSchema.index({ isRealTime: 1 });
+eventSchema.index({ mision: 1 });
 
 module.exports = mongoose.model('Event', eventSchema);

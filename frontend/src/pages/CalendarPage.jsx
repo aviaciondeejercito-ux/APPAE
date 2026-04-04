@@ -31,8 +31,6 @@ const CalendarPage = () => {
                 if (role === 'admin') return true;
 
                 // 2. DIRECTOR - BOSS - OTO:
-                // Ver todos los eventos de la DIR AE (internos de DIR AE en cualquier etapa)
-                // Ver eventos Globales de unidades subalternas solo si están en estado 'ordenada'
                 if (role === 'DIRECTOR' || role === 'BOSS' || role === 'OTO') {
                     const esDeDirAe = evCreador === 'DIR AE' || evElemento === 'DIR AE';
                     const esGlobalOrdenadoSubalterno = ev.esGlobal && etapa === 'ordenada';
@@ -40,8 +38,6 @@ const CalendarPage = () => {
                 }
 
                 // 3. USER - S4_UNIDAD:
-                // Ver eventos internos de su propio elemento (en cualquier etapa)
-                // Ver eventos globales donde su elemento fue elegido, solo si están en estado 'ordenada'
                 if (role === 'user' || role === 'S4_UNIDAD') {
                     const esInternoPropio = !ev.esGlobal && (evElemento === unidadUsuario || evCreador === unidadUsuario);
                     const esGlobalOrdenadoPropio = ev.esGlobal && evElemento.includes(unidadUsuario) && etapa === 'ordenada';
@@ -57,32 +53,28 @@ const CalendarPage = () => {
         }
     };
 
-    const getEventColor = (tipo) => {
-        if (!tipo) return '#6c757d';
-        const t = tipo.toUpperCase();
-        if (t.includes('SOSTENIMIENTO')) return '#007bff';
-        if (t.includes('FUERZA OPERATIVA')) return '#28a745';
-        if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000';
+    /**
+     * Define el color basado en el campo 'mision' del modelo
+     */
+    const getEventColor = (mision) => {
+        if (!mision) return '#6c757d';
+        const m = mision.toUpperCase();
+        if (m.includes('SOSTENIMIENTO')) return '#007bff';
+        if (m.includes('FUERZA OPERATIVA')) return '#28a745';
+        if (m.includes('EDUCACION') || m.includes('EDUCACIÓN')) return '#800000';
         return '#6c757d'; 
     };
 
     const handleEventClick = (info) => {
         const { event } = info;
-        let cleanNotes = event.extendedProps.notes || '';
-        const sdas = event.extendedProps.sdaListado || [];
         
-        sdas.forEach(sda => {
-            const regex = new RegExp(`SDA:\\s*${sda}`, 'gi');
-            cleanNotes = cleanNotes.replace(regex, '').replace(/\|\s*\|/g, '|').trim();
-        });
-
         setSelectedEvent({
             id: event.id,
             title: event.title.replace(/^[🟡🔵🟢🌐 ]+/, ''), 
             start: event.start,
             end: event.end,
             color: event.backgroundColor,
-            notes: cleanNotes,
+            notes: event.extendedProps.notes,
             user: event.extendedProps.user,
             creadorUnidad: event.extendedProps.creadorUnidad,
             origen: event.extendedProps.tipoOrigen,
@@ -90,7 +82,7 @@ const CalendarPage = () => {
             etapa: event.extendedProps.etapa,
             tipoApoyo: event.extendedProps.tipoApoyo,
             esGlobal: event.extendedProps.esGlobal,
-            sdaListado: sdas,
+            sdaListado: event.extendedProps.sdaListado || [], // Ahora es un array de objetos
             unidadApoyada: event.extendedProps.unidadApoyada,
             pntoContactoNom: event.extendedProps.pntoContactoNom,
             pntoContactoTel: event.extendedProps.pntoContactoTel,
@@ -105,6 +97,7 @@ const CalendarPage = () => {
         const { elemento, esGlobal, tipoOrigen, etapa } = info.event.extendedProps;
         const backgroundColor = info.event.backgroundColor;
         info.el.style.backgroundColor = backgroundColor;
+        
         const isWhite = backgroundColor.toLowerCase() === '#ffffff' || backgroundColor === 'rgb(255, 255, 255)';
         const textElements = info.el.querySelectorAll('.fc-event-title, .fc-event-time');
         
@@ -173,7 +166,7 @@ const CalendarPage = () => {
                 <div style={styles.headerMonitor}>
                     <h2 style={styles.title}>🗓️ Monitor de Actividades Operativas</h2>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <span style={styles.unidadBadge}>{userUnidad || "SIN UNIDAD"}</span>
+                        <span style={styles.badge}>{userUnidad || "SIN UNIDAD"}</span>
                         <span style={styles.modeBadge}>
                             {role === 'admin' ? 'JERARQUÍA: CONTROL TOTAL' : `JERARQUÍA: ${role.toUpperCase()}`}
                         </span>
@@ -185,7 +178,8 @@ const CalendarPage = () => {
                     initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
                     locale={esLocale}
                     events={events.map(ev => {
-                        const colorBase = getEventColor(ev.tipoApoyo);
+                        // Usamos el campo 'mision' para el color
+                        const colorBase = getEventColor(ev.mision);
                         let prefix = '';
                         if (ev.etapa === 'recepcion') prefix = '🟡 ';
                         if (ev.etapa === 'revision') prefix = '🔵 ';
@@ -232,7 +226,7 @@ const CalendarPage = () => {
 
             <div style={styles.legendBar}>
                 <div style={styles.legendGroup}>
-                    <span style={styles.legendGroupTitle}>Misiones (Colores):</span>
+                    <span style={styles.legendGroupTitle}>Misiones:</span>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#007bff'}}></span> Sostenimiento</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#28a745'}}></span> Fza. Operativa</div>
                     <div style={styles.legendItem}><span style={{...styles.colorBox, background:'#800000'}}></span> Educación</div>
@@ -242,12 +236,11 @@ const CalendarPage = () => {
                     <div style={styles.legendItem}>🟡 Solicitud</div>
                     <div style={styles.legendItem}>🔵 Revisión</div>
                     <div style={styles.legendItem}>🟢 Ordenada</div>
-                    <div style={styles.legendItem}>🌐 Global</div>
                 </div>
                 <div style={styles.legendGroup}>
-                    <span style={styles.legendGroupTitle}>Ayudas Visuales:</span>
+                    <span style={styles.legendGroupTitle}>Ayudas:</span>
                     <div style={styles.legendItem}><div style={styles.borderSample}></div> Propio</div>
-                    <div style={styles.legendItem}><div style={styles.dashedSample}></div> Borrador/Rec.</div>
+                    <div style={styles.legendItem}><div style={styles.dashedSample}></div> Borrador</div>
                 </div>
             </div>
 
@@ -264,18 +257,18 @@ const CalendarPage = () => {
                             </div>
                             
                             <div style={styles.infoRow}>
-                                <strong>🏢 Unidades Involucradas:</strong> 
+                                <strong>🏢 Unidad Responsable:</strong> 
                                 <span style={{ color: '#1b3a57', fontWeight: 'bold' }}>{selectedEvent.elemento}</span>
                             </div>
 
                             <div style={styles.infoRow}>
-                                <strong>✍️ Creado por:</strong> 
-                                <span>{selectedEvent.creadorUnidad || 'N/C'} ({selectedEvent.user || 'Usuario'})</span>
+                                <strong>✍️ Gestión:</strong> 
+                                <span>{selectedEvent.creadorUnidad || 'N/C'} ({selectedEvent.user})</span>
                             </div>
 
                             {selectedEvent.unidadApoyada && (
                                 <div style={styles.infoRow}>
-                                    <strong>🤝 Unidad/Entidad Apoyada:</strong> 
+                                    <strong>🤝 Apoyo a:</strong> 
                                     <span>{selectedEvent.unidadApoyada}</span>
                                 </div>
                             )}
@@ -298,19 +291,22 @@ const CalendarPage = () => {
                             <hr style={styles.divider} />
 
                             <div style={styles.infoRow}>
-                                <strong>🚀 Tipo de Apoyo / SdA:</strong> 
-                                <span>{selectedEvent.tipoApoyo || 'No especificado'}</span>
-                                {selectedEvent.sdaListado?.length > 0 && (
-                                    <div style={styles.sdaContainer}>
-                                        {selectedEvent.sdaListado.map((sda, idx) => (
-                                            <span key={idx} style={styles.sdaBadge}>⚙️ {sda}</span>
-                                        ))}
-                                    </div>
-                                )}
+                                <strong>🚀 Medios (SdA):</strong> 
+                                <div style={styles.sdaContainer}>
+                                    {selectedEvent.sdaListado?.length > 0 ? (
+                                        selectedEvent.sdaListado.map((item, idx) => (
+                                            <span key={idx} style={styles.sdaBadge}>
+                                                ⚙️ {item.sda} (Cant: {item.cantidad})
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span>No se especificaron medios técnicos.</span>
+                                    )}
+                                </div>
                             </div>
 
                             <div style={styles.infoRow}>
-                                <strong>⏱️ Horario de Operación (UTC):</strong> 
+                                <strong>⏱️ Inicio (UTC):</strong> 
                                 <span>{new Date(selectedEvent.start).toISOString().slice(0, 16).replace('T', ' ')} hs</span>
                             </div>
 

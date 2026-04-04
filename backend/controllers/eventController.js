@@ -93,7 +93,7 @@ const createEvent = async (req, res) => {
             elemento, etapa, tipoApoyo, sdaListado,
             isRealTime, notasMarginales, status,
             aeronave, matricula, tipoIcono,
-            origen, destino, misionDetalle,
+            origen, destino, misionDetalle, mision,
             unidadApoyada, pntoContactoNom, pntoContactoTel,
             responsableNom, responsableTel
         } = req.body;
@@ -114,6 +114,7 @@ const createEvent = async (req, res) => {
         
         const eventData = {
             title: (title || '').toString().toUpperCase(),
+            mision: (mision || 'OTROS').toString().toUpperCase(),
             notes: (notes || '').toString().toUpperCase(),
             notasMarginales: (notasMarginales || notes || '').toString().toUpperCase(),
             color: color || '#1b3a57',
@@ -152,7 +153,6 @@ const createEvent = async (req, res) => {
             etapa: isRealTime ? 'operativo' : (etapa || 'recepcion'),
             tipoApoyo: isRealTime ? 'VUELO' : (tipoApoyo || 'SOSTENIMIENTO').toUpperCase(),
             esGlobal: isMando ? (esGlobal || false) : false,
-            // Soporta el nuevo formato [{sda: String, cantidad: Number}]
             sdaListado: sdaListado || []
         };
 
@@ -185,9 +185,6 @@ const updateEvent = async (req, res) => {
         const isResponsibleUnit = event.elemento === userElemento;
 
         // LÓGICA DE PERMISOS AE:
-        // - Mandos y Dueños (Creadores) siempre pueden editar.
-        // - Unidad Responsable puede editar SOLO si el evento está en etapa 'ordenada' o 'revision' 
-        //   para poder cargar las matrículas de los SDAs pedidos por la DIR AE.
         const canEdit = isMando || isOwner || isCreatorUnit || (isResponsibleUnit && ['revision', 'ordenada'].includes(event.etapa));
 
         if (!canEdit) {
@@ -203,8 +200,9 @@ const updateEvent = async (req, res) => {
         updateData.updatedBy = req.user._id; 
         updateData.userName = (req.user.username || req.user.name || 'OPERADOR').toUpperCase();
 
-        // Formateo de strings
+        // Formateo de strings y nuevos campos
         if (updateData.title) updateData.title = updateData.title.toUpperCase();
+        if (updateData.mision) updateData.mision = updateData.mision.toUpperCase();
         if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
         if (updateData.notes) updateData.notes = updateData.notes.toUpperCase();
         if (updateData.unidadApoyada) updateData.unidadApoyada = updateData.unidadApoyada.toUpperCase();
