@@ -14,9 +14,6 @@ import CargaTactica from './pages/CargaTactica';
 /**
  * COMPONENTE PRINCIPAL - SISTEMA GESTIÓN AE
  * Estándar de Seguridad: SINCRO JOKER (Frontend Core)
- * - Gestión de sesión persistente con validación de roles.
- * - Navegación condicional por jerarquía militar.
- * - Soporte responsivo para tablets y terminales móviles.
  */
 function App() {
     // 1. ESTADOS DE AUTENTICACIÓN Y NAVEGACIÓN
@@ -25,11 +22,41 @@ function App() {
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-    // Escucha cambios de tamaño de pantalla para optimizar la UI
+    // ESTADOS DE CONEXIÓN (NUEVO)
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [lastSync, setLastSync] = useState(localStorage.getItem('lastSync') || '---');
+
+    // Escucha cambios de tamaño de pantalla
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // GESTIÓN DE ESTADO ONLINE/OFFLINE Y ÚLTIMA CONEXIÓN (NUEVO)
+    useEffect(() => {
+        const handleStatusChange = () => {
+            const online = navigator.onLine;
+            setIsOnline(online);
+            if (online) {
+                const now = new Date().toLocaleString('es-AR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    day: '2-digit',
+                    month: '2-digit'
+                });
+                setLastSync(now);
+                localStorage.setItem('lastSync', now);
+            }
+        };
+
+        window.addEventListener('online', handleStatusChange);
+        window.addEventListener('offline', handleStatusChange);
+
+        return () => {
+            window.removeEventListener('online', handleStatusChange);
+            window.removeEventListener('offline', handleStatusChange);
+        };
     }, []);
 
     // 2. EFECTO DE SINCRONIZACIÓN DE SEGURIDAD
@@ -50,10 +77,6 @@ function App() {
         setView('calendar');
     };
 
-    /**
-     * LÓGICA DE PERMISOS (ESTÁNDAR SINCRO JOKER 2026)
-     * Strings normalizados para coincidir con la lógica del Backend.
-     */
     const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
     const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OFICINA_TECNICA' || role === 'BOSS';
     const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
@@ -221,10 +244,23 @@ function App() {
                 )}
             </main>
 
-            {/* FOOTER - OCULTO EN MAPA Y STATS PARA MAXIMIZAR VISIBILIDAD */}
+            {/* FOOTER - INCLUYE INDICADOR DE CONEXIÓN */}
             {(view !== 'mapa' && view !== 'stats' && view !== 'despacho') && (
                 <footer style={styles.footer}>
-                    © 2026 Aviación de Ejército - Sistema de Comando y Control
+                    <div style={styles.statusRow}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <div style={{
+                                width: '8px', 
+                                height: '8px', 
+                                borderRadius: '50%', 
+                                backgroundColor: isOnline ? '#2ecc71' : '#e74c3c',
+                                boxShadow: isOnline ? '0 0 4px #2ecc71' : '0 0 4px #e74c3c'
+                            }} />
+                            <span>{isOnline ? 'CONECTADO' : 'MODO OFFLINE'}</span>
+                        </div>
+                        <span>SINCRO: {lastSync}</span>
+                    </div>
+                    <div>© 2026 Aviación de Ejército - Sistema de Comando y Control</div>
                 </footer>
             )}
         </div>
@@ -240,7 +276,8 @@ const styles = {
     btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
     container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
     containerFull: { width: '100%', margin: '0', padding: '0', flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 65px)' },
-    footer: { textAlign: 'center', padding: '12px', color: '#7f8c8d', fontSize: '0.65rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' }
+    footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.65rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' },
+    statusRow: { display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '4px', fontWeight: 'bold', letterSpacing: '0.5px' }
 };
 
 export default App;
