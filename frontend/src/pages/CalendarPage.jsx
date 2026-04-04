@@ -21,7 +21,7 @@ const CalendarPage = () => {
         try {
             const data = await getEvents();
             
-            const filteredData = (role === 'admin' || role === 'BOSS' || role === 'DIRECTOR'|| role === 'OTO') 
+            const filteredData = (role === 'admin' || role === 'OTO') 
                 ? data 
                 : data.filter(ev => {
                     const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
