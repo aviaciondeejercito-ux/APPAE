@@ -48,25 +48,29 @@ router.get('/aircraft-available/:elemento', authorize('user', 'S4_UNIDAD', 'OFIC
 
 /**
  * @route    GET /api/events
- * @desc     Obtener lista de eventos (Calendario / Log)
+ * @desc     Obtener lista de eventos (Calendario / Log / Monitor)
+ * @note     La lógica de filtrado por creador/responsable se aplica en el controlador.
  */
 router.get('/', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getEvents);
 
 /**
  * @route    POST /api/events
  * @desc     Registrar nuevo VUELO TÁCTICO o Actividad de Monitor
+ * @note     Sella automáticamente el 'creadorUnidad' desde el perfil del usuario.
  */
 router.post('/', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), createEvent);
 
 /**
  * @route    PUT /api/events/:id
  * @desc     Actualizar misión (Cambio de ubicación, tripulación o etapa operativa)
+ * @note     Valida permisos de edición: Creador siempre, Responsable solo en 'ordenada'.
  */
 router.put('/:id', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), updateEvent);
 
 /**
  * @route    DELETE /api/events/:id
  * @desc     Eliminación de registro y limpieza de rastro
+ * @note     Solo permitido para Creador o Mandos Superiores.
  */
 router.delete('/:id', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), deleteEvent);
 

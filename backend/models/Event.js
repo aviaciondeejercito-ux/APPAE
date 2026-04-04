@@ -29,11 +29,22 @@ const eventSchema = new mongoose.Schema({
 
     // --- SECCIÓN DE APOYOS Y REQUERIMIENTOS ---
     tipoApoyo: { type: String, trim: true, default: 'SOSTENIMIENTO', uppercase: true },
-    sdaListado: { type: [String], default: [] },
+    
+    /**
+     * REQUERIMIENTO TÉCNICO (SDA Y CANTIDAD)
+     * Permite que DIR AE solicite material (ej: 2x C-208) sin conocer matrículas.
+     */
+    sdaListado: { 
+        type: [{
+            sda: { type: String, uppercase: true, trim: true },
+            cantidad: { type: Number, default: 1 }
+        }], 
+        default: [] 
+    },
 
     // --- SECCIÓN TÁCTICA Y DETALLE SIMPLIFICADA ---
     misionDetalle: {
-        // 2. MATRÍCULA (Aeronave)
+        // 2. MATRÍCULA (Asignada por la Unidad Responsable)
         matricula: { type: String, uppercase: true, trim: true, default: '' },
         aeronave: { type: String, uppercase: true, trim: true, default: '' },
         tipoIcono: { type: String, default: 'ala_rotativa' }
@@ -45,23 +56,23 @@ const eventSchema = new mongoose.Schema({
     tipoIcono: { type: String },
     isRealTime: { type: Boolean, default: false }, 
 
-    // 3. ORIGEN (Entrada de datos principal)
+    // 3. ORIGEN
     origen: {
         nombre: { type: String, uppercase: true },
         lat: { type: Number },
         lng: { type: Number }
     },
 
-    // 4. DESTINO (Entrada de datos independiente)
+    // 4. DESTINO
     destino: {
         nombre: { type: String, uppercase: true },
         lat: { type: Number },
         lng: { type: Number }
     },
 
-    // Campo solicitado para mejoras en CargaTactica
     notasMarginales: { type: String, default: '', trim: true, uppercase: true },
 
+    // UNIDAD RESPONSABLE (La que debe poner la matrícula)
     elemento: { 
         type: String, 
         required: [true, 'La unidad/elemento es obligatoria'],
@@ -78,8 +89,8 @@ const eventSchema = new mongoose.Schema({
     tipoOrigen: { type: String, enum: ['LOCAL', 'COMANDO'], default: 'LOCAL', required: true },
     esGlobal: { type: Boolean, default: false },
 
-    // --- NUEVOS CAMPOS DE PECERA ESTANCA Y CONTACTO ---
-    creadorUnidad: { type: String, uppercase: true, index: true }, // Identificador de la pecera original
+    // --- SECCIÓN DE AUTORÍA Y PECERA ESTANCA ---
+    creadorUnidad: { type: String, uppercase: true, index: true }, 
     unidadApoyada: { type: String, uppercase: true, trim: true, default: '' },
     pntoContactoNom: { type: String, trim: true, default: '' },
     pntoContactoTel: { type: String, trim: true, default: '' },
@@ -88,7 +99,7 @@ const eventSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    userName: { type: String, required: true, default: 'OPERADOR' }
+    userName: { type: String, required: true, default: 'OPERADOR', uppercase: true }
 }, { 
     timestamps: true 
 });
@@ -97,30 +108,30 @@ const eventSchema = new mongoose.Schema({
  * MIDDLEWARE PRE-SAVE: LIMPIEZA Y FORMATEO
  */
 eventSchema.pre('validate', function(next) {
-    // Formateo de strings generales
     if (this.title) this.title = this.title.toUpperCase();
     if (this.elemento) this.elemento = this.elemento.toUpperCase();
     if (this.notasMarginales) this.notasMarginales = this.notasMarginales.toUpperCase();
     if (this.creadorUnidad) this.creadorUnidad = this.creadorUnidad.toUpperCase();
     if (this.unidadApoyada) this.unidadApoyada = this.unidadApoyada.toUpperCase();
+    if (this.userName) this.userName = this.userName.toUpperCase();
     
-    // Verificación y formateo de ORIGEN
-    if (this.origen) {
-        if (this.origen.nombre) this.origen.nombre = this.origen.nombre.toUpperCase();
+    // Formateo del listado de SDA si existe
+    if (this.sdaListado && this.sdaListado.length > 0) {
+        this.sdaListado.forEach(item => {
+            if (item.sda) item.sda = item.sda.toUpperCase();
+        });
     }
 
-    // Verificación y formateo de DESTINO
-    if (this.destino) {
-        if (this.destino.nombre) this.destino.nombre = this.destino.nombre.toUpperCase();
-    }
+    if (this.origen && this.origen.nombre) this.origen.nombre = this.origen.nombre.toUpperCase();
+    if (this.destino && this.destino.nombre) this.destino.nombre = this.destino.nombre.toUpperCase();
 
     next();
 });
 
-// Índices para optimización de búsqueda
+// Índices optimizados
 eventSchema.index({ status: 1 });
 eventSchema.index({ elemento: 1, etapa: 1 }); 
-eventSchema.index({ creadorUnidad: 1 }); // Índice para filtro de pecera
+eventSchema.index({ creadorUnidad: 1 }); 
 eventSchema.index({ createdAt: -1 });
 eventSchema.index({ isRealTime: 1 });
 

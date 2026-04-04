@@ -83,7 +83,6 @@ const Operaciones = () => {
             
             const logicFiltered = data.filter(ev => {
                 if (ev.isRealTime) return false;
-                
                 if (esMando) return true;
 
                 const creador = ev.creadorUnidad?.toUpperCase() || "";
@@ -91,11 +90,13 @@ const Operaciones = () => {
                 const unidadUsuario = userUnidad.toUpperCase();
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
+                // El creador siempre ve su propia misión
                 if (creador === unidadUsuario) return true;
 
+                // Las unidades responsables y globales SOLO ven si está en 'ordenada'
+                // Se quitó 'revision' de aquí por pedido explícito
                 if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
-
-                if (creador === 'DIR AE' && etapa === 'ordenada') return true;
+                if (ev.esGlobal && etapa === 'ordenada') return true;
 
                 return false;
             });
@@ -122,11 +123,13 @@ const Operaciones = () => {
     const addSda = () => {
         if (!formData.sdaSelected || formData.sdaSelected.trim() === "") return;
         const cantidad = parseInt(formData.sdaCantidad) || 1;
-        const nuevoSda = `${cantidad}x ${formData.sdaSelected}`;
-        if (!formData.sdaListado.includes(nuevoSda)) {
+        const nuevoSdaObj = { sda: formData.sdaSelected.toUpperCase(), cantidad: cantidad };
+        
+        const exists = formData.sdaListado.some(item => item.sda === nuevoSdaObj.sda);
+        if (!exists) {
             setFormData(prev => ({ 
                 ...prev, 
-                sdaListado: [...prev.sdaListado, nuevoSda], 
+                sdaListado: [...prev.sdaListado, nuevoSdaObj], 
                 sdaSelected: '', 
                 sdaCantidad: 1 
             }));
@@ -160,9 +163,8 @@ const Operaciones = () => {
             sdaListado: formData.sdaListado,
             etapa: formData.etapa,
             esGlobal: publicarGlobal,
-            notes: `SdA: ${formData.sdaListado.join(', ')} | Apoyado: ${formData.unidadApoyada} | Obs: ${cleanNotes}`,
+            notes: `SdA: ${formData.sdaListado.map(s => `${s.cantidad}x ${s.sda}`).join(', ')} | Apoyado: ${formData.unidadApoyada} | Obs: ${cleanNotes}`,
             elemento: finalElemento,
-            creadorUnidad: isEditing ? undefined : userUnidad,
             unidadApoyada: formData.unidadApoyada.toUpperCase(),
             pntoContactoNom: formData.pntoContactoNom,
             pntoContactoTel: formData.pntoContactoTel,
@@ -174,7 +176,7 @@ const Operaciones = () => {
             if (isEditing) {
                 await updateEvent(selectedId, finalData);
             } else {
-                await createEvent(finalData);
+                await createEvent({ ...finalData, creadorUnidad: userUnidad });
             }
             resetForm();
             fetchData();
@@ -284,8 +286,8 @@ const Operaciones = () => {
                             </div>
                         )}
 
-                        <div style={styles.sectionTitle}>UNIDAD APOYADA (QUIEN RECIBE)</div>
-                        <input type="text" placeholder="Escriba la unidad que recibe el apoyo..." value={formData.unidadApoyada} 
+                        <div style={styles.sectionTitle}>UNIDAD APOYADA</div>
+                        <input type="text" placeholder="Unidad que recibe el apoyo..." value={formData.unidadApoyada} 
                                onChange={e => setFormData({...formData, unidadApoyada: e.target.value})} style={styles.input} />
 
                         <div style={styles.sectionTitle}>PUNTO DE CONTACTO</div>
@@ -310,10 +312,11 @@ const Operaciones = () => {
                                    onChange={e => setFormData({...formData, responsableTel: e.target.value})} style={{...styles.input, flex: 1}} />
                         </div>
 
+                        <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA)</div>
                         <div style={styles.sdaBox}>
                             <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                <option value="">{loadingAircraft ? "Cargando..." : "Asignar SdA..."}</option>
-                                {availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} ({air.matricula})</option>)}
+                                <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar SdA..."}</option>
+                                {availableAircraft.map(air => <option key={air._id} value={air.modelo}>{air.modelo} ({air.matricula})</option>)}
                             </select>
                             <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
                             <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
@@ -321,7 +324,7 @@ const Operaciones = () => {
 
                         <div style={styles.tagWrap}>
                             {formData.sdaListado.map((s, i) => (
-                                <span key={i} style={styles.tag}>{s} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
+                                <span key={i} style={styles.tag}>{s.cantidad}x {s.sda} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
                             ))}
                         </div>
 
@@ -336,12 +339,14 @@ const Operaciones = () => {
 
                 <div style={styles.card}>
                     <h3 style={styles.title}>📜 Registro de Misiones</h3>
-                    <input type="text" placeholder="🔍 Filtrar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
+                    <input type="text" placeholder="🔍 Filtrar misión, unidad o apoyo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
                     <div style={styles.scrollList}>
                         {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay misiones visibles.</p> : 
                         filteredEvents.map(ev => {
                             const esCreador = ev.creadorUnidad?.toUpperCase() === userUnidad;
                             const esResponsable = ev.elemento?.toUpperCase().includes(userUnidad);
+                            
+                            // Solo permite editar si es Mando, Creador o Responsable EN ORDENADA (Se quitó revision de aquí)
                             const puedeEditar = esMando || esCreador || (esResponsable && ev.etapa === 'ordenada');
                             const puedeBorrar = esMando || esCreador;
 
@@ -350,7 +355,7 @@ const Operaciones = () => {
                                     <div style={{flex: 1}}>
                                         <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.esGlobal && "🌐 "}{ev.title}</div>
                                         <div style={{display: 'inline-block', fontSize: '0.65rem', background: '#e1e8ed', color: '#1b3a57', padding: '2px 6px', borderRadius: '4px', marginBottom: '4px'}}>
-                                            CREADOR: {ev.creadorUnidad || 'S/D'}
+                                            ORIGEN: {ev.creadorUnidad || 'S/D'}
                                         </div>
                                         <div style={{fontSize: '0.75rem', color: '#666'}}>Resp: {ev.elemento} | Apoyado: {ev.unidadApoyada}</div>
                                         <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>

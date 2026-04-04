@@ -31,13 +31,10 @@ const getEvents = async (req, res) => {
         const { elemento } = req.user; 
         const isMando = req.isMando; 
         
-        // FILTRO BASE: Solo traer lo que NO es tiempo real
         let query = { isRealTime: false }; 
 
         if (!isMando) {
-            // Lógica de visualización restringida para elementos
             query.$or = [
-                // 1. Siempre ve lo que es de su propia unidad (cualquier etapa)
                 { 
                     isRealTime: false,
                     $or: [
@@ -45,7 +42,6 @@ const getEvents = async (req, res) => {
                         { creadorUnidad: { $regex: elemento, $options: 'i' } }
                     ]
                 },
-                // 2. Solo ve lo Global (DIR AE) si ya está en etapa 'ordenada'
                 { 
                     isRealTime: false,
                     esGlobal: true,
@@ -104,9 +100,10 @@ const createEvent = async (req, res) => {
 
         if (!title) return res.status(400).json({ message: 'El título es obligatorio.' });
 
-        if (isRealTime || tipoApoyo === 'VUELO') {
-            const targetMatricula = matricula || misionDetalle?.matricula;
-            const aircraftExists = await Aircraft.findOne({ matricula: targetMatricula?.toUpperCase() });
+        // Validación de aeronave solo si se provee una matrícula específica
+        const targetMatricula = matricula || misionDetalle?.matricula;
+        if (targetMatricula && (isRealTime || tipoApoyo === 'VUELO')) {
+            const aircraftExists = await Aircraft.findOne({ matricula: targetMatricula.toUpperCase() });
             if (!aircraftExists) {
                 return res.status(404).json({ message: `La aeronave ${targetMatricula} no existe.` });
             }
@@ -121,9 +118,10 @@ const createEvent = async (req, res) => {
             notasMarginales: (notasMarginales || notes || '').toString().toUpperCase(),
             color: color || '#1b3a57',
             createdBy: req.user._id,
-            userName: req.user.username || req.user.name,
-            elemento: ((isMando && elemento) ? elemento : userElemento).toUpperCase(),
-            creadorUnidad: userElemento,
+            userName: (req.user.username || req.user.name || 'OPERADOR').toUpperCase(),
+            // Si es mando, puede asignar a otra unidad; si no, es su propia unidad.
+            elemento: ((isMando && elemento) ? elemento : (elemento || userElemento)).toUpperCase(),
+            creadorUnidad: userElemento, 
             status: (status || 'programado').toLowerCase(),
             isRealTime: isRealTime || false,
             matricula: (matricula || misionDetalle?.matricula || '').toUpperCase(),
@@ -154,6 +152,7 @@ const createEvent = async (req, res) => {
             etapa: isRealTime ? 'operativo' : (etapa || 'recepcion'),
             tipoApoyo: isRealTime ? 'VUELO' : (tipoApoyo || 'SOSTENIMIENTO').toUpperCase(),
             esGlobal: isMando ? (esGlobal || false) : false,
+            // Soporta el nuevo formato [{sda: String, cantidad: Number}]
             sdaListado: sdaListado || []
         };
 
@@ -180,18 +179,32 @@ const updateEvent = async (req, res) => {
         if (!event) return res.status(404).json({ message: 'Registro no localizado.' });
 
         const isMando = req.isMando;
+        const userElemento = (req.user.elemento || '').toUpperCase();
         const isOwner = event.createdBy.toString() === req.user._id.toString();
+        const isCreatorUnit = event.creadorUnidad === userElemento;
+        const isResponsibleUnit = event.elemento === userElemento;
 
-        if (!isMando && !isOwner) {
-            return res.status(403).json({ message: 'No tiene permisos.' });
+        // LÓGICA DE PERMISOS AE:
+        // - Mandos y Dueños (Creadores) siempre pueden editar.
+        // - Unidad Responsable puede editar SOLO si el evento está en etapa 'ordenada' o 'revision' 
+        //   para poder cargar las matrículas de los SDAs pedidos por la DIR AE.
+        const canEdit = isMando || isOwner || isCreatorUnit || (isResponsibleUnit && ['revision', 'ordenada'].includes(event.etapa));
+
+        if (!canEdit) {
+            return res.status(403).json({ message: 'No tiene permisos para editar este registro en la etapa actual.' });
         }
 
         const updateData = { ...req.body };
+        
         delete updateData._id; 
         delete updateData.createdBy;
         delete updateData.creadorUnidad; 
+        
         updateData.updatedBy = req.user._id; 
+        updateData.userName = (req.user.username || req.user.name || 'OPERADOR').toUpperCase();
 
+        // Formateo de strings
+        if (updateData.title) updateData.title = updateData.title.toUpperCase();
         if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
         if (updateData.notes) updateData.notes = updateData.notes.toUpperCase();
         if (updateData.unidadApoyada) updateData.unidadApoyada = updateData.unidadApoyada.toUpperCase();
@@ -235,8 +248,12 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
 
-        if (!req.isMando && event.createdBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Acceso denegado.' });
+        const isMando = req.isMando;
+        const isOwner = event.createdBy.toString() === req.user._id.toString();
+        const isCreatorUnit = event.creadorUnidad === (req.user.elemento || '').toUpperCase();
+
+        if (!isMando && !isOwner && !isCreatorUnit) {
+            return res.status(403).json({ message: 'Acceso denegado. Solo el creador puede eliminar.' });
         }
 
         const isRealTime = event.isRealTime;
