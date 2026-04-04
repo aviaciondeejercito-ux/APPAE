@@ -3,13 +3,12 @@ const bcrypt = require('bcryptjs');
 
 /**
  * Modelo de Usuario - Estándar de Seguridad Aviación de Ejército
- * Actualización: Jerarquía de Roles (Director, OTO, OTOAE, Oficina Técnica) y Vinculación por Elemento.
+ * Actualización: Jerarquía de Roles con lógica mixta (minúsculas y MAYÚSCULAS).
  */
 const userSchema = new mongoose.Schema({
     nombreReal: { 
         type: String, 
         required: [true, 'El nombre de usuario (Nombre y Apellido) es obligatorio'], 
-        // Eliminado unique: true para evitar colapsos por nombres duplicados
         trim: true
     },
     username: { 
@@ -23,7 +22,7 @@ const userSchema = new mongoose.Schema({
         type: String, 
         required: [true, 'El elemento/unidad es obligatorio'],
         trim: true,
-        uppercase: true // Asegura que la unidad siempre sea comparable
+        uppercase: true // La unidad siempre se mantiene en MAYÚSCULAS
     },
     email: { 
         type: String, 
@@ -40,20 +39,20 @@ const userSchema = new mongoose.Schema({
     },
     role: { 
         type: String, 
-        // Se estandarizan los roles a MAYÚSCULAS para coincidir con el Middleware de Seguridad
+        // Se define el enum respetando minúsculas para admin/user
         enum: [
             'admin', 
+            'user', 
             'BOSS', 
             'DIRECTOR', 
             'OTO', 
             'OTOAE',
-            'user', 
             'S4',
             'S4_UNIDAD',
             'OFICINA_TECNICA'
         ], 
         default: 'user',
-        uppercase: true,
+        // IMPORTANTE: Se quitó 'uppercase: true' para permitir 'admin' y 'user' en minúsculas
         trim: true
     }
 }, { 

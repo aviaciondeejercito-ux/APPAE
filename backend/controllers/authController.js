@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 
 /**
  * Genera un token JWT seguro - ESTÁNDAR DE SEGURIDAD AE
- * Ahora incluye ID, Rol y Elemento dentro del payload para evitar consultas extra.
  */
 const generateToken = (user) => {
     if (!process.env.JWT_SECRET) {
@@ -11,15 +10,21 @@ const generateToken = (user) => {
         return null;
     }
 
-    // NORMALIZACIÓN SINCRO JOKER: Aseguramos formato para el Payload del Token
-    // Agregamos fallback (|| '') para evitar que el servidor explote (Error 500) si falta un dato
-    const roleNormalized = String(user.role || 'USER').toUpperCase().trim().replace(/\s+/g, '_');
+    // NORMALIZACIÓN SINCRO JOKER: 
+    // admin y user van en minúscula, el resto en MAYÚSCULA.
+    let roleForToken = String(user.role || 'user').trim();
+    if (['admin', 'user'].includes(roleForToken.toLowerCase())) {
+        roleForToken = roleForToken.toLowerCase();
+    } else {
+        roleForToken = roleForToken.toUpperCase().replace(/\s+/g, '_');
+    }
+
     const elementoNormalized = String(user.elemento || 'SIN_UNIDAD').toUpperCase().trim();
 
     return jwt.sign(
         { 
             id: user._id, 
-            role: roleNormalized, 
+            role: roleForToken, 
             elemento: elementoNormalized 
         }, 
         process.env.JWT_SECRET, 
@@ -37,23 +42,35 @@ exports.register = async (req, res) => {
             return res.status(400).json({ message: 'Por favor, complete todos los campos obligatorios' });
         }
 
-        // 2. Verificación de existencia (Normalizada)
-        const userExists = await User.findOne({ username: username.toLowerCase().trim() });
-        if (userExists) return res.status(400).json({ message: 'El Identificador GDE ya existe' });
+        // 2. Verificación de existencia previa (Evita Error 500 por duplicados)
+        const finalUsername = username.toLowerCase().trim();
+        const finalEmail = email.toLowerCase().trim();
 
-        const emailExists = await User.findOne({ email: email.toLowerCase().trim() });
-        if (emailExists) return res.status(400).json({ message: 'El Email ya está registrado' });
+        const userExists = await User.findOne({ 
+            $or: [{ username: finalUsername }, { email: finalEmail }] 
+        });
 
-        // 3. Normalización de campos antes de crear
-        const finalRole = (role || 'USER').toUpperCase().trim().replace(/\s+/g, '_');
+        if (userExists) {
+            const campo = userExists.username === finalUsername ? 'El Identificador GDE' : 'El Email';
+            return res.status(400).json({ message: `${campo} ya está registrado.` });
+        }
+
+        // 3. Normalización de campos según pedido (admin/user en minúscula, resto MAYÚS)
+        let finalRole = (role || 'user').trim();
+        if (['admin', 'user'].includes(finalRole.toLowerCase())) {
+            finalRole = finalRole.toLowerCase();
+        } else {
+            finalRole = finalRole.toUpperCase().replace(/\s+/g, '_');
+        }
+
         const finalElemento = elemento.toUpperCase().trim();
 
         // 4. Creación del Usuario
         const user = await User.create({ 
             nombreReal: nombreReal.trim(), 
-            username: username.toLowerCase().trim(), 
+            username: finalUsername, 
             elemento: finalElemento, 
-            email: email.toLowerCase().trim(), 
+            email: finalEmail, 
             password,
             role: finalRole
         });
@@ -67,12 +84,17 @@ exports.register = async (req, res) => {
                 role: user.role,
                 token: generateToken(user)
             });
-        } else {
-            res.status(400).json({ message: 'Datos de usuario inválidos' });
         }
 
     } catch (error) {
         console.error("🔥 ERROR EN REGISTER:", error.message);
+        
+        // Manejo de errores de validación de Mongoose (ej: password corto)
+        if (error.name === 'ValidationError') {
+            const msg = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ message: msg.join(', ') });
+        }
+
         res.status(500).json({ 
             message: 'Error en el servidor al registrar', 
             error: error.message 
@@ -85,14 +107,10 @@ exports.login = async (req, res) => {
     try {
         const { username, password } = req.body;
         
-        console.log("--- INTENTO DE ACCESO ---");
-        console.log("👤 Input Usuario:", username);
-
         if (!username || !password) {
             return res.status(400).json({ message: 'Ingrese sus credenciales' });
         }
 
-        // Buscamos al usuario por nombreReal, email o username
         const user = await User.findOne({ 
             $or: [
                 { nombreReal: username }, 
@@ -102,32 +120,21 @@ exports.login = async (req, res) => {
         });
 
         if (!user) {
-            console.log("❌ RESULTADO: Usuario no encontrado.");
             return res.status(401).json({ message: 'Credenciales inválidas' });
         }
-
-        console.log("✅ RESULTADO: Usuario hallado ->", user.nombreReal);
-        console.log("🔑 Verificando hash de contraseña...");
 
         const isMatch = await user.comparePassword(password);
         
         if (isMatch) {
-            console.log("🔓 ACCESO CONCEDIDO para:", user.nombreReal);
-            
-            // Generamos el token con la lógica de normalización incluida
-            const token = generateToken(user);
-
-            // Enviamos respuesta al Frontend con datos sincronizados
             res.json({
                 _id: user._id,
                 nombreReal: user.nombreReal,
                 username: user.username,
                 role: user.role, 
                 elemento: user.elemento, 
-                token: token
+                token: generateToken(user)
             });
         } else {
-            console.log("🚫 ERROR: Contraseña incorrecta.");
             res.status(401).json({ message: 'Credenciales inválidas' });
         }
     } catch (error) {

@@ -157,7 +157,7 @@ const AdminPanel = () => {
                             onChange={e => setNewUser({...newUser, role: e.target.value})}
                             style={styles.select}
                         >
-                            <option value="USER">USER (Consulta)</option>
+                            <option value="user">USER (Consulta)</option>
                             <option value="OFICINA_TECNICA">OFICINA TÉCNICA (S4 UNIDAD)</option>
                             <option value="OTO">OTO (Oficial Técnico)</option>
                             <option value="BOSS">BOSS (Comando)</option>
