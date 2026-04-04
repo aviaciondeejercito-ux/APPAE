@@ -29,6 +29,7 @@ const CalendarPage = () => {
                     const unidadUsuario = userUnidad.toUpperCase();
                     const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
+                    // Lógica existente
                     const soyDueño = evElemento === unidadUsuario || evCreador === unidadUsuario;
                     const soyInvolucradoOrdenado = evElemento.includes(unidadUsuario) && etapa === 'ordenada';
 
@@ -41,7 +42,19 @@ const CalendarPage = () => {
                         }
                     }
 
-                    return soyDueño || soyInvolucradoOrdenado || visibilidadGlobal;
+                    // NUEVA LÓGICA: BOSS y DIRECTOR
+                    let visibilidadJerarquia = false;
+                    if (role === 'BOSS' || role === 'DIRECTOR'|| role === 'DIRECTOR') {
+                        // 1. Ver elementos GLOBALES en estado ORDENADO
+                        const globalOrdenado = ev.esGlobal && etapa === 'ordenada';
+                        
+                        // 2. Ver eventos creados por usuarios de DIR AE (internos) en cualquier estado
+                        const creadoPorDirAe = evCreador === 'DIR AE';
+
+                        visibilidadJerarquia = globalOrdenado || creadoPorDirAe;
+                    }
+
+                    return soyDueño || soyInvolucradoOrdenado || visibilidadGlobal || visibilidadJerarquia;
                 });
 
             setEvents(Array.isArray(filteredData) ? filteredData : []);
@@ -77,7 +90,7 @@ const CalendarPage = () => {
             color: event.backgroundColor,
             notes: cleanNotes,
             user: event.extendedProps.user,
-            creadorUnidad: event.extendedProps.creadorUnidad, // Agregado
+            creadorUnidad: event.extendedProps.creadorUnidad,
             origen: event.extendedProps.tipoOrigen,
             elemento: event.extendedProps.elemento,
             etapa: event.extendedProps.etapa,
