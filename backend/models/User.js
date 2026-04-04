@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
     nombreReal: { 
         type: String, 
         required: [true, 'El nombre de usuario (Nombre y Apellido) es obligatorio'], 
-        unique: true, 
+        // Eliminado unique: true para evitar colapsos por nombres duplicados
         trim: true
     },
     username: { 
@@ -42,17 +42,17 @@ const userSchema = new mongoose.Schema({
         type: String, 
         // Se estandarizan los roles a MAYÚSCULAS para coincidir con el Middleware de Seguridad
         enum: [
-            'admin', 
+            'ADMIN', 
             'BOSS', 
             'DIRECTOR', 
             'OTO', 
             'OTOAE',
-            'user', 
+            'USER', 
             'S4',
             'S4_UNIDAD',
             'OFICINA_TECNICA'
         ], 
-        default: 'user',
+        default: 'USER',
         uppercase: true,
         trim: true
     }
@@ -78,8 +78,11 @@ userSchema.pre('save', async function(next) {
 // --- VERIFICACIÓN DE CREDENCIALES ---
 userSchema.methods.comparePassword = async function(enteredPassword) {
     try {
+        // Validación de seguridad: si no hay password guardado, no comparar
+        if (!this.password) return false;
         return await bcrypt.compare(enteredPassword, this.password);
     } catch (error) {
+        console.error("Error en comparación de password:", error);
         return false;
     }
 };
