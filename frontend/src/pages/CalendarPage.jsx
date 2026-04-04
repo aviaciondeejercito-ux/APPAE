@@ -32,19 +32,18 @@ const CalendarPage = () => {
                     const unidadUsuario = userUnidad.toUpperCase();
                     const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
-                    // 1. Es de mi unidad: Lo veo siempre (soy el dueño/creador o está asignado a mi unidad)
+                    // 1. Es de mi unidad: Lo veo siempre (dueño o involucrado)
                     const esDeMiUnidad = evElemento.includes(unidadUsuario) || evCreador === unidadUsuario;
                     
-                    // 2. Lógica de visibilidad cruzada (Solo si es Global)
+                    // 2. Lógica de visibilidad cruzada Global
                     let esGlobalVisible = false;
 
                     if (ev.esGlobal) {
                         if (unidadUsuario === 'DIR AE') {
-                            // Si soy DIR AE: Solo veo lo global de otros si me mencionan o si yo lo creé
+                            // DIR AE ve lo global de otros solo si lo involucraron explícitamente
                             esGlobalVisible = evElemento.includes('DIR AE');
                         } else {
-                            // Si soy unidad subordinada: Solo veo lo de DIR AE si está "ordenada" 
-                            // O si el evento global fue creado por mi unidad para que lo vea DIR AE
+                            // Subordinada ve lo de DIR AE solo si está "ordenada"
                             const deDirAeParaMi = (evCreador.includes('DIR AE') || evElemento.includes('DIR AE')) && etapa === 'ordenada';
                             esGlobalVisible = deDirAeParaMi;
                         }
@@ -59,16 +58,26 @@ const CalendarPage = () => {
         }
     };
 
+    /**
+     * CORRECCIÓN DE LÓGICA DE COLOR:
+     * El color Rojo (#dc3545) ahora es EXCLUSIVO para eventos Globales 
+     * creados por Secretarías (SEC AE) que NO son la Dirección (DIR AE).
+     */
     const getEventColor = (tipo, creadorUnidad, esGlobal) => {
         const creador = creadorUnidad ? creadorUnidad.toUpperCase() : '';
         
-        if (esGlobal && creador.includes('SEC AE') && !creador.includes('DIR AE')) return '#dc3545';
+        // Si es Global y viene de una SEC AE, pero NO es de DIR AE -> ROJO
+        if (esGlobal && creador.includes('SEC AE') && !creador.includes('DIR AE')) {
+            return '#dc3545';
+        }
 
+        // Si no, colores por tipo de misión
         if (!tipo) return '#6c757d';
         const t = tipo.toUpperCase();
         if (t.includes('SOSTENIMIENTO')) return '#007bff';
         if (t.includes('FUERZA OPERATIVA')) return '#28a745';
         if (t.includes('EDUCACION') || t.includes('EDUCACIÓN')) return '#800000';
+        
         return '#6c757d'; 
     };
 
