@@ -30,21 +30,28 @@ const CalendarPage = () => {
                 // 1. ADMIN: Ve todo
                 if (role === 'admin') return true;
 
-                // 2. DIRECTOR - BOSS - OTO:
+                // 2. Lógica para DIR AE (Director, Boss, OTO)
                 if (role === 'DIRECTOR' || role === 'BOSS' || role === 'OTO') {
-                    const esDeDirAe = evCreador === 'DIR AE' || evElemento === 'DIR AE';
+                    const esDeDirAe = evCreador.includes('DIR AE') || evElemento.includes('DIR AE');
                     const esGlobalOrdenadoSubalterno = ev.esGlobal && etapa === 'ordenada';
                     return esDeDirAe || esGlobalOrdenadoSubalterno;
                 }
 
-                // 3. USER - S4_UNIDAD (Lógica corregida según pedido):
+                // 3. Lógica para UNIDADES SUBALTERNAS (User, S4)
                 if (role === 'user' || role === 'S4_UNIDAD') {
-                    // Evento Interno: Se ve en cualquier etapa
-                    const esInternoPropio = !ev.esGlobal && (evElemento === unidadUsuario || evCreador === unidadUsuario);
-                    // Evento Global: SOLO se ve si está en etapa 'ordenada'
-                    const esGlobalOrdenadoPropio = ev.esGlobal && (evElemento === unidadUsuario || evCreador === unidadUsuario) && etapa === 'ordenada';
                     
-                    return esInternoPropio || esGlobalOrdenadoPropio;
+                    // CASO A: Eventos CREADOS por la propia unidad (Sus propios borradores internos)
+                    // Estos los ven siempre, en cualquier etapa.
+                    if (evCreador === unidadUsuario) return true;
+
+                    // CASO B: Eventos donde la unidad es RESPONSABLE (elemento) pero NO los creó ella
+                    // (Ej: Creados por DIR AE para esa unidad).
+                    // SOLO se ven si están en etapa 'ORDENADA'.
+                    if (evElemento === unidadUsuario && etapa === 'ordenada') return true;
+
+                    // CASO C: Eventos marcados como GLOBALES.
+                    // SOLO se ven si están en etapa 'ORDENADA'.
+                    if (ev.esGlobal && etapa === 'ordenada') return true;
                 }
 
                 return false;
@@ -56,17 +63,12 @@ const CalendarPage = () => {
         }
     };
 
-    /**
-     * Define el color basado en el creador (SEC AE = ROJO) o en la misión
-     */
     const getEventColor = (ev) => {
         const creador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
         const mision = ev.mision ? String(ev.mision).toUpperCase() : '';
 
-        // Prioridad 1: Si fue creado por SEC AE (Cualquiera), siempre Rojo
-        if (creador.includes('SEC AE')) return '#ff0000';
+        if (creador.includes('SEC AE')) return '#ff0000'; // SEC AE siempre Rojo
 
-        // Prioridad 2: Colores por Misión
         if (mision.includes('SOSTENIMIENTO')) return '#007bff';
         if (mision.includes('FUERZA OPERATIVA')) return '#28a745';
         if (mision.includes('EDUCACION') || mision.includes('EDUCACIÓN')) return '#800000';
@@ -76,7 +78,6 @@ const CalendarPage = () => {
 
     const handleEventClick = (info) => {
         const { event } = info;
-        
         setSelectedEvent({
             id: event.id,
             title: event.title.replace(/^[🟡🔵🟢🌐 ]+/, ''), 
@@ -103,7 +104,7 @@ const CalendarPage = () => {
     const closeModal = () => setSelectedEvent(null);
 
     const eventDidMount = (info) => {
-        const { elemento, esGlobal, tipoOrigen, etapa } = info.event.extendedProps;
+        const { elemento, esGlobal, etapa } = info.event.extendedProps;
         const backgroundColor = info.event.backgroundColor;
         info.el.style.backgroundColor = backgroundColor;
         
@@ -118,7 +119,8 @@ const CalendarPage = () => {
         if (isWhite) info.el.style.border = '1px solid #ddd';
 
         const evElemento = elemento ? String(elemento).toUpperCase() : '';
-        if (evElemento === userUnidad && !esGlobal && tipoOrigen !== 'COMANDO') {
+        // Si el evento es propio y no global, borde negro para resaltar
+        if (evElemento === userUnidad && !esGlobal) {
             info.el.style.border = '2px solid #000000';
         }
 
@@ -187,7 +189,6 @@ const CalendarPage = () => {
                     initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
                     locale={esLocale}
                     events={events.map(ev => {
-                        // Pasamos el objeto evento completo para evaluar creador y misión
                         const colorBase = getEventColor(ev);
                         let prefix = '';
                         if (ev.etapa === 'recepcion') prefix = '🟡 ';
