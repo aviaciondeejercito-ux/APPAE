@@ -22,7 +22,7 @@ const CalendarPage = () => {
             const data = await getEvents();
             
             /**
-             * LÓGICA DE FILTRADO JERÁRQUICO (PECERA ESTANCA)
+             * LÓGICA DE FILTRADO JERÁRQUICO (PECERA ESTANCA TOTAL)
              */
             const filteredData = (role === 'admin' || role === 'BOSS' || role === 'DIRECTOR'|| role === 'OTO') 
                 ? data 
@@ -31,14 +31,24 @@ const CalendarPage = () => {
                     const evCreador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
                     const unidadUsuario = userUnidad.toUpperCase();
                     const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
-                    
-                    // 1. Es de mi unidad: Lo veo siempre (soy el dueño/creador)
+
+                    // 1. Es de mi unidad: Lo veo siempre (soy el dueño/creador o está asignado a mi unidad)
                     const esDeMiUnidad = evElemento.includes(unidadUsuario) || evCreador === unidadUsuario;
                     
-                    // 2. Es Global (DIR AE): Solo lo veo si está en etapa "ordenada"
-                    const esGlobalVisible = ev.esGlobal && 
-                                          (evElemento === '' || evElemento.includes(unidadUsuario) || evElemento.includes('DIR AE')) &&
-                                          etapa === 'ordenada';
+                    // 2. Lógica de visibilidad cruzada (Solo si es Global)
+                    let esGlobalVisible = false;
+
+                    if (ev.esGlobal) {
+                        if (unidadUsuario === 'DIR AE') {
+                            // Si soy DIR AE: Solo veo lo global de otros si me mencionan o si yo lo creé
+                            esGlobalVisible = evElemento.includes('DIR AE');
+                        } else {
+                            // Si soy unidad subordinada: Solo veo lo de DIR AE si está "ordenada" 
+                            // O si el evento global fue creado por mi unidad para que lo vea DIR AE
+                            const deDirAeParaMi = (evCreador.includes('DIR AE') || evElemento.includes('DIR AE')) && etapa === 'ordenada';
+                            esGlobalVisible = deDirAeParaMi;
+                        }
+                    }
 
                     return esDeMiUnidad || esGlobalVisible;
                 });
@@ -52,7 +62,7 @@ const CalendarPage = () => {
     const getEventColor = (tipo, creadorUnidad, esGlobal) => {
         const creador = creadorUnidad ? creadorUnidad.toUpperCase() : '';
         
-        if (esGlobal && creador.includes('SEC AE')) return '#dc3545';
+        if (esGlobal && creador.includes('SEC AE') && !creador.includes('DIR AE')) return '#dc3545';
 
         if (!tipo) return '#6c757d';
         const t = tipo.toUpperCase();
