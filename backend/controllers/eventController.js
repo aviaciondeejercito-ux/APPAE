@@ -31,23 +31,25 @@ const getEvents = async (req, res) => {
         const { elemento } = req.user; 
         const isMando = req.isMando; 
         
-        // FILTRO: Solo traer lo que NO es tiempo real para mantener limpio el Calendario
+        // FILTRO BASE: Solo traer lo que NO es tiempo real
         let query = { isRealTime: false }; 
 
         if (!isMando) {
+            // Lógica de visualización restringida para elementos
             query.$or = [
-                { elemento: { $regex: elemento, $options: 'i' }, isRealTime: false },
+                // 1. Siempre ve lo que es de su propia unidad (cualquier etapa)
                 { 
-                    $and: [
-                        { etapa: 'ordenada' }, 
-                        { isRealTime: false },
-                        { 
-                            $or: [
-                                { esGlobal: true }, 
-                                { elemento: { $regex: elemento, $options: 'i' } } 
-                            ]
-                        }
+                    isRealTime: false,
+                    $or: [
+                        { elemento: { $regex: elemento, $options: 'i' } },
+                        { creadorUnidad: { $regex: elemento, $options: 'i' } }
                     ]
+                },
+                // 2. Solo ve lo Global (DIR AE) si ya está en etapa 'ordenada'
+                { 
+                    isRealTime: false,
+                    esGlobal: true,
+                    etapa: 'ordenada'
                 }
             ];
         }
@@ -102,7 +104,6 @@ const createEvent = async (req, res) => {
 
         if (!title) return res.status(400).json({ message: 'El título es obligatorio.' });
 
-        // Validación de aeronave si es vuelo
         if (isRealTime || tipoApoyo === 'VUELO') {
             const targetMatricula = matricula || misionDetalle?.matricula;
             const aircraftExists = await Aircraft.findOne({ matricula: targetMatricula?.toUpperCase() });
@@ -122,19 +123,12 @@ const createEvent = async (req, res) => {
             createdBy: req.user._id,
             userName: req.user.username || req.user.name,
             elemento: ((isMando && elemento) ? elemento : userElemento).toUpperCase(),
-            
-            // Lógica de Pecera Estanca: El creador original queda marcado
             creadorUnidad: userElemento,
-
             status: (status || 'programado').toLowerCase(),
             isRealTime: isRealTime || false,
-            
-            // 1. Datos de Aeronave
             matricula: (matricula || misionDetalle?.matricula || '').toUpperCase(),
             aeronave: (aeronave || misionDetalle?.aeronave || '').toUpperCase(),
             tipoIcono: tipoIcono || misionDetalle?.tipoIcono || 'ala_rotativa',
-
-            // 2. Coordenadas Independientes
             origen: {
                 nombre: (origen?.nombre || 'ORIGEN').toUpperCase(),
                 lat: origen?.lat ? parseFloat(origen.lat) : null,
@@ -145,20 +139,16 @@ const createEvent = async (req, res) => {
                 lat: destino?.lat ? parseFloat(destino.lat) : null,
                 lng: destino?.lng ? parseFloat(destino.lng) : null
             },
-
-            // 3. Contactos y Responsables
             unidadApoyada: (unidadApoyada || '').toUpperCase(),
             pntoContactoNom: (pntoContactoNom || '').toUpperCase(),
             pntoContactoTel: pntoContactoTel || '',
             responsableNom: (responsableNom || '').toUpperCase(),
             responsableTel: responsableTel || '',
-
             misionDetalle: {
                 ...misionDetalle,
                 matricula: (matricula || misionDetalle?.matricula || '').toUpperCase(),
                 aeronave: (aeronave || misionDetalle?.aeronave || '').toUpperCase(),
             },
-
             start: start ? new Date(start) : new Date(),
             end: end ? new Date(end) : null,
             etapa: isRealTime ? 'operativo' : (etapa || 'recepcion'),
@@ -199,7 +189,7 @@ const updateEvent = async (req, res) => {
         const updateData = { ...req.body };
         delete updateData._id; 
         delete updateData.createdBy;
-        delete updateData.creadorUnidad; // Protegemos la unidad de origen
+        delete updateData.creadorUnidad; 
         updateData.updatedBy = req.user._id; 
 
         if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
