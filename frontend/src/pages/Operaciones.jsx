@@ -84,7 +84,6 @@ const Operaciones = () => {
             const logicFiltered = data.filter(ev => {
                 if (ev.isRealTime) return false;
                 
-                // Si el usuario es ADMIN o MANDO, ve absolutamente TODO
                 if (esMando) return true;
 
                 const creador = ev.creadorUnidad?.toUpperCase() || "";
@@ -92,14 +91,10 @@ const Operaciones = () => {
                 const unidadUsuario = userUnidad.toUpperCase();
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
-                // 1. Si soy el creador/dueño (Evento Interno), lo veo siempre
                 if (creador === unidadUsuario) return true;
 
-                // 2. Si soy el responsable asignado, lo veo solo si está ORDENADA
                 if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
 
-                // 3. REGLA SOLICITADA: Eventos insertados por la DIR AE con condición "ORDENADA" 
-                // son visibles para todas las unidades.
                 if (creador === 'DIR AE' && etapa === 'ordenada') return true;
 
                 return false;
@@ -354,6 +349,9 @@ const Operaciones = () => {
                                 <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
                                     <div style={{flex: 1}}>
                                         <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.esGlobal && "🌐 "}{ev.title}</div>
+                                        <div style={{display: 'inline-block', fontSize: '0.65rem', background: '#e1e8ed', color: '#1b3a57', padding: '2px 6px', borderRadius: '4px', marginBottom: '4px'}}>
+                                            CREADOR: {ev.creadorUnidad || 'S/D'}
+                                        </div>
                                         <div style={{fontSize: '0.75rem', color: '#666'}}>Resp: {ev.elemento} | Apoyado: {ev.unidadApoyada}</div>
                                         <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>
                                             <span style={{...styles.miniBadge, backgroundColor: etapaColors[ev.etapa] || '#95a5a6'}}>{ev.etapa?.toUpperCase()}</span>
