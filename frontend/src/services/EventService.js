@@ -19,10 +19,11 @@ export const getActiveOperations = async () => {
 };
 
 // --- 2. NUEVA FUNCIÓN: Obtener aeronaves E/S por unidad ---
+// CORRECCIÓN: Se cambia la ruta de /events/aircraft a /aircraft/ para coincidir con el backend
 export const getAvailableAircraft = async (elemento) => {
     try {
         const encodedElemento = encodeURIComponent(elemento || 'all');
-        const response = await API.get(`/events/aircraft/${encodedElemento}`);
+        const response = await API.get(`/aircraft/${encodedElemento}`);
         return response.data;
     } catch (error) {
         console.error(`❌ Error al obtener aeronaves para ${elemento}:`, 

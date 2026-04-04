@@ -16,11 +16,19 @@ router.use(protect);
 
 /**
  * 2. Consultar disponibilidad por Elemento (ESENCIAL PARA CARGA TÁCTICA)
- * Esta ruta resuelve el error 'undefined' al cargar el selector de aeronaves.
- * Nota: Los roles coinciden con el estándar (admin minúscula, OTO mayúscula).
+ * Se agregan ambas versiones para asegurar compatibilidad con EventService.js
  */
+
+// Versión con prefijo /elemento/
 router.get(
     '/elemento/:elemento', 
+    authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
+    aircraftController.getAircraftsByElemento || aircraftController.getAircrafts
+);
+
+// Versión directa (la que busca el frontend según el error 404)
+router.get(
+    '/:elemento', 
     authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
     aircraftController.getAircraftsByElemento || aircraftController.getAircrafts
 );
@@ -28,8 +36,6 @@ router.get(
 /**
  * 3. Ver flota completa / Filtrada
  * Permitido para cualquier usuario logueado. 
- * El controlador filtra internamente qué unidad ve cada uno según su jerarquía 
- * (admin/OTO ven todo, usuario ve su unidad).
  */
 router.get('/', aircraftController.getAircrafts);
 
@@ -45,7 +51,6 @@ router.post(
 
 /**
  * 5. Actualizar Estado/Horas/Novedades (Punto de Gestión Técnica)
- * Habilita a roles de gestión y mando para actualizar el estado operativo.
  */
 router.put(
     '/:id', 

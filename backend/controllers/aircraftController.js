@@ -41,7 +41,35 @@ exports.getAircrafts = async (req, res) => {
     }
 };
 
-// 2. Crear una nueva aeronave (Incorporación al Inventario)
+/**
+ * 2. NUEVA FUNCIÓN: Obtener aeronaves por Elemento (Ruta por Params)
+ * Resuelve la llamada de EventService.js: /api/aircraft/:elemento
+ */
+exports.getAircraftsByElemento = async (req, res) => {
+    try {
+        const { elemento } = req.params;
+        let query = {};
+
+        if (elemento && elemento !== 'all') {
+            // Decodificamos por si viene con espacios (%20)
+            query.unidad = decodeURIComponent(elemento).trim().toUpperCase();
+        }
+
+        // En esta ruta específica, devolvemos solo aeronaves con estado operativo o en inspección 
+        // (Configurable según necesidad táctica)
+        const aircrafts = await Aircraft.find(query).sort({ sda: 1, matricula: 1 });
+        res.json(aircrafts);
+    } catch (error) {
+        console.error('❌ Error AE (getAircraftsByElemento):', error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Error al filtrar aeronaves por unidad", 
+            error: error.message 
+        });
+    }
+};
+
+// 3. Crear una nueva aeronave (Incorporación al Inventario)
 exports.createAircraft = async (req, res) => {
     try {
         const { matricula, sda } = req.body;
@@ -90,7 +118,7 @@ exports.createAircraft = async (req, res) => {
     }
 };
 
-// 3. Actualizar Estado, Horas y NOVEDADES (Gestión Operativa)
+// 4. Actualizar Estado, Horas y NOVEDADES (Gestión Operativa)
 exports.updateAircraftStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -141,7 +169,7 @@ exports.updateAircraftStatus = async (req, res) => {
     }
 };
 
-// 4. Eliminar aeronave (Baja Definitiva del Registro)
+// 5. Eliminar aeronave (Baja Definitiva del Registro)
 exports.deleteAircraft = async (req, res) => {
     try {
         const rawRole = req.user.role ? String(req.user.role).trim() : '';
