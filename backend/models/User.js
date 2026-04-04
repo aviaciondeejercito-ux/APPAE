@@ -42,17 +42,17 @@ const userSchema = new mongoose.Schema({
         type: String, 
         // Se estandarizan los roles a MAYÚSCULAS para coincidir con el Middleware de Seguridad
         enum: [
-            'ADMIN', 
+            'admin', 
             'BOSS', 
             'DIRECTOR', 
             'OTO', 
             'OTOAE',
-            'USER', 
+            'user', 
             'S4',
             'S4_UNIDAD',
             'OFICINA_TECNICA'
         ], 
-        default: 'USER',
+        default: 'user',
         uppercase: true,
         trim: true
     }
