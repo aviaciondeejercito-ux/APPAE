@@ -8,13 +8,12 @@ const Material = () => {
     
     // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER)
     const rawRole = localStorage.getItem('role') || "";
-    const role = rawRole.trim(); // Se mantiene el case original para comparar con 'admin'
+    const role = rawRole.trim(); 
     
     const userElemento = localStorage.getItem('elemento')?.toUpperCase().trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
     // Definición de permisos jerárquicos estrictos
-    // Corregido: Se asegura que 'admin' (minúscula como viene del sistema) sea reconocido
     const isAdmin = role === 'admin';
     const isMando = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role);
     
@@ -26,7 +25,6 @@ const Material = () => {
         "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
     ];
 
-    // Listado de unidades para el selector del ADMIN
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
         "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
@@ -51,8 +49,6 @@ const Material = () => {
         try {
             setLoading(true);
             const { data } = await getAircrafts();
-            
-            // Si es Mando/Admin ve todo. Si no, solo su unidad.
             const filtrados = isMando 
                 ? data 
                 : data.filter(a => 
@@ -72,9 +68,7 @@ const Material = () => {
         e.preventDefault();
         if (!newAir.matricula || !newAir.sda) return alert("Faltan campos obligatorios");
         
-        // El ADMIN usa la unidad seleccionada, el resto usa la suya de sesión
         const unidadFinal = isAdmin ? newAir.unidadDestino : userElemento;
-        
         if (!unidadFinal) return alert("Debe seleccionar una unidad de destino.");
 
         try {
@@ -102,7 +96,6 @@ const Material = () => {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
 
-            // Seguridad: El Admin e isMando saltan la validación de unidad
             const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
             if (!isMando && targetUnidad !== userElemento) {
                 return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");
@@ -132,7 +125,6 @@ const Material = () => {
         const targetAir = aircrafts.find(a => a._id === id);
         if (!targetAir) return;
 
-        // Seguridad: El Admin e isMando pueden eliminar cualquier aeronave cargada
         const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
         if (!isMando && targetUnidad !== userElemento) {
             return alert("Seguridad: No tiene permisos para eliminar este registro.");
@@ -234,9 +226,9 @@ const Material = () => {
                                         <label style={styles.tinyLabel}>HS REM</label>
                                         <input 
                                             type="number" 
-                                            value={air.horasRemanentes || 0} 
+                                            defaultValue={air.horasRemanentes || 0} 
                                             disabled={!hasEditPrivileges}
-                                            onChange={(e) => handleUpdateField(air._id, { horasRemanentes: e.target.value })} 
+                                            onBlur={(e) => handleUpdateField(air._id, { horasRemanentes: e.target.value })} 
                                             style={styles.inputSmall} 
                                         />
                                     </div>
