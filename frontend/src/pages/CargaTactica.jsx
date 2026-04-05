@@ -14,21 +14,16 @@ const CargaTactica = () => {
     const user = getUser();
     const userElemento = localStorage.getItem('elemento') || user.elemento || "SIN UNIDAD";
 
-    // Lógica corregida: admin y user en minúsculas, el resto en MAYÚSCULAS según normalización.
-    const isMando = 
-        user.role === 'admin' || 
-        user.role === 'OTO' || 
-        user.role === 'DIRECTOR' || 
-        user.role === 'BOSS' || 
-        user.role === 'OTOAE' || 
-        user.role === 'OFICINA_TECNICA';
+    const isMando = user.role === 'admin' || user.role === 'OTO' || 
+                    ['boss', 'director', 'otoae'].includes(user.role?.toLowerCase()) ||
+                    !user.role;
 
     const [misiones, setMisiones] = useState([]);
     const [aeronaves, setAeronaves] = useState([]); 
     const [loading, setLoading] = useState(false);
     
     // Estados del Formulario
-    const [editingId, setEditingId] = useState(null);
+    const [editingId, setEditingId] = useState(null); 
     const [title, setTitle] = useState('');
     const [selectedMatricula, setSelectedMatricula] = useState('');
     const [notasMarginales, setNotasMarginales] = useState('');
@@ -73,12 +68,15 @@ const CargaTactica = () => {
             const evRes = await getActiveOperations();
             const events = Array.isArray(evRes) ? evRes : [];
             
-            // Filtro corregido: Si es mando ve TODO, si no, filtra por su elemento.
-            if (isMando) {
-                setMisiones(events);
-            } else {
-                setMisiones(events.filter(ev => ev.elemento === userElemento));
-            }
+            // MODIFICACIÓN: Filtro inclusivo para asegurar que se vean los vuelos de CargaTactica
+            const filtered = events.filter(ev => {
+                const perteneceAUnidad = isMando || ev.elemento === userElemento;
+                // Mostramos si es RealTime (vuelo activo) o si tiene tipoApoyo VUELO
+                const esVueloValido = ev.isRealTime === true || ev.tipoApoyo === 'VUELO' || ev.tipo === 'operativo';
+                return perteneceAUnidad && esVueloValido;
+            });
+
+            setMisiones(filtered);
 
             const airRes = await getAircrafts();
             const dataAeronaves = Array.isArray(airRes) ? airRes : airRes.data || [];
@@ -141,6 +139,8 @@ const CargaTactica = () => {
             elemento: aeroInfo ? (aeroInfo.unidad || aeroInfo.elemento) : userElemento,
             isRealTime: true,
             status: 'operativo', 
+            type: 'operativo',
+            tipoApoyo: 'VUELO',
             matricula: selectedMatricula,
             aeronave: aeroInfo ? aeroInfo.sda : '',
             tipoIcono: aeroInfo ? aeroInfo.tipoIcono : 'ala_rotativa',
@@ -154,7 +154,8 @@ const CargaTactica = () => {
                 nombre: (coordDes.nombre || "DESTINO").toUpperCase(),
                 lat: toDecimal(coordDes.latG, coordDes.latM, coordDes.latS),
                 lng: toDecimal(coordDes.lngG, coordDes.lngM, coordDes.lngS)
-            }
+            },
+            start: new Date().toISOString()
         };
 
         try {
