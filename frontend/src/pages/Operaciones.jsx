@@ -25,7 +25,6 @@ const Operaciones = () => {
         "SEC AE MTE 12", "B AB MANT AERON 601", "SEC AE MTE 3", "SEC AE 9"
     ];
 
-    // Listado de SdA para la DIR AE (según tu imagen)
     const sdaListadoDirAe = [
         "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
         "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
@@ -46,7 +45,7 @@ const Operaciones = () => {
 
     const [formData, setFormData] = useState({
         title: '', start: '', end: '', color: '#3498db', notes: '',
-        mision: '', // Nuevo campo solicitado
+        mision: '', 
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
         etapa: 'recepcion', 
         unidadesInvolucradas: [],
@@ -70,16 +69,13 @@ const Operaciones = () => {
 
     useEffect(() => {
         const fetchAeronaves = async () => {
-            // Si es mando, no necesita cargar matrículas específicas aquí, usa el listado estático
             if (esMando) return;
-
             const unidadABuscar = userUnidad;
             if (!unidadABuscar) return;
             
             setLoadingAircraft(true);
             try {
                 const data = await getAvailableAircraft(unidadABuscar);
-                // FILTRO CRÍTICO: Solo aeronaves En Servicio (E/S)
                 const cleanData = data
                     .filter(a => a.estado === 'E/S')
                     .map(a => ({
@@ -283,7 +279,6 @@ const Operaciones = () => {
                     </div>
 
                     <form onSubmit={handleSubmit} style={styles.form}>
-                        {/* SECTOR DE MISIÓN (CAMBIO DE COLOR) */}
                         <div style={styles.sectionTitle}>CLASIFICACIÓN DE MISIÓN</div>
                         <select 
                             value={formData.mision} 
@@ -345,17 +340,13 @@ const Operaciones = () => {
                                    onChange={e => setFormData({...formData, responsableTel: e.target.value})} style={{...styles.input, flex: 1}} />
                         </div>
 
-                        {/* SELECTOR DE SdA DINÁMICO SEGÚN ROL */}
                         <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA)</div>
                         <div style={styles.sdaBox}>
                             <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
                                 <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar SdA..."}</option>
-                                
                                 {esMando ? (
-                                    /* Listado para DIR AE (Genérico por modelo) */
                                     sdaListadoDirAe.map((sda, idx) => <option key={idx} value={sda}>{sda}</option>)
                                 ) : (
-                                    /* Listado para Unidades (Solo sus aeronaves E/S) */
                                     availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} - {air.matricula}</option>)
                                 )}
                             </select>
@@ -417,7 +408,7 @@ const Operaciones = () => {
 };
 
 const styles = {
-    container: { padding: '20px', maxWidth: '1200px', margin: '0 auto' },
+    container: { padding: '20px', maxWidth: '1200px', margin: '0 auto', fontFamily: 'Arial, sans-serif' },
     grid: { display: 'grid', gap: '25px', alignItems: 'start' },
     card: { background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f0f2f5' },
     title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '12px', fontSize: '1.2rem', color: '#1b3a57', marginBottom: '20px' },

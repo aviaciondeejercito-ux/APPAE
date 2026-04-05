@@ -1,38 +1,37 @@
-const CACHE_NAME = 'monitor-ae-v2'; // Cambiamos a V2 para que el navegador actualice
-const ASSETS = [
+// frontend/public/sw.js
+const CACHE_NAME = 'monitor-ae-v3';
+const OFFLINE_URL = '/';
+
+const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
   '/logo192.png',
-  '/logo512.png'
+  '/logo512.png',
+  '/favicon.ico'
 ];
 
-// Instalación: Guardamos los archivos básicos
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
   );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
-      );
-    })
+    caches.keys().then((keys) => Promise.all(
+      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+    ))
   );
-  clients.claim();
+  self.claim();
 });
 
-// Estrategia: Intentar red, si falla usar cache
+// Estrategia: Network First con fallback a Cache
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request) || caches.match('/');
-    })
-  );
+  if (event.request.method === 'GET') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request) || caches.match(OFFLINE_URL))
+    );
+  }
 });

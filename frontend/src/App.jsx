@@ -22,7 +22,7 @@ function App() {
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-    // ESTADOS DE CONEXIÓN (NUEVO)
+    // ESTADOS DE CONEXIÓN
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [lastSync, setLastSync] = useState(localStorage.getItem('lastSync') || '---');
 
@@ -33,7 +33,35 @@ function App() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // GESTIÓN DE ESTADO ONLINE/OFFLINE Y ÚLTIMA CONEXIÓN (NUEVO)
+    // FUNCIÓN PARA SINCRONIZAR EVENTOS GUARDADOS OFFLINE (NUEVO)
+    const syncOfflineEvents = async () => {
+        const pending = JSON.parse(localStorage.getItem('pending_events') || '[]');
+        if (pending.length === 0) return;
+
+        console.log(`Sincronizando ${pending.length} eventos pendientes...`);
+        
+        for (const event of pending) {
+            try {
+                const res = await fetch('https://sistema-ae-backend.onrender.com/api/operaciones', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify(event)
+                });
+                if (res.ok) {
+                    const currentPending = JSON.parse(localStorage.getItem('pending_events') || '[]');
+                    const filtered = currentPending.filter(e => e.id_temp !== event.id_temp);
+                    localStorage.setItem('pending_events', JSON.stringify(filtered));
+                }
+            } catch (err) {
+                console.error("Error sincronizando, se intentará luego", err);
+            }
+        }
+    };
+
+    // GESTIÓN DE ESTADO ONLINE/OFFLINE Y ÚLTIMA CONEXIÓN
     useEffect(() => {
         const handleStatusChange = () => {
             const online = navigator.onLine;
@@ -47,6 +75,9 @@ function App() {
                 });
                 setLastSync(now);
                 localStorage.setItem('lastSync', now);
+                
+                // DISPARAR SINCRONIZACIÓN AL RECUPERAR SEÑAL (NUEVO)
+                syncOfflineEvents();
             }
         };
 
@@ -245,24 +276,22 @@ function App() {
             </main>
 
             {/* FOOTER - INCLUYE INDICADOR DE CONEXIÓN */}
-            {(view !== 'mapa' && view !== 'stats' && view !== 'despacho') && (
-                <footer style={styles.footer}>
-                    <div style={styles.statusRow}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <div style={{
-                                width: '8px', 
-                                height: '8px', 
-                                borderRadius: '50%', 
-                                backgroundColor: isOnline ? '#2ecc71' : '#e74c3c',
-                                boxShadow: isOnline ? '0 0 4px #2ecc71' : '0 0 4px #e74c3c'
-                            }} />
-                            <span>{isOnline ? 'CONECTADO' : 'MODO OFFLINE'}</span>
-                        </div>
-                        <span>SINCRO: {lastSync}</span>
+            <footer style={styles.footer}>
+                <div style={styles.statusRow}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <div style={{
+                            width: '8px', 
+                            height: '8px', 
+                            borderRadius: '50%', 
+                            backgroundColor: isOnline ? '#2ecc71' : '#e74c3c',
+                            boxShadow: isOnline ? '0 0 4px #2ecc71' : '0 0 4px #e74c3c'
+                        }} />
+                        <span>{isOnline ? 'CONECTADO' : 'MODO OFFLINE'}</span>
                     </div>
-                    <div>© 2026 Aviación de Ejército - Sistema de Comando y Control</div>
-                </footer>
-            )}
+                    <span>SINCRO: {lastSync}</span>
+                </div>
+                <div>© 2026 Aviación de Ejército - Sistema de Comando y Control</div>
+            </footer>
         </div>
     );
 }
