@@ -56,7 +56,6 @@ exports.getAircraftsByElemento = async (req, res) => {
         }
 
         // En esta ruta específica, devolvemos solo aeronaves con estado operativo o en inspección 
-        // (Configurable según necesidad táctica)
         const aircrafts = await Aircraft.find(query).sort({ sda: 1, matricula: 1 });
         res.json(aircrafts);
     } catch (error) {
@@ -99,7 +98,7 @@ exports.createAircraft = async (req, res) => {
         }
 
         const newAircraft = new Aircraft({
-            ...req.body,
+            ...req.body, // Aquí ya entran horasPlaneador, motores, helices y vencimientos
             matricula: finalMatricula,
             sda: finalSda,
             unidad: finalUnidad,
@@ -122,7 +121,23 @@ exports.createAircraft = async (req, res) => {
 exports.updateAircraftStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { estado, horasRemanentes, novedades, matricula, sda, unidad, tipoIcono } = req.body;
+        const { 
+            estado, 
+            horasRemanentes, 
+            horasPlaneador, 
+            motores, 
+            helices, 
+            vencimientoSeguro, 
+            vencimientoAvionica,
+            vencimientoRAAC91217,
+            vencimientoRAAC91411,
+            vencimientoRAAC91413,
+            novedades, 
+            matricula, 
+            sda, 
+            unidad, 
+            tipoIcono 
+        } = req.body;
         
         const aircraft = await Aircraft.findById(id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no localizada en el inventario." });
@@ -138,14 +153,27 @@ exports.updateAircraftStatus = async (req, res) => {
             });
         }
 
+        // Actualización de campos operativos y técnicos
         if (estado) aircraft.estado = estado;
         if (horasRemanentes !== undefined) aircraft.horasRemanentes = Number(horasRemanentes);
+        if (horasPlaneador !== undefined) aircraft.horasPlaneador = Number(horasPlaneador);
+        
+        // Actualización de motores y hélices si vienen en el body
+        if (motores) aircraft.motores = motores;
+        if (helices) aircraft.helices = helices;
+
+        // Actualización de vencimientos
+        if (vencimientoSeguro) aircraft.vencimientoSeguro = vencimientoSeguro;
+        if (vencimientoAvionica) aircraft.vencimientoAvionica = vencimientoAvionica;
+        if (vencimientoRAAC91217) aircraft.vencimientoRAAC91217 = vencimientoRAAC91217;
+        if (vencimientoRAAC91411) aircraft.vencimientoRAAC91411 = vencimientoRAAC91411;
+        if (vencimientoRAAC91413) aircraft.vencimientoRAAC91413 = vencimientoRAAC91413;
         
         if (novedades !== undefined) {
             aircraft.novedades = String(novedades).toUpperCase().trim(); 
         }
 
-        // Permite actualización de datos estructurales incluyendo el nuevo campo tipoIcono
+        // Permite actualización de datos estructurales
         if (esMandoSuperior || userRole === 'OFICINA_TECNICA' || userRole === 'S4_UNIDAD') {
             if (matricula) aircraft.matricula = matricula.toUpperCase().trim();
             if (sda) aircraft.sda = sda.toUpperCase().trim();

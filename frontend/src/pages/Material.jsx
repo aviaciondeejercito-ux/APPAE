@@ -5,6 +5,7 @@ const Material = () => {
     const [aircrafts, setAircrafts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedNote, setSelectedNote] = useState(null); 
+    const [isEditing, setIsEditing] = useState(false); // Estado para saber si estamos editando
     
     // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER)
     const rawRole = localStorage.getItem('role') || "";
@@ -31,13 +32,23 @@ const Material = () => {
         "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"
     ];
 
-    const [newAir, setNewAir] = useState({
+    const initialFormState = {
         matricula: '',
         sda: '',
         horasRemanentes: 0,
         novedades: '',
-        unidadDestino: '' 
-    });
+        unidadDestino: '',
+        horasPlaneador: 0,
+        motores: [{ horas: 0, fecha: '' }],
+        helices: [{ horas: 0, fecha: '' }],
+        vencimientoSeguro: '',
+        vencimientoAvionica: '',
+        vencimientoRAAC91217: '',
+        vencimientoRAAC91411: '',
+        vencimientoRAAC91413: ''
+    };
+
+    const [newAir, setNewAir] = useState(initialFormState);
 
     useEffect(() => {
         if (role) {
@@ -64,30 +75,73 @@ const Material = () => {
         }
     };
 
-    const handleCreate = async (e) => {
+    // Cargar datos en el formulario para editar
+    const handleEditClick = (air) => {
+        setIsEditing(true);
+        setNewAir({
+            ...air,
+            unidadDestino: air.unidad, // Para que el select de admin sepa que unidad es
+            motores: air.motores?.length ? air.motores : [{ horas: 0, fecha: '' }],
+            helices: air.helices?.length ? air.helices : [{ horas: 0, fecha: '' }]
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const cancelEdit = () => {
+        setIsEditing(false);
+        setNewAir(initialFormState);
+    };
+
+    // Manejadores para campos dinámicos
+    const addMotor = () => setNewAir({ ...newAir, motores: [...newAir.motores, { horas: 0, fecha: '' }] });
+    const updateMotor = (index, field, value) => {
+        const updated = [...newAir.motores];
+        updated[index][field] = value;
+        setNewAir({ ...newAir, motores: updated });
+    };
+
+    const addHelice = () => setNewAir({ ...newAir, helices: [...newAir.helices, { horas: 0, fecha: '' }] });
+    const updateHelice = (index, field, value) => {
+        const updated = [...newAir.helices];
+        updated[index][field] = value;
+        setNewAir({ ...newAir, helices: updated });
+    };
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
         if (!newAir.matricula || !newAir.sda) return alert("Faltan campos obligatorios");
         
         const unidadFinal = isAdmin ? newAir.unidadDestino : userElemento;
         if (!unidadFinal) return alert("Debe seleccionar una unidad de destino.");
 
+        const timestamp = `[Modificado: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()} por ${userName}]`;
+
         try {
             const payload = {
+                ...newAir,
                 matricula: newAir.matricula.toUpperCase().trim(),
-                sda: newAir.sda,
                 horasRemanentes: Number(newAir.horasRemanentes) || 0,
+                horasPlaneador: Number(newAir.horasPlaneador) || 0,
                 unidad: unidadFinal,
-                estado: 'E/S',
-                novedades: newAir.novedades ? `[${new Date().toLocaleDateString()}] ${userName}: ${newAir.novedades}` : '',
-                creadoPor: `${userName} (${role})` 
+                novedades: isEditing 
+                    ? (newAir.novedades.includes(timestamp) ? newAir.novedades : `${newAir.novedades}\n${timestamp}`)
+                    : (newAir.novedades ? `[${new Date().toLocaleDateString()}] ${userName}: ${newAir.novedades}` : '')
             };
 
-            await createAircraft(payload);
-            setNewAir({ matricula: '', sda: '', horasRemanentes: 0, novedades: '', unidadDestino: '' });
+            if (isEditing) {
+                await updateAircraftStatus(newAir._id, payload);
+                alert("Aeronave actualizada correctamente.");
+            } else {
+                payload.estado = 'E/S';
+                payload.creadoPor = `${userName} (${role})`;
+                await createAircraft(payload);
+                alert(`Aeronave registrada correctamente en ${unidadFinal}.`);
+            }
+
+            cancelEdit();
             await fetchMaterial();
-            alert(`Aeronave registrada correctamente en ${unidadFinal}.`);
         } catch (error) {
-            alert("Error de Autorización: Su nivel jerárquico no permite esta acción.");
+            alert("Error de Operación: Verifique sus permisos o conexión.");
         }
     };
 
@@ -95,23 +149,14 @@ const Material = () => {
         try {
             const targetAir = aircrafts.find(a => a._id === id);
             if (!targetAir) return;
-
             const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
-            if (!isMando && targetUnidad !== userElemento) {
-                return alert("Seguridad: No tiene permisos para modificar material de otra unidad.");
-            }
-
-            const fullUpdatedObject = { ...targetAir, ...updatedFields };
-
-            if (fullUpdatedObject.horasRemanentes !== undefined) {
-                fullUpdatedObject.horasRemanentes = Number(fullUpdatedObject.horasRemanentes);
-            }
+            if (!isMando && targetUnidad !== userElemento) return alert("Seguridad: Sin permisos.");
             
+            const fullUpdatedObject = { ...targetAir, ...updatedFields };
             await updateAircraftStatus(id, fullUpdatedObject);
             setAircrafts(prev => prev.map(a => a._id === id ? { ...a, ...updatedFields } : a));
         } catch (error) {
-            console.error("Error al actualizar:", error);
-            alert("Acceso Denegado: Error de permisos en el servidor.");
+            alert("Error al actualizar estado/horas.");
         }
     };
 
@@ -123,19 +168,13 @@ const Material = () => {
 
     const handleDelete = async (id) => {
         const targetAir = aircrafts.find(a => a._id === id);
-        if (!targetAir) return;
-
-        const targetUnidad = String(targetAir.unidad).toUpperCase().trim();
-        if (!isMando && targetUnidad !== userElemento) {
-            return alert("Seguridad: No tiene permisos para eliminar este registro.");
-        }
-
-        if (!window.confirm("¿Confirmar eliminación del registro oficial?")) return;
+        if (!targetAir || (!isMando && String(targetAir.unidad).toUpperCase().trim() !== userElemento)) return alert("No autorizado.");
+        if (!window.confirm("¿Confirmar eliminación?")) return;
         try {
             await deleteAircraft(id);
             setAircrafts(prev => prev.filter(a => a._id !== id));
         } catch (error) {
-            alert("Error de seguridad: No autorizado para eliminar.");
+            alert("Error al eliminar.");
         }
     };
 
@@ -146,17 +185,18 @@ const Material = () => {
             <div style={styles.grid}>
                 {hasEditPrivileges ? (
                     <div style={styles.card}>
-                        <h3 style={styles.title}>➕ Alta de Aeronave</h3>
-                        <form onSubmit={handleCreate} style={styles.form}>
+                        <h3 style={styles.title}>{isEditing ? "🔄 Actualizar Aeronave" : "➕ Alta de Aeronave"}</h3>
+                        <form onSubmit={handleSubmit} style={styles.form}>
                             
-                            {isAdmin && (
+                            {(isAdmin || isEditing) && (
                                 <div style={styles.field}>
-                                    <label style={{...styles.label, color: '#e67e22'}}>📍 Unidad de Destino (Solo Admin)</label>
+                                    <label style={{...styles.label, color: '#e67e22'}}>📍 Unidad</label>
                                     <select 
                                         value={newAir.unidadDestino} 
                                         onChange={e => setNewAir({...newAir, unidadDestino: e.target.value})} 
                                         style={{...styles.input, border: '1px solid #e67e22'}} 
                                         required
+                                        disabled={isEditing && !isAdmin}
                                     >
                                         <option value="">Seleccione Unidad...</option>
                                         {unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
@@ -165,8 +205,8 @@ const Material = () => {
                             )}
 
                             <div style={styles.field}>
-                                <label style={styles.label}>Matrícula (AE-XXX)</label>
-                                <input type="text" value={newAir.matricula} onChange={e => setNewAir({...newAir, matricula: e.target.value})} style={styles.input} required />
+                                <label style={styles.label}>Matrícula</label>
+                                <input type="text" value={newAir.matricula} onChange={e => setNewAir({...newAir, matricula: e.target.value})} style={styles.input} required disabled={isEditing} />
                             </div>
                             <div style={styles.field}>
                                 <label style={styles.label}>Sistema de Armas</label>
@@ -180,33 +220,74 @@ const Material = () => {
                                 <input type="number" value={newAir.horasRemanentes} onChange={e => setNewAir({...newAir, horasRemanentes: e.target.value})} style={styles.input} />
                             </div>
                             <div style={styles.field}>
-                                <label style={styles.label}>Novedades Iniciales</label>
-                                <textarea value={newAir.novedades} onChange={e => setNewAir({...newAir, novedades: e.target.value})} style={{...styles.input, height: '60px', resize: 'none'}} placeholder="Ej: Próxima inspección de 100hs..." />
+                                <label style={styles.label}>Horas de Planeador</label>
+                                <input type="number" value={newAir.horasPlaneador} onChange={e => setNewAir({...newAir, horasPlaneador: e.target.value})} style={styles.input} />
                             </div>
-                            <button type="submit" style={styles.btnPrimary}>
-                                {isAdmin ? "Registrar Aeronave" : `Registrar en ${userElemento}`}
-                            </button>
+
+                            <div style={styles.field}>
+                                <label style={styles.label}>Motores (Horas + Fecha)</label>
+                                {newAir.motores.map((m, idx) => (
+                                    <div key={idx} style={{display: 'flex', gap: '5px', marginBottom: '5px'}}>
+                                        <input type="number" placeholder="Hs" value={m.horas} onChange={e => updateMotor(idx, 'horas', e.target.value)} style={{...styles.input, flex: 1}} />
+                                        <input type="date" value={m.fecha ? m.fecha.split('T')[0] : ''} onChange={e => updateMotor(idx, 'fecha', e.target.value)} style={{...styles.input, flex: 1}} />
+                                        {idx === newAir.motores.length - 1 && <button type="button" onClick={addMotor} style={styles.btnAddSmall}>+</button>}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div style={styles.field}>
+                                <label style={styles.label}>Hélices (Horas + Fecha)</label>
+                                {newAir.helices.map((h, idx) => (
+                                    <div key={idx} style={{display: 'flex', gap: '5px', marginBottom: '5px'}}>
+                                        <input type="number" placeholder="Hs" value={h.horas} onChange={e => updateHelice(idx, 'horas', e.target.value)} style={{...styles.input, flex: 1}} />
+                                        <input type="date" value={h.fecha ? h.fecha.split('T')[0] : ''} onChange={e => updateHelice(idx, 'fecha', e.target.value)} style={{...styles.input, flex: 1}} />
+                                        {idx === newAir.helices.length - 1 && <button type="button" onClick={addHelice} style={styles.btnAddSmall}>+</button>}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div style={styles.field}><label style={styles.label}>Vto Seguro</label><input type="date" value={newAir.vencimientoSeguro?.split('T')[0] || ''} onChange={e => setNewAir({...newAir, vencimientoSeguro: e.target.value})} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>Vto Aviónica</label><input type="date" value={newAir.vencimientoAvionica?.split('T')[0] || ''} onChange={e => setNewAir({...newAir, vencimientoAvionica: e.target.value})} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>Vto RAAC 91.217</label><input type="date" value={newAir.vencimientoRAAC91217?.split('T')[0] || ''} onChange={e => setNewAir({...newAir, vencimientoRAAC91217: e.target.value})} style={styles.input} /></div>
+                            
+                            <div style={styles.field}>
+                                <label style={styles.label}>Novedades</label>
+                                <textarea value={newAir.novedades} onChange={e => setNewAir({...newAir, novedades: e.target.value})} style={{...styles.input, height: '60px', resize: 'none'}} />
+                            </div>
+
+                            <div style={{display: 'flex', gap: '10px'}}>
+                                <button type="submit" style={{...styles.btnPrimary, flex: 2}}>
+                                    {isEditing ? "Confirmar Cambios" : "Registrar Aeronave"}
+                                </button>
+                                {isEditing && <button type="button" onClick={cancelEdit} style={styles.btnCancel}>Anular</button>}
+                            </div>
                         </form>
                     </div>
                 ) : (
                     <div style={styles.card}>
                         <h3 style={styles.title}>📋 Información de Unidad</h3>
-                        <p style={{fontSize: '0.9rem', color: '#666'}}>Usted está operando en: <strong>{userElemento}</strong></p>
-                        <p style={{fontSize: '0.8rem', color: '#888'}}>El alta de nuevas aeronaves está reservada para Oficina Técnica, S4 y Mandos.</p>
+                        <p style={{fontSize: '0.9rem', color: '#666'}}>Operando en: <strong>{userElemento}</strong></p>
                     </div>
                 )}
 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>🛠️ Gestión y Novedades</h3>
+                    <h3 style={styles.title}>🛠️ Gestión de Material</h3>
                     <div style={styles.scrollList}>
                         {aircrafts.map(air => (
                             <div key={air._id} style={{...styles.item, borderLeft: air.estado === 'E/S' ? '6px solid #28a745' : '6px solid #e74c3c'}}>
                                 <div style={{flex: 1.2}}>
                                     <div style={styles.itemMain}>{air.matricula}</div>
-                                    <div style={styles.itemSub}>{air.sda} | <span style={{fontWeight:'bold'}}>{air.unidad}</span></div>
-                                    <button onClick={() => setSelectedNote(air)} style={{...styles.btnNoteTrigger, background: air.novedades ? '#fff3cd' : '#eef2f7'}}>
-                                        {air.novedades ? "📋 Ver Novedades" : "➕ Agregar Nota"}
-                                    </button>
+                                    <div style={styles.itemSub}>{air.sda} | <strong>{air.unidad}</strong></div>
+                                    <div style={{display:'flex', gap: '5px'}}>
+                                        <button onClick={() => setSelectedNote(air)} style={{...styles.btnNoteTrigger, background: air.novedades ? '#fff3cd' : '#eef2f7'}}>
+                                            {air.novedades ? "📋 Ver" : "➕ Nota"}
+                                        </button>
+                                        {hasEditPrivileges && (
+                                            <button onClick={() => handleEditClick(air)} style={{...styles.btnNoteTrigger, background: '#e3f2fd', borderColor: '#2196f3'}}>
+                                                📝 Actualizar
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div style={styles.actions}>
@@ -243,30 +324,8 @@ const Material = () => {
             {selectedNote && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modal}>
-                        <h4 style={{marginTop: 0, color: '#1b3a57'}}>Gestión de Novedades: {selectedNote.matricula}</h4>
-                        <div style={styles.noteContent}>
-                            {selectedNote.novedades || "Sin novedades registradas."}
-                        </div>
-                        
-                        {hasEditPrivileges && (
-                            <>
-                                <textarea 
-                                    id="newNoteText"
-                                    placeholder="Escribir nueva novedad..." 
-                                    style={{...styles.input, width: '100%', height: '80px', marginTop: '15px', boxSizing: 'border-box'}}
-                                />
-                                <div style={{display: 'flex', gap: '10px', marginTop: '15px'}}>
-                                    <button onClick={() => {
-                                        const val = document.getElementById('newNoteText').value;
-                                        if(val) handleSaveNote(selectedNote._id, val);
-                                    }} style={{...styles.btnPrimary, flex: 2, margin: 0}}>Actualizar</button>
-                                    
-                                    <button onClick={() => {
-                                        if(window.confirm("¿Limpiar novedades?")) handleSaveNote(selectedNote._id, "", true);
-                                    }} style={styles.btnClear}>Limpiar</button>
-                                </div>
-                            </>
-                        )}
+                        <h4 style={{marginTop: 0, color: '#1b3a57'}}>Novedades: {selectedNote.matricula}</h4>
+                        <div style={styles.noteContent}>{selectedNote.novedades || "Sin novedades."}</div>
                         <button onClick={() => setSelectedNote(null)} style={{...styles.btnCancel, width: '100%', marginTop: '10px'}}>Cerrar</button>
                     </div>
                 </div>
@@ -285,6 +344,7 @@ const styles = {
     label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#555', textTransform: 'uppercase' },
     input: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem', outline: 'none' },
     btnPrimary: { background: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
+    btnAddSmall: { background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', width: '30px', cursor: 'pointer', fontWeight: 'bold' },
     scrollList: { maxHeight: '600px', overflowY: 'auto', paddingRight: '5px' },
     item: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', background: '#fcfcfc', borderRadius: '10px', marginBottom: '12px', border: '1px solid #eee' },
     itemMain: { fontWeight: 'bold', fontSize: '1.1rem', color: '#1b3a57' },
@@ -298,10 +358,9 @@ const styles = {
     btnDelete: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' },
     loader: { textAlign: 'center', marginTop: '100px', fontWeight: 'bold', color: '#1b3a57' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-    modal: { background: 'white', padding: '25px', borderRadius: '15px', width: '90%', maxWidth: '450px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' },
-    noteContent: { background: '#f8f9fa', padding: '15px', borderRadius: '8px', fontSize: '0.85rem', color: '#444', borderLeft: '4px solid #1b3a57', minHeight: '50px', whiteSpace: 'pre-wrap', marginBottom: '10px' },
-    btnCancel: { background: '#eee', color: '#666', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
-    btnClear: { background: '#e74c3c', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', flex: 1 }
+    modal: { background: 'white', padding: '25px', borderRadius: '15px', width: '90%', maxWidth: '450px' },
+    noteContent: { background: '#f8f9fa', padding: '15px', borderRadius: '8px', fontSize: '0.85rem', color: '#444', borderLeft: '4px solid #1b3a57', whiteSpace: 'pre-wrap' },
+    btnCancel: { background: '#eee', color: '#666', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }
 };
 
 export default Material;

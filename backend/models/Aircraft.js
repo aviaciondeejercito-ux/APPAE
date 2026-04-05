@@ -39,13 +39,33 @@ const AircraftSchema = new mongoose.Schema({
         min: [0, 'Las horas remanentes no pueden ser negativas'],
         default: 0
     },
-    // CAMBIO CLAVE: Se permite que sea vacío para facilitar la limpieza de notas desde el frontend
+    // NUEVO: Seguimiento de horas de planeador
+    horasPlaneador: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    // NUEVO: Estructuras dinámicas para Motores y Hélices
+    motores: [{
+        horas: { type: Number, default: 0 },
+        fecha: { type: Date }
+    }],
+    helices: [{
+        horas: { type: Number, default: 0 },
+        fecha: { type: Date }
+    }],
+    // NUEVO: Vencimientos técnicos y legales
+    vencimientoSeguro: { type: Date },
+    vencimientoAvionica: { type: Date },
+    vencimientoRAAC91217: { type: Date },
+    vencimientoRAAC91411: { type: Date },
+    vencimientoRAAC91413: { type: Date },
+
     novedades: { 
         type: String, 
         default: '', 
         trim: true
     },
-    // NUEVO CAMPO: Define el ícono a representar en el mapa táctico
     tipoIcono: {
         type: String,
         enum: {
@@ -54,7 +74,6 @@ const AircraftSchema = new mongoose.Schema({
         },
         default: 'ala_rotativa'
     },
-    // Auditoría de cambios en tiempo real
     ultimaActualizacion: { 
         type: Date, 
         default: Date.now 
@@ -63,7 +82,6 @@ const AircraftSchema = new mongoose.Schema({
         type: String,
         default: 'Sistema (Carga Inicial)' 
     },
-    // Trazabilidad de origen del dato
     creadoPor: {
         type: String,
         required: [true, 'El registro de autoría es obligatorio para auditoría']
@@ -80,12 +98,10 @@ AircraftSchema.pre('save', function(next) {
     if (this.sda) this.sda = this.sda.toUpperCase().trim();
     if (this.unidad) this.unidad = this.unidad.toUpperCase().trim();
     
-    // Si novedades viene como null o undefined, lo seteamos a string vacío para evitar errores
     if (this.novedades === null || this.novedades === undefined) {
         this.novedades = '';
     }
 
-    // Normalización del tipo de icono
     if (this.tipoIcono) {
         this.tipoIcono = this.tipoIcono.toLowerCase().trim();
     }

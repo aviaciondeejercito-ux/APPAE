@@ -15,32 +15,13 @@ const protect = authMiddleware.protect || authMiddleware.verifyToken || authMidd
 router.use(protect);
 
 /**
- * 2. Consultar disponibilidad por Elemento (ESENCIAL PARA CARGA TÁCTICA)
- * Se agregan ambas versiones para asegurar compatibilidad con EventService.js
- */
-
-// Versión con prefijo /elemento/
-router.get(
-    '/elemento/:elemento', 
-    authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
-    aircraftController.getAircraftsByElemento || aircraftController.getAircrafts
-);
-
-// Versión directa (la que busca el frontend según el error 404)
-router.get(
-    '/:elemento', 
-    authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
-    aircraftController.getAircraftsByElemento || aircraftController.getAircrafts
-);
-
-/**
- * 3. Ver flota completa / Filtrada
- * Permitido para cualquier usuario logueado. 
+ * 2. Consultar flota completa / Filtrada
+ * Se coloca arriba para que el "/" no sea capturado por el parámetro ":elemento"
  */
 router.get('/', aircraftController.getAircrafts);
 
 /**
- * 4. Crear nueva aeronave
+ * 3. Crear nueva aeronave
  * Permitido para admin, BOSS, DIRECTOR, OTO, OFICINA_TECNICA y S4_UNIDAD.
  */
 router.post(
@@ -50,7 +31,28 @@ router.post(
 );
 
 /**
+ * 4. Consultar disponibilidad por Elemento (ESENCIAL PARA CARGA TÁCTICA)
+ * Se mantienen ambas para asegurar compatibilidad total.
+ */
+
+// Versión con prefijo /elemento/
+router.get(
+    '/elemento/:elemento', 
+    authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
+    aircraftController.getAircraftsByElemento || aircraftController.getAircrafts
+);
+
+// Versión directa (Búsqueda del frontend para evitar 404)
+router.get(
+    '/:elemento', 
+    authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
+    aircraftController.getAircraftsByElemento || aircraftController.getAircrafts
+);
+
+/**
  * 5. Actualizar Estado/Horas/Novedades (Punto de Gestión Técnica)
+ * Nota: El ID de MongoDB suele ser más largo que el nombre de un elemento, 
+ * pero Express prioriza por orden de llegada.
  */
 router.put(
     '/:id', 
