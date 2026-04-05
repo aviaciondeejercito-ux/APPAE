@@ -183,9 +183,9 @@ const Operaciones = () => {
             notes: `SdA: ${formData.sdaListado.map(s => `${s.cantidad}x ${s.sda}`).join(', ')} | Apoyado: ${formData.unidadApoyada} | Obs: ${cleanNotes}`,
             elemento: finalElemento,
             unidadApoyada: formData.unidadApoyada.toUpperCase(),
-            pntoContactoNom: formData.pntoContactoNom,
+            pntoContactoNom: formData.pntoContactoNom.toUpperCase(),
             pntoContactoTel: formData.pntoContactoTel,
-            responsableNom: formData.responsableNom,
+            responsableNom: formData.responsableNom.toUpperCase(),
             responsableTel: formData.responsableTel
         };
 

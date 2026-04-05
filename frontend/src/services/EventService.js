@@ -2,33 +2,66 @@ import API from './api';
 
 /**
  * SERVICIO DE EVENTOS - SISTEMA GESTIÓN AE
- * Interfaz de comunicación de alto nivel para el Calendario Operativo y Mapa Táctico.
- * Independencia garantizada: Los vuelos tácticos no aparecen en la agenda administrativa.
+ * Interfaz de comunicación con soporte OFFLINE y Persistencia Local.
+ * Mantiene la compatibilidad estricta con la estructura de la DIR AE.
  */
 
-// --- 1. NUEVA FUNCIÓN: Obtener operaciones para el Mapa Táctico (BOSS/ADMIN) ---
+// --- FUNCIONES AUXILIARES PARA MODO OFFLINE ---
+
+const getLocalData = (key) => JSON.parse(localStorage.getItem(key) || '[]');
+
+const saveLocalData = (key, data) => localStorage.setItem(key, JSON.stringify(data));
+
+// Agrega una operación a la cola de sincronización cuando no hay internet
+const addToSyncQueue = (method, url, payload) => {
+    const queue = getLocalData('pending_sync');
+    queue.push({ method, url, payload, timestamp: Date.now() });
+    saveLocalData('pending_sync', queue);
+};
+
+// Sincroniza datos pendientes cuando vuelve la conexión
+export const syncPendingData = async () => {
+    const queue = getLocalData('pending_sync');
+    if (queue.length === 0) return;
+
+    console.log(`🔄 Sincronizando ${queue.length} operaciones pendientes...`);
+    const remaining = [];
+
+    for (const item of queue) {
+        try {
+            if (item.method === 'POST') await API.post(item.url, item.payload);
+            if (item.method === 'PUT') await API.put(item.url, item.payload);
+        } catch (error) {
+            console.error("❌ Fallo de sincronización para un item, se mantiene en cola.");
+            remaining.push(item);
+        }
+    }
+    saveLocalData('pending_sync', remaining);
+};
+
+// --- 1. OBTENER OPERACIONES PARA MAPA TÁCTICO ---
 export const getActiveOperations = async () => {
     try {
         const response = await API.get('/events/active-map');
-        return Array.isArray(response.data) ? response.data : [];
+        const data = Array.isArray(response.data) ? response.data : [];
+        saveLocalData('cached_active_map', data); // Backup local
+        return data;
     } catch (error) {
-        console.error("❌ Error al obtener operaciones en desarrollo:", 
-            error.response?.data?.message || error.message);
-        return [];
+        console.warn("⚠️ Usando datos locales para Mapa Táctico.");
+        return getLocalData('cached_active_map');
     }
 };
 
-// --- 2. NUEVA FUNCIÓN: Obtener aeronaves E/S por unidad ---
-// CORRECCIÓN: Se cambia la ruta de /events/aircraft a /aircraft/ para coincidir con el backend
+// --- 2. OBTENER AERONAVES E/S POR UNIDAD ---
 export const getAvailableAircraft = async (elemento) => {
     try {
         const encodedElemento = encodeURIComponent(elemento || 'all');
         const response = await API.get(`/aircraft/${encodedElemento}`);
+        saveLocalData(`cached_aircraft_${elemento}`, response.data);
         return response.data;
     } catch (error) {
-        console.error(`❌ Error al obtener aeronaves para ${elemento}:`, 
-            error.response?.data?.message || error.message);
-        throw error;
+        console.warn(`⚠️ Usando datos locales de aeronaves para ${elemento}`);
+        return getLocalData(`cached_aircraft_${elemento}`);
     }
 };
 
@@ -37,74 +70,75 @@ export const getAvailableAircraft = async (elemento) => {
 export const getEvents = async () => {
     try {
         const response = await API.get('/events');
-        return Array.isArray(response.data) ? response.data : [];
+        const data = Array.isArray(response.data) ? response.data : [];
+        saveLocalData('cached_events', data); // Backup para offline
+        return data;
     } catch (error) {
-        console.error("❌ Error al obtener eventos del backend:", 
-            error.response?.data?.message || error.message);
-        throw error;
+        console.error("❌ Error al obtener eventos. Cargando caché local.");
+        return getLocalData('cached_events');
     }
 };
 
-// Crear un nuevo registro (CALENDARIO o DESPACHO TÁCTICO)
+// Crear un nuevo registro (Soporta Offline)
 export const createEvent = async (eventData) => {
-    try {
-        const payload = {
-            ...eventData,
-            start: eventData.start || null,
-            end: eventData.end || null,
-            isRealTime: eventData.isRealTime || false,
-            
-            // --- SINCRONIZACIÓN ESTRUCTURA MONGODB (misionDetalle) ---
-            misionDetalle: {
-                comandante: eventData.misionDetalle?.comandante || eventData.comandante || "S/D",
-                copiloto: eventData.misionDetalle?.copiloto || eventData.copiloto || "S/D",
-                mecanico: eventData.misionDetalle?.mecanico || eventData.mecanico || "S/D",
-                pax: eventData.misionDetalle?.pax || eventData.pax || "0",
-                carga: eventData.misionDetalle?.carga || eventData.carga || "0",
-                aeronave: (eventData.misionDetalle?.aeronave || eventData.aeronave || "S/D").toUpperCase(),
-                matricula: (eventData.misionDetalle?.matricula || eventData.matricula || "S/M").toUpperCase(),
-                tipoIcono: eventData.misionDetalle?.tipoIcono || eventData.tipoIcono || "ala_rotativa",
-                isRealTime: eventData.isRealTime || false,
-                lat: parseFloat(eventData.lat || eventData.ubicacion?.lat || -34.61315),
-                lng: parseFloat(eventData.lng || eventData.ubicacion?.lng || -58.37723)
-            },
-
-            ubicacion: {
-                nombre: (eventData.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
-                salida: {
-                    nombre: (eventData.ubicacion?.salida?.nombre || 'ORIGEN').toUpperCase(),
-                    lat: parseFloat(eventData.ubicacion?.salida?.lat || eventData.lat || -34.61315),
-                    lng: parseFloat(eventData.ubicacion?.salida?.lng || eventData.lng || -58.37723)
-                },
-                llegada: {
-                    nombre: (eventData.ubicacion?.llegada?.nombre || 'DESTINO').toUpperCase(),
-                    lat: parseFloat(eventData.ubicacion?.llegada?.lat || eventData.lat || -34.61315),
-                    lng: parseFloat(eventData.ubicacion?.llegada?.lng || eventData.lng || -58.37723)
-                },
-                lat: parseFloat(eventData.lat || eventData.ubicacion?.lat || -34.61315),
-                lng: parseFloat(eventData.lng || eventData.ubicacion?.lng || -58.37723)
-            },
-            notasMarginales: (eventData.notasMarginales || eventData.notes || '').toUpperCase()
-        };
+    const payload = {
+        ...eventData,
+        start: eventData.start || null,
+        end: eventData.end || null,
+        isRealTime: eventData.isRealTime || false,
         
-        if (!payload.start) delete payload.start;
-        if (!payload.end) delete payload.end;
+        misionDetalle: {
+            comandante: eventData.misionDetalle?.comandante || eventData.comandante || "S/D",
+            copiloto: eventData.misionDetalle?.copiloto || eventData.copiloto || "S/D",
+            mecanico: eventData.misionDetalle?.mecanico || eventData.mecanico || "S/D",
+            pax: eventData.misionDetalle?.pax || eventData.pax || "0",
+            carga: eventData.misionDetalle?.carga || eventData.carga || "0",
+            aeronave: (eventData.misionDetalle?.aeronave || eventData.aeronave || "S/D").toUpperCase(),
+            matricula: (eventData.misionDetalle?.matricula || eventData.matricula || "S/M").toUpperCase(),
+            tipoIcono: eventData.misionDetalle?.tipoIcono || eventData.tipoIcono || "ala_rotativa",
+            isRealTime: eventData.isRealTime || false,
+            lat: parseFloat(eventData.lat || eventData.ubicacion?.lat || -34.61315),
+            lng: parseFloat(eventData.lng || eventData.ubicacion?.lng || -58.37723)
+        },
 
+        ubicacion: {
+            nombre: (eventData.ubicacion?.nombre || 'POSICIÓN TÁCTICA').toUpperCase(),
+            salida: {
+                nombre: (eventData.ubicacion?.salida?.nombre || 'ORIGEN').toUpperCase(),
+                lat: parseFloat(eventData.ubicacion?.salida?.lat || eventData.lat || -34.61315),
+                lng: parseFloat(eventData.ubicacion?.salida?.lng || eventData.lng || -58.37723)
+            },
+            llegada: {
+                nombre: (eventData.ubicacion?.llegada?.nombre || 'DESTINO').toUpperCase(),
+                lat: parseFloat(eventData.ubicacion?.llegada?.lat || eventData.lat || -34.61315),
+                lng: parseFloat(eventData.ubicacion?.llegada?.lng || eventData.lng || -58.37723)
+            },
+            lat: parseFloat(eventData.lat || eventData.ubicacion?.lat || -34.61315),
+            lng: parseFloat(eventData.lng || eventData.ubicacion?.lng || -58.37723)
+        },
+        notasMarginales: (eventData.notasMarginales || eventData.notes || '').toUpperCase()
+    };
+    
+    if (!payload.start) delete payload.start;
+    if (!payload.end) delete payload.end;
+
+    try {
         const response = await API.post('/events', payload);
         return response.data;
     } catch (error) {
-        console.error("❌ Error al crear registro operativo:", 
-            error.response?.data?.message || error.message);
+        if (!navigator.onLine || error.message === 'Network Error') {
+            addToSyncQueue('POST', '/events', payload);
+            return { ...payload, _id: `temp-${Date.now()}`, offline: true };
+        }
         throw error;
     }
 };
 
-// Actualizar un evento (Posición táctica o datos de calendario)
+// Actualizar un evento (Soporta Offline)
 export const updateEvent = async (id, eventData) => {
     try {
         const cleanData = JSON.parse(JSON.stringify(eventData));
 
-        // Sanitización estricta de coordenadas y misionDetalle para el radar
         if (cleanData.ubicacion) {
             cleanData.ubicacion = {
                 nombre: (cleanData.ubicacion.nombre || 'ACTUALIZACIÓN DE POSICIÓN').toUpperCase(),
@@ -123,7 +157,6 @@ export const updateEvent = async (id, eventData) => {
             };
         }
 
-        // Asegurar consistencia en misionDetalle durante la actualización
         if (cleanData.misionDetalle || cleanData.matricula || cleanData.aeronave) {
             cleanData.misionDetalle = {
                 ...(cleanData.misionDetalle || {}),
@@ -137,18 +170,23 @@ export const updateEvent = async (id, eventData) => {
 
         if (cleanData.start) cleanData.start = eventData.start;
         if (cleanData.end) cleanData.end = eventData.end;
-
         if (cleanData.title) cleanData.title = cleanData.title.toUpperCase();
         if (cleanData.notasMarginales) cleanData.notasMarginales = cleanData.notasMarginales.toUpperCase();
 
         const forbidden = ['_id', '__v', 'createdAt', 'updatedAt', 'createdBy', 'userName'];
         forbidden.forEach(field => delete cleanData[field]);
 
-        const response = await API.put(`/events/${id}`, cleanData);
-        return response.data;
+        try {
+            const response = await API.put(`/events/${id}`, cleanData);
+            return response.data;
+        } catch (error) {
+            if (!navigator.onLine || error.message === 'Network Error') {
+                addToSyncQueue('PUT', `/events/${id}`, cleanData);
+                return { ...cleanData, _id: id, offline: true };
+            }
+            throw error;
+        }
     } catch (error) {
-        const errorMsg = error.response?.data?.message || error.message;
-        console.error(`❌ Error al actualizar el evento ${id}:`, errorMsg);
         throw error;
     }
 };
@@ -158,8 +196,6 @@ export const deleteEvent = async (id) => {
         const response = await API.delete(`/events/${id}`);
         return response.data;
     } catch (error) {
-        console.error(`❌ Error al eliminar el evento ${id}:`, 
-            error.response?.data?.message || error.message);
         throw error;
     }
 };
@@ -174,7 +210,6 @@ export const getWeatherData = async (icao) => {
             }
         };
     } catch (error) {
-        console.error(`❌ Error en conexión meteorológica para ${icao}:`, error.message);
         throw error;
     }
 };
@@ -184,7 +219,6 @@ export const getAstronomyData = async (lat, lng) => {
         const response = await API.get('/astronomy/data', { params: { lat, lng } });
         return response.data; 
     } catch (error) {
-        console.error("❌ Error al recuperar datos astronómicos:", error.message);
         throw error;
     }
 };
@@ -197,7 +231,8 @@ const EventService = {
     updateEvent,
     deleteEvent,
     getWeatherData,
-    getAstronomyData
+    getAstronomyData,
+    syncPendingData
 };
 
 export default EventService;

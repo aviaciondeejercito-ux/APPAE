@@ -24,6 +24,7 @@ function App() {
 
     // ESTADOS DE CONEXIÓN
     const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [lastSync, setLastSync] = useState(localStorage.getItem('lastSync') || '---');
 
     // Escucha cambios de tamaño de pantalla
@@ -33,32 +34,46 @@ function App() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // FUNCIÓN PARA SINCRONIZAR EVENTOS GUARDADOS OFFLINE (NUEVO)
+    // FUNCIÓN PARA SINCRONIZAR EVENTOS GUARDADOS OFFLINE
     const syncOfflineEvents = async () => {
         const pending = JSON.parse(localStorage.getItem('pending_events') || '[]');
         if (pending.length === 0) return;
 
+        setIsSyncing(true);
         console.log(`Sincronizando ${pending.length} eventos pendientes...`);
         
+        let currentPending = [...pending];
+
         for (const event of pending) {
             try {
+                // Se eliminan campos temporales antes de enviar al servidor
+                const { id_temp, offline, ...eventToSync } = event;
+
                 const res = await fetch('https://sistema-ae-backend.onrender.com/api/operaciones', {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${localStorage.getItem('token')}`
                     },
-                    body: JSON.stringify(event)
+                    body: JSON.stringify(eventToSync)
                 });
+
                 if (res.ok) {
-                    const currentPending = JSON.parse(localStorage.getItem('pending_events') || '[]');
-                    const filtered = currentPending.filter(e => e.id_temp !== event.id_temp);
-                    localStorage.setItem('pending_events', JSON.stringify(filtered));
+                    // Filtrar el que se acaba de sincronizar con éxito
+                    currentPending = currentPending.filter(e => e.id_temp !== event.id_temp);
+                    localStorage.setItem('pending_events', JSON.stringify(currentPending));
                 }
             } catch (err) {
-                console.error("Error sincronizando, se intentará luego", err);
+                console.error("Error sincronizando evento, se mantiene en cola", err);
             }
         }
+        
+        setIsSyncing(false);
+        const now = new Date().toLocaleString('es-AR', { 
+            hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' 
+        });
+        setLastSync(now);
+        localStorage.setItem('lastSync', now);
     };
 
     // GESTIÓN DE ESTADO ONLINE/OFFLINE Y ÚLTIMA CONEXIÓN
@@ -67,16 +82,6 @@ function App() {
             const online = navigator.onLine;
             setIsOnline(online);
             if (online) {
-                const now = new Date().toLocaleString('es-AR', { 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    day: '2-digit',
-                    month: '2-digit'
-                });
-                setLastSync(now);
-                localStorage.setItem('lastSync', now);
-                
-                // DISPARAR SINCRONIZACIÓN AL RECUPERAR SEÑAL (NUEVO)
                 syncOfflineEvents();
             }
         };
@@ -283,10 +288,10 @@ function App() {
                             width: '8px', 
                             height: '8px', 
                             borderRadius: '50%', 
-                            backgroundColor: isOnline ? '#2ecc71' : '#e74c3c',
-                            boxShadow: isOnline ? '0 0 4px #2ecc71' : '0 0 4px #e74c3c'
+                            backgroundColor: isSyncing ? '#3498db' : (isOnline ? '#2ecc71' : '#e74c3c'),
+                            boxShadow: isSyncing ? '0 0 4px #3498db' : (isOnline ? '0 0 4px #2ecc71' : '0 0 4px #e74c3c')
                         }} />
-                        <span>{isOnline ? 'CONECTADO' : 'MODO OFFLINE'}</span>
+                        <span>{isSyncing ? 'SINCRONIZANDO...' : (isOnline ? 'CONECTADO' : 'MODO OFFLINE')}</span>
                     </div>
                     <span>SINCRO: {lastSync}</span>
                 </div>
