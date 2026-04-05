@@ -117,6 +117,8 @@ function App() {
     const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OFICINA_TECNICA' || role === 'BOSS';
     const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
     const puedeVerMapa = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'user';
+    // Solo OTO o Admin ven el botón de Vuelos
+    const puedeVerVuelos = role === 'admin' || role === 'OTO';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -167,7 +169,7 @@ function App() {
                                 </button>
                             )}
 
-                            {(role === 'admin' || role === 'OTO' || role === 'user') && (
+                            {puedeVerVuelos && (
                                 <button 
                                     onClick={() => setView('despacho')}
                                     style={{
@@ -271,7 +273,9 @@ function App() {
                                 <OperacionesMapa />
                             </div>
                         );
-                        if (view === 'despacho' && puedeCargarOperaciones) return <CargaTactica />;
+                        // AL APRETAR VUELOS (view === 'despacho'), LLEVA A CARGATACTICA
+                        if (view === 'despacho' && puedeVerVuelos) return <CargaTactica />;
+                        
                         if (view === 'operaciones' && puedeCargarOperaciones) return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
                         if (view === 'material' && puedeGestionarMaterial) return <Material />;
