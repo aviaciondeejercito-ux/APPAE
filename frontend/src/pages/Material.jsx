@@ -43,7 +43,7 @@ const Material = () => {
         helices: [{ horas: 0, fecha: '' }],
         vencimientoSeguro: '',
         vencimientoAvionica: '',
-        vencimientoRAAC91217: '',
+        vencimientoRAAC91207: '',
         vencimientoRAAC91411: '',
         vencimientoRAAC91413: ''
     };
@@ -248,8 +248,10 @@ const Material = () => {
 
                             <div style={styles.field}><label style={styles.label}>Vto Seguro</label><input type="date" value={newAir.vencimientoSeguro?.split('T')[0] || ''} onChange={e => setNewAir({...newAir, vencimientoSeguro: e.target.value})} style={styles.input} /></div>
                             <div style={styles.field}><label style={styles.label}>Vto Aviónica</label><input type="date" value={newAir.vencimientoAvionica?.split('T')[0] || ''} onChange={e => setNewAir({...newAir, vencimientoAvionica: e.target.value})} style={styles.input} /></div>
-                            <div style={styles.field}><label style={styles.label}>Vto RAAC 91.217</label><input type="date" value={newAir.vencimientoRAAC91217?.split('T')[0] || ''} onChange={e => setNewAir({...newAir, vencimientoRAAC91217: e.target.value})} style={styles.input} /></div>
-                            
+                            <div style={styles.field}><label style={styles.label}>Vto RAAC 91.207</label><input type="date" value={newAir.vencimientoRAAC91207?.split('T')[0] || ''} onChange={e => setNewAir({...newAir, vencimientoRAAC91207: e.target.value})} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>Vto RAAC 91.411</label><input type="date" value={newAir.vencimientoRAAC91411?.split('T')[0] || ''} onChange={e => setNewAir({...newAir, vencimientoRAAC91411: e.target.value})} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>Vto RAAC 91.413</label><input type="date" value={newAir.vencimientoRAAC91413?.split('T')[0] || ''} onChange={e => setNewAir({...newAir, vencimientoRAAC91413: e.target.value})} style={styles.input} /></div>
+
                             <div style={styles.field}>
                                 <label style={styles.label}>Novedades</label>
                                 <textarea value={newAir.novedades} onChange={e => setNewAir({...newAir, novedades: e.target.value})} style={{...styles.input, height: '60px', resize: 'none'}} />

@@ -38,7 +38,6 @@ const EstadoAeronaves = () => {
 
     const unidades = [...new Set(aircrafts.filter(a => a.unidad).map(a => a.unidad))].sort();
 
-    // Función auxiliar para formatear fechas de vencimiento
     const formatDate = (date) => {
         if (!date) return "N/D";
         return new Date(date).toLocaleDateString('es-AR');
@@ -141,7 +140,6 @@ const EstadoAeronaves = () => {
                 )}
             </div>
 
-            {/* MODAL AMPLIADO CON INFO TÉCNICA */}
             {selectedNote && (
                 <div style={styles.modalOverlay} onClick={() => setSelectedNote(null)}>
                     <div style={styles.modal} onClick={e => e.stopPropagation()}>
@@ -151,7 +149,6 @@ const EstadoAeronaves = () => {
                         </div>
                         <div style={styles.modalBody}>
                             
-                            {/* Sección Horas */}
                             <div style={styles.infoSection}>
                                 <h5 style={styles.sectionTitle}>⏳ Seguimiento de Horas</h5>
                                 <div style={styles.infoGrid}>
@@ -160,7 +157,6 @@ const EstadoAeronaves = () => {
                                 </div>
                             </div>
 
-                            {/* Motores y Hélices */}
                             <div style={styles.infoSection}>
                                 <h5 style={styles.sectionTitle}>⚙️ Componentes</h5>
                                 {selectedNote.motores?.map((m, i) => (
@@ -171,19 +167,17 @@ const EstadoAeronaves = () => {
                                 ))}
                             </div>
 
-                            {/* Vencimientos */}
                             <div style={styles.infoSection}>
                                 <h5 style={styles.sectionTitle}>📅 Vencimientos e Inspecciones</h5>
                                 <div style={styles.infoGrid}>
                                     <div><strong>Seguro:</strong> {formatDate(selectedNote.vencimientoSeguro)}</div>
                                     <div><strong>Aviónica:</strong> {formatDate(selectedNote.vencimientoAvionica)}</div>
-                                    <div><strong>91.217:</strong> {formatDate(selectedNote.vencimientoRAAC91217)}</div>
+                                    <div><strong>91.207:</strong> {formatDate(selectedNote.vencimientoRAAC91207)}</div>
                                     <div><strong>91.411:</strong> {formatDate(selectedNote.vencimientoRAAC91411)}</div>
                                     <div><strong>91.413:</strong> {formatDate(selectedNote.vencimientoRAAC91413)}</div>
                                 </div>
                             </div>
 
-                            {/* Novedades */}
                             <div style={styles.infoSection}>
                                 <h5 style={styles.sectionTitle}>📝 Novedades de Mantenimiento</h5>
                                 {selectedNote.novedades ? (
@@ -228,7 +222,7 @@ const styles = {
     modal: { background: 'white', width: '90%', maxWidth: '600px', borderRadius: '12px', overflow: 'hidden' },
     modalHeader: { background: '#1b3a57', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     modalBody: { padding: '20px', maxHeight: '70vh', overflowY: 'auto' },
-    infoSection: { marginBottom: '20px', borderBottom: '1px solid #eee', pb: '10px' },
+    infoSection: { marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' },
     sectionTitle: { margin: '0 0 10px 0', fontSize: '0.9rem', color: '#1b3a57', borderLeft: '3px solid #3498db', paddingLeft: '8px' },
     infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.85rem' },
     subInfo: { fontSize: '0.8rem', color: '#666', padding: '2px 0' },

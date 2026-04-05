@@ -39,13 +39,13 @@ const AircraftSchema = new mongoose.Schema({
         min: [0, 'Las horas remanentes no pueden ser negativas'],
         default: 0
     },
-    // NUEVO: Seguimiento de horas de planeador
+    // Seguimiento de horas de planeador
     horasPlaneador: {
         type: Number,
         default: 0,
         min: 0
     },
-    // NUEVO: Estructuras dinámicas para Motores y Hélices
+    // Estructuras dinámicas para Motores y Hélices
     motores: [{
         horas: { type: Number, default: 0 },
         fecha: { type: Date }
@@ -54,10 +54,10 @@ const AircraftSchema = new mongoose.Schema({
         horas: { type: Number, default: 0 },
         fecha: { type: Date }
     }],
-    // NUEVO: Vencimientos técnicos y legales
+    // Vencimientos técnicos y legales (Actualizado 91.207)
     vencimientoSeguro: { type: Date },
     vencimientoAvionica: { type: Date },
-    vencimientoRAAC91217: { type: Date },
+    vencimientoRAAC91207: { type: Date },
     vencimientoRAAC91411: { type: Date },
     vencimientoRAAC91413: { type: Date },
 
@@ -112,8 +112,8 @@ AircraftSchema.pre('save', function(next) {
 
 /**
  * ÍNDICES DE RENDIMIENTO Y SEGURIDAD
+ * Se mantiene el índice de unidad. El de matrícula se maneja con 'unique: true' en la definición del campo.
  */
 AircraftSchema.index({ unidad: 1 });
-AircraftSchema.index({ matricula: 1 }, { unique: true });
 
 module.exports = mongoose.model('Aircraft', AircraftSchema);
