@@ -108,7 +108,7 @@ const OperacionesMapa = () => {
                                 <Tooltip direction="top" offset={[0, -15]} opacity={1} permanent className="custom-tooltip-radar">
                                     <div style={styles.tooltipContent}>
                                         <span style={styles.tooltipText}>{m.matricula || 'S/M'}</span>
-                                        <span style={styles.tooltipIcon}>{tieneDestinoValido ? '✈️' : '📍'}</span>
+                                        <span style={styles.tooltipIcon}>{tieneDestinoValido ? '📍' : '📍'}</span>
                                     </div>
                                 </Tooltip>
                                 <Popup>
