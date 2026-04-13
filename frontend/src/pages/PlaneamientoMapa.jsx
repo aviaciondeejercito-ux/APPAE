@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { MapContainer, TileLayer, LayersControl, Marker, Polyline, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -13,7 +13,6 @@ L.Icon.Default.mergeOptions({
 
 const { BaseLayer, Overlay } = LayersControl;
 
-// --- Utilidades de Conversión ---
 const decimalToGMS = (decimal, isLat) => {
     const absDecimal = Math.abs(decimal);
     const grados = Math.floor(absDecimal);
@@ -67,7 +66,6 @@ const PlaneamientoMapa = () => {
 
     return (
         <div style={styles.container}>
-            {/* PANEL LATERAL */}
             <div style={styles.sidebar}>
                 <div style={styles.sidebarTitle}>NAVEGACIÓN TÁCTICA</div>
                 
@@ -111,51 +109,51 @@ const PlaneamientoMapa = () => {
                 </div>
             </div>
 
-            {/* MAPA */}
             <div style={styles.mapWrapper}>
                 <div style={styles.header}>
                     <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO MILITAR</div>
-                    <div style={styles.subHeader}>VISTA NOCTURNA DE ALTA RESOLUCIÓN</div>
+                    <div style={styles.subHeader}>VISTA DE LUCES URBANAS Y COTAS</div>
                 </div>
 
                 <MapContainer 
                     center={[-34.528, -58.641]} 
-                    zoom={10} 
+                    zoom={9} 
                     style={{ height: '100%', width: '100%', zIndex: 1, background: '#000' }}
                     zoomControl={false}
                 >
                     <MapEvents addWaypoint={addWaypoint} />
                     <LayersControl position="topright">
                         
-                        <BaseLayer checked name="🌃 Satelital Nocturna (Zoom Pro)">
+                        {/* CAPA DE LUCES REALES - Usando un servidor alternativo más estable para VIIRS */}
+                        <BaseLayer checked name="✨ Brillo Urbano (NASA Night)">
                             <TileLayer 
-                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
-                                attribution='Esri'
-                                className="night-vision"
+                                url="https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg" 
+                                attribution='NASA GIBS'
+                                minZoom={1}
+                                maxZoom={9}
                             />
                         </BaseLayer>
 
-                        <BaseLayer name="🌑 Modo Vectorial Nocturno">
+                        <BaseLayer name="🌑 Mapa Nocturno Vectorial">
                             <TileLayer 
                                 url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
                                 attribution='&copy; CARTO'
-                                subdomains='abcd'
                             />
                         </BaseLayer>
-                        
-                        <BaseLayer name="🏔️ Satelital Día">
+
+                        <BaseLayer name="🏔️ Satelital Estándar">
                             <TileLayer 
                                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
                                 attribution='Esri' 
                             />
                         </BaseLayer>
 
-                        {/* CAPA DE COTAS (CURVAS DE NIVEL) */}
+                        {/* OVERLAY DE COTAS - Se puede activar sobre las luces */}
                         <Overlay checked name="📈 Curvas de Nivel (Cotas)">
                             <TileLayer 
                                 url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
                                 attribution='&copy; Thunderforest'
-                                opacity={0.5}
+                                opacity={0.4}
                             />
                         </Overlay>
                     </LayersControl>
@@ -165,9 +163,7 @@ const PlaneamientoMapa = () => {
                             <Popup>
                                 <div style={{ fontFamily: 'monospace' }}>
                                     <strong>{wp.nombre}</strong><br/>
-                                    ALT: {wp.altitud} FT<br/>
-                                    {decimalToGMS(wp.latlng.lat, true)}<br/>
-                                    {decimalToGMS(wp.latlng.lng, false)}
+                                    ALT: {wp.altitud} FT
                                 </div>
                             </Popup>
                         </Marker>
@@ -179,15 +175,8 @@ const PlaneamientoMapa = () => {
                 </MapContainer>
             </div>
 
-            {/* ESTILOS CSS PARA EFECTO NOCTURNO PRO */}
             <style>{`
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #00d4ff !important; font-family: monospace; }
-                
-                /* Filtro para convertir Satélite en Nocturno permitiendo zoom total */
-                .night-vision {
-                    filter: brightness(0.4) contrast(1.2) saturate(0.5) hue-rotate(10deg) !important;
-                }
-
                 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
             `}</style>
         </div>
