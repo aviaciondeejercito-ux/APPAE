@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MapContainer, TileLayer, LayersControl, Marker, Polyline, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -13,15 +13,14 @@ L.Icon.Default.mergeOptions({
 
 const { BaseLayer, Overlay } = LayersControl;
 
-// --- Utilidades Matemáticas de Navegación ---
-
+// --- Utilidades ---
 const calcularRumbo = (lat1, lon1, lat2, lon2) => {
     const dLon = (lon2 - lon1) * (Math.PI / 180);
     const y = Math.sin(dLon) * Math.cos(lat2 * (Math.PI / 180));
     const x = Math.cos(lat1 * (Math.PI / 180)) * Math.sin(lat2 * (Math.PI / 180)) -
               Math.sin(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.cos(dLon);
     let rumbo = Math.atan2(y, x) * (180 / Math.PI);
-    return (rumbo + 360) % 360; // Normalizar a 0-360°
+    return (rumbo + 360) % 360;
 };
 
 const decimalToGMS = (decimal, isLat) => {
@@ -36,9 +35,7 @@ const decimalToGMS = (decimal, isLat) => {
 
 const MapEvents = ({ addWaypoint }) => {
     useMapEvents({
-        click(e) {
-            addWaypoint(e.latlng);
-        },
+        click(e) { addWaypoint(e.latlng); },
     });
     return null;
 };
@@ -51,7 +48,8 @@ const PlaneamientoMapa = () => {
             id: Date.now(),
             nombre: `WP ${waypoints.length + 1}`,
             latlng: latlng,
-            altitud: "0"
+            altitud: "0",
+            consumo: "0" // Combustible consumido en esta pierna (tramo hasta el siguiente punto)
         };
         setWaypoints(prev => [...prev, newWp]);
     };
@@ -64,26 +62,41 @@ const PlaneamientoMapa = () => {
         setWaypoints(waypoints.map(wp => wp.id === id ? { ...wp, [campo]: valor } : wp));
     };
 
-    const calcularDistanciaTotalKM = () => {
-        let total = 0;
-        for (let i = 0; i < waypoints.length - 1; i++) {
-            total += waypoints[i].latlng.distanceTo(waypoints[i + 1].latlng);
-        }
-        return total / 1000;
+    const handleDrag = (id, e) => {
+        const newLatLng = e.target.getLatLng();
+        setWaypoints(prev => prev.map(wp => wp.id === id ? { ...wp, latlng: newLatLng } : wp));
     };
 
-    const distKM = calcularDistanciaTotalKM();
-    const distNM = distKM * 0.539957;
+    // Cálculos globales
+    const stats = useMemo(() => {
+        let distTotal = 0;
+        let combustibleTotal = 0;
+        for (let i = 0; i < waypoints.length; i++) {
+            if (i < waypoints.length - 1) {
+                distTotal += waypoints[i].latlng.distanceTo(waypoints[i + 1].latlng);
+            }
+            combustibleTotal += parseFloat(waypoints[i].consumo || 0);
+        }
+        return {
+            distNM: (distTotal / 1000) * 0.539957,
+            fuel: combustibleTotal
+        };
+    }, [waypoints]);
 
     return (
         <div style={styles.container}>
+            {/* PANEL LATERAL */}
             <div style={styles.sidebar}>
                 <div style={styles.sidebarTitle}>NAVEGACIÓN TÁCTICA</div>
                 
                 <div style={styles.statsContainer}>
                     <div style={styles.statBox}>
                         <span style={styles.statLabel}>DISTANCIA TOTAL</span>
-                        <span style={styles.statValue}>{distNM.toFixed(2)} NM</span>
+                        <span style={styles.statValue}>{stats.distNM.toFixed(1)} NM</span>
+                    </div>
+                    <div style={styles.statBox}>
+                        <span style={styles.statLabel}>COMBUSTIBLE TOTAL</span>
+                        <span style={{...styles.statValue, color: '#ffcc00'}}>{stats.fuel.toFixed(1)} Gal/L</span>
                     </div>
                 </div>
 
@@ -108,22 +121,32 @@ const PlaneamientoMapa = () => {
                                     />
                                     <button onClick={() => eliminarPunto(wp.id)} style={styles.btnDelete}>X</button>
                                 </div>
+                                
                                 <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lat, true)} | {decimalToGMS(wp.latlng.lng, false)}</div>
                                 
-                                <div style={styles.dataRow}>
-                                    <div>
+                                <div style={styles.dataGrid}>
+                                    <div style={styles.inputGroup}>
                                         <label style={styles.miniLabel}>ALT (FT)</label>
                                         <input 
                                             type="number" 
                                             value={wp.altitud} 
                                             onChange={(e) => actualizarDato(wp.id, 'altitud', e.target.value)}
-                                            style={styles.altInput}
+                                            style={styles.miniInput}
+                                        />
+                                    </div>
+                                    <div style={styles.inputGroup}>
+                                        <label style={styles.miniLabel}>FUEL TRAMO</label>
+                                        <input 
+                                            type="number" 
+                                            value={wp.consumo} 
+                                            onChange={(e) => actualizarDato(wp.id, 'consumo', e.target.value)}
+                                            style={{...styles.miniInput, color: '#ffcc00'}}
                                         />
                                     </div>
                                     {rumboSig !== null && (
-                                        <div style={styles.rumboBox}>
-                                            <label style={styles.miniLabel}>RUMBO</label>
-                                            <div style={styles.rumboValue}>{Math.round(rumboSig)}°</div>
+                                        <div style={styles.rumboTag}>
+                                            <span style={styles.miniLabel}>RUMBO</span>
+                                            <span style={styles.rumboValue}>{Math.round(rumboSig)}°</span>
                                         </div>
                                     )}
                                 </div>
@@ -133,9 +156,11 @@ const PlaneamientoMapa = () => {
                 </div>
             </div>
 
+            {/* MAPA */}
             <div style={styles.mapWrapper}>
                 <div style={styles.header}>
-                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO DE MISIÓN</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '2px' }}>PLANEAMIENTO DE MISIÓN</div>
+                    <div style={{ fontSize: '0.6rem', color: '#888' }}>DRAG MARKERS TO REPOSITION</div>
                 </div>
 
                 <MapContainer 
@@ -148,55 +173,51 @@ const PlaneamientoMapa = () => {
                     <LayersControl position="topright">
                         
                         <BaseLayer checked name="🏔️ Satelital">
-                            <TileLayer 
-                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
-                                attribution='Esri' 
-                            />
+                            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Esri' />
                         </BaseLayer>
 
                         <BaseLayer name="🗺️ Político">
-                            <TileLayer 
-                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
-                                attribution='&copy; OpenStreetMap' 
-                            />
+                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='OSM' />
                         </BaseLayer>
 
                         <BaseLayer name="🌑 Oscuro">
-                            <TileLayer 
-                                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
-                                attribution='&copy; CARTO' 
-                            />
+                            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='CARTO' />
                         </BaseLayer>
 
+                        {/* OVERLAY INDEPENDIENTE DE COTAS - ACTIVADO POR DEFECTO */}
                         <Overlay checked name="📈 Curvas de Nivel (Cotas)">
                             <TileLayer 
                                 url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
-                                attribution='&copy; Thunderforest'
-                                opacity={0.7}
+                                attribution='Thunderforest'
+                                opacity={0.6}
                             />
                         </Overlay>
                     </LayersControl>
 
                     {waypoints.map((wp) => (
-                        <Marker key={wp.id} position={wp.latlng}>
+                        <Marker 
+                            key={wp.id} 
+                            position={wp.latlng}
+                            draggable={true}
+                            eventHandlers={{ dragend: (e) => handleDrag(wp.id, e) }}
+                        >
                             <Popup>
                                 <div style={{ fontFamily: 'monospace' }}>
                                     <strong>{wp.nombre}</strong><br/>
-                                    {decimalToGMS(wp.latlng.lat, true)}<br/>
-                                    {decimalToGMS(wp.latlng.lng, false)}
+                                    ALT: {wp.altitud} FT
                                 </div>
                             </Popup>
                         </Marker>
                     ))}
 
                     {waypoints.length > 1 && (
-                        <Polyline positions={waypoints.map(wp => wp.latlng)} color="#00d4ff" weight={3} />
+                        <Polyline positions={waypoints.map(wp => wp.latlng)} color="#00d4ff" weight={3} dashArray="10, 5" />
                     )}
                 </MapContainer>
             </div>
 
             <style>{`
-                .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #00d4ff !important; font-family: monospace; }
+                .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; font-family: monospace; }
                 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
             `}</style>
         </div>
@@ -205,25 +226,25 @@ const PlaneamientoMapa = () => {
 
 const styles = {
     container: { display: 'flex', width: '100%', height: '100vh', backgroundColor: '#050505' },
-    sidebar: { width: '320px', background: '#0a0a0a', borderRight: '1px solid #333', padding: '15px', overflowY: 'auto', zIndex: 2000, fontFamily: 'monospace', color: '#bdc3c7' },
+    sidebar: { width: '340px', background: '#0a0a0a', borderRight: '1px solid #333', padding: '15px', overflowY: 'auto', zIndex: 2000, fontFamily: 'monospace', color: '#bdc3c7' },
     sidebarTitle: { color: '#00d4ff', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '15px', borderBottom: '1px solid #00d4ff', paddingBottom: '8px', textAlign: 'center' },
-    statsContainer: { marginBottom: '15px' },
-    statBox: { background: '#111', padding: '10px', borderRadius: '4px', border: '1px solid #00d4ff', textAlign: 'center' },
-    statLabel: { fontSize: '0.65rem', color: '#00d4ff', display: 'block' },
-    statValue: { fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' },
+    statsContainer: { display: 'flex', gap: '8px', marginBottom: '20px' },
+    statBox: { flex: 1, background: '#111', padding: '8px', borderRadius: '4px', border: '1px solid #222', textAlign: 'center' },
+    statLabel: { fontSize: '0.55rem', color: '#00d4ff', display: 'block', marginBottom: '4px' },
+    statValue: { fontSize: '1rem', fontWeight: 'bold', color: '#fff' },
     waypointsList: { display: 'flex', flexDirection: 'column', gap: '10px' },
-    waypointItem: { background: '#1a1a1a', padding: '12px', borderRadius: '4px', borderLeft: '4px solid #00d4ff' },
+    waypointItem: { background: '#161616', padding: '12px', borderRadius: '4px', borderLeft: '4px solid #00d4ff' },
     nameInput: { background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: '#00d4ff', fontWeight: 'bold', fontSize: '0.9rem', width: '70%', outline: 'none' },
-    gmsText: { fontSize: '0.65rem', color: '#888', margin: '5px 0' },
-    dataRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '10px' },
-    miniLabel: { fontSize: '0.6rem', color: '#00d4ff', display: 'block', marginBottom: '2px' },
-    altInput: { background: '#000', border: '1px solid #333', color: '#fff', fontSize: '0.8rem', width: '70px', padding: '3px', textAlign: 'center' },
-    rumboBox: { textAlign: 'right' },
-    rumboValue: { fontSize: '1rem', fontWeight: 'bold', color: '#00ff00' },
-    btnDelete: { background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontWeight: 'bold' },
+    gmsText: { fontSize: '0.6rem', color: '#666', margin: '6px 0' },
+    dataGrid: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '10px', gap: '8px' },
+    inputGroup: { display: 'flex', flexDirection: 'column' },
+    miniLabel: { fontSize: '0.5rem', color: '#00d4ff', marginBottom: '2px', textTransform: 'uppercase' },
+    miniInput: { background: '#000', border: '1px solid #333', color: '#fff', fontSize: '0.75rem', width: '65px', padding: '3px', textAlign: 'center' },
+    rumboTag: { textAlign: 'right' },
+    rumboValue: { fontSize: '0.9rem', fontWeight: 'bold', color: '#00ff00', display: 'block' },
+    btnDelete: { background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontWeight: 'bold', padding: '0 5px' },
     mapWrapper: { flex: 1, position: 'relative' },
-    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#00d4ff', padding: '10px 25px', border: '1px solid #00d4ff', borderRadius: '4px', fontFamily: 'monospace' },
-    subHeader: { fontSize: '0.6rem', color: '#bdc3c7', textAlign: 'center' }
+    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#00d4ff', padding: '10px 25px', border: '1px solid #333', borderRadius: '4px', fontFamily: 'monospace', textAlign: 'center' }
 };
 
 export default PlaneamientoMapa;
