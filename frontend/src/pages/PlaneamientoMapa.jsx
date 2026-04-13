@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, LayersControl, Marker, Polyline, Popup, useMap
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Configuración de iconos de Leaflet
+// Configuración de iconos de Leaflet para evitar errores de carga
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -116,7 +116,7 @@ const PlaneamientoMapa = () => {
             <div style={styles.mapWrapper}>
                 <div style={styles.header}>
                     <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO MILITAR</div>
-                    <div style={styles.subHeader}>ANÁLISIS DE TERRENO Y NAVEGACIÓN</div>
+                    <div style={styles.subHeader}>SISTEMA DE NAVEGACIÓN Y COTAS</div>
                 </div>
 
                 <MapContainer 
@@ -128,22 +128,31 @@ const PlaneamientoMapa = () => {
                     <MapEvents addWaypoint={addWaypoint} />
                     <LayersControl position="topright">
                         <BaseLayer checked name="🌑 Modo Nocturno">
-                            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='CARTO' />
+                            <TileLayer 
+                                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
+                                attribution='&copy; CARTO' 
+                            />
                         </BaseLayer>
                         
-                        <BaseLayer name="✨ Luces Nocturnas (NASA)">
+                        <BaseLayer name="🏔️ Relieve Satelital">
                             <TileLayer 
-                                url="https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg" 
-                                attribution='NASA GIBS'
+                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+                                attribution='Esri' 
                             />
                         </BaseLayer>
 
-                        <BaseLayer name="🏔️ Relieve (Satelital)">
-                            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Esri' />
+                        <BaseLayer name="🏙️ Brillo Urbano (Contrast)">
+                            <TileLayer 
+                                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" 
+                                attribution='&copy; CARTO' 
+                            />
                         </BaseLayer>
                         
                         <BaseLayer name="📈 Curvas de Nivel">
-                            <TileLayer url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" attribution='Thunderforest' />
+                            <TileLayer 
+                                url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
+                                attribution='Thunderforest' 
+                            />
                         </BaseLayer>
                     </LayersControl>
 
