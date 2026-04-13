@@ -64,8 +64,8 @@ const PlaneamientoMapa = () => {
             id: newId,
             nombre: `WP ${waypoints.length + 1}`,
             latlng: latlng,
-            altitud: "500", // Altitud de vuelo por defecto
-            elevTerreno: "...", // Elevación del terreno automática
+            altitud: "500",
+            elevTerreno: "...",
             consumo: "0"
         };
         setWaypoints(prev => [...prev, newWp]);
@@ -121,7 +121,10 @@ const PlaneamientoMapa = () => {
                 <div style={styles.waypointsList}>
                     {waypoints.map((wp, index) => {
                         let rumboSig = null;
+                        let distSig = null;
                         if (index < waypoints.length - 1) {
+                            const dMeters = wp.latlng.distanceTo(waypoints[index + 1].latlng);
+                            distSig = (dMeters / 1000) * 0.539957;
                             rumboSig = calcularRumbo(
                                 wp.latlng.lat, wp.latlng.lng,
                                 waypoints[index + 1].latlng.lat, waypoints[index + 1].latlng.lng
@@ -130,7 +133,7 @@ const PlaneamientoMapa = () => {
 
                         return (
                             <div key={wp.id} style={styles.waypointItem}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <input 
                                         type="text" 
                                         value={wp.nombre} 
@@ -139,7 +142,9 @@ const PlaneamientoMapa = () => {
                                     />
                                     <button onClick={() => eliminarPunto(wp.id)} style={styles.btnDelete}>X</button>
                                 </div>
-                                <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lat, true)} | {decimalToGMS(wp.latlng.lng, false)}</div>
+                                <div style={styles.gmsText}>
+                                    {decimalToGMS(wp.latlng.lat, true)} <br/> {decimalToGMS(wp.latlng.lng, false)}
+                                </div>
                                 
                                 <div style={styles.dataGrid}>
                                     <div style={styles.inputGroup}>
@@ -161,13 +166,19 @@ const PlaneamientoMapa = () => {
                                             type="number" 
                                             value={wp.consumo} 
                                             onChange={(e) => actualizarDato(wp.id, 'consumo', e.target.value)}
-                                            style={{...styles.miniInput, color: '#ffcc00', width: '45px'}}
+                                            style={{...styles.miniInput, color: '#ffcc00', width: '40px'}}
                                         />
                                     </div>
+                                    {distSig !== null && (
+                                        <div style={styles.navInfo}>
+                                            <span style={styles.miniLabel}>DIST</span>
+                                            <span style={styles.navValue}>{distSig.toFixed(1)}<small>NM</small></span>
+                                        </div>
+                                    )}
                                     {rumboSig !== null && (
-                                        <div style={styles.rumboTag}>
+                                        <div style={styles.navInfo}>
                                             <span style={styles.miniLabel}>RUMBO</span>
-                                            <span style={styles.rumboValue}>{Math.round(rumboSig)}°</span>
+                                            <span style={{...styles.navValue, color: '#00ff00'}}>{Math.round(rumboSig)}°</span>
                                         </div>
                                     )}
                                 </div>
@@ -200,10 +211,25 @@ const PlaneamientoMapa = () => {
                             />
                         </BaseLayer>
 
+                        <BaseLayer name="📈 Curvas de Nivel">
+                            <TileLayer 
+                                url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
+                                attribution='Thunderforest'
+                                opacity={0.7}
+                            />
+                        </BaseLayer>
+
                         <BaseLayer name="🏔️ Satelital">
                             <TileLayer 
                                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
                                 attribution='Esri' 
+                            />
+                        </BaseLayer>
+
+                        <BaseLayer name="🗺️ Político">
+                            <TileLayer 
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                                attribution='OSM' 
                             />
                         </BaseLayer>
 
@@ -249,7 +275,7 @@ const PlaneamientoMapa = () => {
 
 const styles = {
     container: { display: 'flex', width: '100%', height: '100vh', backgroundColor: '#050505' },
-    sidebar: { width: '360px', background: '#0a0a0a', borderRight: '1px solid #333', padding: '15px', overflowY: 'auto', zIndex: 2000, fontFamily: 'monospace', color: '#bdc3c7' },
+    sidebar: { width: '380px', background: '#0a0a0a', borderRight: '1px solid #333', padding: '15px', overflowY: 'auto', zIndex: 2000, fontFamily: 'monospace', color: '#bdc3c7' },
     sidebarTitle: { color: '#00d4ff', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '15px', borderBottom: '1px solid #00d4ff', paddingBottom: '8px', textAlign: 'center' },
     statsContainer: { display: 'flex', gap: '8px', marginBottom: '20px' },
     statBox: { flex: 1, background: '#111', padding: '8px', borderRadius: '4px', border: '1px solid #222', textAlign: 'center' },
@@ -257,16 +283,16 @@ const styles = {
     statValue: { fontSize: '1rem', fontWeight: 'bold', color: '#fff' },
     waypointsList: { display: 'flex', flexDirection: 'column', gap: '10px' },
     waypointItem: { background: '#161616', padding: '12px', borderRadius: '4px', borderLeft: '4px solid #00d4ff' },
-    nameInput: { background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: '#00d4ff', fontWeight: 'bold', fontSize: '0.9rem', width: '70%', outline: 'none' },
-    gmsText: { fontSize: '0.6rem', color: '#666', margin: '6px 0' },
-    dataGrid: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '10px', gap: '8px' },
+    nameInput: { background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: '#00d4ff', fontWeight: 'bold', fontSize: '1rem', width: '75%', outline: 'none' },
+    gmsText: { fontSize: '0.85rem', color: '#ffffff', margin: '8px 0', fontWeight: 'bold', letterSpacing: '0.5px', lineHeight: '1.2' },
+    dataGrid: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '12px', gap: '6px' },
     inputGroup: { display: 'flex', flexDirection: 'column' },
     miniLabel: { fontSize: '0.45rem', color: '#00d4ff', marginBottom: '2px', textTransform: 'uppercase' },
-    miniInput: { background: '#000', border: '1px solid #333', color: '#fff', fontSize: '0.75rem', width: '55px', padding: '3px', textAlign: 'center', outline: 'none' },
-    elevDisplay: { background: '#222', color: '#00ff00', fontSize: '0.75rem', width: '55px', padding: '4px', textAlign: 'center', borderRadius: '2px', border: '1px solid #333' },
-    rumboTag: { textAlign: 'right' },
-    rumboValue: { fontSize: '0.9rem', fontWeight: 'bold', color: '#00ff00', display: 'block' },
-    btnDelete: { background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontWeight: 'bold', padding: '0 5px' },
+    miniInput: { background: '#000', border: '1px solid #333', color: '#fff', fontSize: '0.75rem', width: '50px', padding: '3px', textAlign: 'center', outline: 'none' },
+    elevDisplay: { background: '#222', color: '#00ff00', fontSize: '0.75rem', width: '50px', padding: '4px', textAlign: 'center', borderRadius: '2px', border: '1px solid #333' },
+    navInfo: { textAlign: 'right', display: 'flex', flexDirection: 'column' },
+    navValue: { fontSize: '0.85rem', fontWeight: 'bold', color: '#ffffff' },
+    btnDelete: { background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem' },
     mapWrapper: { flex: 1, position: 'relative' },
     header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#00d4ff', padding: '10px 25px', border: '1px solid #333', borderRadius: '4px', fontFamily: 'monospace', textAlign: 'center' }
 };
