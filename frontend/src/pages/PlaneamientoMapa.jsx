@@ -170,16 +170,18 @@ const PlaneamientoMapa = () => {
                     <MapEvents addWaypoint={addWaypoint} />
                     <LayersControl position="topright">
                         
-                        <BaseLayer checked name="⛰️ Relieve + Cotas">
-                            <div style={{ display: 'none' }}></div>
+                        <BaseLayer checked name="⛰️ Relieve">
                             <TileLayer 
                                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Hillshade/MapServer/tile/{z}/{y}/{x}" 
                                 attribution='Esri Hillshade' 
                             />
+                        </BaseLayer>
+
+                        <BaseLayer name="📈 Cotas y Curvas de Nivel">
                             <TileLayer 
                                 url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
                                 attribution='Thunderforest'
-                                opacity={0.6}
+                                opacity={0.8}
                             />
                         </BaseLayer>
 
