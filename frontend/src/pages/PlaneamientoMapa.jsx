@@ -46,7 +46,7 @@ const PlaneamientoMapa = () => {
                     {/* 4. CAPA CURVAS DE NIVEL (ESTILO CARTA TOPOGRÁFICA) */}
                     <BaseLayer name="📈 Curvas de Nivel">
                         <TileLayer 
-                            url="https://{s}.tile.thunderforest.com/landscape/{z}/{x}/{y}.png?apikey=7c352c8ff4764d148a07119027878601" 
+                            url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
                             attribution='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                         />
                     </BaseLayer>
