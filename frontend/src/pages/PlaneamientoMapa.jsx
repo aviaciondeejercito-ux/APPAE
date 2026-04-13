@@ -91,6 +91,7 @@ const PlaneamientoMapa = () => {
                                     value={wp.nombre} 
                                     onChange={(e) => actualizarDato(wp.id, 'nombre', e.target.value)}
                                     style={styles.nameInput}
+                                    placeholder="Nombre WP"
                                 />
                                 <button onClick={() => eliminarPunto(wp.id)} style={styles.btnDelete}>X</button>
                             </div>
@@ -129,17 +130,18 @@ const PlaneamientoMapa = () => {
                         <BaseLayer checked name="🌑 Modo Nocturno">
                             <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='CARTO' />
                         </BaseLayer>
+                        
                         <BaseLayer name="✨ Luces Nocturnas (NASA)">
                             <TileLayer 
-                                url="https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/{time}/{tilematrixset}/{z}/{y}/{x}.jpg" 
-                                attribution='NASA EOSDIS GIBS'
-                                time='2012'
-                                tilematrixset='GoogleMapsCompatible_Level8'
+                                url="https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg" 
+                                attribution='NASA GIBS'
                             />
                         </BaseLayer>
+
                         <BaseLayer name="🏔️ Relieve (Satelital)">
                             <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Esri' />
                         </BaseLayer>
+                        
                         <BaseLayer name="📈 Curvas de Nivel">
                             <TileLayer url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" attribution='Thunderforest' />
                         </BaseLayer>
