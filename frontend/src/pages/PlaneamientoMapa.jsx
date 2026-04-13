@@ -13,6 +13,17 @@ L.Icon.Default.mergeOptions({
 
 const { BaseLayer, Overlay } = LayersControl;
 
+// --- Utilidades Matemáticas de Navegación ---
+
+const calcularRumbo = (lat1, lon1, lat2, lon2) => {
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const y = Math.sin(dLon) * Math.cos(lat2 * (Math.PI / 180));
+    const x = Math.cos(lat1 * (Math.PI / 180)) * Math.sin(lat2 * (Math.PI / 180)) -
+              Math.sin(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.cos(dLon);
+    let rumbo = Math.atan2(y, x) * (180 / Math.PI);
+    return (rumbo + 360) % 360; // Normalizar a 0-360°
+};
+
 const decimalToGMS = (decimal, isLat) => {
     const absDecimal = Math.abs(decimal);
     const grados = Math.floor(absDecimal);
@@ -66,89 +77,102 @@ const PlaneamientoMapa = () => {
 
     return (
         <div style={styles.container}>
-            {/* PANEL LATERAL */}
             <div style={styles.sidebar}>
                 <div style={styles.sidebarTitle}>NAVEGACIÓN TÁCTICA</div>
                 
                 <div style={styles.statsContainer}>
                     <div style={styles.statBox}>
-                        <span style={styles.statLabel}>DISTANCIA KM</span>
-                        <span style={styles.statValue}>{distKM.toFixed(2)} KM</span>
-                    </div>
-                    <div style={styles.statBox}>
-                        <span style={styles.statLabel}>DISTANCIA NM</span>
+                        <span style={styles.statLabel}>DISTANCIA TOTAL</span>
                         <span style={styles.statValue}>{distNM.toFixed(2)} NM</span>
                     </div>
                 </div>
 
                 <div style={styles.waypointsList}>
-                    {waypoints.map((wp) => (
-                        <div key={wp.id} style={styles.waypointItem}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <input 
-                                    type="text" 
-                                    value={wp.nombre} 
-                                    onChange={(e) => actualizarDato(wp.id, 'nombre', e.target.value)}
-                                    style={styles.nameInput}
-                                />
-                                <button onClick={() => eliminarPunto(wp.id)} style={styles.btnDelete}>X</button>
+                    {waypoints.map((wp, index) => {
+                        let rumboSig = null;
+                        if (index < waypoints.length - 1) {
+                            rumboSig = calcularRumbo(
+                                wp.latlng.lat, wp.latlng.lng,
+                                waypoints[index + 1].latlng.lat, waypoints[index + 1].latlng.lng
+                            );
+                        }
+
+                        return (
+                            <div key={wp.id} style={styles.waypointItem}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                    <input 
+                                        type="text" 
+                                        value={wp.nombre} 
+                                        onChange={(e) => actualizarDato(wp.id, 'nombre', e.target.value)}
+                                        style={styles.nameInput}
+                                    />
+                                    <button onClick={() => eliminarPunto(wp.id)} style={styles.btnDelete}>X</button>
+                                </div>
+                                <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lat, true)} | {decimalToGMS(wp.latlng.lng, false)}</div>
+                                
+                                <div style={styles.dataRow}>
+                                    <div>
+                                        <label style={styles.miniLabel}>ALT (FT)</label>
+                                        <input 
+                                            type="number" 
+                                            value={wp.altitud} 
+                                            onChange={(e) => actualizarDato(wp.id, 'altitud', e.target.value)}
+                                            style={styles.altInput}
+                                        />
+                                    </div>
+                                    {rumboSig !== null && (
+                                        <div style={styles.rumboBox}>
+                                            <label style={styles.miniLabel}>RUMBO</label>
+                                            <div style={styles.rumboValue}>{Math.round(rumboSig)}°</div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lat, true)}</div>
-                            <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lng, false)}</div>
-                            
-                            <div style={styles.altInputContainer}>
-                                <label style={{ fontSize: '0.65rem' }}>ALT (FT): </label>
-                                <input 
-                                    type="number" 
-                                    value={wp.altitud} 
-                                    onChange={(e) => actualizarDato(wp.id, 'altitud', e.target.value)}
-                                    style={styles.altInput}
-                                />
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
 
-            {/* MAPA */}
             <div style={styles.mapWrapper}>
                 <div style={styles.header}>
-                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO MILITAR</div>
-                    <div style={styles.subHeader}>SISTEMA DE VISIÓN NOCTURNA TÁCTICA</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO DE MISIÓN</div>
                 </div>
 
                 <MapContainer 
                     center={[-34.528, -58.641]} 
                     zoom={10} 
-                    style={{ height: '100%', width: '100%', zIndex: 1, background: '#000' }}
+                    style={{ height: '100%', width: '100%', zIndex: 1 }}
                     zoomControl={false}
                 >
                     <MapEvents addWaypoint={addWaypoint} />
                     <LayersControl position="topright">
                         
-                        {/* CAPA SATELITAL NOCTURNA PRO (CON ZOOM INFINITO) */}
-                        <BaseLayer checked name="🌃 Satelital Nocturna (Alta Res)">
-                            <TileLayer 
-                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
-                                attribution='Esri Satellite'
-                                className="layer-night-vision"
-                            />
-                        </BaseLayer>
-
-                        <BaseLayer name="🏔️ Satelital Diurna">
+                        <BaseLayer checked name="🏔️ Satelital">
                             <TileLayer 
                                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
                                 attribution='Esri' 
                             />
                         </BaseLayer>
 
-                        {/* CAPA DE COTAS (CURVAS DE NIVEL) RE-AGREGADA */}
+                        <BaseLayer name="🗺️ Político">
+                            <TileLayer 
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                                attribution='&copy; OpenStreetMap' 
+                            />
+                        </BaseLayer>
+
+                        <BaseLayer name="🌑 Oscuro">
+                            <TileLayer 
+                                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
+                                attribution='&copy; CARTO' 
+                            />
+                        </BaseLayer>
+
                         <Overlay checked name="📈 Curvas de Nivel (Cotas)">
                             <TileLayer 
                                 url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
                                 attribution='&copy; Thunderforest'
-                                opacity={0.6}
-                                className="layer-topo"
+                                opacity={0.7}
                             />
                         </Overlay>
                     </LayersControl>
@@ -158,34 +182,21 @@ const PlaneamientoMapa = () => {
                             <Popup>
                                 <div style={{ fontFamily: 'monospace' }}>
                                     <strong>{wp.nombre}</strong><br/>
-                                    ALT: {wp.altitud} FT
+                                    {decimalToGMS(wp.latlng.lat, true)}<br/>
+                                    {decimalToGMS(wp.latlng.lng, false)}
                                 </div>
                             </Popup>
                         </Marker>
                     ))}
 
                     {waypoints.length > 1 && (
-                        <Polyline positions={waypoints.map(wp => wp.latlng)} color="#00d4ff" weight={2} dashArray="5, 10" />
+                        <Polyline positions={waypoints.map(wp => wp.latlng)} color="#00d4ff" weight={3} />
                     )}
                 </MapContainer>
             </div>
 
             <style>{`
-                /* Corrige el warning de PWA en consola */
-                head [name="apple-mobile-web-app-capable"] { content: "yes"; }
-
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #00d4ff !important; font-family: monospace; }
-                
-                /* EFECTO NOCTURNO REAL SOBRE SATÉLITE DE ALTA RESOLUCIÓN */
-                .layer-night-vision {
-                    filter: brightness(0.3) contrast(1.4) saturate(0.2) hue-rotate(180deg) invert(0.1) !important;
-                }
-
-                /* AJUSTE PARA QUE LAS COTAS SE VEAN BIEN EN LA NOCHE */
-                .layer-topo {
-                    filter: invert(1) opacity(0.5) !important;
-                }
-
                 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
             `}</style>
         </div>
@@ -194,22 +205,25 @@ const PlaneamientoMapa = () => {
 
 const styles = {
     container: { display: 'flex', width: '100%', height: '100vh', backgroundColor: '#050505' },
-    sidebar: { width: '300px', background: '#0a0a0a', borderRight: '1px solid #333', padding: '15px', overflowY: 'auto', zIndex: 2000, fontFamily: 'monospace', color: '#bdc3c7' },
+    sidebar: { width: '320px', background: '#0a0a0a', borderRight: '1px solid #333', padding: '15px', overflowY: 'auto', zIndex: 2000, fontFamily: 'monospace', color: '#bdc3c7' },
     sidebarTitle: { color: '#00d4ff', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '15px', borderBottom: '1px solid #00d4ff', paddingBottom: '8px', textAlign: 'center' },
-    statsContainer: { display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '15px' },
-    statBox: { background: '#111', padding: '8px', borderRadius: '4px', border: '1px solid #222', display: 'flex', flexDirection: 'column' },
-    statLabel: { fontSize: '0.6rem', color: '#00d4ff' },
-    statValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#fff' },
-    waypointsList: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    waypointItem: { background: '#1a1a1a', padding: '10px', borderRadius: '4px', borderLeft: '3px solid #00d4ff' },
-    nameInput: { background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: '#00d4ff', fontWeight: 'bold', fontSize: '0.85rem', width: '80%', padding: '2px', fontFamily: 'monospace', outline: 'none' },
-    gmsText: { fontSize: '0.65rem', color: '#eee', marginTop: '2px' },
-    altInputContainer: { marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px', borderTop: '1px solid #222', paddingTop: '5px' },
-    altInput: { background: '#000', border: '1px solid #333', color: '#00d4ff', fontSize: '0.8rem', width: '80px', padding: '2px 5px', textAlign: 'right', fontFamily: 'monospace' },
-    btnDelete: { background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' },
+    statsContainer: { marginBottom: '15px' },
+    statBox: { background: '#111', padding: '10px', borderRadius: '4px', border: '1px solid #00d4ff', textAlign: 'center' },
+    statLabel: { fontSize: '0.65rem', color: '#00d4ff', display: 'block' },
+    statValue: { fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' },
+    waypointsList: { display: 'flex', flexDirection: 'column', gap: '10px' },
+    waypointItem: { background: '#1a1a1a', padding: '12px', borderRadius: '4px', borderLeft: '4px solid #00d4ff' },
+    nameInput: { background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: '#00d4ff', fontWeight: 'bold', fontSize: '0.9rem', width: '70%', outline: 'none' },
+    gmsText: { fontSize: '0.65rem', color: '#888', margin: '5px 0' },
+    dataRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '10px' },
+    miniLabel: { fontSize: '0.6rem', color: '#00d4ff', display: 'block', marginBottom: '2px' },
+    altInput: { background: '#000', border: '1px solid #333', color: '#fff', fontSize: '0.8rem', width: '70px', padding: '3px', textAlign: 'center' },
+    rumboBox: { textAlign: 'right' },
+    rumboValue: { fontSize: '1rem', fontWeight: 'bold', color: '#00ff00' },
+    btnDelete: { background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontWeight: 'bold' },
     mapWrapper: { flex: 1, position: 'relative' },
-    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#00d4ff', padding: '10px 25px', border: '1px solid #00d4ff', textAlign: 'center', borderRadius: '4px', fontFamily: 'monospace' },
-    subHeader: { fontSize: '0.6rem', color: '#bdc3c7', marginTop: '2px' }
+    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#00d4ff', padding: '10px 25px', border: '1px solid #00d4ff', borderRadius: '4px', fontFamily: 'monospace' },
+    subHeader: { fontSize: '0.6rem', color: '#bdc3c7', textAlign: 'center' }
 };
 
 export default PlaneamientoMapa;
