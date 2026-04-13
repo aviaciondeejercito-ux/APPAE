@@ -43,15 +43,33 @@ const MapEvents = ({ addWaypoint }) => {
 const PlaneamientoMapa = () => {
     const [waypoints, setWaypoints] = useState([]);
 
+    // Función para obtener elevación desde API externa
+    const fetchElevacion = async (lat, lng, id) => {
+        try {
+            const res = await fetch(`https://api.opentopodata.org/v1/srtm30m?locations=${lat},${lng}`);
+            const data = await res.json();
+            if (data.results && data.results[0].elevation !== null) {
+                // Conversión de metros a pies: m * 3.28084
+                const elevFeet = Math.round(data.results[0].elevation * 3.28084);
+                actualizarDato(id, 'altitud', elevFeet.toString());
+            }
+        } catch (error) {
+            console.error("Error obteniendo elevación:", error);
+            actualizarDato(id, 'altitud', "Error");
+        }
+    };
+
     const addWaypoint = (latlng) => {
+        const newId = Date.now();
         const newWp = {
-            id: Date.now(),
+            id: newId,
             nombre: `WP ${waypoints.length + 1}`,
             latlng: latlng,
-            altitud: "0",
+            altitud: "...", 
             consumo: "0"
         };
         setWaypoints(prev => [...prev, newWp]);
+        fetchElevacion(latlng.lat, latlng.lng, newId);
     };
 
     const eliminarPunto = (id) => {
@@ -59,12 +77,13 @@ const PlaneamientoMapa = () => {
     };
 
     const actualizarDato = (id, campo, valor) => {
-        setWaypoints(waypoints.map(wp => wp.id === id ? { ...wp, [campo]: valor } : wp));
+        setWaypoints(prev => prev.map(wp => wp.id === id ? { ...wp, [campo]: valor } : wp));
     };
 
     const handleDrag = (id, e) => {
         const newLatLng = e.target.getLatLng();
-        setWaypoints(prev => prev.map(wp => wp.id === id ? { ...wp, latlng: newLatLng } : wp));
+        setWaypoints(prev => prev.map(wp => wp.id === id ? { ...wp, latlng: newLatLng, altitud: "..." } : wp));
+        fetchElevacion(newLatLng.lat, newLatLng.lng, id);
     };
 
     const stats = useMemo(() => {
@@ -124,9 +143,9 @@ const PlaneamientoMapa = () => {
                                 
                                 <div style={styles.dataGrid}>
                                     <div style={styles.inputGroup}>
-                                        <label style={styles.miniLabel}>ALT (FT)</label>
+                                        <label style={styles.miniLabel}>ALT (FT MSL)</label>
                                         <input 
-                                            type="number" 
+                                            type="text" 
                                             value={wp.altitud} 
                                             onChange={(e) => actualizarDato(wp.id, 'altitud', e.target.value)}
                                             style={styles.miniInput}
