@@ -43,19 +43,18 @@ const MapEvents = ({ addWaypoint }) => {
 const PlaneamientoMapa = () => {
     const [waypoints, setWaypoints] = useState([]);
 
-    // Función para obtener elevación desde API externa
+    // Función para obtener elevación desde API (Open-Elevation soporta CORS)
     const fetchElevacion = async (lat, lng, id) => {
         try {
-            const res = await fetch(`https://api.opentopodata.org/v1/srtm30m?locations=${lat},${lng}`);
+            const res = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${lat},${lng}`);
             const data = await res.json();
             if (data.results && data.results[0].elevation !== null) {
-                // Conversión de metros a pies: m * 3.28084
                 const elevFeet = Math.round(data.results[0].elevation * 3.28084);
-                actualizarDato(id, 'altitud', elevFeet.toString());
+                actualizarDato(id, 'elevTerreno', elevFeet.toString());
             }
         } catch (error) {
             console.error("Error obteniendo elevación:", error);
-            actualizarDato(id, 'altitud', "Error");
+            actualizarDato(id, 'elevTerreno', "Err");
         }
     };
 
@@ -65,7 +64,8 @@ const PlaneamientoMapa = () => {
             id: newId,
             nombre: `WP ${waypoints.length + 1}`,
             latlng: latlng,
-            altitud: "...", 
+            altitud: "500", // Altitud de vuelo por defecto
+            elevTerreno: "...", // Elevación del terreno automática
             consumo: "0"
         };
         setWaypoints(prev => [...prev, newWp]);
@@ -82,7 +82,7 @@ const PlaneamientoMapa = () => {
 
     const handleDrag = (id, e) => {
         const newLatLng = e.target.getLatLng();
-        setWaypoints(prev => prev.map(wp => wp.id === id ? { ...wp, latlng: newLatLng, altitud: "..." } : wp));
+        setWaypoints(prev => prev.map(wp => wp.id === id ? { ...wp, latlng: newLatLng, elevTerreno: "..." } : wp));
         fetchElevacion(newLatLng.lat, newLatLng.lng, id);
     };
 
@@ -143,7 +143,7 @@ const PlaneamientoMapa = () => {
                                 
                                 <div style={styles.dataGrid}>
                                     <div style={styles.inputGroup}>
-                                        <label style={styles.miniLabel}>ALT (FT MSL)</label>
+                                        <label style={styles.miniLabel}>ALT VUELO</label>
                                         <input 
                                             type="text" 
                                             value={wp.altitud} 
@@ -152,12 +152,16 @@ const PlaneamientoMapa = () => {
                                         />
                                     </div>
                                     <div style={styles.inputGroup}>
-                                        <label style={styles.miniLabel}>FUEL PIERNA</label>
+                                        <label style={styles.miniLabel}>ELEV TERR</label>
+                                        <div style={styles.elevDisplay}>{wp.elevTerreno}</div>
+                                    </div>
+                                    <div style={styles.inputGroup}>
+                                        <label style={styles.miniLabel}>FUEL</label>
                                         <input 
                                             type="number" 
                                             value={wp.consumo} 
                                             onChange={(e) => actualizarDato(wp.id, 'consumo', e.target.value)}
-                                            style={{...styles.miniInput, color: '#ffcc00'}}
+                                            style={{...styles.miniInput, color: '#ffcc00', width: '45px'}}
                                         />
                                     </div>
                                     {rumboSig !== null && (
@@ -196,25 +200,10 @@ const PlaneamientoMapa = () => {
                             />
                         </BaseLayer>
 
-                        <BaseLayer name="📈 Cotas y Curvas de Nivel">
-                            <TileLayer 
-                                url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
-                                attribution='Thunderforest'
-                                opacity={0.8}
-                            />
-                        </BaseLayer>
-
                         <BaseLayer name="🏔️ Satelital">
                             <TileLayer 
                                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
                                 attribution='Esri' 
-                            />
-                        </BaseLayer>
-
-                        <BaseLayer name="🗺️ Político">
-                            <TileLayer 
-                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
-                                attribution='OSM' 
                             />
                         </BaseLayer>
 
@@ -235,9 +224,10 @@ const PlaneamientoMapa = () => {
                             eventHandlers={{ dragend: (e) => handleDrag(wp.id, e) }}
                         >
                             <Popup>
-                                <div style={{ fontFamily: 'monospace' }}>
-                                    <strong>{wp.nombre}</strong><br/>
-                                    ALT: {wp.altitud} FT
+                                <div style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                                    <strong style={{color: '#00d4ff'}}>{wp.nombre}</strong><br/>
+                                    ALT VUELO: {wp.altitud} FT<br/>
+                                    ELEV TERR: {wp.elevTerreno} FT
                                 </div>
                             </Popup>
                         </Marker>
@@ -259,7 +249,7 @@ const PlaneamientoMapa = () => {
 
 const styles = {
     container: { display: 'flex', width: '100%', height: '100vh', backgroundColor: '#050505' },
-    sidebar: { width: '340px', background: '#0a0a0a', borderRight: '1px solid #333', padding: '15px', overflowY: 'auto', zIndex: 2000, fontFamily: 'monospace', color: '#bdc3c7' },
+    sidebar: { width: '360px', background: '#0a0a0a', borderRight: '1px solid #333', padding: '15px', overflowY: 'auto', zIndex: 2000, fontFamily: 'monospace', color: '#bdc3c7' },
     sidebarTitle: { color: '#00d4ff', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '15px', borderBottom: '1px solid #00d4ff', paddingBottom: '8px', textAlign: 'center' },
     statsContainer: { display: 'flex', gap: '8px', marginBottom: '20px' },
     statBox: { flex: 1, background: '#111', padding: '8px', borderRadius: '4px', border: '1px solid #222', textAlign: 'center' },
@@ -271,8 +261,9 @@ const styles = {
     gmsText: { fontSize: '0.6rem', color: '#666', margin: '6px 0' },
     dataGrid: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '10px', gap: '8px' },
     inputGroup: { display: 'flex', flexDirection: 'column' },
-    miniLabel: { fontSize: '0.5rem', color: '#00d4ff', marginBottom: '2px', textTransform: 'uppercase' },
-    miniInput: { background: '#000', border: '1px solid #333', color: '#fff', fontSize: '0.75rem', width: '65px', padding: '3px', textAlign: 'center' },
+    miniLabel: { fontSize: '0.45rem', color: '#00d4ff', marginBottom: '2px', textTransform: 'uppercase' },
+    miniInput: { background: '#000', border: '1px solid #333', color: '#fff', fontSize: '0.75rem', width: '55px', padding: '3px', textAlign: 'center', outline: 'none' },
+    elevDisplay: { background: '#222', color: '#00ff00', fontSize: '0.75rem', width: '55px', padding: '4px', textAlign: 'center', borderRadius: '2px', border: '1px solid #333' },
     rumboTag: { textAlign: 'right' },
     rumboValue: { fontSize: '0.9rem', fontWeight: 'bold', color: '#00ff00', display: 'block' },
     btnDelete: { background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontWeight: 'bold', padding: '0 5px' },
