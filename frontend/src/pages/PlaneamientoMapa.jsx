@@ -11,7 +11,7 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-const { BaseLayer, Overlay } = LayersControl;
+const { BaseLayer } = LayersControl;
 
 // --- Utilidades Matemáticas ---
 const calcularRumbo = (lat1, lon1, lat2, lon2) => {
@@ -158,7 +158,7 @@ const PlaneamientoMapa = () => {
             <div style={styles.mapWrapper}>
                 <div style={styles.header}>
                     <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '2px' }}>PLANEAMIENTO DE MISIÓN</div>
-                    <div style={{ fontSize: '0.6rem', color: '#bdc3c7' }}>VISTA DE RELIEVE Y COTAS</div>
+                    <div style={{ fontSize: '0.6rem', color: '#bdc3c7' }}>SISTEMA DE CARTOGRAFÍA OPERATIVA</div>
                 </div>
 
                 <MapContainer 
@@ -170,9 +170,8 @@ const PlaneamientoMapa = () => {
                     <MapEvents addWaypoint={addWaypoint} />
                     <LayersControl position="topright">
                         
-                        {/* CAPA DE RELIEVE SOMBREADO (HILLSHADE) */}
                         <BaseLayer checked name="⛰️ Relieve + Cotas">
-                            <div style={{ display: 'none' }}></div> {/* Placeholder */}
+                            <div style={{ display: 'none' }}></div>
                             <TileLayer 
                                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Hillshade/MapServer/tile/{z}/{y}/{x}" 
                                 attribution='Esri Hillshade' 
@@ -185,21 +184,26 @@ const PlaneamientoMapa = () => {
                         </BaseLayer>
 
                         <BaseLayer name="🏔️ Satelital">
-                            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Esri' />
+                            <TileLayer 
+                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+                                attribution='Esri' 
+                            />
                         </BaseLayer>
 
                         <BaseLayer name="🗺️ Político">
-                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='OSM' />
+                            <TileLayer 
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                                attribution='OSM' 
+                            />
                         </BaseLayer>
 
-                        {/* OVERLAY EXTRA PARA CONTROLAR COTAS POR SEPARADO SI SE DESEA */}
-                        <Overlay name="📈 Solo Curvas de Nivel">
+                        <BaseLayer name="🌑 Modo Oscuro">
                             <TileLayer 
-                                url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
-                                attribution='Thunderforest'
-                                opacity={0.5}
+                                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
+                                attribution='&copy; CARTO' 
                             />
-                        </Overlay>
+                        </BaseLayer>
+
                     </LayersControl>
 
                     {waypoints.map((wp) => (
