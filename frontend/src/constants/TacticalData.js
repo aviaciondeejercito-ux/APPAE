@@ -1,7 +1,6 @@
 // src/constants/TacticalData.js
 
 export const AEROPUERTOS = [
-    // --- AMBA & BUENOS AIRES ---
     { nombre: "SADO - CAMPO DE MAYO", lat: -34.528, lng: -58.641 },
     { nombre: "SABE - AEROPARQUE J. NEWBERY", lat: -34.558, lng: -58.416 },
     { nombre: "SAEZ - EZEIZA / PISTARINI", lat: -34.822, lng: -58.535 },
@@ -14,8 +13,6 @@ export const AEROPUERTOS = [
     { nombre: "SAZM - MAR DEL PLATA", lat: -37.934, lng: -57.573 },
     { nombre: "SAZT - TANDIL", lat: -37.236, lng: -59.227 },
     { nombre: "SAZV - VILLA GESELL", lat: -37.235, lng: -57.027 },
-
-    // --- CENTRO & CUYO ---
     { nombre: "SACO - CÓRDOBA / AMBROSIO TARAVELLA", lat: -31.310, lng: -64.208 },
     { nombre: "SAOC - RÍO CUARTO", lat: -33.125, lng: -64.261 },
     { nombre: "SAOR - VILLA REYNOLDS", lat: -33.725, lng: -65.380 },
@@ -24,8 +21,6 @@ export const AEROPUERTOS = [
     { nombre: "SANU - SAN JUAN", lat: -31.571, lng: -68.418 },
     { nombre: "SAOU - SAN LUIS", lat: -33.272, lng: -66.355 },
     { nombre: "SAOS - VALLE DEL CONLARA", lat: -32.385, lng: -65.185 },
-
-    // --- NOROESTE (NOA) ---
     { nombre: "SASA - SALTA / GÜEMES", lat: -24.856, lng: -65.486 },
     { nombre: "SASJ - JUJUY / GUZMÁN", lat: -24.392, lng: -64.913 },
     { nombre: "SANT - TUCUMÁN", lat: -26.840, lng: -65.104 },
@@ -33,8 +28,6 @@ export const AEROPUERTOS = [
     { nombre: "SANC - CATAMARCA", lat: -28.593, lng: -65.751 },
     { nombre: "SANE - SANTIAGO DEL ESTERO", lat: -27.766, lng: -64.310 },
     { nombre: "SANR - TERMAS DE RÍO HONDO", lat: -27.508, lng: -64.935 },
-
-    // --- NORESTE & LITORAL (NEA) ---
     { nombre: "SARE - RESISTENCIA", lat: -27.449, lng: -59.056 },
     { nombre: "SARC - CORRIENTES", lat: -27.445, lng: -58.761 },
     { nombre: "SARP - POSADAS", lat: -27.385, lng: -55.971 },
@@ -43,8 +36,6 @@ export const AEROPUERTOS = [
     { nombre: "SAAR - ROSARIO", lat: -32.903, lng: -60.784 },
     { nombre: "SAAV - SANTA FE / SAUCE VIEJO", lat: -31.711, lng: -60.812 },
     { nombre: "SAAP - PARANÁ", lat: -31.794, lng: -60.480 },
-
-    // --- PATAGONIA ---
     { nombre: "SAZN - NEUQUÉN", lat: -38.949, lng: -68.143 },
     { nombre: "SAZS - BARILOCHE", lat: -41.151, lng: -71.157 },
     { nombre: "SAZY - SAN MARTÍN DE LOS ANDES", lat: -40.075, lng: -71.231 },
@@ -56,24 +47,65 @@ export const AEROPUERTOS = [
     { nombre: "SAWH - USHUAIA", lat: -54.843, lng: -68.295 },
     { nombre: "SAWC - EL CALAFATE", lat: -50.280, lng: -72.053 },
     { nombre: "SAVE - ESQUEL", lat: -42.907, lng: -71.139 },
-
-    // --- LAD & HELIPUERTOS ESTRATÉGICOS ---
     { nombre: "LADH - CASA DE GOBIERNO", lat: -34.608, lng: -58.370 },
     { nombre: "LADH - HOSPITAL MILITAR CENTRAL", lat: -34.572, lng: -58.435 },
     { nombre: "LAD - CURUZÚ CUATIÁ (EJÉRCITO)", lat: -29.771, lng: -58.016 },
     { nombre: "LAD - APÓSTOLES", lat: -27.915, lng: -55.761 },
-    { nombre: "LAD - TARTAGAL", lat: -22.518, lng: -63.791 },
     { nombre: "LAD - PASO DE LOS LIBRES", lat: -29.689, lng: -57.152 },
     { nombre: "LAD - SAN JULIÁN", lat: -49.308, lng: -67.801 },
-    { nombre: "SABC - EDIFICIO CÓNDOR (FAA)", lat: -34.585, lng: -58.368 }
+    { nombre: "SABC - EDIFICIO CÓNDOR (FAA)", lat: -34.585, lng: -58.368 },
+    { nombre: "SAZR - SANTA ROSA", lat: -36.588, lng: -64.276 },
+    { nombre: "SAHZ - ZAPALA", lat: -38.975, lng: -70.113 },
+    { nombre: "SAZA - AZUL", lat: -36.839, lng: -59.833 },
+    { nombre: "SAZF - OLAVARRIA", lat: -36.889, lng: -60.224 },
+    { nombre: "SACA - CÓRDOBA (EAM)", lat: -31.396, lng: -64.227 },
+    { nombre: "SAWU - SANTA CRUZ", lat: -50.016, lng: -68.572 },
+    { nombre: "SAST - TARTAGAL", lat: -22.616, lng: -63.783 },
+    { nombre: "SACE - ESCUELA DE AVIACIÓN", lat: -31.442, lng: -64.275 },
+    { nombre: "SAVM - SARMIENTO", lat: -45.584, lng: -69.076 },
+    { nombre: "SAWD - PUERTO DESEADO", lat: -47.736, lng: -65.903 },
+    { nombre: "SATM - MERCEDES", lat: -34.683, lng: -59.333 },
+    { nombre: "SAEM - MIRAMAR", lat: -38.225, lng: -57.871 },
+    { nombre: "SARS - SÁENZ PEÑA", lat: -26.754, lng: -60.447 },
+    { nombre: "SRDR - RODRÍGUEZ", lat: -34.584, lng: -58.948 },
+    { nombre: "SAAI - PUNTA INDIO", lat: -35.353, lng: -57.295 },
+    { nombre: "SATR - RECONQUISTA", lat: -29.210, lng: -59.695 },
+    { nombre: "SAWL - TOLHUIN", lat: -54.492, lng: -67.247 }
 ];
 
 export const UNIDADES_EJERCITO = [
-    "B HELIC ASAL 601",
-    "B AV APY COMB 601",
-    "SEC AE M 6",
-    "ESC AV EXPL ATQ 602",
-    "SEC AE 11",
+    "R I 1 'PATRICIOS'",
+    "R I MEC 3",
+    "R I MEC 4",
+    "R I MEC 5",
+    "R I MEC 6",
+    "R I MEC 7",
+    "R I MEC 8",
+    "R I MEC 12",
+    "R I MEC 20",
+    "R I MEC 24",
+    "R I MEC 25",
+    "R I MNT 10",
+    "R I MNT 11",
+    "R I M 15",
+    "R I M 16",
+    "R I M 22",
+    "R I Mte 9",
+    "R I Mte 17",
+    "R I Mte 28",
+    "R I Mte 29",
+    "R I Mte 30",
+    "R I Parac 2",
+    "R I Parac 14",
+    "R Asal Ae 601",
+    "DET MTE 18",
+    "Ca Cdos 601",
+    "Ca Cdos 602",
+    "Ca Caz M 8",
+    "Ca Caz Mte 12",
+    "Ca Caz Mte 18",
+    "Ca FFEE 601"
+
 ];
 
 export const TRIPULACION = {
