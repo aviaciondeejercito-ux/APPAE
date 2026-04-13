@@ -14,7 +14,7 @@ const PlaneamientoMapa = () => {
 
             <MapContainer 
                 center={[-34.528, -58.641]} 
-                zoom={6} 
+                zoom={12} 
                 style={{ height: '100%', width: '100%', zIndex: 1 }}
                 zoomControl={false}
             >
@@ -43,11 +43,11 @@ const PlaneamientoMapa = () => {
                         />
                     </BaseLayer>
 
-                    {/* 4. CAPA CURVAS DE NIVEL */}
+                    {/* 4. CAPA CURVAS DE NIVEL (ESTILO CARTA TOPOGRÁFICA) */}
                     <BaseLayer name="📈 Curvas de Nivel">
                         <TileLayer 
-                            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" 
-                            attribution='Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap'
+                            url="https://{s}.tile.thunderforest.com/landscape/{z}/{x}/{y}.png?apikey=7c352c8ff4764d148a07119027878601" 
+                            attribution='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                         />
                     </BaseLayer>
                 </LayersControl>
