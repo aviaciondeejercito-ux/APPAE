@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, LayersControl, Marker, Polyline, Popup, useMap
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Corregir iconos de Leaflet por defecto
+// Configuración de iconos de Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -13,123 +13,168 @@ L.Icon.Default.mergeOptions({
 
 const { BaseLayer } = LayersControl;
 
-// Componente para manejar los clicks en el mapa
-const MapEvents = ({ setPuntos }) => {
+// --- Utilidades de Conversión ---
+const decimalToGMS = (decimal, isLat) => {
+    const absDecimal = Math.abs(decimal);
+    const grados = Math.floor(absDecimal);
+    const minutosDecimal = (absDecimal - grados) * 60;
+    const minutos = Math.floor(minutosDecimal);
+    const segundos = ((minutosDecimal - minutos) * 60).toFixed(1);
+    const direccion = isLat ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W');
+    return `${grados}°${minutos}'${segundos}"${direccion}`;
+};
+
+const MapEvents = ({ addWaypoint }) => {
     useMapEvents({
         click(e) {
-            setPuntos(prev => [...prev, e.latlng]);
+            addWaypoint(e.latlng);
         },
     });
     return null;
 };
 
 const PlaneamientoMapa = () => {
-    const [puntos, setPuntos] = useState([]);
+    const [waypoints, setWaypoints] = useState([]);
 
-    // Función para limpiar la navegación
-    const limpiarNavegacion = () => setPuntos([]);
-
-    // Cálculo de distancia total
-    const calcularDistanciaTotal = () => {
-        let total = 0;
-        for (let i = 0; i < puntos.length - 1; i++) {
-            total += puntos[i].distanceTo(puntos[i + 1]);
-        }
-        return (total / 1000).toFixed(2); // Retorna en Kilómetros
+    const addWaypoint = (latlng) => {
+        const newWp = {
+            id: Date.now(),
+            latlng: latlng,
+            altitud: "0" // Altitud por defecto en pies
+        };
+        setWaypoints(prev => [...prev, newWp]);
     };
 
+    const eliminarPunto = (id) => {
+        setWaypoints(waypoints.filter(wp => wp.id !== id));
+    };
+
+    const actualizarAltitud = (id, valor) => {
+        setWaypoints(waypoints.map(wp => wp.id === id ? { ...wp, altitud: valor } : wp));
+    };
+
+    const calcularDistanciaTotalKM = () => {
+        let total = 0;
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            total += waypoints[i].latlng.distanceTo(waypoints[i + 1].latlng);
+        }
+        return total / 1000;
+    };
+
+    const distKM = calcularDistanciaTotalKM();
+    const distNM = distKM * 0.539957; // Conversión a Millas Náuticas
+
     return (
-        <div style={styles.mapWrapper}>
-            <div style={styles.header}>
-                <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO MILITAR</div>
-                <div style={styles.subHeader}>
-                    {puntos.length > 1 
-                        ? `DISTANCIA TOTAL: ${calcularDistanciaTotal()} KM` 
-                        : "ANÁLISIS DE TERRENO Y COTAS"}
+        <div style={styles.container}>
+            {/* PANEL LATERAL */}
+            <div style={styles.sidebar}>
+                <div style={styles.sidebarTitle}>NAVEGACIÓN AÉREA</div>
+                
+                <div style={styles.statsContainer}>
+                    <div style={styles.statBox}>
+                        <span style={styles.statLabel}>DISTANCIA KM</span>
+                        <span style={styles.statValue}>{distKM.toFixed(2)} KM</span>
+                    </div>
+                    <div style={styles.statBox}>
+                        <span style={styles.statLabel}>DISTANCIA NM</span>
+                        <span style={styles.statValue}>{distNM.toFixed(2)} NM</span>
+                    </div>
                 </div>
-                {puntos.length > 0 && (
-                    <button onClick={limpiarNavegacion} style={styles.btnLimpiar}>
-                        LIMPIAR RUTA
-                    </button>
-                )}
+
+                <div style={styles.waypointsList}>
+                    {waypoints.map((wp, idx) => (
+                        <div key={wp.id} style={styles.waypointItem}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ color: '#00d4ff', fontWeight: 'bold' }}>WP {idx + 1}</span>
+                                <button onClick={() => eliminarPunto(wp.id)} style={styles.btnDelete}>ELIMINAR</button>
+                            </div>
+                            <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lat, true)}</div>
+                            <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lng, false)}</div>
+                            
+                            <div style={styles.altInputContainer}>
+                                <label style={{ fontSize: '0.7rem' }}>ALT (FT): </label>
+                                <input 
+                                    type="number" 
+                                    value={wp.altitud} 
+                                    onChange={(e) => actualizarAltitud(wp.id, e.target.value)}
+                                    style={styles.altInput}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
 
-            <MapContainer 
-                center={[-34.528, -58.641]} 
-                zoom={12} 
-                style={{ height: '100%', width: '100%', zIndex: 1 }}
-                zoomControl={false}
-            >
-                <MapEvents setPuntos={setPuntos} />
+            {/* MAPA */}
+            <div style={styles.mapWrapper}>
+                <div style={styles.header}>
+                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO MILITAR</div>
+                    <div style={styles.subHeader}>SISTEMA DE AYUDAMEMORIA DE VUELO</div>
+                </div>
 
-                <LayersControl position="topright">
-                    <BaseLayer checked name="🌑 Modo Nocturno">
-                        <TileLayer 
-                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
-                            attribution='&copy; CARTO'
-                        />
-                    </BaseLayer>
+                <MapContainer 
+                    center={[-34.528, -58.641]} 
+                    zoom={12} 
+                    style={{ height: '100%', width: '100%', zIndex: 1 }}
+                    zoomControl={false}
+                >
+                    <MapEvents addWaypoint={addWaypoint} />
+                    <LayersControl position="topright">
+                        <BaseLayer checked name="🌑 Modo Nocturno">
+                            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='CARTO' />
+                        </BaseLayer>
+                        <BaseLayer name="🏔️ Relieve (Satelital)">
+                            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Esri' />
+                        </BaseLayer>
+                        <BaseLayer name="📈 Curvas de Nivel">
+                            <TileLayer url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" attribution='Thunderforest' />
+                        </BaseLayer>
+                    </LayersControl>
 
-                    <BaseLayer name="🏔️ Relieve (Satelital)">
-                        <TileLayer 
-                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
-                            attribution='Esri'
-                        />
-                    </BaseLayer>
+                    {waypoints.map((wp, idx) => (
+                        <Marker key={wp.id} position={wp.latlng}>
+                            <Popup>
+                                <div style={{ fontFamily: 'monospace' }}>
+                                    <strong>WP {idx + 1}</strong><br/>
+                                    ALT: {wp.altitud} FT<br/>
+                                    {decimalToGMS(wp.latlng.lat, true)}<br/>
+                                    {decimalToGMS(wp.latlng.lng, false)}
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ))}
 
-                    <BaseLayer name="🗺️ Político">
-                        <TileLayer 
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
-                            attribution='&copy; OpenStreetMap'
-                        />
-                    </BaseLayer>
-
-                    <BaseLayer name="📈 Curvas de Nivel">
-                        <TileLayer 
-                            url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
-                            attribution='&copy; Thunderforest'
-                        />
-                    </BaseLayer>
-                </LayersControl>
-
-                {/* Dibujar Marcadores */}
-                {puntos.map((pos, idx) => (
-                    <Marker key={idx} position={pos}>
-                        <Popup>Punto {idx + 1}<br/>Lat: {pos.lat.toFixed(4)}<br/>Lng: {pos.lng.toFixed(4)}</Popup>
-                    </Marker>
-                ))}
-
-                {/* Dibujar Línea de Navegación */}
-                {puntos.length > 1 && (
-                    <Polyline positions={puntos} color="#00d4ff" weight={3} dashArray="10, 10" />
-                )}
-            </MapContainer>
+                    {waypoints.length > 1 && (
+                        <Polyline positions={waypoints.map(wp => wp.latlng)} color="#00d4ff" weight={2} dashArray="5, 10" />
+                    )}
+                </MapContainer>
+            </div>
 
             <style>{`
-                .leaflet-control-layers { 
-                    background: #1a1a1a !important; 
-                    color: white !important; 
-                    border: 1px solid #00d4ff !important; 
-                    font-family: monospace;
-                    border-radius: 4px;
-                }
+                .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #00d4ff !important; font-family: monospace; }
+                input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
             `}</style>
         </div>
     );
 };
 
 const styles = {
-    mapWrapper: { width: '100%', height: '100vh', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },
-    header: { 
-        position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, 
-        background: 'rgba(10, 10, 10, 0.95)', color: '#00d4ff', padding: '12px 30px', 
-        border: '1px solid #00d4ff', textAlign: 'center', borderRadius: '4px', fontFamily: 'monospace'
-    },
-    subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #333', paddingTop: '4px', letterSpacing: '1px' },
-    btnLimpiar: {
-        marginTop: '8px', background: 'transparent', border: '1px solid #ff4444', color: '#ff4444',
-        cursor: 'pointer', fontSize: '0.6rem', padding: '2px 10px', borderRadius: '2px', fontFamily: 'monospace'
-    }
+    container: { display: 'flex', width: '100%', height: '100vh', backgroundColor: '#050505' },
+    sidebar: { width: '300px', background: '#0a0a0a', borderRight: '1px solid #333', padding: '15px', overflowY: 'auto', zIndex: 2000, fontFamily: 'monospace', color: '#bdc3c7' },
+    sidebarTitle: { color: '#00d4ff', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '15px', borderBottom: '1px solid #00d4ff', paddingBottom: '8px', textAlign: 'center' },
+    statsContainer: { display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '15px' },
+    statBox: { background: '#111', padding: '8px', borderRadius: '4px', border: '1px solid #222', display: 'flex', flexDirection: 'column' },
+    statLabel: { fontSize: '0.6rem', color: '#00d4ff' },
+    statValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#fff' },
+    waypointsList: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    waypointItem: { background: '#1a1a1a', padding: '10px', borderRadius: '4px', borderLeft: '3px solid #00d4ff' },
+    gmsText: { fontSize: '0.7rem', color: '#eee', marginTop: '2px' },
+    altInputContainer: { marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px', borderTop: '1px solid #333', paddingTop: '5px' },
+    altInput: { background: '#000', border: '1px solid #444', color: '#00d4ff', fontSize: '0.8rem', width: '80px', padding: '2px 5px', textAlign: 'right', fontFamily: 'monospace' },
+    btnDelete: { background: 'transparent', border: '1px solid #ff4444', color: '#ff4444', cursor: 'pointer', fontSize: '0.6rem', padding: '1px 5px' },
+    mapWrapper: { flex: 1, position: 'relative' },
+    header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#00d4ff', padding: '10px 25px', border: '1px solid #00d4ff', textAlign: 'center', borderRadius: '4px', fontFamily: 'monospace' },
+    subHeader: { fontSize: '0.6rem', color: '#bdc3c7', marginTop: '2px' }
 };
 
 export default PlaneamientoMapa;
