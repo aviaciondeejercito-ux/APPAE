@@ -172,8 +172,8 @@ const PlaneamientoMapa = () => {
                         
                         <BaseLayer checked name="⛰️ Relieve">
                             <TileLayer 
-                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Hillshade/MapServer/tile/{z}/{y}/{x}" 
-                                attribution='Esri Hillshade' 
+                                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" 
+                                attribution='Map data: &copy; OSM, SRTM | Map style: &copy; OpenTopoMap' 
                             />
                         </BaseLayer>
 
