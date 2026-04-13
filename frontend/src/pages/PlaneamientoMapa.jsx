@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MapContainer, TileLayer, LayersControl, Marker, Polyline, Popup, useMapEvents, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -45,10 +45,47 @@ const MapEvents = ({ addWaypoint, addDrawingPoint, mode }) => {
 
 const PlaneamientoMapa = () => {
     const [waypoints, setWaypoints] = useState([]);
-    const [drawings, setDrawings] = useState([]); // {id, type: 'line'|'note', points: [], color, text}
-    const [activeMode, setActiveMode] = useState('route'); // 'route', 'draw', 'note'
+    const [drawings, setDrawings] = useState([]); 
+    const [activeMode, setActiveMode] = useState('route'); 
     const [currentColor, setCurrentColor] = useState('#ff0000');
     const [tempPoints, setTempPoints] = useState([]);
+
+    // --- Persistencia Local (Carga inicial) ---
+    useEffect(() => {
+        const savedWaypoints = localStorage.getItem('tactical_waypoints');
+        const savedDrawings = localStorage.getItem('tactical_drawings');
+        
+        if (savedWaypoints) {
+            const parsedWps = JSON.parse(savedWaypoints);
+            const sanitizedWps = parsedWps.map(wp => ({
+                ...wp,
+                latlng: L.latLng(wp.latlng.lat, wp.latlng.lng)
+            }));
+            setWaypoints(sanitizedWps);
+        }
+        if (savedDrawings) {
+            const parsedDraws = JSON.parse(savedDrawings);
+            const sanitizedDraws = parsedDraws.map(d => {
+                if (d.type === 'line') {
+                    return { ...d, points: d.points.map(p => L.latLng(p.lat, p.lng)) };
+                }
+                if (d.type === 'note') {
+                    return { ...d, position: L.latLng(d.position.lat, d.position.lng) };
+                }
+                return d;
+            });
+            setDrawings(sanitizedDraws);
+        }
+    }, []);
+
+    // --- Persistencia Local (Guardado automático) ---
+    useEffect(() => {
+        localStorage.setItem('tactical_waypoints', JSON.stringify(waypoints));
+    }, [waypoints]);
+
+    useEffect(() => {
+        localStorage.setItem('tactical_drawings', JSON.stringify(drawings));
+    }, [drawings]);
 
     const fetchElevacion = async (lat, lng, id) => {
         try {
@@ -111,6 +148,15 @@ const PlaneamientoMapa = () => {
         const newLatLng = e.target.getLatLng();
         setWaypoints(prev => prev.map(wp => wp.id === id ? { ...wp, latlng: newLatLng, elevTerreno: "..." } : wp));
         fetchElevacion(newLatLng.lat, newLatLng.lng, id);
+    };
+
+    const borrarTodo = () => {
+        if (window.confirm("¿Desea borrar toda la navegación y dibujos actuales?")) {
+            setWaypoints([]);
+            setDrawings([]);
+            localStorage.removeItem('tactical_waypoints');
+            localStorage.removeItem('tactical_drawings');
+        }
     };
 
     const stats = useMemo(() => {
@@ -190,7 +236,6 @@ const PlaneamientoMapa = () => {
                     })}
                 </div>
 
-                {/* LISTA DE ANOTACIONES EDITABLES */}
                 {drawings.length > 0 && (
                     <div style={{marginTop: '20px'}}>
                         <div style={styles.miniLabel}>ANOTACIONES Y DIBUJOS</div>
@@ -207,6 +252,8 @@ const PlaneamientoMapa = () => {
                         ))}
                     </div>
                 )}
+
+                <button onClick={borrarTodo} style={styles.clearAllBtn}>BORRAR TODA LA MISIÓN</button>
             </div>
 
             {/* MAPA */}
@@ -226,10 +273,8 @@ const PlaneamientoMapa = () => {
                         <BaseLayer name="🌑 Modo Oscuro"><TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' /></BaseLayer>
                     </LayersControl>
 
-                    {/* CAPA DE DIBUJO TEMPORAL */}
                     {tempPoints.length > 0 && <Polyline positions={tempPoints} color={currentColor} weight={2} dashArray="5, 5" />}
 
-                    {/* DIBUJOS GUARDADOS */}
                     {drawings.map(d => (
                         d.type === 'line' ? 
                         <Polyline key={d.id} positions={d.points} color={d.color} weight={4}>
@@ -275,7 +320,7 @@ const styles = {
     drawItem: { background: '#111', padding: '8px', marginTop: '5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #222' },
     drawInput: { background: 'transparent', border: 'none', color: '#fff', fontSize: '0.75rem', width: '85%', outline: 'none', fontFamily: 'monospace' },
     nameInput: { background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: '#00d4ff', fontWeight: 'bold', fontSize: '1rem', width: '75%', outline: 'none' },
-    gmsText: { fontSize: '0.85rem', color: '#ffffff', margin: '8px 0', fontWeight: 'bold', letterSpacing: '0.5px', lineHeight: '1.2' },
+    gmsText: { fontSize: '0.85rem', color: '#ffffff', margin: '8px 0', fontWeight: 'bold', letterSpacing: '0.5px', letterSpacing: '0.5px', lineHeight: '1.2' },
     dataGrid: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '12px', gap: '6px' },
     inputGroup: { display: 'flex', flexDirection: 'column' },
     miniLabel: { fontSize: '0.45rem', color: '#00d4ff', marginBottom: '2px', textTransform: 'uppercase' },
@@ -284,6 +329,7 @@ const styles = {
     navInfo: { textAlign: 'right', display: 'flex', flexDirection: 'column' },
     navValue: { fontSize: '0.85rem', fontWeight: 'bold', color: '#ffffff' },
     btnDelete: { background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem' },
+    clearAllBtn: { width: '100%', marginTop: '30px', padding: '10px', background: '#330000', color: '#ff4444', border: '1px solid #ff4444', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.7rem' },
     mapWrapper: { flex: 1, position: 'relative' },
     header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#00d4ff', padding: '10px 25px', border: '1px solid #333', borderRadius: '4px', fontFamily: 'monospace', textAlign: 'center' }
 };
