@@ -10,6 +10,7 @@ import EstadoAeronaves from './pages/EstadoAeronaves';
 import Material from './pages/Material'; 
 import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
+import PlaneamientoMapa from './pages/PlaneamientoMapa';
 
 /**
  * COMPONENTE PRINCIPAL - SISTEMA GESTIÓN AE
@@ -169,6 +170,19 @@ function App() {
                                 </button>
                             )}
 
+                            {role === 'admin' && (
+                                <button 
+                                    onClick={() => setView('planeamiento')}
+                                    style={{
+                                        ...styles.btnNav,
+                                        backgroundColor: view === 'planeamiento' ? '#16a085' : '#4a69bd',
+                                        border: view === 'planeamiento' ? '2px solid white' : 'none'
+                                    }}
+                                >
+                                    🏔️ Planeamiento
+                                </button>
+                            )}
+
                             {puedeVerVuelos && (
                                 <button 
                                     onClick={() => setView('despacho')}
@@ -261,7 +275,7 @@ function App() {
             </nav>
 
             {/* ÁREA DE CONTENIDO DINÁMICO */}
-            <main style={(view === 'mapa' || view === 'stats' || view === 'material' || view === 'estado' || view === 'despacho') ? styles.containerFull : styles.container}>
+            <main style={(view === 'mapa' || view === 'planeamiento' || view === 'stats' || view === 'material' || view === 'estado' || view === 'despacho') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
@@ -273,6 +287,8 @@ function App() {
                                 <OperacionesMapa />
                             </div>
                         );
+                        if (view === 'planeamiento' && role === 'admin') return <PlaneamientoMapa />;
+                        
                         // AL APRETAR VUELOS (view === 'despacho'), LLEVA A CARGATACTICA
                         if (view === 'despacho' && puedeVerVuelos) return <CargaTactica />;
                         
