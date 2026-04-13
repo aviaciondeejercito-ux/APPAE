@@ -39,8 +39,9 @@ const PlaneamientoMapa = () => {
     const addWaypoint = (latlng) => {
         const newWp = {
             id: Date.now(),
+            nombre: `WP ${waypoints.length + 1}`,
             latlng: latlng,
-            altitud: "0" // Altitud por defecto en pies
+            altitud: "0"
         };
         setWaypoints(prev => [...prev, newWp]);
     };
@@ -49,8 +50,8 @@ const PlaneamientoMapa = () => {
         setWaypoints(waypoints.filter(wp => wp.id !== id));
     };
 
-    const actualizarAltitud = (id, valor) => {
-        setWaypoints(waypoints.map(wp => wp.id === id ? { ...wp, altitud: valor } : wp));
+    const actualizarDato = (id, campo, valor) => {
+        setWaypoints(waypoints.map(wp => wp.id === id ? { ...wp, [campo]: valor } : wp));
     };
 
     const calcularDistanciaTotalKM = () => {
@@ -62,13 +63,13 @@ const PlaneamientoMapa = () => {
     };
 
     const distKM = calcularDistanciaTotalKM();
-    const distNM = distKM * 0.539957; // Conversión a Millas Náuticas
+    const distNM = distKM * 0.539957;
 
     return (
         <div style={styles.container}>
             {/* PANEL LATERAL */}
             <div style={styles.sidebar}>
-                <div style={styles.sidebarTitle}>NAVEGACIÓN AÉREA</div>
+                <div style={styles.sidebarTitle}>NAVEGACIÓN TÁCTICA</div>
                 
                 <div style={styles.statsContainer}>
                     <div style={styles.statBox}>
@@ -84,19 +85,24 @@ const PlaneamientoMapa = () => {
                 <div style={styles.waypointsList}>
                     {waypoints.map((wp, idx) => (
                         <div key={wp.id} style={styles.waypointItem}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ color: '#00d4ff', fontWeight: 'bold' }}>WP {idx + 1}</span>
-                                <button onClick={() => eliminarPunto(wp.id)} style={styles.btnDelete}>ELIMINAR</button>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                <input 
+                                    type="text" 
+                                    value={wp.nombre} 
+                                    onChange={(e) => actualizarDato(wp.id, 'nombre', e.target.value)}
+                                    style={styles.nameInput}
+                                />
+                                <button onClick={() => eliminarPunto(wp.id)} style={styles.btnDelete}>X</button>
                             </div>
                             <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lat, true)}</div>
                             <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lng, false)}</div>
                             
                             <div style={styles.altInputContainer}>
-                                <label style={{ fontSize: '0.7rem' }}>ALT (FT): </label>
+                                <label style={{ fontSize: '0.65rem' }}>ALT (FT): </label>
                                 <input 
                                     type="number" 
                                     value={wp.altitud} 
-                                    onChange={(e) => actualizarAltitud(wp.id, e.target.value)}
+                                    onChange={(e) => actualizarDato(wp.id, 'altitud', e.target.value)}
                                     style={styles.altInput}
                                 />
                             </div>
@@ -109,12 +115,12 @@ const PlaneamientoMapa = () => {
             <div style={styles.mapWrapper}>
                 <div style={styles.header}>
                     <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO MILITAR</div>
-                    <div style={styles.subHeader}>SISTEMA DE AYUDAMEMORIA DE VUELO</div>
+                    <div style={styles.subHeader}>ANÁLISIS DE TERRENO Y NAVEGACIÓN</div>
                 </div>
 
                 <MapContainer 
                     center={[-34.528, -58.641]} 
-                    zoom={12} 
+                    zoom={10} 
                     style={{ height: '100%', width: '100%', zIndex: 1 }}
                     zoomControl={false}
                 >
@@ -122,6 +128,14 @@ const PlaneamientoMapa = () => {
                     <LayersControl position="topright">
                         <BaseLayer checked name="🌑 Modo Nocturno">
                             <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='CARTO' />
+                        </BaseLayer>
+                        <BaseLayer name="✨ Luces Nocturnas (NASA)">
+                            <TileLayer 
+                                url="https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/{time}/{tilematrixset}/{z}/{y}/{x}.jpg" 
+                                attribution='NASA EOSDIS GIBS'
+                                time='2012'
+                                tilematrixset='GoogleMapsCompatible_Level8'
+                            />
                         </BaseLayer>
                         <BaseLayer name="🏔️ Relieve (Satelital)">
                             <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Esri' />
@@ -131,11 +145,11 @@ const PlaneamientoMapa = () => {
                         </BaseLayer>
                     </LayersControl>
 
-                    {waypoints.map((wp, idx) => (
+                    {waypoints.map((wp) => (
                         <Marker key={wp.id} position={wp.latlng}>
                             <Popup>
                                 <div style={{ fontFamily: 'monospace' }}>
-                                    <strong>WP {idx + 1}</strong><br/>
+                                    <strong>{wp.nombre}</strong><br/>
                                     ALT: {wp.altitud} FT<br/>
                                     {decimalToGMS(wp.latlng.lat, true)}<br/>
                                     {decimalToGMS(wp.latlng.lng, false)}
@@ -168,10 +182,11 @@ const styles = {
     statValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#fff' },
     waypointsList: { display: 'flex', flexDirection: 'column', gap: '8px' },
     waypointItem: { background: '#1a1a1a', padding: '10px', borderRadius: '4px', borderLeft: '3px solid #00d4ff' },
-    gmsText: { fontSize: '0.7rem', color: '#eee', marginTop: '2px' },
-    altInputContainer: { marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px', borderTop: '1px solid #333', paddingTop: '5px' },
-    altInput: { background: '#000', border: '1px solid #444', color: '#00d4ff', fontSize: '0.8rem', width: '80px', padding: '2px 5px', textAlign: 'right', fontFamily: 'monospace' },
-    btnDelete: { background: 'transparent', border: '1px solid #ff4444', color: '#ff4444', cursor: 'pointer', fontSize: '0.6rem', padding: '1px 5px' },
+    nameInput: { background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: '#00d4ff', fontWeight: 'bold', fontSize: '0.85rem', width: '80%', padding: '2px', fontFamily: 'monospace', outline: 'none' },
+    gmsText: { fontSize: '0.65rem', color: '#eee', marginTop: '2px' },
+    altInputContainer: { marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px', borderTop: '1px solid #222', paddingTop: '5px' },
+    altInput: { background: '#000', border: '1px solid #333', color: '#00d4ff', fontSize: '0.8rem', width: '80px', padding: '2px 5px', textAlign: 'right', fontFamily: 'monospace' },
+    btnDelete: { background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' },
     mapWrapper: { flex: 1, position: 'relative' },
     header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.9)', color: '#00d4ff', padding: '10px 25px', border: '1px solid #00d4ff', textAlign: 'center', borderRadius: '4px', fontFamily: 'monospace' },
     subHeader: { fontSize: '0.6rem', color: '#bdc3c7', marginTop: '2px' }
