@@ -13,7 +13,7 @@ L.Icon.Default.mergeOptions({
 
 const { BaseLayer, Overlay } = LayersControl;
 
-// --- Utilidades ---
+// --- Utilidades Matemáticas ---
 const calcularRumbo = (lat1, lon1, lat2, lon2) => {
     const dLon = (lon2 - lon1) * (Math.PI / 180);
     const y = Math.sin(dLon) * Math.cos(lat2 * (Math.PI / 180));
@@ -49,7 +49,7 @@ const PlaneamientoMapa = () => {
             nombre: `WP ${waypoints.length + 1}`,
             latlng: latlng,
             altitud: "0",
-            consumo: "0" // Combustible consumido en esta pierna (tramo hasta el siguiente punto)
+            consumo: "0"
         };
         setWaypoints(prev => [...prev, newWp]);
     };
@@ -67,7 +67,6 @@ const PlaneamientoMapa = () => {
         setWaypoints(prev => prev.map(wp => wp.id === id ? { ...wp, latlng: newLatLng } : wp));
     };
 
-    // Cálculos globales
     const stats = useMemo(() => {
         let distTotal = 0;
         let combustibleTotal = 0;
@@ -95,8 +94,8 @@ const PlaneamientoMapa = () => {
                         <span style={styles.statValue}>{stats.distNM.toFixed(1)} NM</span>
                     </div>
                     <div style={styles.statBox}>
-                        <span style={styles.statLabel}>COMBUSTIBLE TOTAL</span>
-                        <span style={{...styles.statValue, color: '#ffcc00'}}>{stats.fuel.toFixed(1)} Gal/L</span>
+                        <span style={styles.statLabel}>FUEL ACUMULADO</span>
+                        <span style={{...styles.statValue, color: '#ffcc00'}}>{stats.fuel.toFixed(1)}</span>
                     </div>
                 </div>
 
@@ -112,7 +111,7 @@ const PlaneamientoMapa = () => {
 
                         return (
                             <div key={wp.id} style={styles.waypointItem}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <input 
                                         type="text" 
                                         value={wp.nombre} 
@@ -121,7 +120,6 @@ const PlaneamientoMapa = () => {
                                     />
                                     <button onClick={() => eliminarPunto(wp.id)} style={styles.btnDelete}>X</button>
                                 </div>
-                                
                                 <div style={styles.gmsText}>{decimalToGMS(wp.latlng.lat, true)} | {decimalToGMS(wp.latlng.lng, false)}</div>
                                 
                                 <div style={styles.dataGrid}>
@@ -135,7 +133,7 @@ const PlaneamientoMapa = () => {
                                         />
                                     </div>
                                     <div style={styles.inputGroup}>
-                                        <label style={styles.miniLabel}>FUEL TRAMO</label>
+                                        <label style={styles.miniLabel}>FUEL PIERNA</label>
                                         <input 
                                             type="number" 
                                             value={wp.consumo} 
@@ -160,7 +158,7 @@ const PlaneamientoMapa = () => {
             <div style={styles.mapWrapper}>
                 <div style={styles.header}>
                     <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '2px' }}>PLANEAMIENTO DE MISIÓN</div>
-                    <div style={{ fontSize: '0.6rem', color: '#888' }}>DRAG MARKERS TO REPOSITION</div>
+                    <div style={{ fontSize: '0.6rem', color: '#bdc3c7' }}>VISTA DE RELIEVE Y COTAS</div>
                 </div>
 
                 <MapContainer 
@@ -172,7 +170,21 @@ const PlaneamientoMapa = () => {
                     <MapEvents addWaypoint={addWaypoint} />
                     <LayersControl position="topright">
                         
-                        <BaseLayer checked name="🏔️ Satelital">
+                        {/* CAPA DE RELIEVE SOMBREADO (HILLSHADE) */}
+                        <BaseLayer checked name="⛰️ Relieve + Cotas">
+                            <div style={{ display: 'none' }}></div> {/* Placeholder */}
+                            <TileLayer 
+                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Hillshade/MapServer/tile/{z}/{y}/{x}" 
+                                attribution='Esri Hillshade' 
+                            />
+                            <TileLayer 
+                                url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
+                                attribution='Thunderforest'
+                                opacity={0.6}
+                            />
+                        </BaseLayer>
+
+                        <BaseLayer name="🏔️ Satelital">
                             <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Esri' />
                         </BaseLayer>
 
@@ -180,16 +192,12 @@ const PlaneamientoMapa = () => {
                             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='OSM' />
                         </BaseLayer>
 
-                        <BaseLayer name="🌑 Oscuro">
-                            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='CARTO' />
-                        </BaseLayer>
-
-                        {/* OVERLAY INDEPENDIENTE DE COTAS - ACTIVADO POR DEFECTO */}
-                        <Overlay checked name="📈 Curvas de Nivel (Cotas)">
+                        {/* OVERLAY EXTRA PARA CONTROLAR COTAS POR SEPARADO SI SE DESEA */}
+                        <Overlay name="📈 Solo Curvas de Nivel">
                             <TileLayer 
                                 url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
                                 attribution='Thunderforest'
-                                opacity={0.6}
+                                opacity={0.5}
                             />
                         </Overlay>
                     </LayersControl>
