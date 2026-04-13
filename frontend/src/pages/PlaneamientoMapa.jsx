@@ -80,7 +80,7 @@ const PlaneamientoMapa = () => {
 
     const addDrawingPoint = (latlng) => {
         if (activeMode === 'note') {
-            const text = prompt("Ingrese anotación:");
+            const text = prompt("Ingrese texto de la nota:");
             if (text) {
                 setDrawings(prev => [...prev, { id: Date.now(), type: 'note', position: latlng, text, color: currentColor }]);
             }
@@ -91,7 +91,7 @@ const PlaneamientoMapa = () => {
 
     const finalizarDibujo = () => {
         if (tempPoints.length > 1) {
-            setDrawings(prev => [...prev, { id: Date.now(), type: 'line', points: tempPoints, color: currentColor }]);
+            setDrawings(prev => [...prev, { id: Date.now(), type: 'line', points: tempPoints, color: currentColor, text: `LÍNEA ${drawings.filter(d => d.type === 'line').length + 1}` }]);
         }
         setTempPoints([]);
     };
@@ -101,6 +101,10 @@ const PlaneamientoMapa = () => {
 
     const actualizarDato = (id, campo, valor) => {
         setWaypoints(prev => prev.map(wp => wp.id === id ? { ...wp, [campo]: valor } : wp));
+    };
+
+    const actualizarDibujo = (id, valor) => {
+        setDrawings(prev => prev.map(d => d.id === id ? { ...d, text: valor } : d));
     };
 
     const handleDrag = (id, e) => {
@@ -135,13 +139,13 @@ const PlaneamientoMapa = () => {
                         <button onClick={() => setActiveMode('draw')} style={{...styles.toolBtn, backgroundColor: activeMode === 'draw' ? '#00d4ff' : '#222'}}>DIBUJO</button>
                         <button onClick={() => setActiveMode('note')} style={{...styles.toolBtn, backgroundColor: activeMode === 'note' ? '#00d4ff' : '#222'}}>NOTA</button>
                     </div>
-                    {activeMode === 'draw' && (
+                    {(activeMode === 'draw' || activeMode === 'note') && (
                         <div style={{marginTop: '10px'}}>
                             <div style={styles.btnGroup}>
                                 {['#ff0000', '#ffff00', '#00ff00', '#00d4ff'].map(c => (
                                     <div key={c} onClick={() => setCurrentColor(c)} style={{...styles.colorPick, backgroundColor: c, border: currentColor === c ? '2px solid white' : 'none'}} />
                                 ))}
-                                <button onClick={finalizarDibujo} style={styles.finishBtn}>OK</button>
+                                {activeMode === 'draw' && <button onClick={finalizarDibujo} style={styles.finishBtn}>OK</button>}
                             </div>
                         </div>
                     )}
@@ -186,13 +190,18 @@ const PlaneamientoMapa = () => {
                     })}
                 </div>
 
-                {/* LISTA DE ANOTACIONES */}
+                {/* LISTA DE ANOTACIONES EDITABLES */}
                 {drawings.length > 0 && (
                     <div style={{marginTop: '20px'}}>
                         <div style={styles.miniLabel}>ANOTACIONES Y DIBUJOS</div>
                         {drawings.map(d => (
-                            <div key={d.id} style={styles.drawItem}>
-                                <span style={{color: d.color}}>{d.type === 'note' ? `TXT: ${d.text}` : 'LÍNEA TÁCTICA'}</span>
+                            <div key={d.id} style={{...styles.drawItem, borderLeft: `4px solid ${d.color}`}}>
+                                <input 
+                                    type="text" 
+                                    value={d.text} 
+                                    onChange={(e) => actualizarDibujo(d.id, e.target.value)}
+                                    style={styles.drawInput}
+                                />
                                 <button onClick={() => eliminarDibujo(d.id)} style={styles.btnDelete}>X</button>
                             </div>
                         ))}
@@ -223,7 +232,9 @@ const PlaneamientoMapa = () => {
                     {/* DIBUJOS GUARDADOS */}
                     {drawings.map(d => (
                         d.type === 'line' ? 
-                        <Polyline key={d.id} positions={d.points} color={d.color} weight={4} /> :
+                        <Polyline key={d.id} positions={d.points} color={d.color} weight={4}>
+                            <Tooltip sticky>{d.text}</Tooltip>
+                        </Polyline> :
                         <Marker key={d.id} position={d.position} icon={L.divIcon({className: 'custom-note', html: `<div style="background:${d.color}; padding:2px 6px; border-radius:3px; color:black; font-weight:bold; font-family:monospace; font-size:12px; white-space:nowrap; border:1px solid black">${d.text}</div>`})} />
                     ))}
 
@@ -261,7 +272,8 @@ const styles = {
     statValue: { fontSize: '1rem', fontWeight: 'bold', color: '#fff' },
     waypointsList: { display: 'flex', flexDirection: 'column', gap: '10px' },
     waypointItem: { background: '#161616', padding: '12px', borderRadius: '4px', borderLeft: '4px solid #00d4ff' },
-    drawItem: { background: '#111', padding: '8px', marginTop: '5px', display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', border: '1px solid #222' },
+    drawItem: { background: '#111', padding: '8px', marginTop: '5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #222' },
+    drawInput: { background: 'transparent', border: 'none', color: '#fff', fontSize: '0.75rem', width: '85%', outline: 'none', fontFamily: 'monospace' },
     nameInput: { background: 'transparent', border: 'none', borderBottom: '1px solid #333', color: '#00d4ff', fontWeight: 'bold', fontSize: '1rem', width: '75%', outline: 'none' },
     gmsText: { fontSize: '0.85rem', color: '#ffffff', margin: '8px 0', fontWeight: 'bold', letterSpacing: '0.5px', lineHeight: '1.2' },
     dataGrid: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '12px', gap: '6px' },
