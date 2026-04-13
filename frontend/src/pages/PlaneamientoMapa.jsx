@@ -66,6 +66,7 @@ const PlaneamientoMapa = () => {
 
     return (
         <div style={styles.container}>
+            {/* PANEL LATERAL */}
             <div style={styles.sidebar}>
                 <div style={styles.sidebarTitle}>NAVEGACIÓN TÁCTICA</div>
                 
@@ -109,51 +110,45 @@ const PlaneamientoMapa = () => {
                 </div>
             </div>
 
+            {/* MAPA */}
             <div style={styles.mapWrapper}>
                 <div style={styles.header}>
                     <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO MILITAR</div>
-                    <div style={styles.subHeader}>VISTA DE LUCES URBANAS Y COTAS</div>
+                    <div style={styles.subHeader}>SISTEMA DE VISIÓN NOCTURNA TÁCTICA</div>
                 </div>
 
                 <MapContainer 
                     center={[-34.528, -58.641]} 
-                    zoom={9} 
+                    zoom={10} 
                     style={{ height: '100%', width: '100%', zIndex: 1, background: '#000' }}
                     zoomControl={false}
                 >
                     <MapEvents addWaypoint={addWaypoint} />
                     <LayersControl position="topright">
                         
-                        {/* CAPA DE LUCES REALES - Usando un servidor alternativo más estable para VIIRS */}
-                        <BaseLayer checked name="✨ Brillo Urbano (NASA Night)">
+                        {/* CAPA SATELITAL NOCTURNA PRO (CON ZOOM INFINITO) */}
+                        <BaseLayer checked name="🌃 Satelital Nocturna (Alta Res)">
                             <TileLayer 
-                                url="https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg" 
-                                attribution='NASA GIBS'
-                                minZoom={1}
-                                maxZoom={9}
+                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+                                attribution='Esri Satellite'
+                                className="layer-night-vision"
                             />
                         </BaseLayer>
 
-                        <BaseLayer name="🌑 Mapa Nocturno Vectorial">
-                            <TileLayer 
-                                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
-                                attribution='&copy; CARTO'
-                            />
-                        </BaseLayer>
-
-                        <BaseLayer name="🏔️ Satelital Estándar">
+                        <BaseLayer name="🏔️ Satelital Diurna">
                             <TileLayer 
                                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
                                 attribution='Esri' 
                             />
                         </BaseLayer>
 
-                        {/* OVERLAY DE COTAS - Se puede activar sobre las luces */}
+                        {/* CAPA DE COTAS (CURVAS DE NIVEL) RE-AGREGADA */}
                         <Overlay checked name="📈 Curvas de Nivel (Cotas)">
                             <TileLayer 
                                 url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" 
                                 attribution='&copy; Thunderforest'
-                                opacity={0.4}
+                                opacity={0.6}
+                                className="layer-topo"
                             />
                         </Overlay>
                     </LayersControl>
@@ -176,7 +171,21 @@ const PlaneamientoMapa = () => {
             </div>
 
             <style>{`
+                /* Corrige el warning de PWA en consola */
+                head [name="apple-mobile-web-app-capable"] { content: "yes"; }
+
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #00d4ff !important; font-family: monospace; }
+                
+                /* EFECTO NOCTURNO REAL SOBRE SATÉLITE DE ALTA RESOLUCIÓN */
+                .layer-night-vision {
+                    filter: brightness(0.3) contrast(1.4) saturate(0.2) hue-rotate(180deg) invert(0.1) !important;
+                }
+
+                /* AJUSTE PARA QUE LAS COTAS SE VEAN BIEN EN LA NOCHE */
+                .layer-topo {
+                    filter: invert(1) opacity(0.5) !important;
+                }
+
                 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
             `}</style>
         </div>
