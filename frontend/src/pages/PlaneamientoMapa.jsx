@@ -83,7 +83,7 @@ const PlaneamientoMapa = () => {
                 </div>
 
                 <div style={styles.waypointsList}>
-                    {waypoints.map((wp, idx) => (
+                    {waypoints.map((wp) => (
                         <div key={wp.id} style={styles.waypointItem}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                                 <input 
@@ -116,36 +116,42 @@ const PlaneamientoMapa = () => {
             <div style={styles.mapWrapper}>
                 <div style={styles.header}>
                     <div style={{ fontWeight: 'bold', fontSize: '1.1rem', letterSpacing: '3px' }}>PLANEAMIENTO MILITAR</div>
-                    <div style={styles.subHeader}>VISTA NOCTURNA Y NAVEGACIÓN</div>
+                    <div style={styles.subHeader}>VISTA SATELITAL NOCTURNA</div>
                 </div>
 
                 <MapContainer 
                     center={[-34.528, -58.641]} 
-                    zoom={10} 
+                    zoom={8} 
                     style={{ height: '100%', width: '100%', zIndex: 1 }}
                     zoomControl={false}
+                    maxZoom={18}
                 >
                     <MapEvents addWaypoint={addWaypoint} />
                     <LayersControl position="topright">
                         
-                        {/* CAPA DE LUCES NOCTURNAS - NASA VIIRS */}
+                        {/* CAPA DE LUCES NOCTURNAS ACTUALIZADA */}
                         <BaseLayer checked name="✨ Luces Nocturnas (NASA)">
                             <TileLayer 
                                 url="https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg" 
                                 attribution='NASA GIBS'
+                                minZoom={1}
+                                maxZoom={8}
                             />
                         </BaseLayer>
 
                         <BaseLayer name="🌑 Modo Nocturno (Calles)">
-                            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='CARTO' />
+                            <TileLayer 
+                                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
+                                attribution='&copy; OpenStreetMap'
+                                subdomains='abcd'
+                            />
                         </BaseLayer>
                         
                         <BaseLayer name="🏔️ Satelital Día">
-                            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Esri' />
-                        </BaseLayer>
-                        
-                        <BaseLayer name="📈 Curvas de Nivel">
-                            <TileLayer url="https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png" attribution='Thunderforest' />
+                            <TileLayer 
+                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+                                attribution='Esri' 
+                            />
                         </BaseLayer>
                     </LayersControl>
 
