@@ -39,7 +39,7 @@ const CalendarPage = () => {
                 }
 
                 // 3. Lógica para UNIDADES SUBALTERNAS (User, S4)
-                if (role === 'user' || role === 'S4_UNIDAD') {
+                if (role === 'user' || role === 'OFICINA_TECNICA') {
                     
                     // REGLA A: Si la unidad es la creadora, lo ve siempre (borrador o final)
                     if (evCreador === unidadUsuario) return true;
