@@ -111,7 +111,8 @@ const Operaciones = () => {
                     return false;
                 }
 
-                if (role === 'user' || role === 'OFICINA_TECNICA') {
+                // Se incluye OFICINA_TECNICA con el mismo criterio que 'user'
+                if (role === 'user' || role === 'oficina_tecnica') {
                     if (creador === unidadUsuario) return true;
                     if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
                 }
