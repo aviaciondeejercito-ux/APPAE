@@ -111,7 +111,7 @@ const Operaciones = () => {
                     return false;
                 }
 
-                if (role === 'user' || role === 's4_unidad') {
+                if (role === 'user' || role === 'OFICINA_TECNICA') {
                     if (creador === unidadUsuario) return true;
                     if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
                 }
