@@ -93,7 +93,7 @@ const adminRoutes = require('./routes/admin');
 const aircraftRoutes = require('./routes/aircraft'); 
 const weatherRoutes = require('./routes/metar'); 
 const astronomyRoutes = require('./routes/astronomy');
-const tripulanteRoutes = require('./routes/tripulanteRoutes'); // <--- NUEVO MÓDULO
+const tripulanteRoutes = require('./routes/tripulantesRoutes'); 
 
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
