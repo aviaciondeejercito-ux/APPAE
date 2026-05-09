@@ -59,6 +59,17 @@ export const login = (credentials) => API.post('/auth/login', credentials);
 export const register = (userData) => API.post('/auth/register', userData);
 
 /**
+ * ==========================================
+ * SERVICIOS DE PERSONAL (TRIPULANTES) - AGREGADO PARA FIX 404
+ * ==========================================
+ */
+export const getTripulantes = () => API.get('/tripulantes');
+export const getTripulanteById = (id) => API.get(`/tripulantes/${id}`);
+export const createTripulante = (data) => API.post('/tripulantes', data);
+export const updateTripulante = (id, data) => API.put(`/tripulantes/${id}`, data);
+export const deleteTripulante = (id) => API.delete(`/tripulantes/${id}`);
+
+/**
  * SERVICIOS DE EVENTOS Y OPERACIONES (MAPA TÁCTICO)
  */
 export const getEvents = () => API.get('/events');
@@ -95,14 +106,11 @@ export const createEvent = (eventData) => {
         aeronave: eventData.aeronave?.toUpperCase().trim() || "",
         matricula: eventData.matricula?.toUpperCase().trim() || "",
         status: eventData.status || 'programado',
-        // Mejora: Inclusión de notasMarginales
         notasMarginales: (eventData.notasMarginales || "").toUpperCase().trim(),
         
-        // Mantenemos lat/lng raíz para compatibilidad con el radar actual
         lat: latOri,
         lng: lngOri,
         
-        // Estructura duplicada para origen y destino (Persistencia Atómica)
         origen: {
             nombre: (eventData.origen?.nombre || "ORIGEN PENDIENTE").toUpperCase(),
             lat: latOri,
@@ -135,7 +143,6 @@ export const updateEvent = (id, eventData) => {
         notes: eventData.notes?.toUpperCase().trim(),
         aeronave: eventData.aeronave?.toUpperCase().trim(),
         matricula: eventData.matricula?.toUpperCase().trim(),
-        // Mejora: Actualización de notasMarginales
         notasMarginales: (eventData.notasMarginales || "").toUpperCase().trim(),
         
         lat: latOri,
@@ -276,6 +283,11 @@ const EventService = {
     createEvent,
     updateEvent,
     deleteEvent,
+    getTripulantes,
+    getTripulanteById,
+    createTripulante,
+    updateTripulante,
+    deleteTripulante,
     getWeatherData,
     getAstronomyData,
     getJackpotStatus,
