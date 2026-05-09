@@ -11,6 +11,7 @@ import Material from './pages/Material';
 import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
+import Tripulantes from './pages/Tripulantes'; // <--- NUEVO: Componente de Legajos
 
 /**
  * COMPONENTE PRINCIPAL - SISTEMA GESTIÓN AE
@@ -47,7 +48,6 @@ function App() {
 
         for (const event of pending) {
             try {
-                // Se eliminan campos temporales antes de enviar al servidor
                 const { id_temp, offline, ...eventToSync } = event;
 
                 const res = await fetch('https://sistema-ae-backend.onrender.com/api/operaciones', {
@@ -60,7 +60,6 @@ function App() {
                 });
 
                 if (res.ok) {
-                    // Filtrar el que se acaba de sincronizar con éxito
                     currentPending = currentPending.filter(e => e.id_temp !== event.id_temp);
                     localStorage.setItem('pending_events', JSON.stringify(currentPending));
                 }
@@ -77,14 +76,12 @@ function App() {
         localStorage.setItem('lastSync', now);
     };
 
-    // GESTIÓN DE ESTADO ONLINE/OFFLINE Y ÚLTIMA CONEXIÓN
+    // GESTIÓN DE ESTADO ONLINE/OFFLINE
     useEffect(() => {
         const handleStatusChange = () => {
             const online = navigator.onLine;
             setIsOnline(online);
-            if (online) {
-                syncOfflineEvents();
-            }
+            if (online) syncOfflineEvents();
         };
 
         window.addEventListener('online', handleStatusChange);
@@ -114,12 +111,14 @@ function App() {
         setView('calendar');
     };
 
+    // --- REGLAS DE ACCESO (RBAC) ---
     const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
     const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OFICINA_TECNICA' || role === 'BOSS';
     const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
     const puedeVerMapa = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'user';
-    // Solo OTO o Admin ven el botón de Vuelos
     const puedeVerVuelos = role === 'admin' || role === 'OTO';
+    // Acceso a Legajos de Tripulantes: Admin, OTO, BOSS, o usuarios autorizados
+    const puedeVerTripulantes = role === 'admin' || role === 'OTO' || role === 'BOSS' || role === 'user';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -156,6 +155,20 @@ function App() {
                             >
                                 📅 Calendario
                             </button>
+
+                            {/* NUEVO BOTÓN: TRIPULANTES (LEGAJOS) */}
+                            {puedeVerTripulantes && (
+                                <button 
+                                    onClick={() => setView('tripulantes')}
+                                    style={{
+                                        ...styles.btnNav,
+                                        backgroundColor: view === 'tripulantes' ? '#2980b9' : '#4a69bd',
+                                        border: view === 'tripulantes' ? '2px solid white' : 'none'
+                                    }}
+                                >
+                                    👥 Personal
+                                </button>
+                            )}
 
                             {puedeVerMapa && (
                                 <button 
@@ -275,23 +288,21 @@ function App() {
             </nav>
 
             {/* ÁREA DE CONTENIDO DINÁMICO */}
-            <main style={(view === 'mapa' || view === 'planeamiento' || view === 'stats' || view === 'material' || view === 'estado' || view === 'despacho') ? styles.containerFull : styles.container}>
+            <main style={(view === 'mapa' || view === 'planeamiento' || view === 'stats' || view === 'material' || view === 'estado' || view === 'despacho' || view === 'tripulantes') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
+                        if (view === 'tripulantes' && puedeVerTripulantes) return <Tripulantes />;
                         if (view === 'mapa' && puedeVerMapa) return (
                             <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#000' }}>
                                 <OperacionesMapa />
                             </div>
                         );
                         if (view === 'planeamiento' && role === 'admin') return <PlaneamientoMapa />;
-                        
-                        // AL APRETAR VUELOS (view === 'despacho'), LLEVA A CARGATACTICA
                         if (view === 'despacho' && puedeVerVuelos) return <CargaTactica />;
-                        
                         if (view === 'operaciones' && puedeCargarOperaciones) return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
                         if (view === 'material' && puedeGestionarMaterial) return <Material />;

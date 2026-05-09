@@ -93,6 +93,7 @@ const adminRoutes = require('./routes/admin');
 const aircraftRoutes = require('./routes/aircraft'); 
 const weatherRoutes = require('./routes/metar'); 
 const astronomyRoutes = require('./routes/astronomy');
+const tripulanteRoutes = require('./routes/tripulanteRoutes'); // <--- NUEVO MÓDULO
 
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
@@ -103,7 +104,7 @@ app.get('/api/health', (req, res) => {
         database: 'Connected',
         socketStatus: 'Active',
         timestamp: new Date().toISOString(),
-        version: '1.4.1-OPERATIONAL'
+        version: '1.5.0-OPERATIONAL-TRIP'
     });
 });
 
@@ -114,6 +115,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/aircraft', aircraftRoutes); 
 app.use('/api/weather', weatherRoutes); 
 app.use('/api/astronomy', astronomyRoutes); 
+app.use('/api/tripulantes', tripulanteRoutes); // <--- REGISTRO DE TRIPULANTES
 
 // --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
 app.use((req, res) => {
@@ -148,7 +150,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`🚀 SISTEMA OPERATIVO EN PUERTO: ${PORT}`);
-    console.log(`📡 FRECUENCIAS ACTIVAS: /api/auth, /api/events, /api/admin, /api/aircraft, /api/weather, /api/astronomy`);
+    console.log(`📡 FRECUENCIAS ACTIVAS: /api/auth, /api/events, /api/admin, /api/aircraft, /api/weather, /api/astronomy, /api/tripulantes`);
     console.log(`🛰️ MOTOR SOCKET.IO: Listo para Sincro Joker - ESTADO OPERATIVO`);
 });
 

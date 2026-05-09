@@ -41,7 +41,7 @@ const authorize = (...rolesPermitidos) => {
          * Inyectamos flag de mando para visión global del sistema.
          * Estos roles tienen visibilidad total sobre los eventos y operaciones.
          */
-        const mandoRoles = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'];
+        const mandoRoles = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'];
         req.isMando = mandoRoles.includes(normalizedUserRole);
 
         /**
@@ -55,7 +55,7 @@ const authorize = (...rolesPermitidos) => {
         req.isGestionUnidad = (
             req.isOficinaTecnica || 
             normalizedUserRole === 'S4_UNIDAD' || 
-            normalizedUserRole === 'USER' || 
+            normalizedUserRole === 'user' || 
             req.isMando // Si es mando, por defecto tiene permisos de gestión
         );
 
