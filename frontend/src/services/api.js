@@ -5,11 +5,18 @@ import axios from 'axios';
  * Manejo dinámico de comunicación entre Frontend y Backend.
  */
 const getBaseURL = () => {
-    let url = (import.meta.env.VITE_API_URL || 'http://localhost:5000').trim().replace(/\/$/, "");
-    if (!url.endsWith('/api')) {
-        return `${url}/api`;
+    // Forzamos el uso del Web Service en producción para evitar el 404 del static site
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl) {
+        let url = envUrl.trim().replace(/\/$/, "");
+        return url.endsWith('/api') ? url : `${url}/api`;
     }
-    return url;
+    
+    // Fallback manual para asegurar conexión con el Web Service de Render
+    const isProduction = window.location.hostname !== 'localhost';
+    return isProduction 
+        ? 'https://appae.onrender.com/api' 
+        : 'http://localhost:5000/api';
 };
 
 const API = axios.create({
@@ -59,9 +66,7 @@ export const login = (credentials) => API.post('/auth/login', credentials);
 export const register = (userData) => API.post('/auth/register', userData);
 
 /**
- * ==========================================
- * SERVICIOS DE PERSONAL (TRIPULANTES) - AGREGADO PARA FIX 404
- * ==========================================
+ * SERVICIOS DE PERSONAL (TRIPULANTES)
  */
 export const getTripulantes = () => API.get('/tripulantes');
 export const getTripulanteById = (id) => API.get(`/tripulantes/${id}`);
@@ -87,11 +92,8 @@ export const getActiveOperations = async () => {
 export const createEvent = (eventData) => {
     const userElemento = localStorage.getItem('elemento');
     
-    // Normalización de Coordenadas de Origen
     const latOri = eventData.origen?.lat !== undefined ? Number(eventData.origen.lat) : 0;
     const lngOri = eventData.origen?.lng !== undefined ? Number(eventData.origen.lng) : 0;
-
-    // Normalización de Coordenadas de Destino
     const latDes = eventData.destino?.lat !== undefined ? Number(eventData.destino.lat) : 0;
     const lngDes = eventData.destino?.lng !== undefined ? Number(eventData.destino.lng) : 0;
 
@@ -175,7 +177,6 @@ export const deleteEvent = (id) => API.delete(`/events/${id}`);
 export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
     const userElemento = localStorage.getItem('elemento')?.trim();
-
     const hasGlobalView = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
 
     if (!hasGlobalView && userElemento) {
@@ -188,7 +189,6 @@ export const createAircraft = (aircraftData) => {
     const rawRole = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
     const userElemento = localStorage.getItem('elemento')?.trim();
     const userName = localStorage.getItem('username') || 'Usuario';
-
     const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(rawRole);
 
     const dataNormalized = {
@@ -202,25 +202,20 @@ export const createAircraft = (aircraftData) => {
         novedades: (aircraftData.novedades || "").toUpperCase().trim(),
         creadoPor: userName
     };
-
     return API.post('/aircraft', dataNormalized);
 };
 
 export const updateAircraftStatus = (id, aircraftData) => {
     const userName = localStorage.getItem('username') || 'Usuario';
-    
     const dataNormalized = {
         ...aircraftData,
-        horasRemanentes: aircraftData.horasRemanentes !== undefined 
-            ? Number(aircraftData.horasRemanentes) 
-            : undefined,
+        horasRemanentes: aircraftData.horasRemanentes !== undefined ? Number(aircraftData.horasRemanentes) : undefined,
         novedades: aircraftData.novedades !== undefined 
             ? String(aircraftData.novedades).toUpperCase().trim() 
             : (aircraftData.notas ? String(aircraftData.notas).toUpperCase().trim() : ""), 
         actualizadoPor: userName,
         fechaActualizacion: new Date()
     };
-
     delete dataNormalized.notas;
     return API.put(`/aircraft/${id}`, dataNormalized);
 };
@@ -262,21 +257,6 @@ export const getAstronomyData = async (lat, lng) => {
     }
 };
 
-/**
- * SERVICIOS DE LÓGICA DE NEGOCIO (SINCRO JOKER - ESTÁNDAR DE SEGURIDAD)
- */
-export const getJackpotStatus = () => API.get('/casino/jackpot');
-
-export const processBet = async (betData) => {
-    const dataNormalized = {
-        ...betData,
-        amount: Number(betData.amount),
-        timestamp: new Date(),
-        jackpotContribution: Number(betData.amount) * 0.01
-    };
-    return API.post('/casino/bet', dataNormalized);
-};
-
 const EventService = {
     getEvents,
     getActiveOperations,
@@ -290,8 +270,6 @@ const EventService = {
     deleteTripulante,
     getWeatherData,
     getAstronomyData,
-    getJackpotStatus,
-    processBet
 };
 
 export { EventService };
