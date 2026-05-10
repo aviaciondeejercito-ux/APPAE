@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import './index.css' // Asegúrate de que esta línea esté para cargar los estilos
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -8,9 +9,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 
-// REGISTRO DE SERVICE WORKER PARA PWA
-// Esto permite que el navegador reconozca el sitio como una aplicación instalable
-if ('serviceWorker' in navigator) {
+// DESACTIVAMOS TEMPORALMENTE EL SERVICE WORKER PARA LIMPIAR EL ERROR
+/* if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(registration => {
@@ -20,4 +20,14 @@ if ('serviceWorker' in navigator) {
         console.log('❌ PWA: Error al registrar el Service Worker:', error);
       });
   });
+}
+*/
+
+// ESTO FUERZA A QUE EL NAVEGADOR ELIMINE CUALQUIER SERVICE WORKER ROTO
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+            registration.unregister();
+        }
+    });
 }
