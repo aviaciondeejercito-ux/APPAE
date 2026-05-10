@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { EventService } from '../services/api'; 
+import { EventService } from './services/api'; 
 
 const Tripulantes = () => {
     const [tripulantes, setTripulantes] = useState([]);
