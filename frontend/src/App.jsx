@@ -1,348 +1,256 @@
 import React, { useState, useEffect } from 'react';
-import 'leaflet/dist/leaflet.css'; 
+import { EventService } from '../services/api'; 
 
-import CalendarPage from './pages/CalendarPage';
-import Login from './pages/Login';
-import AdminPanel from './pages/AdminPanel';
-import Estadisticas from './pages/Estadisticas';
-import Operaciones from './pages/Operaciones'; 
-import EstadoAeronaves from './pages/EstadoAeronaves';
-import Material from './pages/Material'; 
-import OperacionesMapa from './pages/OperacionesMapa';
-import CargaTactica from './pages/CargaTactica';
-import PlaneamientoMapa from './pages/PlaneamientoMapa';
-import Tripulantes from './pages/Tripulantes'; // <--- NUEVO: Componente de Legajos
+const Tripulantes = () => {
+    const [tripulantes, setTripulantes] = useState([]);
+    const [seleccionado, setSeleccionado] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [showModal, setShowModal] = useState(false);
+    
+    // Unidad del usuario para el alta automática
+    const unidadUsuario = localStorage.getItem('elemento')?.toUpperCase() || 'B HELIC ASAL 601';
 
-/**
- * COMPONENTE PRINCIPAL - SISTEMA GESTIÓN AE
- * Estándar de Seguridad: SINCRO JOKER (Frontend Core)
- */
-function App() {
-    // 1. ESTADOS DE AUTENTICACIÓN Y NAVEGACIÓN
-    const [auth, setAuth] = useState(!!localStorage.getItem('token'));
-    const [role, setRole] = useState(localStorage.getItem('role'));
-    const [view, setView] = useState('calendar'); 
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [nuevo, setNuevo] = useState({
+        apellido: '', nombre: '', grado: 'ST', unidad: unidadUsuario
+    });
 
-    // ESTADOS DE CONEXIÓN
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [lastSync, setLastSync] = useState(localStorage.getItem('lastSync') || '---');
+    const ordenGrados = ["CR", "TC", "MY", "CT", "TP", "TT", "ST", "SM", "SP", "SA", "SI", "SG", "CI", "CB"];
 
-    // Escucha cambios de tamaño de pantalla
     useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 768);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        cargarTripulantes();
     }, []);
 
-    // FUNCIÓN PARA SINCRONIZAR EVENTOS GUARDADOS OFFLINE
-    const syncOfflineEvents = async () => {
-        const pending = JSON.parse(localStorage.getItem('pending_events') || '[]');
-        if (pending.length === 0) return;
+    const cargarTripulantes = async () => {
+        try {
+            setLoading(true);
+            const res = await EventService.getTripulantes();
+            // Ordenar por jerarquía antes de setear
+            const ordenados = res.data.sort((a, b) => {
+                const pesoA = ordenGrados.indexOf(a.grado);
+                const pesoB = ordenGrados.indexOf(b.grado);
+                return pesoA - pesoB || a.apellido.localeCompare(b.apellido);
+            });
+            setTripulantes(ordenados);
+        } catch (error) {
+            console.error("❌ Error al cargar personal:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-        setIsSyncing(true);
-        console.log(`Sincronizando ${pending.length} eventos pendientes...`);
-        
-        let currentPending = [...pending];
+    const manejarCrear = async (e) => {
+        e.preventDefault();
+        try {
+            // Aseguramos que la unidad sea la correcta para evitar el Error 400
+            const dataEnvio = { ...nuevo, unidad: unidadUsuario };
+            await EventService.createTripulante(dataEnvio);
+            setShowModal(false);
+            setNuevo({ apellido: '', nombre: '', grado: 'ST', unidad: unidadUsuario });
+            cargarTripulantes();
+            alert("Legajo creado con éxito y registrado en auditoría.");
+        } catch (error) {
+            alert("Error al crear: " + (error.response?.data?.mensaje || "Error de validación del servidor"));
+        }
+    };
 
-        for (const event of pending) {
+    const eliminar = async (id) => {
+        if (window.confirm("¿Confirmar eliminación de legajo? Esta acción quedará registrada en el historial de auditoría.")) {
             try {
-                const { id_temp, offline, ...eventToSync } = event;
-
-                const res = await fetch('https://sistema-ae-backend.onrender.com/api/operaciones', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    },
-                    body: JSON.stringify(eventToSync)
-                });
-
-                if (res.ok) {
-                    currentPending = currentPending.filter(e => e.id_temp !== event.id_temp);
-                    localStorage.setItem('pending_events', JSON.stringify(currentPending));
-                }
-            } catch (err) {
-                console.error("Error sincronizando evento, se mantiene en cola", err);
+                await EventService.deleteTripulante(id);
+                cargarTripulantes();
+                if (seleccionado?._id === id) setSeleccionado(null);
+            } catch (error) {
+                alert("Error al eliminar el registro.");
             }
         }
-        
-        setIsSyncing(false);
-        const now = new Date().toLocaleString('es-AR', { 
-            hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' 
-        });
-        setLastSync(now);
-        localStorage.setItem('lastSync', now);
     };
-
-    // GESTIÓN DE ESTADO ONLINE/OFFLINE
-    useEffect(() => {
-        const handleStatusChange = () => {
-            const online = navigator.onLine;
-            setIsOnline(online);
-            if (online) syncOfflineEvents();
-        };
-
-        window.addEventListener('online', handleStatusChange);
-        window.addEventListener('offline', handleStatusChange);
-
-        return () => {
-            window.removeEventListener('online', handleStatusChange);
-            window.removeEventListener('offline', handleStatusChange);
-        };
-    }, []);
-
-    // 2. EFECTO DE SINCRONIZACIÓN DE SEGURIDAD
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        const savedRole = localStorage.getItem('role');
-        if (token) {
-            setAuth(true);
-            setRole(savedRole);
-        }
-    }, [auth]);
-
-    // 3. GESTIÓN DE CIERRE DE SESIÓN
-    const handleLogout = () => {
-        localStorage.clear();
-        setAuth(false);
-        setRole(null);
-        setView('calendar');
-    };
-
-    // --- REGLAS DE ACCESO (RBAC) ---
-    const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
-    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OFICINA_TECNICA' || role === 'BOSS';
-    const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
-    const puedeVerMapa = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'user';
-    const puedeVerVuelos = role === 'admin' || role === 'OTO';
-    // Acceso a Legajos de Tripulantes: Admin, OTO, BOSS, o usuarios autorizados
-    const puedeVerTripulantes = role === 'admin' || role === 'OTO' || role === 'BOSS' || role === 'user';
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
-            
-            {/* HEADER INSTITUCIONAL */}
-            <nav style={{
-                ...styles.navbar,
-                flexDirection: isMobile ? 'column' : 'row',
-                padding: isMobile ? '10px' : '0 30px',
-                height: isMobile ? 'auto' : '65px'
-            }}>
-                <div 
-                    style={styles.logo} 
-                    onClick={() => setView('calendar')}
-                >
-                    {isMobile ? '🦅 GESTIÓN AE' : '🦅 OPERACIONES AVIACION DE EJERCITO'}
+        <div style={styles.mainContainer}>
+            {/* PANEL IZQUIERDO: LISTADO */}
+            <div style={styles.sidebar}>
+                <div style={styles.sidebarHeader}>
+                    <span style={{fontWeight: 'bold', fontSize: '0.8rem', letterSpacing: '1px'}}>PERSONAL UNIDAD</span>
+                    <button onClick={() => setShowModal(true)} style={styles.btnAdd}>+ ALTA</button>
                 </div>
-                
-                <div style={{
-                    ...styles.navActions,
-                    flexWrap: 'wrap',
-                    justifyContent: 'center',
-                    marginTop: isMobile ? '10px' : '0'
-                }}>
-                    {auth ? (
-                        <>
-                            <button 
-                                onClick={() => setView('calendar')}
-                                style={{
-                                    ...styles.btnNav,
-                                    backgroundColor: view === 'calendar' ? '#1e3799' : '#4a69bd',
-                                    border: view === 'calendar' ? '2px solid white' : 'none'
-                                }}
-                            >
-                                📅 Calendario
-                            </button>
-
-                            {/* NUEVO BOTÓN: TRIPULANTES (LEGAJOS) */}
-                            {puedeVerTripulantes && (
-                                <button 
-                                    onClick={() => setView('tripulantes')}
-                                    style={{
-                                        ...styles.btnNav,
-                                        backgroundColor: view === 'tripulantes' ? '#2980b9' : '#4a69bd',
-                                        border: view === 'tripulantes' ? '2px solid white' : 'none'
-                                    }}
-                                >
-                                    👥 Personal
-                                </button>
-                            )}
-
-                            {puedeVerMapa && (
-                                <button 
-                                    onClick={() => setView('mapa')}
-                                    style={{
-                                        ...styles.btnNav,
-                                        backgroundColor: view === 'mapa' ? '#d35400' : '#4a69bd',
-                                        border: view === 'mapa' ? '2px solid white' : 'none'
-                                    }}
-                                >
-                                    📍 Mapa 
-                                </button>
-                            )}
-
-                            {role === 'admin' && (
-                                <button 
-                                    onClick={() => setView('planeamiento')}
-                                    style={{
-                                        ...styles.btnNav,
-                                        backgroundColor: view === 'planeamiento' ? '#16a085' : '#4a69bd',
-                                        border: view === 'planeamiento' ? '2px solid white' : 'none'
-                                    }}
-                                >
-                                    🏔️ Planeamiento
-                                </button>
-                            )}
-
-                            {puedeVerVuelos && (
-                                <button 
-                                    onClick={() => setView('despacho')}
-                                    style={{
-                                        ...styles.btnNav,
-                                        backgroundColor: view === 'despacho' ? '#e67e22' : '#4a69bd',
-                                        border: view === 'despacho' ? '2px solid white' : 'none'
-                                    }}
-                                >
-                                    ⚡ Vuelos
-                                </button>
-                            )}
-
-                            <button 
-                                onClick={() => setView('estado')}
-                                style={{
-                                    ...styles.btnNav,
-                                    backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd',
-                                    border: view === 'estado' ? '2px solid white' : 'none'
-                                }}
-                            >
-                                🚁 Estado Material
-                            </button>
-
-                            {puedeGestionarMaterial && (
-                                <button 
-                                    onClick={() => setView('material')}
-                                    style={{
-                                        ...styles.btnNav,
-                                        backgroundColor: view === 'material' ? '#8e44ad' : '#4a69bd',
-                                        border: view === 'material' ? '2px solid white' : 'none'
-                                    }}
-                                >
-                                    🛠️ Material
-                                </button>
-                            )}
-
-                            {puedeVerStats && (
-                                <button 
-                                    onClick={() => setView('stats')}
-                                    style={{
-                                        ...styles.btnNav,
-                                        backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd',
-                                        border: view === 'stats' ? '2px solid white' : 'none'
-                                    }}
-                                >
-                                    📊 Stats
-                                </button>
-                            )}
-
-                            {puedeCargarOperaciones && (
-                                <button 
-                                    onClick={() => setView('operaciones')}
-                                    style={{
-                                        ...styles.btnNav,
-                                        backgroundColor: view === 'operaciones' ? '#60a3bc' : '#4a69bd',
-                                        border: view === 'operaciones' ? '2px solid white' : 'none'
-                                    }}
-                                >
-                                    📝 Carga
-                                </button>
-                            )}
-
-                            {role === 'admin' && (
-                                <button 
-                                    onClick={() => setView('admin')}
-                                    style={{
-                                        ...styles.btnNav,
-                                        backgroundColor: view === 'admin' ? '#5cb85c' : '#f0ad4e'
-                                    }}
-                                >
-                                    ⚙️ Usuarios
-                                </button>
-                            )}
-
-                            <div style={{
-                                ...styles.userInfo,
-                                borderLeft: isMobile ? 'none' : '1px solid rgba(255,255,255,0.2)',
-                                paddingLeft: isMobile ? '0' : '20px'
-                            }}>
-                                <button onClick={handleLogout} style={styles.btnLogout}>
-                                    Salir
-                                </button>
-                            </div>
-                        </>
+                <div style={styles.listContainer}>
+                    {loading ? (
+                        <div style={{padding: '40px', textAlign: 'center', fontSize: '0.7rem', color: '#95a5a6'}}>CONECTANDO CON SERVIDOR...</div>
                     ) : (
-                        <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>Acceso Restringido</span>
+                        tripulantes.map(t => (
+                            <div 
+                                key={t._id} 
+                                onClick={() => setSeleccionado(t)}
+                                style={{
+                                    ...styles.item,
+                                    backgroundColor: seleccionado?._id === t._id ? '#e3f2fd' : 'transparent',
+                                    borderLeft: seleccionado?._id === t._id ? '4px solid #1b3a57' : '4px solid transparent'
+                                }}
+                            >
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                                    <div>
+                                        <div style={{fontSize: '0.65rem', fontWeight: 'bold', color: '#1b3a57'}}>{t.grado}</div>
+                                        <div style={{fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase'}}>{t.apellido}, {t.nombre}</div>
+                                        <div style={{fontSize: '0.6rem', color: '#7f8c8d'}}>{t.unidad}</div>
+                                    </div>
+                                    <button onClick={(e) => { e.stopPropagation(); eliminar(t._id); }} style={styles.btnTrash}>🗑️</button>
+                                </div>
+                            </div>
+                        ))
                     )}
                 </div>
-            </nav>
+            </div>
 
-            {/* ÁREA DE CONTENIDO DINÁMICO */}
-            <main style={(view === 'mapa' || view === 'planeamiento' || view === 'stats' || view === 'material' || view === 'estado' || view === 'despacho' || view === 'tripulantes') ? styles.containerFull : styles.container}>
-                {!auth ? (
-                    <Login setAuth={setAuth} />
-                ) : (
-                    (() => {
-                        if (view === 'admin' && role === 'admin') return <AdminPanel />;
-                        if (view === 'stats' && puedeVerStats) return <Estadisticas />;
-                        if (view === 'tripulantes' && puedeVerTripulantes) return <Tripulantes />;
-                        if (view === 'mapa' && puedeVerMapa) return (
-                            <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#000' }}>
-                                <OperacionesMapa />
+            {/* PANEL DERECHO: LEGAJO DETALLADO */}
+            <div style={styles.content}>
+                {seleccionado ? (
+                    <div style={styles.card}>
+                        <div style={styles.cardHeader}>
+                            <h2 style={{margin: 0, fontSize: '1.4rem', fontWeight: '900', italic: 'italic'}}>
+                                {seleccionado.grado} {seleccionado.apellido}
+                            </h2>
+                            <p style={{margin: 0, fontSize: '0.8rem', opacity: 0.8, fontWeight: 'bold'}}>
+                                {seleccionado.nombre} | LEGAJO: {seleccionado._id.substring(18).toUpperCase()}
+                            </p>
+                        </div>
+                        
+                        <div style={styles.cardBody}>
+                            {/* Alertas de Vencimiento Automáticas */}
+                            <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
+                                <div style={{...styles.alert, backgroundColor: seleccionado.estadoCertificaciones?.psicofisicoVencido ? '#fff1f0' : '#f6ffed', color: seleccionado.estadoCertificaciones?.psicofisicoVencido ? '#cf1322' : '#389e0d', border: `1px solid ${seleccionado.estadoCertificaciones?.psicofisicoVencido ? '#ffa39e' : '#b7eb8f'}`}}>
+                                    ⚠️ PSICOFÍSICO: {seleccionado.estadoCertificaciones?.psicofisicoVencido ? 'VENCIDO' : 'AL DÍA'}
+                                </div>
+                                <div style={{...styles.alert, backgroundColor: seleccionado.estadoCertificaciones?.crmVencido ? '#fff1f0' : '#f6ffed', color: seleccionado.estadoCertificaciones?.crmVencido ? '#cf1322' : '#389e0d', border: `1px solid ${seleccionado.estadoCertificaciones?.crmVencido ? '#ffa39e' : '#b7eb8f'}`}}>
+                                    🛡️ CRM: {seleccionado.estadoCertificaciones?.crmVencido ? 'VENCIDO' : 'AL DÍA'}
+                                </div>
                             </div>
-                        );
-                        if (view === 'planeamiento' && role === 'admin') return <PlaneamientoMapa />;
-                        if (view === 'despacho' && puedeVerVuelos) return <CargaTactica />;
-                        if (view === 'operaciones' && puedeCargarOperaciones) return <Operaciones />; 
-                        if (view === 'estado') return <EstadoAeronaves />;
-                        if (view === 'material' && puedeGestionarMaterial) return <Material />;
-                        return <CalendarPage />;
-                    })()
-                )}
-            </main>
 
-            {/* FOOTER - INCLUYE INDICADOR DE CONEXIÓN */}
-            <footer style={styles.footer}>
-                <div style={styles.statusRow}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <div style={{
-                            width: '8px', 
-                            height: '8px', 
-                            borderRadius: '50%', 
-                            backgroundColor: isSyncing ? '#3498db' : (isOnline ? '#2ecc71' : '#e74c3c'),
-                            boxShadow: isSyncing ? '0 0 4px #3498db' : (isOnline ? '0 0 4px #2ecc71' : '0 0 4px #e74c3c')
-                        }} />
-                        <span>{isSyncing ? 'SINCRONIZANDO...' : (isOnline ? 'CONECTADO' : 'MODO OFFLINE')}</span>
+                            <div style={styles.section}>
+                                <h4 style={styles.sectionTitle}>SISTEMAS DE ARMAS HABILITADOS</h4>
+                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px'}}>
+                                    {seleccionado.habilitaciones?.length > 0 ? seleccionado.habilitaciones.map((h, i) => (
+                                        <div key={i} style={styles.subItem}>
+                                            <span style={{fontWeight: 'bold'}}>{h.aeronave}</span>
+                                            <span style={styles.badgeRol}>{h.rolActual}</span>
+                                        </div>
+                                    )) : <p style={{fontSize: '0.7rem', color: '#999'}}>No registra habilitaciones vigentes.</p>}
+                                </div>
+                            </div>
+
+                            <div style={styles.section}>
+                                <h4 style={styles.sectionTitle}>TOTALES ACUMULADOS (HS)</h4>
+                                <div style={styles.statsGrid}>
+                                    <div style={styles.statBox}>
+                                        <div style={styles.statLabel}>DIURNO</div>
+                                        <div style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloDiurno || 0}</div>
+                                    </div>
+                                    <div style={styles.statBox}>
+                                        <div style={styles.statLabel}>NOCTURNO</div>
+                                        <div style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloNocturno || 0}</div>
+                                    </div>
+                                    <div style={{...styles.statBox, backgroundColor: '#1b3a57', color: 'white'}}>
+                                        <div style={{...styles.statLabel, color: '#bdc3c7'}}>TOTAL GRAL</div>
+                                        <div style={styles.statValue}>{seleccionado.totalVueloGeneral || 0}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <span>SINCRO: {lastSync}</span>
+                ) : (
+                    <div style={styles.emptyState}>
+                        <div style={{fontSize: '3rem', marginBottom: '10px'}}>👤</div>
+                        Seleccione un tripulante para inspección de legajo
+                    </div>
+                )}
+            </div>
+
+            {/* MODAL DE ALTA - POSICIÓN ABSOLUTA SOBRE TODO */}
+            {showModal && (
+                <div style={styles.overlay}>
+                    <div style={styles.modal}>
+                        <div style={styles.modalHeader}>
+                            <span>ALTA DE PERSONAL</span>
+                            <button onClick={() => setShowModal(false)} style={styles.btnClose}>X</button>
+                        </div>
+                        <form onSubmit={manejarCrear} style={styles.modalBody}>
+                            <div style={styles.formRow}>
+                                <div style={{flex: 1}}>
+                                    <label style={styles.label}>GRADO</label>
+                                    <select 
+                                        style={styles.input}
+                                        value={nuevo.grado}
+                                        onChange={e => setNuevo({...nuevo, grado: e.target.value})}
+                                    >
+                                        {ordenGrados.map(g => <option key={g} value={g}>{g}</option>)}
+                                    </select>
+                                </div>
+                                <div style={{flex: 1}}>
+                                    <label style={styles.label}>UNIDAD</label>
+                                    <input type="text" readOnly style={{...styles.input, backgroundColor: '#eee', color: '#777'}} value={unidadUsuario} />
+                                </div>
+                            </div>
+
+                            <label style={styles.label}>APELLIDO</label>
+                            <input 
+                                type="text" required style={styles.input}
+                                value={nuevo.apellido}
+                                onChange={e => setNuevo({...nuevo, apellido: e.target.value.toUpperCase()})}
+                                placeholder="Ej: PEREZ"
+                            />
+
+                            <label style={styles.label}>NOMBRE</label>
+                            <input 
+                                type="text" required style={styles.input}
+                                value={nuevo.nombre}
+                                onChange={e => setNuevo({...nuevo, nombre: e.target.value.toUpperCase()})}
+                                placeholder="Ej: JUAN CARLOS"
+                            />
+
+                            <div style={{padding: '10px', backgroundColor: '#fffbe6', border: '1px solid #ffe58f', fontSize: '0.6rem', color: '#856404', borderRadius: '4px'}}>
+                                ℹ️ El alta se registrará automáticamente en la base de datos de <strong>{unidadUsuario}</strong>.
+                            </div>
+
+                            <button type="submit" style={styles.btnSave}>GUARDAR EN BASE DE DATOS</button>
+                        </form>
+                    </div>
                 </div>
-                <div>© 2026 Aviación de Ejército - Sistema de Comando y Control</div>
-            </footer>
+            )}
         </div>
     );
-}
-
-const styles = {
-    navbar: { backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', position: 'sticky', top: 0, zIndex: 3000, transition: 'all 0.3s ease' },
-    logo: { fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer', letterSpacing: '0.5px' },
-    navActions: { display: 'flex', alignItems: 'center', gap: '6px' },
-    userInfo: { display: 'flex', alignItems: 'center', gap: '10px' },
-    btnNav: { color: 'white', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '0.75rem', transition: '0.2s' },
-    btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
-    container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
-    containerFull: { width: '100%', margin: '0', padding: '0', flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 65px)' },
-    footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.65rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' },
-    statusRow: { display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '4px', fontWeight: 'bold', letterSpacing: '0.5px' }
 };
 
-export default App;
+// --- SISTEMA DE ESTILOS INLINE (SINCRO JOKER) ---
+const styles = {
+    mainContainer: { display: 'flex', height: '100%', width: '100%', backgroundColor: '#f4f7f6', overflow: 'hidden' },
+    sidebar: { width: '320px', backgroundColor: 'white', borderRight: '1px solid #ddd', display: 'flex', flexDirection: 'column', boxShadow: '2px 0 5px rgba(0,0,0,0.05)' },
+    sidebarHeader: { padding: '15px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    btnAdd: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 'bold', transition: '0.3s hover' },
+    listContainer: { flex: 1, overflowY: 'auto' },
+    item: { padding: '15px', borderBottom: '1px solid #eee', cursor: 'pointer', transition: '0.2s' },
+    btnTrash: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', opacity: 0.5 },
+    content: { flex: 1, padding: '40px', overflowY: 'auto', display: 'flex', justifyContent: 'center' },
+    card: { backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%', maxWidth: '900px', height: 'fit-content' },
+    cardHeader: { padding: '30px', backgroundColor: '#1b3a57', color: 'white', backgroundImage: 'linear-gradient(45deg, #1b3a57 0%, #2c3e50 100%)' },
+    cardBody: { padding: '30px' },
+    alert: { padding: '8px 15px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 'bold', flex: 1, textAlign: 'center' },
+    section: { marginBottom: '30px' },
+    sectionTitle: { fontSize: '0.7rem', fontWeight: 'bold', color: '#1b3a57', borderBottom: '2px solid #f1f2f6', paddingBottom: '8px', marginBottom: '15px', textTransform: 'uppercase', letterSpacing: '1px' },
+    statsGrid: { display: 'flex', gap: '20px' },
+    statBox: { flex: 1, padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', borderBottom: '4px solid #1b3a57' },
+    statLabel: { fontSize: '0.6rem', fontWeight: 'bold', color: '#95a5a6', marginBottom: '5px' },
+    statValue: { fontSize: '1.5rem', fontWeight: '900' },
+    subItem: { padding: '12px', backgroundColor: '#f1f2f6', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    badgeRol: { fontSize: '0.6rem', backgroundColor: 'white', padding: '3px 8px', borderRadius: '10px', border: '1px solid #ddd', fontWeight: 'bold', color: '#7f8c8d' },
+    emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#bdc3c7', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '2px', fontSize: '0.8rem' },
+    overlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 },
+    modal: { backgroundColor: 'white', width: '450px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' },
+    modalHeader: { padding: '15px 20px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold' },
+    modalBody: { padding: '25px', display: 'flex', flexDirection: 'column', gap: '15px' },
+    formRow: { display: 'flex', gap: '15px' },
+    label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#1b3a57', marginBottom: '-10px' },
+    input: { padding: '12px', border: '1px solid #ddd', borderRadius: '6px', outline: 'none', fontSize: '0.9rem', fontWeight: 'bold' },
+    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '15px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', marginTop: '10px' },
+    btnClose: { background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem' }
+};
+
+export default Tripulantes;
