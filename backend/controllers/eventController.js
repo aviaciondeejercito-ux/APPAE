@@ -3,7 +3,6 @@ const Aircraft = require('../models/Aircraft');
 
 /**
  * CONTROLADOR DE EVENTOS - SISTEMA GESTIÓN AE
- * Estándar de Seguridad: SINCRO JOKER (Optimizado)
  * Acción: Segregación de Vuelos (Radar) vs Actividades (Calendario)
  */
 
@@ -28,18 +27,23 @@ const getAvailableAircraft = async (req, res) => {
 // @desc    Obtener eventos para CALENDARIO (Excluye Vuelos en Tiempo Real)
 const getEvents = async (req, res) => {
     try {
-        const { elemento } = req.user; 
+        // Extraemos role para tener una segunda validación además de isMando
+        const { elemento, role } = req.user; 
         const isMando = req.isMando; 
         
         let query = { isRealTime: false }; 
 
-        if (!isMando) {
+        // CORRECCIÓN CRÍTICA: Si no es mando Y el rol no es admin, aplicamos restricción.
+        // Si el rol es 'admin', saltamos este bloque y la query queda libre.
+        const userRole = (role || '').toLowerCase();
+
+        if (!isMando && userRole !== 'admin') {
             query.$or = [
                 { 
                     isRealTime: false,
                     $or: [
-                        { elemento: { $regex: elemento, $options: 'i' } },
-                        { creadorUnidad: { $regex: elemento, $options: 'i' } }
+                        { elemento: { $regex: elemento || '', $options: 'i' } },
+                        { creadorUnidad: { $regex: elemento || '', $options: 'i' } }
                     ]
                 },
                 { 
@@ -61,17 +65,19 @@ const getEvents = async (req, res) => {
 // @desc    Obtener operaciones activas para el MAPA TÁCTICO Y LOG
 const getActiveOperations = async (req, res) => {
     try {
-        const { elemento } = req.user;
+        const { elemento, role } = req.user;
         const isMando = req.isMando;
+        const userRole = (role || '').toLowerCase();
 
         let query = { 
             isRealTime: true,
             status: { $in: ['en_curso', 'en_desarrollo', 'operativo', 'emergencia', 'programado'] } 
         };
 
-        if (!isMando) {
+        // Aplicamos la misma lógica de seguridad para el mapa
+        if (!isMando && userRole !== 'admin') {
             query.$or = [
-                { elemento: { $regex: elemento, $options: 'i' }, isRealTime: true },
+                { elemento: { $regex: elemento || '', $options: 'i' }, isRealTime: true },
                 { esGlobal: true, isRealTime: true },
                 { etapa: 'operativo', isRealTime: true }
             ];
@@ -100,7 +106,6 @@ const createEvent = async (req, res) => {
 
         if (!title) return res.status(400).json({ message: 'El título es obligatorio.' });
 
-        // Validación de aeronave solo si se provee una matrícula específica
         const targetMatricula = matricula || misionDetalle?.matricula;
         if (targetMatricula && (isRealTime || tipoApoyo === 'VUELO')) {
             const aircraftExists = await Aircraft.findOne({ matricula: targetMatricula.toUpperCase() });
@@ -109,7 +114,7 @@ const createEvent = async (req, res) => {
             }
         }
 
-        const isMando = req.isMando;
+        const isMando = req.isMando || req.user.role?.toLowerCase() === 'admin';
         const userElemento = (req.user.elemento || 'DESCONOCIDO').toUpperCase();
         
         const eventData = {
@@ -120,7 +125,6 @@ const createEvent = async (req, res) => {
             color: color || '#1b3a57',
             createdBy: req.user._id,
             userName: (req.user.username || req.user.name || 'OPERADOR').toUpperCase(),
-            // Si es mando, puede asignar a otra unidad; si no, es su propia unidad.
             elemento: ((isMando && elemento) ? elemento : (elemento || userElemento)).toUpperCase(),
             creadorUnidad: userElemento, 
             status: (status || 'programado').toLowerCase(),
@@ -178,21 +182,19 @@ const updateEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'Registro no localizado.' });
 
-        const isMando = req.isMando;
+        const isMando = req.isMando || req.user.role?.toLowerCase() === 'admin';
         const userElemento = (req.user.elemento || '').toUpperCase();
         const isOwner = event.createdBy.toString() === req.user._id.toString();
         const isCreatorUnit = event.creadorUnidad === userElemento;
         const isResponsibleUnit = event.elemento === userElemento;
 
-        // LÓGICA DE PERMISOS AE:
         const canEdit = isMando || isOwner || isCreatorUnit || (isResponsibleUnit && ['revision', 'ordenada'].includes(event.etapa));
 
         if (!canEdit) {
-            return res.status(403).json({ message: 'No tiene permisos para editar este registro en la etapa actual.' });
+            return res.status(403).json({ message: 'No tiene permisos para editar este registro.' });
         }
 
         const updateData = { ...req.body };
-        
         delete updateData._id; 
         delete updateData.createdBy;
         delete updateData.creadorUnidad; 
@@ -200,26 +202,10 @@ const updateEvent = async (req, res) => {
         updateData.updatedBy = req.user._id; 
         updateData.userName = (req.user.username || req.user.name || 'OPERADOR').toUpperCase();
 
-        // Formateo de strings y nuevos campos
         if (updateData.title) updateData.title = updateData.title.toUpperCase();
         if (updateData.mision) updateData.mision = updateData.mision.toUpperCase();
-        if (updateData.notasMarginales) updateData.notasMarginales = updateData.notasMarginales.toUpperCase();
         if (updateData.notes) updateData.notes = updateData.notes.toUpperCase();
         if (updateData.unidadApoyada) updateData.unidadApoyada = updateData.unidadApoyada.toUpperCase();
-        if (updateData.pntoContactoNom) updateData.pntoContactoNom = updateData.pntoContactoNom.toUpperCase();
-        if (updateData.responsableNom) updateData.responsableNom = updateData.responsableNom.toUpperCase();
-
-        if (updateData.origen) {
-            updateData.origen.nombre = (updateData.origen.nombre || '').toUpperCase();
-            if (updateData.origen.lat) updateData.origen.lat = parseFloat(updateData.origen.lat);
-            if (updateData.origen.lng) updateData.origen.lng = parseFloat(updateData.origen.lng);
-        }
-
-        if (updateData.destino) {
-            updateData.destino.nombre = (updateData.destino.nombre || '').toUpperCase();
-            if (updateData.destino.lat) updateData.destino.lat = parseFloat(updateData.destino.lat);
-            if (updateData.destino.lng) updateData.destino.lng = parseFloat(updateData.destino.lng);
-        }
 
         const updatedEvent = await Event.findByIdAndUpdate(
             req.params.id,
@@ -246,12 +232,12 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
 
-        const isMando = req.isMando;
+        const isMando = req.isMando || req.user.role?.toLowerCase() === 'admin';
         const isOwner = event.createdBy.toString() === req.user._id.toString();
         const isCreatorUnit = event.creadorUnidad === (req.user.elemento || '').toUpperCase();
 
         if (!isMando && !isOwner && !isCreatorUnit) {
-            return res.status(403).json({ message: 'Acceso denegado. Solo el creador puede eliminar.' });
+            return res.status(403).json({ message: 'Acceso denegado.' });
         }
 
         const isRealTime = event.isRealTime;
@@ -265,7 +251,7 @@ const deleteEvent = async (req, res) => {
             io.emit(deleteChannel, eventId);
         }
 
-        res.status(200).json({ message: 'Vector eliminado correctamente.' });
+        res.status(200).json({ message: 'Eliminado correctamente.' });
     } catch (error) {
         console.error(`❌ Error en deleteEvent: ${error.message}`);
         res.status(500).json({ message: 'Error al eliminar el registro.' });
