@@ -8,7 +8,8 @@ import { getEvents } from '../services/EventService';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
-    const [role] = useState(localStorage.getItem('role') || 'guest');
+    // CORRECCIÓN: Normalizamos el rol a minúsculas y quitamos espacios para evitar errores de comparación
+    const [role] = useState(localStorage.getItem('role')?.trim().toLowerCase() || 'guest');
     const [userUnidad] = useState(localStorage.getItem('elemento')?.toUpperCase() || ''); 
     const [selectedEvent, setSelectedEvent] = useState(null); 
     const [isMobile] = useState(window.innerWidth < 768);
@@ -27,33 +28,22 @@ const CalendarPage = () => {
                 const unidadUsuario = userUnidad.toUpperCase();
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
-                // 1. ADMIN: Ve todo
+                // 1. ADMIN: Ve todo (Ya está normalizado a minúsculas arriba)
                 if (role === 'admin') return true;
 
-                // 2. Lógica para DIR AE (Director, Boss, OTO)
-                if (role === 'DIRECTOR' || role === 'BOSS' || role === 'OTO') {
+                // 2. Lógica para DIR AE (Director, Boss, OTO) - Normalizamos para comparar
+                const normalizedRole = role.toUpperCase();
+                if (normalizedRole === 'DIRECTOR' || normalizedRole === 'BOSS' || normalizedRole === 'OTO') {
                     const esDeDirAe = evCreador.includes('DIR AE') || evElemento.includes('DIR AE');
-                    // Ven lo que las unidades ya ordenaron para supervisión general
                     const esUnidadOrdenado = etapa === 'ordenada'; 
                     return esDeDirAe || esUnidadOrdenado;
                 }
 
-                // 3. Lógica para UNIDADES SUBALTERNAS (User, S4)
-                if (role === 'user' || role === 'OFICINA_TECNICA') {
-                    
-                    // REGLA A: Si la unidad es la creadora, lo ve siempre (borrador o final)
+                // 3. Lógica para UNIDADES SUBALTERNAS
+                if (role === 'user' || normalizedRole === 'OFICINA_TECNICA') {
                     if (evCreador === unidadUsuario) return true;
-
-                    // REGLA B: Si la DIR AE lo creó específicamente para esta unidad (elemento responsable)
-                    // Solo se ve cuando está ORDENADA
                     if (evCreador.includes('DIR AE') && evElemento === unidadUsuario && etapa === 'ordenada') return true;
-
-                    // REGLA C: Si la DIR AE creó un evento GLOBAL (coordinación lateral oficial)
-                    // Solo se ve cuando está ORDENADA
                     if (evCreador.includes('DIR AE') && ev.esGlobal && etapa === 'ordenada') return true;
-
-                    // REGLA D: Bloqueo lateral. Si el creador NO es la DIR AE y NO es la propia unidad,
-                    // no se muestra, evitando que unidades vean actividades de sus pares.
                     return false;
                 }
 
@@ -69,13 +59,10 @@ const CalendarPage = () => {
     const getEventColor = (ev) => {
         const creador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
         const mision = ev.mision ? String(ev.mision).toUpperCase() : '';
-
         if (creador.includes('SEC AE')) return '#ff0000'; 
-
         if (mision.includes('SOSTENIMIENTO')) return '#007bff';
         if (mision.includes('FUERZA OPERATIVA')) return '#28a745';
         if (mision.includes('EDUCACION') || mision.includes('EDUCACIÓN')) return '#800000';
-        
         return '#6c757d'; 
     };
 
