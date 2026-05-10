@@ -27,14 +27,12 @@ const tripulanteSchema = new mongoose.Schema({
     },
     fechaHabilitacion: { type: Date, required: true },
     
-    // ROL ACTUAL EN ESTE SISTEMA (Agregado 'Inspector' que mencionaste)
     rolActual: {
       type: String,
       enum: ['Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'],
       required: true
     },
     
-    // HISTORIAL DE ROLES EN ESTE SISTEMA (Acumulativo)
     historialRoles: [{
       rol: String,
       fechaDesde: Date,
@@ -51,7 +49,7 @@ const tripulanteSchema = new mongoose.Schema({
     observaciones: String
   }],
 
-  // --- CAPACITACIONES ESPECIALES (ACUMULATIVAS) ---
+  // --- CAPACITACIONES ESPECIALES ---
   capacitacionesEspeciales: [{
     tipo: {
       type: String,
@@ -88,7 +86,6 @@ const tripulanteSchema = new mongoose.Schema({
   },
 
   // --- REGISTRO DE CONTROL Y AUDITORÍA ---
-  // Guarda la referencia al usuario que hizo el último cambio
   ultimoEditor: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -101,10 +98,14 @@ const tripulanteSchema = new mongoose.Schema({
   activo: { type: Boolean, default: true }
 
 }, { 
-  timestamps: true, // Esto crea createdAt y updatedAt automáticamente
+  timestamps: true, 
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
+
+// --- ÍNDICES PARA OPTIMIZACIÓN ---
+tripulanteSchema.index({ apellido: 1, unidad: 1 });
+tripulanteSchema.index({ "habilitaciones.aeronave": 1 });
 
 // Virtual para ver la experiencia total en años
 tripulanteSchema.virtual('antiguedadResumen').get(function() {
@@ -115,6 +116,21 @@ tripulanteSchema.virtual('antiguedadResumen').get(function() {
     rol: h.rolActual,
     anios: hoy.getFullYear() - h.fechaHabilitacion.getFullYear()
   }));
+});
+
+// VIRTUAL: Suma de horas totales a través de todos los sistemas
+tripulanteSchema.virtual('totalVueloGeneral').get(function() {
+  if (!this.habilitaciones) return 0;
+  return this.habilitaciones.reduce((acc, h) => acc + (h.ultimaActividad?.totalHorasSistema || 0), 0);
+});
+
+// VIRTUAL: Estado de Vencimientos (útil para alertas en el Frontend)
+tripulanteSchema.virtual('estadoCertificaciones').get(function() {
+  const hoy = new Date();
+  return {
+    psicofisicoVencido: this.certificaciones.psicofisico?.vencimiento ? this.certificaciones.psicofisico.vencimiento < hoy : true,
+    crmVencido: this.certificaciones.crm?.vencimiento ? this.certificaciones.crm.vencimiento < hoy : true
+  };
 });
 
 module.exports = mongoose.model('Tripulante', tripulanteSchema);

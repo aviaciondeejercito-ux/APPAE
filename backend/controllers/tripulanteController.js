@@ -1,16 +1,23 @@
 const Tripulante = require('../models/Tripulante');
-const Auditoria = require('../models/Auditoria'); // Importamos el modelo de auditoría
+const Auditoria = require('../models/Auditoria');
 
-// 1. Crear Tripulante (Solo ADMIN o USER de la misma unidad)
+/**
+ * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
+ * Restricción estricta: Solo ADMIN y USER de la unidad.
+ */
+
+// 1. Crear Tripulante
 exports.crearTripulante = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
-        
-        if (usuarioLogueado.role !== 'admin' && usuarioLogueado.unidad !== req.body.unidad) {
+        const { unidad } = req.body;
+
+        // Solo admin o user de la misma unidad
+        const role = usuarioLogueado.role?.toLowerCase();
+        if (role !== 'admin' && usuarioLogueado.unidad !== unidad) {
             return res.status(403).json({ mensaje: "No tienes permiso para dar de alta personal en otra unidad" });
         }
 
-        // Asignamos el creador como primer editor
         const datosNuevoTripulante = {
             ...req.body,
             ultimoEditor: usuarioLogueado._id,
@@ -20,7 +27,6 @@ exports.crearTripulante = async (req, res) => {
         const nuevoTripulante = new Tripulante(datosNuevoTripulante);
         await nuevoTripulante.save();
 
-        // Registro en Auditoría
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
@@ -35,57 +41,72 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Obtener Tripulantes (Filtro automático por unidad)
+// 2. Obtener Tripulantes (Optimizado con índices)
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
-        let filtro = {};
+        const role = usuarioLogueado.role?.toLowerCase();
+        let filtro = { activo: true };
 
-        if (usuarioLogueado.role !== 'admin') {
+        // Si no es admin, solo ve su unidad
+        if (role !== 'admin') {
             filtro.unidad = usuarioLogueado.unidad;
-        } else if (req.query.unidad) {
+        } else if (req.query.unidad && req.query.unidad !== 'all') {
             filtro.unidad = req.query.unidad;
         }
 
         const tripulantes = await Tripulante.find(filtro)
-            .populate('ultimoEditor', 'grado apellido') // Para ver quién fue el último que lo tocó
-            .sort({ apellido: 1 });
+            .populate('ultimoEditor', 'grado apellido')
+            .sort({ apellido: 1 })
+            .lean(); // .lean() para mayor velocidad de lectura
+
         res.status(200).json(tripulantes);
     } catch (error) {
         res.status(500).json({ mensaje: "Error al obtener tripulantes", error: error.message });
     }
 };
 
-// 3. Actualizar Tripulante (Con Auditoría de cambios)
+// 3. Actualizar Tripulante (Auditoría Forense de cambios)
 exports.actualizarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
         const usuarioLogueado = req.user;
+        const role = usuarioLogueado.role?.toLowerCase();
 
         const tripulantePrevio = await Tripulante.findById(id);
         if (!tripulantePrevio) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
 
-        // Seguridad: ADMIN o misma Unidad
-        if (usuarioLogueado.role !== 'admin' && usuarioLogueado.unidad !== tripulantePrevio.unidad) {
+        // Solo admin o user de la misma unidad
+        if (role !== 'admin' && usuarioLogueado.unidad !== tripulantePrevio.unidad) {
             return res.status(403).json({ mensaje: "Acceso denegado: No pertenece a tu unidad" });
         }
 
-        // Actualizamos campos de auditoría interna
+        // Detectar qué campos específicos cambiaron para la auditoría
+        const cambiosRealizados = {};
+        for (const key in req.body) {
+            if (JSON.stringify(tripulantePrevio[key]) !== JSON.stringify(req.body[key])) {
+                cambiosRealizados[key] = {
+                    anterior: tripulantePrevio[key],
+                    nuevo: req.body[key]
+                };
+            }
+        }
+
         req.body.ultimoEditor = usuarioLogueado._id;
         req.body.fechaUltimaModificacion = Date.now();
 
-        const actualizado = await Tripulante.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
+        const actualizado = await Tripulante.findByIdAndUpdate(
+            id, 
+            { $set: req.body }, 
+            { new: true, runValidators: true }
+        );
 
-        // Registro detallado en Auditoría
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
             accion: 'MODIFICACION',
             entidadAfectada: `Tripulante: ${actualizado.grado} ${actualizado.apellido}`,
-            cambios: {
-                anterior: tripulantePrevio.totalesHistoricos, // Ejemplo: trackear si cambiaron las horas
-                nuevo: actualizado.totalesHistoricos
-            }
+            cambios: cambiosRealizados // Registro detallado de cada campo modificado
         });
 
         res.status(200).json(actualizado);
@@ -99,17 +120,17 @@ exports.eliminarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
         const usuarioLogueado = req.user;
+        const role = usuarioLogueado.role?.toLowerCase();
 
         const tripulante = await Tripulante.findById(id);
         if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
 
-        if (usuarioLogueado.role !== 'admin' && usuarioLogueado.unidad !== tripulante.unidad) {
+        if (role !== 'admin' && usuarioLogueado.unidad !== tripulante.unidad) {
             return res.status(403).json({ mensaje: "No tienes permiso para eliminar este registro" });
         }
 
         await Tripulante.findByIdAndDelete(id);
 
-        // Registro en Auditoría
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
@@ -124,24 +145,25 @@ exports.eliminarTripulante = async (req, res) => {
     }
 };
 
-// 5. Agregar Capacitación
+// 5. Agregar Capacitación Especial
 exports.agregarCapacitacion = async (req, res) => {
     try {
         const { id } = req.params;
         const tripulante = await Tripulante.findById(id);
-        
-        if (req.user.role !== 'admin' && req.user.unidad !== tripulante.unidad) {
+        const role = req.user.role?.toLowerCase();
+
+        if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+
+        if (role !== 'admin' && req.user.unidad !== tripulante.unidad) {
             return res.status(403).json({ mensaje: "No autorizado" });
         }
 
-        // Actualizamos auditoría interna del modelo
         tripulante.capacitacionesEspeciales.push(req.body);
         tripulante.ultimoEditor = req.user._id;
         tripulante.fechaUltimaModificacion = Date.now();
         
         await tripulante.save();
 
-        // Registro en Auditoría
         await Auditoria.create({
             usuarioId: req.user._id,
             usuarioNombre: `${req.user.grado} ${req.user.apellido}`,
@@ -155,11 +177,12 @@ exports.agregarCapacitacion = async (req, res) => {
     }
 };
 
-// 6. Buscar por Apellido/Nombre
+// 6. Buscar Tripulante (Búsqueda optimizada por índices)
 exports.buscarTripulante = async (req, res) => {
     try {
         const { termino } = req.params;
         const usuario = req.user;
+        const role = usuario.role?.toLowerCase();
         
         let query = {
             $or: [
@@ -168,9 +191,14 @@ exports.buscarTripulante = async (req, res) => {
             ]
         };
 
-        if (usuario.role !== 'admin') query.unidad = usuario.unidad;
+        if (role !== 'admin') query.unidad = usuario.unidad;
 
-        const resultados = await Tripulante.find(query).populate('ultimoEditor', 'grado apellido');
+        // Uso de limit para optimizar la velocidad de respuesta del buscador
+        const resultados = await Tripulante.find(query)
+            .populate('ultimoEditor', 'grado apellido')
+            .limit(10)
+            .lean();
+
         res.status(200).json(resultados);
     } catch (error) {
         res.status(500).json({ mensaje: "Error", error: error.message });

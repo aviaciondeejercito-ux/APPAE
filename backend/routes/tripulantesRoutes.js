@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const tripulanteController = require('../controllers/tripulanteController');
 
-// Importamos protect (autenticación) y admin (autorización)
-const { protect, admin } = require('../middleware/authMiddleware'); 
+// Importamos protect (autenticación)
+const { protect } = require('../middleware/authMiddleware'); 
 
 /**
  * ESTÁNDAR DE SEGURIDAD AE
@@ -11,12 +11,13 @@ const { protect, admin } = require('../middleware/authMiddleware');
  */
 
 // --- TODAS LAS RUTAS REQUIEREN LOGIN ---
-// Bloqueo preventivo: Si no hay token, no hay acceso a los datos de personal.
 router.use(protect);
 
 // 1. Rutas base: /api/tripulantes
+// GET: Obtener todos (el controlador filtra por Unidad si no es Admin)
+// POST: Crear nuevo (el controlador valida que sea Admin o de la misma Unidad)
 router.route('/')
-    .get(tripulanteController.obtenerTripulantes) // El controlador filtra por Unidad/Rol
+    .get(tripulanteController.obtenerTripulantes)
     .post(tripulanteController.crearTripulante); 
 
 // 2. Búsqueda específica: /api/tripulantes/buscar/:termino
@@ -27,14 +28,13 @@ router.route('/:id')
     .put(tripulanteController.actualizarTripulante) 
     .delete(tripulanteController.eliminarTripulante); 
 
-// 4. Rutas de actualizaciones específicas
+// 4. Rutas de actualizaciones específicas (Capacitaciones especiales)
 router.post('/:id/capacitacion', tripulanteController.agregarCapacitacion);
 
 /**
- * CORRECCIÓN CRÍTICA: 
- * Se comenta la siguiente línea porque la función 'actualizarCertificaciones' 
- * no está definida o exportada en tripulanteController.js, lo que causaba el crash.
+ * NOTA TÉCNICA: 
+ * La actualización de certificaciones (psicofísico/CRM) se maneja 
+ * a través de la ruta PUT general (/:id) enviando el objeto 'certificaciones'.
  */
-// router.put('/:id/certificaciones', tripulanteController.actualizarCertificaciones);
 
 module.exports = router;
