@@ -24,7 +24,7 @@ self.addEventListener('activate', (event) => {
       keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
     ))
   );
-  self.claim();
+  self.clients.claim();
 });
 
 // Estrategia: Network First con fallback a Cache
