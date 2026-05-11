@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Users, Clock, Save, Trash2, Map, Luggage, UserPlus } from 'lucide-react';
+import { Plane, Users, Clock, Save, Trash2, Map, Luggage, UserPlus, Info } from 'lucide-react';
 import API from '../services/api';
 
 const Vuelos = () => {
@@ -97,6 +97,7 @@ const Vuelos = () => {
                 <div style={styles.card}>
                     <h2 style={styles.cardTitle}><Save size={18} /> Nueva Carga - Formulario -12</h2>
                     <form onSubmit={handleSubmit} style={styles.form}>
+                        {/* Fecha y Aeronave */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Fecha</label>
                             <input type="date" style={styles.input} onChange={e => setFormData({...formData, fecha: e.target.value})} required/></div>
@@ -107,6 +108,7 @@ const Vuelos = () => {
                             </select></div>
                         </div>
 
+                        {/* Matrícula y Elemento Apoyado */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Matrícula</label>
                             <input placeholder="AE-XXX" style={styles.input} value={formData.matricula} onChange={e => setFormData({...formData, matricula: e.target.value.toUpperCase()})} required/></div>
@@ -114,7 +116,7 @@ const Vuelos = () => {
                             <input placeholder="Ej: DIR AE" style={styles.input} value={formData.elementoApoyado} onChange={e => setFormData({...formData, elementoApoyado: e.target.value.toUpperCase()})} required/></div>
                         </div>
 
-                        {/* TRIPULACIÓN */}
+                        {/* Piloto y Copiloto */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Piloto</label>
                             <select style={styles.input} value={formData.piloto} onChange={e => setFormData({...formData, piloto: e.target.value})} required>
@@ -128,6 +130,7 @@ const Vuelos = () => {
                             </select></div>
                         </div>
 
+                        {/* Mecánicos */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Mecánico 1</label>
                             <select style={styles.input} value={formData.mecanico} onChange={e => setFormData({...formData, mecanico: e.target.value})}>
@@ -141,6 +144,7 @@ const Vuelos = () => {
                             </select></div>
                         </div>
 
+                        {/* Ruta */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Desde</label>
                             <input placeholder="ORIGEN" style={styles.input} value={formData.desde} onChange={e => setFormData({...formData, desde: e.target.value.toUpperCase()})} required/></div>
@@ -148,6 +152,7 @@ const Vuelos = () => {
                             <input placeholder="DESTINO" style={styles.input} value={formData.hasta} onChange={e => setFormData({...formData, hasta: e.target.value.toUpperCase()})} required/></div>
                         </div>
 
+                        {/* Pax y Carga */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Pasajeros</label>
                             <input type="number" style={styles.input} value={formData.cantidadPasajeros} onChange={e => setFormData({...formData, cantidadPasajeros: e.target.value})} /></div>
@@ -155,6 +160,7 @@ const Vuelos = () => {
                             <input type="number" style={styles.input} value={formData.pesoCarga} onChange={e => setFormData({...formData, pesoCarga: e.target.value})} /></div>
                         </div>
 
+                        {/* Horas y Reglas */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Horas</label>
                             <input type="number" step="0.1" style={styles.input} value={formData.horasVoladas} onChange={e => setFormData({...formData, horasVoladas: e.target.value})} required/></div>
@@ -165,6 +171,7 @@ const Vuelos = () => {
                             </select></div>
                         </div>
 
+                        {/* Local y Condición */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Local/Travesía</label>
                             <select style={styles.input} value={formData.localTravesia} onChange={e => setFormData({...formData, localTravesia: e.target.value})}>
@@ -194,42 +201,80 @@ const Vuelos = () => {
                     </form>
                 </div>
 
-                {/* TABLA */}
+                {/* TABLA DE HISTORIAL EXPANDIDA */}
                 <div style={{...styles.card, flex: 1}}>
-                    <h2 style={styles.cardTitle}><Clock size={18} /> Historial Operativo</h2>
+                    <h2 style={styles.cardTitle}><Clock size={18} /> Historial Operativo Detallado</h2>
                     <div style={styles.tableContainer}>
                         <table style={styles.table}>
                             <thead>
                                 <tr style={styles.thead}>
-                                    <th style={styles.th}>Fecha</th>
-                                    <th style={styles.th}>SdA/Mat</th>
+                                    <th style={styles.th}>Fecha / Ruta</th>
+                                    <th style={styles.th}>Aeronave</th>
                                     <th style={styles.th}>Tripulación</th>
-                                    <th style={styles.th}>Ruta/Hs</th>
-                                    <th style={styles.th}>Misión/Apoyo</th>
+                                    <th style={styles.th}>Carga / Pax</th>
+                                    <th style={styles.th}>Condiciones</th>
+                                    <th style={styles.th}>Misión</th>
                                     <th style={styles.th}>Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {vuelos.map(v => (
                                     <tr key={v._id} style={styles.tr}>
-                                        <td style={styles.td}>{new Date(v.fecha).toLocaleDateString()}</td>
-                                        <td style={styles.td}><strong>{v.aeronave}</strong><br/>{v.matricula}</td>
+                                        {/* Fecha y Ruta */}
                                         <td style={styles.td}>
-                                            <small>P: {v.piloto?.apellido}</small><br/>
-                                            {v.copiloto && <small>C: {v.copiloto.apellido}</small>}
+                                            <div style={{fontWeight: 'bold'}}>{new Date(v.fecha).toLocaleDateString()}</div>
+                                            <div style={{fontSize: '0.7rem', color: '#666'}}>{v.desde} ➔ {v.hasta}</div>
+                                            <div style={styles.hsBadge}>{v.horasVoladas} hs</div>
                                         </td>
-                                        <td style={styles.td}>{v.desde}-{v.hasta}<br/><strong>{v.horasVoladas}hs</strong></td>
+
+                                        {/* Aeronave */}
                                         <td style={styles.td}>
-                                            <span style={styles.misionTag}>{v.tipoMision}</span><br/>
-                                            <small>{v.elementoApoyado}</small>
+                                            <div style={{fontWeight: 'bold'}}>{v.aeronave}</div>
+                                            <div style={{fontSize: '0.75rem', color: '#004a99'}}>{v.matricula}</div>
                                         </td>
+
+                                        {/* Tripulación */}
                                         <td style={styles.td}>
-                                            <button onClick={() => eliminarVuelo(v._id)} style={styles.btnDel}><Trash2 size={14}/></button>
+                                            <div style={styles.tripuList}>
+                                                <span><Users size={10} /> P: {v.piloto?.apellido || 'S/D'}</span>
+                                                {v.copiloto && <span><Users size={10} /> C: {v.copiloto.apellido}</span>}
+                                                {v.mecanico && <span style={{color: '#555'}}><Info size={10} /> M: {v.mecanico.apellido}</span>}
+                                            </div>
+                                        </td>
+
+                                        {/* Carga y Pax */}
+                                        <td style={styles.td}>
+                                            <div style={styles.dataRow}>< Luggage size={12} /> {v.pesoCarga || 0} kg</div>
+                                            <div style={styles.dataRow}><Users size={12} /> {v.cantidadPasajeros || 0} pax</div>
+                                        </td>
+
+                                        {/* Condiciones */}
+                                        <td style={styles.td}>
+                                            <div style={styles.miniTag}>{v.reglasVuelo}</div>
+                                            <div style={styles.miniTag}>{v.condicion}</div>
+                                            <div style={styles.miniTag}>{v.localTravesia}</div>
+                                            {v.usoNVG && <div style={{...styles.miniTag, backgroundColor: '#dcfce7', color: '#166534'}}>NVG</div>}
+                                        </td>
+
+                                        {/* Misión y Apoyo */}
+                                        <td style={styles.td}>
+                                            <span style={styles.misionTag}>{v.tipoMision}</span>
+                                            <div style={{fontSize: '0.7rem', marginTop: '4px', fontWeight: '600', color: '#444'}}>
+                                                APOYO: {v.elementoApoyado || 'S/D'}
+                                            </div>
+                                        </td>
+
+                                        {/* Acción */}
+                                        <td style={styles.td}>
+                                            <button onClick={() => eliminarVuelo(v._id)} style={styles.btnDel} title="Eliminar Registro">
+                                                <Trash2 size={16}/>
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                        {vuelos.length === 0 && <div style={styles.noData}>No hay vuelos registrados para esta unidad.</div>}
                     </div>
                 </div>
             </div>
@@ -238,27 +283,32 @@ const Vuelos = () => {
 };
 
 const styles = {
-    container: { padding: '30px', backgroundColor: '#f4f7f6', minHeight: '100vh' },
+    container: { padding: '20px', backgroundColor: '#f4f7f6', minHeight: '100vh' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    title: { margin: 0, fontSize: '1.5rem', color: '#1b3a57' },
-    subtitle: { color: '#7f8c8d', fontSize: '0.9rem' },
+    title: { margin: 0, fontSize: '1.4rem', color: '#1b3a57' },
+    subtitle: { color: '#7f8c8d', fontSize: '0.85rem' },
     mainGrid: { display: 'flex', gap: '20px', alignItems: 'flex-start' },
-    card: { backgroundColor: 'white', borderRadius: '10px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', minWidth: '420px' },
-    cardTitle: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#1b3a57', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px', fontWeight: 'bold' },
+    card: { backgroundColor: 'white', borderRadius: '8px', padding: '15px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', minWidth: '400px' },
+    cardTitle: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: '#1b3a57', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px', fontWeight: 'bold', textTransform: 'uppercase' },
     form: { display: 'flex', flexDirection: 'column', gap: '10px' },
-    row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
-    group: { display: 'flex', flexDirection: 'column', gap: '2px' },
-    label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#7f8c8d', textTransform: 'uppercase' },
-    input: { padding: '8px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '0.85rem' },
-    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
+    row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
+    group: { display: 'flex', flexDirection: 'column', gap: '3px' },
+    label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' },
+    input: { padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.85rem', outline: 'none' },
+    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px', transition: '0.2s' },
     tableContainer: { overflowX: 'auto' },
     table: { width: '100%', borderCollapse: 'collapse' },
-    thead: { backgroundColor: '#f8f9fa' },
-    th: { padding: '10px', textAlign: 'left', fontSize: '0.7rem', color: '#7f8c8d', borderBottom: '2px solid #eee', textTransform: 'uppercase' },
-    tr: { borderBottom: '1px solid #eee' },
-    td: { padding: '10px', fontSize: '0.8rem' },
-    misionTag: { backgroundColor: '#e8f4fd', color: '#1b3a57', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 'bold' },
-    btnDel: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer' }
+    thead: { backgroundColor: '#f9fafb' },
+    th: { padding: '12px 8px', textAlign: 'left', fontSize: '0.65rem', color: '#4b5563', borderBottom: '2px solid #e5e7eb', textTransform: 'uppercase', letterSpacing: '0.025em' },
+    tr: { borderBottom: '1px solid #f3f4f6', transition: '0.2s' },
+    td: { padding: '10px 8px', fontSize: '0.8rem', verticalAlign: 'top' },
+    hsBadge: { backgroundColor: '#1b3a57', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', display: 'inline-block', marginTop: '4px', fontWeight: 'bold' },
+    tripuList: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.75rem' },
+    dataRow: { display: 'flex', alignItems: 'center', gap: '4px', color: '#444', marginBottom: '2px' },
+    miniTag: { display: 'inline-block', backgroundColor: '#f3f4f6', color: '#374151', padding: '1px 5px', borderRadius: '3px', fontSize: '0.65rem', marginRight: '3px', marginBottom: '3px', fontWeight: '600' },
+    misionTag: { backgroundColor: '#eff6ff', color: '#1e40af', padding: '3px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' },
+    btnDel: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px', transition: '0.2s' },
+    noData: { textAlign: 'center', padding: '40px', color: '#9ca3af', fontSize: '0.9rem' }
 };
 
 export default Vuelos;
