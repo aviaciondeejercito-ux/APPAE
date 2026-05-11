@@ -1,29 +1,23 @@
 import React, { useState, useEffect } from 'react';
-// CORRECCIÓN: Importación desde lucide-react (fijate que antes decía lucide-center)
 import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save } from 'lucide-react';
-// IMPORTACIÓN DEL SERVICIO OFICIAL AXIOS
 import { getTripulantes, createTripulante } from '../services/api';
 
 const Tripulantes = () => {
-    // ESTADOS PRINCIPALES
     const [busqueda, setBusqueda] = useState('');
     const [seleccionado, setSeleccionado] = useState(null);
     const [personal, setPersonal] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // ESTADOS PARA EL MODAL DE ALTA
     const [showModal, setShowModal] = useState(false);
     const [formData, setFormData] = useState({
         grado: '', apellido: '', nombre: '', unidad: ''
     });
 
-    // DATOS DE SESIÓN (Sincronizado con authMiddleware y api.js)
     const [user] = useState({
         role: localStorage.getItem('role')?.toLowerCase() || 'user',
         unidad: localStorage.getItem('elemento')?.trim().toUpperCase() || '' 
     });
 
-    // CONFIGURACIÓN ESTRATÉGICA
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
         "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
@@ -36,21 +30,20 @@ const Tripulantes = () => {
         fetchPersonal();
     }, []);
 
-    // 1. OBTENER TRIPULANTES (Usando tu instancia de Axios configurada)
     const fetchPersonal = async () => {
         try {
             setLoading(true);
             const response = await getTripulantes();
             setPersonal(response.data || []);
         } catch (error) {
-            console.error("❌ Error de sincronización táctica:", error);
+            console.error("❌ Error de sincronización:", error);
         } finally {
             setLoading(false);
         }
     };
 
-    // 2. ABRIR MODAL CON RESTRICCIÓN DE UNIDAD
     const handleOpenModal = () => {
+        // Aseguramos que la unidad se cargue al abrir
         setFormData({
             grado: '', 
             apellido: '', 
@@ -60,17 +53,28 @@ const Tripulantes = () => {
         setShowModal(true);
     };
 
-    // 3. ENVIAR ALTA (POST /api/tripulantes)
     const handleSave = async (e) => {
         e.preventDefault();
+        
+        // Verificación de seguridad antes de enviar
+        if (!formData.grado || !formData.unidad) {
+            alert("🛑 Error: Debe seleccionar Grado y Unidad");
+            return;
+        }
+
         try {
+            console.log("✈️ Despachando carga a la DB:", formData);
             const response = await createTripulante(formData);
+            
             if (response.status === 201 || response.status === 200) {
                 setShowModal(false);
+                setFormData({ grado: '', apellido: '', nombre: '', unidad: '' });
                 fetchPersonal(); 
             }
         } catch (error) {
-            const msg = error.response?.data?.mensaje || "Error al procesar el alta en el servidor";
+            // Esto captura el error 400 y te muestra qué campo falta
+            const msg = error.response?.data?.error || error.response?.data?.mensaje || "Error en validación de datos";
+            console.error("❌ FALLO 400:", error.response?.data);
             alert(`🛑 FALLO OPERATIVO: ${msg}`);
         }
     };
@@ -82,7 +86,6 @@ const Tripulantes = () => {
 
     return (
         <div style={styles.dashboardContainer}>
-            
             <div style={styles.sidebar}>
                 <div style={styles.altaBox}>
                     <button style={styles.btnAlta} onClick={handleOpenModal}>
@@ -107,7 +110,7 @@ const Tripulantes = () => {
                 <div style={styles.listContainer}>
                     <div style={styles.listHeader}>PERSONAL CARGADO</div>
                     {loading ? (
-                        <div style={styles.infoText}>Sincronizando frecuencias con Render...</div>
+                        <div style={styles.infoText}>Sincronizando...</div>
                     ) : (
                         personalFiltrado.map(p => (
                             <div 
@@ -144,7 +147,7 @@ const Tripulantes = () => {
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>Grado</label>
                                 <select required style={styles.formInput} value={formData.grado} onChange={e => setFormData({...formData, grado: e.target.value})}>
-                                    <option value="">Seleccionar Grado</option>
+                                    <option value="">Seleccionar...</option>
                                     {gradosAE.map(g => <option key={g} value={g}>{g}</option>)}
                                 </select>
                             </div>
@@ -162,7 +165,7 @@ const Tripulantes = () => {
                                 <label style={styles.label}>Unidad Destino</label>
                                 {user.role === 'admin' ? (
                                     <select required style={styles.formInput} value={formData.unidad} onChange={e => setFormData({...formData, unidad: e.target.value})}>
-                                        <option value="">Seleccionar Unidad</option>
+                                        <option value="">Seleccionar Unidad...</option>
                                         {unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
                                     </select>
                                 ) : (
@@ -209,7 +212,7 @@ const Tripulantes = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div style={styles.sectionHeader}><FileText size={16} /> <span>AUDITORÍA</span></div>
+                            <div style={styles.sectionHeader}><FileText size={16} /> <span>HISTORIAL INMUTABLE</span></div>
                             <div style={styles.placeholderMsg}>
                                 Última edición: {new Date(seleccionado.fechaUltimaModificacion).toLocaleString()} hs.
                             </div>
@@ -219,7 +222,7 @@ const Tripulantes = () => {
                     <div style={styles.emptyState}>
                         <User size={60} color="#dcdde1" />
                         <h3>Monitor de Legajos AE</h3>
-                        <p>Seleccione un tripulante para gestionar su información operativa.</p>
+                        <p>Seleccione un integrante del personal para gestionar su información operativa.</p>
                     </div>
                 )}
             </div>
