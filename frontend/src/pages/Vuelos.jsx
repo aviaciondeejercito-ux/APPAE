@@ -42,18 +42,28 @@ const Vuelos = () => {
         fetchTripulantes();
     }, [userUnidad]);
 
-    const fetchVuelos = async () => {
+   const fetchVuelos = async () => {
         try {
             const res = await API.get('/vuelos');
-            // Filtrado de seguridad AE
-            const dataFinal = esMandoEstrategico
-                ? res.data 
-                : res.data.filter(v => 
-                    v.unidadResponsable?.toUpperCase() === userUnidad || 
-                    v.matricula?.includes(userUnidad)
-                );
-            setVuelos(dataFinal);
-        } catch (error) { console.error("Error cargando vuelos", error); }
+            
+            // LOGICA DE VISIBILIDAD TOTAL PARA MANDOS
+            if (esMandoEstrategico) {
+                // Si es ADMIN, BOSS, DIRECTOR u OTO, no filtramos nada.
+                setVuelos(res.data);
+            } else {
+                // Para OPERACIONES o USER, filtramos por su unidad
+                const dataFiltrada = res.data.filter(v => {
+                    const unidadVuelo = (v.unidadResponsable || "").toUpperCase();
+                    const matriculaVuelo = (v.matricula || "").toUpperCase();
+                    const miUnidad = userUnidad.toUpperCase();
+
+                    return unidadVuelo === miUnidad || matriculaVuelo.includes(miUnidad);
+                });
+                setVuelos(dataFiltrada);
+            }
+        } catch (error) { 
+            console.error("Error cargando historial de vuelos", error); 
+        }
     };
 
     const fetchTripulantes = async () => {
