@@ -35,22 +35,22 @@ const Tripulantes = () => {
         setLoading(true);
         const response = await getTripulantes();
         
-        // 1. Normalizamos la unidad del usuario logueado (Jefe/Operaciones)
-        const miUnidad = userUnidad.trim().toUpperCase();
+        // 1. Normalizamos la unidad de quien está logueado
+        const miUnidadLogueada = userUnidad.trim().toUpperCase();
 
-        // 2. Definimos quiénes tienen visión global (Mandos)
-        const mandosEstrategicos = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'];
-        const esMando = mandosEstrategicos.includes(roleNormalizado);
+        // 2. Definimos mandos
+        const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
 
-        // 3. Aplicamos el filtro blindado
-        const dataFinal = esMando
+        // 3. Filtramos usando la propiedad "elemento" que es la que se ve en tu imagen de MongoDB
+        const dataFinal = esMandoEstrategico
             ? response.data 
             : response.data.filter(p => {
-                // Si el piloto no tiene unidad asignada, no lo mostramos a unidades base
-                if (!p.unidad) return false;
+                // USAMOS p.elemento PORQUE ASÍ ESTÁ EN TU BASE DE DATOS
+                const unidadDelPiloto = p.elemento || p.unidad; // Por si algún registro viejo usa unidad
                 
-                // Comparamos ambas unidades normalizadas (sin espacios y en mayúsculas)
-                return p.unidad.trim().toUpperCase() === miUnidad;
+                if (!unidadDelPiloto) return false;
+                
+                return unidadDelPiloto.trim().toUpperCase() === miUnidadLogueada;
             });
         
         setPersonal(dataFinal || []);
