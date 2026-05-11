@@ -33,7 +33,6 @@ const authorize = (...roles) => {
 /**
  * 3. Definición de Endpoints
  */
-
 // LISTA DE ROLES CON ACCESO OPERATIVO A VUELOS
 // Sumamos a 'OPERACIONES' según la nueva prioridad establecida.
 const rolesConAcceso = ['admin', 'user', 'OPERACIONES'];
@@ -44,6 +43,6 @@ router.route('/')
 
 router.route('/:id')
     // El borrado es crítico por el impacto en el cómputo de horas, queda para el Admin.
-    .delete(authorize('admin'), vueloController.eliminarVuelo); 
+    .delete(authorize('admin', 'OPERACIONES', 'JEFE'), vueloController.eliminarVuelo); 
 
 module.exports = router;

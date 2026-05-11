@@ -18,9 +18,10 @@ const Tripulantes = () => {
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
 
-    // Reglas de acceso
+    // Reglas de acceso actualizadas: Se incluye permiso de borrado para Operaciones y Jefe
     const esAdmin = roleNormalizado === 'ADMIN';
     const esGestorOperativo = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
+    const puedeEliminarPersonal = ['ADMIN', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
 
     const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
     const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
@@ -31,40 +32,46 @@ const Tripulantes = () => {
     useEffect(() => { fetchPersonal(); }, []);
 
     const fetchPersonal = async () => {
-    try {
-        setLoading(true);
-        const response = await getTripulantes();
-        
-        // 1. Normalizamos la unidad de quien está logueado
-        const miUnidadLogueada = userUnidad.trim().toUpperCase();
+        try {
+            setLoading(true);
+            const response = await getTripulantes();
+            const miUnidadLogueada = userUnidad.trim().toUpperCase();
+            const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
 
-        // 2. Definimos mandos
-        const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
-
-        // 3. Filtramos usando la propiedad "elemento" que es la que se ve en tu imagen de MongoDB
-        const dataFinal = esMandoEstrategico
-            ? response.data 
-            : response.data.filter(p => {
-                // USAMOS p.elemento PORQUE ASÍ ESTÁ EN TU BASE DE DATOS
-                const unidadDelPiloto = p.elemento || p.unidad; // Por si algún registro viejo usa unidad
-                
-                if (!unidadDelPiloto) return false;
-                
-                return unidadDelPiloto.trim().toUpperCase() === miUnidadLogueada;
-            });
-        
-        setPersonal(dataFinal || []);
-
-        if (seleccionado) {
-            const actualizado = dataFinal.find(p => p._id === seleccionado._id);
-            if (actualizado) setSeleccionado(actualizado);
+            const dataFinal = esMandoEstrategico
+                ? response.data 
+                : response.data.filter(p => {
+                    const unidadDelPiloto = p.elemento || p.unidad;
+                    if (!unidadDelPiloto) return false;
+                    return unidadDelPiloto.trim().toUpperCase() === miUnidadLogueada;
+                });
+            
+            setPersonal(dataFinal || []);
+            if (seleccionado) {
+                const actualizado = dataFinal.find(p => p._id === seleccionado._id);
+                if (actualizado) setSeleccionado(actualizado);
+                else setSeleccionado(null);
+            }
+        } catch (error) { 
+            console.error("❌ Error de carga de personal:", error); 
+        } finally { 
+            setLoading(false); 
         }
-    } catch (error) { 
-        console.error("❌ Error de carga de personal:", error); 
-    } finally { 
-        setLoading(false); 
-    }
-};
+    };
+
+    // Función específica para eliminar legajo completo
+    const handleEliminarTripulante = async (id) => {
+        if (!window.confirm("¿ESTÁ SEGURO? Esta acción eliminará el legajo digital completo y todo su historial de vuelo de forma definitiva.")) return;
+        
+        try {
+            await deleteTripulante(id);
+            alert("Legajo eliminado correctamente.");
+            setSeleccionado(null);
+            await fetchPersonal();
+        } catch (error) {
+            alert("Error al eliminar legajo. Verifique permisos.");
+        }
+    };
 
     const getEstadoVencimiento = (fecha) => {
         if (!fecha) return { label: 'SIN DATOS', color: '#95a5a6' };
@@ -105,7 +112,8 @@ const Tripulantes = () => {
         e.preventDefault();
         try {
             if (showAltaModal) {
-                await createTripulante(formData);
+                // Al dar de alta, enviamos elemento para coincidir con la DB
+                await createTripulante({ ...formData, elemento: formData.unidad });
                 alert("Personal incorporado al legajo digital.");
             } else {
                 if (modalType === 'certificaciones') {
@@ -139,7 +147,7 @@ const Tripulantes = () => {
 
     const deleteSubItem = async (type, itemId) => {
         if (!esGestorOperativo) return;
-        if (!window.confirm("¿Seguro desea eliminar este registro específico?")) return;
+        if (!window.confirm("¿Desea eliminar este registro de historial?")) return;
         try {
             let updatedData = { ...seleccionado };
             if (type === 'habilitacion') {
@@ -149,7 +157,7 @@ const Tripulantes = () => {
             }
             await updateTripulante(seleccionado._id, updatedData);
             await fetchPersonal();
-        } catch (error) { alert("Error al eliminar rastro."); }
+        } catch (error) { alert("Error al eliminar registro."); }
     };
 
     return (
@@ -172,7 +180,7 @@ const Tripulantes = () => {
                     {personal.filter(p => p.apellido?.toLowerCase().includes(busqueda.toLowerCase())).map(p => (
                         <div key={p._id} onClick={() => setSeleccionado(p)} style={{...styles.personItem, backgroundColor: seleccionado?._id === p._id ? '#e3f2fd' : 'white', borderLeft: seleccionado?._id === p._id ? '4px solid #1b3a57' : '4px solid transparent'}}>
                             <div style={styles.personInfo}>
-                                <span style={styles.itemGrado}>{p.grado} - {p.unidad}</span>
+                                <span style={styles.itemGrado}>{p.grado} - {p.elemento || p.unidad}</span>
                                 <span style={styles.itemNombre}>{p.apellido}, {p.nombre}</span>
                             </div>
                             <ChevronRight size={16} color="#bdc3c7" />
@@ -189,9 +197,15 @@ const Tripulantes = () => {
                             <div style={{ flex: 1 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <h2 style={styles.legajoTitle}>{seleccionado.grado} {seleccionado.apellido}, {seleccionado.nombre}</h2>
-                                    {esAdmin && <button onClick={() => {if(window.confirm("¿BAJA DEFINITIVA?")) deleteTripulante(seleccionado._id).then(()=>fetchPersonal())}} style={styles.btnDelete}><Trash2 size={18}/></button>}
+                                    
+                                    {/* BOTÓN DE ELIMINACIÓN LEGAJO: Visible para Admin, Operaciones y Jefe */}
+                                    {puedeEliminarPersonal && (
+                                        <button onClick={() => handleEliminarTripulante(seleccionado._id)} style={styles.btnDelete}>
+                                            <Trash2 size={22}/>
+                                        </button>
+                                    )}
                                 </div>
-                                <span style={styles.legajoSubtitle}>{seleccionado.unidad}</span>
+                                <span style={styles.legajoSubtitle}>{seleccionado.elemento || seleccionado.unidad}</span>
                             </div>
                         </div>
 
@@ -294,7 +308,7 @@ const Tripulantes = () => {
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
                         <div style={styles.modalHeader}>
-                            <h3>{showAltaModal ? 'Alta de Personal' : `Gestión de ${modalType.toUpperCase()}`}</h3>
+                            <h3>{showAltaModal ? 'Incorporación de Personal' : `Gestión de ${modalType.toUpperCase()}`}</h3>
                             <X size={24} style={{cursor:'pointer'}} onClick={() => {setShowAltaModal(false); setShowEditModal(false);}} />
                         </div>
                         <form onSubmit={handleAction} style={styles.form}>
@@ -314,7 +328,7 @@ const Tripulantes = () => {
                                     </select>
                                 </div>
                             )}
-                            {/* ... Resto de lógica de inputs de horas y SdA se mantiene idéntica pero bajo el control de esGestorOperativo ... */}
+                            
                             {modalType === 'certificaciones' && (
                                 <div style={styles.formCol}>
                                     <label style={styles.label}>Vencimiento Psicofísico</label>
@@ -323,6 +337,7 @@ const Tripulantes = () => {
                                     <input type="date" style={styles.formInput} value={formData.crmVencimiento} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
                                 </div>
                             )}
+
                             {modalType === 'habilitacion' && (
                                 <div style={styles.formCol}>
                                     <label style={styles.label}>SdA</label>
@@ -333,12 +348,32 @@ const Tripulantes = () => {
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
                                         <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
                                     </select>
-                                    <label style={styles.label}>Hs Iniciales Visual</label>
-                                    <input type="number" style={styles.formInput} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required />
-                                    <label style={styles.label}>Fecha Aptitud</label>
+                                    <label style={styles.label}>Hs Visual SdA</label>
+                                    <input type="number" style={styles.formInput} value={formData.hsVisual} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required />
+                                    <label style={styles.label}>Hs Nocturno SdA</label>
+                                    <input type="number" style={styles.formInput} value={formData.hsNocturno} onChange={e => setFormData({...formData, hsNocturno: e.target.value})} required />
+                                    <label style={styles.label}>Hs Instrumental SdA</label>
+                                    <input type="number" style={styles.formInput} value={formData.hsInstrumental} onChange={e => setFormData({...formData, hsInstrumental: e.target.value})} required />
+                                    <label style={styles.label}>Hs NVG SdA</label>
+                                    <input type="number" style={styles.formInput} value={formData.hsNVG} onChange={e => setFormData({...formData, hsNVG: e.target.value})} required />
+                                    <label style={styles.label}>Fecha Aptitud Inicial</label>
                                     <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
                                 </div>
                             )}
+
+                            {modalType === 'capacitacion' && (
+                                <div style={styles.formCol}>
+                                    <label style={styles.label}>Capacitación</label>
+                                    <select style={styles.formInput} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
+                                        <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                    <label style={styles.label}>Horas Acreditadas</label>
+                                    <input type="number" style={styles.formInput} value={formData.horasAcreditadas} onChange={e => setFormData({...formData, horasAcreditadas: e.target.value})} required />
+                                    <label style={styles.label}>Fecha Adquisición</label>
+                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
+                                </div>
+                            )}
+
                             <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Cambios</button>
                         </form>
                     </div>
@@ -349,61 +384,58 @@ const Tripulantes = () => {
 };
 
 const styles = {
-    dashboardContainer: { display: 'flex', height: '100vh', width: '100%', backgroundColor: '#f4f7f6', overflow: 'hidden' },
-    sidebar: { width: '380px', borderRight: '1px solid #dcdde1', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' },
-    altaBox: { padding: '20px' },
-    btnAlta: { width: '100%', backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontWeight: 'bold' },
-    searchBox: { padding: '0 20px 20px 20px' },
-    inputWrapper: { display: 'flex', alignItems: 'center', backgroundColor: '#f1f3f4', padding: '10px', borderRadius: '10px' },
-    searchIcon: { color: '#7f8c8d', marginRight: '10px' },
-    input: { border: 'none', backgroundColor: 'transparent', outline: 'none', width: '100%', fontSize: '0.9rem' },
+    dashboardContainer: { display: 'flex', height: 'calc(100vh - 65px)', backgroundColor: '#f5f6fa' },
+    sidebar: { width: '350px', backgroundColor: 'white', borderRight: '1px solid #dcdde1', display: 'flex', flexDirection: 'column' },
+    altaBox: { padding: '15px', borderBottom: '1px solid #eee' },
+    btnAlta: { width: '100%', backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontWeight: 'bold', cursor: 'pointer' },
+    searchBox: { padding: '15px', backgroundColor: '#f8f9fa' },
+    inputWrapper: { position: 'relative', display: 'flex', alignItems: 'center' },
+    searchIcon: { position: 'absolute', left: '10px', color: '#7f8c8d' },
+    input: { width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid #dcdde1', outline: 'none' },
     listContainer: { flex: 1, overflowY: 'auto' },
-    personItem: { padding: '15px 20px', borderBottom: '1px solid #f1f2f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+    personItem: { padding: '15px', borderBottom: '1px solid #f1f2f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: '0.2s' },
     personInfo: { display: 'flex', flexDirection: 'column' },
-    itemGrado: { fontSize: '0.65rem', color: '#1b3a57', fontWeight: 'bold' },
-    itemNombre: { fontSize: '0.95rem', color: '#2f3640', fontWeight: '600' },
-    mainView: { flex: 1, padding: '25px', overflowY: 'auto' },
-    legajoCard: { backgroundColor: '#fff', borderRadius: '15px', boxShadow: '0 5px 15px rgba(0,0,0,0.05)' },
-    legajoHeader: { padding: '25px', display: 'flex', alignItems: 'center', gap: '20px', backgroundColor: '#1b3a57', color: 'white', borderRadius: '15px 15px 0 0' },
-    avatar: { width: '50px', height: '50px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    itemGrado: { fontSize: '0.7rem', color: '#7f8c8d', fontWeight: 'bold' },
+    itemNombre: { fontSize: '0.9rem', color: '#2f3640', fontWeight: '600' },
+    mainView: { flex: 1, padding: '30px', overflowY: 'auto' },
+    legajoCard: { backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', overflow: 'hidden' },
+    legajoHeader: { padding: '25px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', alignItems: 'center', gap: '20px' },
+    avatar: { width: '70px', height: '70px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid rgba(255,255,255,0.2)' },
     legajoTitle: { margin: 0, fontSize: '1.4rem', fontWeight: 'bold' },
     legajoSubtitle: { opacity: 0.8, fontSize: '0.9rem' },
     legajoBody: { padding: '25px' },
-    sectionHeader: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 'bold', color: '#1b3a57', marginBottom: '15px', marginTop: '20px', borderBottom: '1px solid #eee', paddingBottom: '5px' },
-    gridStats: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px' },
-    statCard: { padding: '12px', border: '1px solid #f1f2f6', borderRadius: '10px', display: 'flex', flexDirection: 'column', backgroundColor: '#fafbfc', position: 'relative' },
-    statLabel: { fontSize: '0.55rem', color: '#7f8c8d', fontWeight: 'bold', textTransform: 'uppercase' },
+    sectionHeader: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 'bold', color: '#1b3a57', borderBottom: '2px solid #f1f2f6', paddingBottom: '10px', marginBottom: '20px', marginTop: '30px' },
+    gridStats: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' },
+    statCard: { padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '10px', border: '1px solid #eee', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' },
+    statLabel: { fontSize: '0.65rem', color: '#7f8c8d', fontWeight: 'bold', textTransform: 'uppercase' },
     statValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1b3a57' },
-    statusTag: { fontSize: '0.5rem', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', marginTop: '5px', alignSelf: 'flex-start', textAlign: 'center' },
+    statusTag: { fontSize: '0.6rem', color: 'white', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', marginTop: '5px' },
     habilitacionesList: { display: 'flex', flexDirection: 'column', gap: '10px' },
-    habItem: { padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '12px', border: '1px solid #e9ecef', display: 'flex', flexWrap: 'wrap', gap: '15px', alignItems: 'center', justifyContent: 'space-between' },
-    habInfoMain: { flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '5px' },
-    habTitleGroup: { display: 'flex', alignItems: 'baseline', gap: '10px' },
-    habAeronave: { fontSize: '1.1rem', color: '#1b3a57' },
-    habRol: { fontSize: '0.75rem', fontWeight: 'bold', color: '#636e72', textTransform: 'uppercase' },
-    habTimeInfo: { display: 'flex', gap: '10px' },
-    habBadge: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.65rem', backgroundColor: '#e8f5e9', color: '#27ae60', padding: '3px 8px', borderRadius: '5px', fontWeight: 'bold' },
-    habDesgloseGrid: { flex: '2 1 350px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', backgroundColor: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid #f1f2f6' },
-    desgloseItem: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: '#1b3a57' },
-    desgloseLabel: { color: '#95a5a6', fontSize: '0.65rem', fontWeight: 'bold' },
-    tacticasContainer: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
-    tacticaBadge: { padding: '8px 14px', backgroundColor: '#1b3a57', color: 'white', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '140px' },
-    btnEditSmall: { background: 'none', border: 'none', cursor: 'pointer', color: '#3498db', marginLeft: 'auto' },
-    btnAddSmall: { background: '#27ae60', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' },
-    btnIconDelete: { background: 'none', border: 'none', cursor: 'pointer', color: '#e74c3c', opacity: 0.7, padding: '5px' },
-    btnIconDeleteWhite: { background: 'none', border: 'none', cursor: 'pointer', color: 'white', opacity: 0.8, display: 'flex', alignItems: 'center' },
-    btnDelete: { background: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', color: '#ff7675', padding: '8px', borderRadius: '8px' },
-    overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 5000 },
-    modal: { backgroundColor: 'white', width: '450px', borderRadius: '15px', padding: '25px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' },
-    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    formGroup: { display: 'flex', flexDirection: 'column', gap: '4px' },
-    formCol: { display: 'flex', flexDirection: 'column', gap: '12px' },
-    modalGrid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' },
-    formInput: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', outline: 'none', width: '100%' },
-    label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#7f8c8d' },
-    btnSave: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' },
-    emptyState: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#bdc3c7', textAlign: 'center' }
+    habItem: { padding: '15px', backgroundColor: '#fcfcfc', borderRadius: '10px', border: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+    habInfoMain: { flex: 1 },
+    habTitleGroup: { display: 'flex', alignItems: 'center', gap: '10px' },
+    habAeronave: { fontSize: '1rem', color: '#1b3a57' },
+    habRol: { fontSize: '0.75rem', background: '#e1e8ed', padding: '2px 8px', borderRadius: '4px', color: '#1b3a57', fontWeight: 'bold' },
+    habTimeInfo: { display: 'flex', gap: '10px', marginTop: '5px' },
+    habBadge: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.65rem', color: '#7f8c8d', background: '#eee', padding: '2px 6px', borderRadius: '4px' },
+    habDesgloseGrid: { display: 'flex', gap: '15px', marginRight: '20px' },
+    desgloseItem: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', color: '#1b3a57', fontWeight: 'bold' },
+    tacticasContainer: { display: 'flex', flexWrap: 'wrap', gap: '10px' },
+    tacticaBadge: { background: '#1b3a57', color: 'white', padding: '8px 12px', borderRadius: '8px', minWidth: '140px' },
+    btnEditSmall: { background: 'none', border: 'none', color: '#3498db', cursor: 'pointer', marginLeft: '10px' },
+    btnAddSmall: { background: '#27ae60', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', marginLeft: 'auto' },
+    btnDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', transition: '0.2s', padding: '5px', borderRadius: '5px' },
+    btnIconDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', opacity: 0.6 },
+    btnIconDeleteWhite: { background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8 },
+    overlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000 },
+    modal: { backgroundColor: 'white', width: '400px', borderRadius: '15px', overflow: 'hidden' },
+    modalHeader: { padding: '20px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    form: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' },
+    formCol: { display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '60vh', overflowY: 'auto' },
+    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#666' },
+    formInput: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd' },
+    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' },
+    emptyState: { height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#bdc3c7' }
 };
 
 export default Tripulantes;
