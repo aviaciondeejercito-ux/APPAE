@@ -17,6 +17,7 @@ import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
 
 function App() {
+    // Sincronizamos estados con localStorage de entrada
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
     const [role, setRole] = useState(localStorage.getItem('role') || 'user');
     const [view, setView] = useState('calendar'); 
@@ -180,12 +181,14 @@ const styles = {
     btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
     container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
     containerFull: { 
-        width: '100vw', 
+        width: '100%', 
+        flex: 1, 
+        position: 'relative', 
+        overflowY: 'auto', // CAMBIADO: Permite el desplazamiento vertical
         height: 'calc(100vh - 65px)',
+        display: 'block',
         margin: 0,
-        padding: 0,
-        overflow: 'hidden',
-        display: 'block' 
+        padding: 0
     },
     footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.6rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' }
 };
