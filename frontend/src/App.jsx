@@ -56,12 +56,14 @@ function App() {
         setView('calendar');
     };
 
-    // REGLAS DE ACCESO (RBAC) - Ajustadas para asegurar visibilidad
-    const puedeVerMapa = true; // Habilitado para todos los autenticados
-    const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
-    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OFICINA_TECNICA' || role === 'BOSS';
-    const puedeVerTripulantes = role === 'admin' || role === 'OTO' || role === 'BOSS' || role === 'user';
-    const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
+    // --- ACCESO TOTAL TEMPORAL ---
+    // Seteamos todas las reglas en true para que cualquier usuario logueado vea todo
+    const puedeVerMapa = true; 
+    const puedeVerStats = true; 
+    const puedeCargarOperaciones = true; 
+    const puedeVerTripulantes = true; 
+    const puedeGestionarMaterial = true; 
+    const puedeVerVuelos = true;
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -99,10 +101,24 @@ function App() {
                                 >📍 Mapa</button>
                             )}
 
+                            {puedeVerVuelos && (
+                                <button 
+                                    onClick={() => setView('despacho')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'despacho' ? '#e67e22' : '#4a69bd'}}
+                                >⚡ Vuelos</button>
+                            )}
+
                             <button 
                                 onClick={() => setView('estado')} 
                                 style={{...styles.btnNav, backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd'}}
                             >🚁 Material</button>
+
+                            {puedeVerStats && (
+                                <button 
+                                    onClick={() => setView('stats')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd'}}
+                                >📊 Stats</button>
+                            )}
 
                             {puedeCargarOperaciones && (
                                 <button 
@@ -120,13 +136,13 @@ function App() {
             </nav>
 
             {/* CONTENIDO PRINCIPAL */}
-            <main style={(view === 'mapa' || view === 'estado' || view === 'tripulantes') ? styles.containerFull : styles.container}>
+            <main style={(view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'stats' || view === 'despacho') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
-                        if (view === 'admin' && role === 'admin') return <AdminPanel />;
-                        if (view === 'stats' && puedeVerStats) return <Estadisticas />;
+                        if (view === 'admin') return <AdminPanel />;
+                        if (view === 'stats') return <Estadisticas />;
                         if (view === 'tripulantes') return <Tripulantes />;
                         if (view === 'mapa') return <OperacionesMapa />;
                         if (view === 'despacho') return <CargaTactica />;
