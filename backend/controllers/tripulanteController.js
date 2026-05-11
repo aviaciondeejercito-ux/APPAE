@@ -42,11 +42,20 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Gestionar Habilitación SdA (Acumulativa)
+// 2. Gestionar Habilitación SdA (Corregido con Desglose de Horas)
 exports.gestionarHabilitacion = async (req, res) => {
     try {
         const { id } = req.params;
-        const { aeronave, fechaHabilitacion, rolActual, observaciones } = req.body;
+        const { 
+            aeronave, 
+            fechaHabilitacion, 
+            rolActual, 
+            hsVisual, 
+            hsInstrumental, 
+            hsNocturno, 
+            hsNVG, 
+            observaciones 
+        } = req.body;
         const usuarioLogueado = req.user;
 
         const tripulante = await Tripulante.findById(id);
@@ -56,6 +65,13 @@ exports.gestionarHabilitacion = async (req, res) => {
         if (role !== 'admin' && usuarioLogueado.unidad !== tripulante.unidad) {
             return res.status(403).json({ mensaje: "No autorizado para modificar este legajo" });
         }
+
+        // Convertimos a números para evitar errores de concatenación de strings
+        const v = Number(hsVisual || 0);
+        const i = Number(hsInstrumental || 0);
+        const n = Number(hsNocturno || 0);
+        const nvg = Number(hsNVG || 0);
+        const totalSdA = v + i + n + nvg;
 
         const index = tripulante.habilitaciones.findIndex(h => h.aeronave === aeronave);
 
@@ -68,17 +84,43 @@ exports.gestionarHabilitacion = async (req, res) => {
                     fechaHasta: new Date()
                 });
             }
+            // Actualización de datos y desgloses
             tripulante.habilitaciones[index].rolActual = rolActual;
             tripulante.habilitaciones[index].fechaHabilitacion = fechaHabilitacion;
+            tripulante.habilitaciones[index].hsVisual = v;
+            tripulante.habilitaciones[index].hsInstrumental = i;
+            tripulante.habilitaciones[index].hsNocturno = n;
+            tripulante.habilitaciones[index].hsNVG = nvg;
+            tripulante.habilitaciones[index].totalHorasSistema = totalSdA;
             tripulante.habilitaciones[index].observaciones = observaciones;
         } else {
+            // Nueva habilitación con desgloses iniciales
             tripulante.habilitaciones.push({
                 aeronave,
                 fechaHabilitacion,
                 rolActual,
+                hsVisual: v,
+                hsInstrumental: i,
+                hsNocturno: n,
+                hsNVG: nvg,
+                totalHorasSistema: totalSdA,
                 observaciones
             });
         }
+
+        // --- RECALCULO DE TOTALES HISTÓRICOS (Sincronización hacia arriba) ---
+        const recalculo = tripulante.habilitaciones.reduce((acc, hab) => {
+            acc.v += Number(hab.hsVisual || 0);
+            acc.i += Number(hab.hsInstrumental || 0);
+            acc.n += Number(hab.hsNocturno || 0);
+            acc.nvg += Number(hab.hsNVG || 0);
+            return acc;
+        }, { v: 0, i: 0, n: 0, nvg: 0 });
+
+        tripulante.totalesHistoricos.vueloDiurno = recalculo.v;
+        tripulante.totalesHistoricos.vueloInstrumental = recalculo.i;
+        tripulante.totalesHistoricos.vueloNocturno = recalculo.n;
+        tripulante.totalesHistoricos.vueloVisual = recalculo.nvg; // Guardamos NVG en el campo Visual histórico (ajustar según prefieras)
 
         tripulante.ultimoEditor = usuarioLogueado._id;
         tripulante.fechaUltimaModificacion = Date.now();
@@ -91,10 +133,10 @@ exports.gestionarHabilitacion = async (req, res) => {
             accion: 'MODIFICACION',
             entidadAfectada: `Habilitación SdA: ${aeronave} - ${tripulante.apellido}`,
             entidadId: tripulante._id,
-            detalles: `Actualización de capacidad a ${rolActual}`
+            detalles: `Actualización de capacidad y horas desglosadas`
         });
 
-        res.status(200).json({ mensaje: "Habilitación actualizada correctamente", tripulante });
+        res.status(200).json({ mensaje: "Habilitación y totales actualizados", tripulante });
     } catch (error) {
         res.status(400).json({ mensaje: "Error al gestionar habilitación", error: error.message });
     }
@@ -115,6 +157,12 @@ exports.agregarCapacitacion = async (req, res) => {
         }
 
         tripulante.capacitacionesEspeciales.push(req.body);
+        
+        // Sumar horas de capacitación al total general si corresponde
+        if (req.body.horasAcreditadas) {
+            tripulante.totalesHistoricos.vueloDiurno += Number(req.body.horasAcreditadas);
+        }
+
         tripulante.ultimoEditor = usuarioLogueado._id;
         tripulante.fechaUltimaModificacion = Date.now();
         

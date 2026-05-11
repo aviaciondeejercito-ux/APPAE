@@ -231,11 +231,11 @@ const Tripulantes = () => {
                                         </div>
                                         
                                         <div style={styles.habDesgloseGrid}>
-                                            <div style={styles.desgloseItem}><Eye size={12} /> <span style={styles.desgloseLabel}>V:</span> <strong>{h.hsVisual || 0}</strong></div>
-                                            <div style={styles.desgloseItem}><Activity size={12} /> <span style={styles.desgloseLabel}>I:</span> <strong>{h.hsInstrumental || 0}</strong></div>
-                                            <div style={styles.desgloseItem}><Moon size={12} /> <span style={styles.desgloseLabel}>N:</span> <strong>{h.hsNocturno || 0}</strong></div>
-                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span style={styles.desgloseLabel}>NVG:</span> <strong>{h.hsNVG || 0}</strong></div>
-                                        </div>
+    <div style={styles.desgloseItem}><Eye size={12} /> <span style={styles.desgloseLabel}>V:</span> <strong>{h.hsVisual || 0}</strong></div>
+    <div style={styles.desgloseItem}><Activity size={12} /> <span style={styles.desgloseLabel}>I:</span> <strong>{h.hsInstrumental || 0}</strong></div>
+    <div style={styles.desgloseItem}><Moon size={12} /> <span style={styles.desgloseLabel}>N:</span> <strong>{h.hsNocturno || 0}</strong></div>
+    <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span style={styles.desgloseLabel}>NVG:</span> <strong>{h.hsNVG || 0}</strong></div>
+</div>
 
                                         <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>
                                     </div>
