@@ -15,6 +15,7 @@ import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
+import Vuelos from './pages/Vuelos'; // NUEVA IMPORTACIÓN
 
 function App() {
     // Sincronizamos estados con localStorage de entrada
@@ -61,9 +62,10 @@ function App() {
     const esOTO = role === 'OTO';
     const esUser = role === 'user';
 
-    // Configuración de visibilidad según la tabla acordada
+    // Configuración de visibilidad
     const puedeVerUsuarios = esAdmin;
     const puedeVerTripulantes = esAdmin; 
+    const puedeVerVuelos = esAdmin; // RESTRICCIÓN: Solo Admin puede ver vuelos
     const puedeVerPlaneamiento = esAdmin || esUser;
     const puedeVerMapa = esAdmin || esUser || esBoss || esDirector || esOTO;
     const puedeVerEstadoAeronaves = esAdmin || esUser || esOfTecnica || esBoss || esDirector || esOTO;
@@ -73,7 +75,7 @@ function App() {
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho';
+    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho' || view === 'vuelos';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -109,6 +111,14 @@ function App() {
                                     onClick={() => setView('tripulantes')} 
                                     style={{...styles.btnNav, backgroundColor: view === 'tripulantes' ? '#2980b9' : '#4a69bd'}}
                                 >👥 Personal</button>
+                            )}
+
+                            {/* BOTÓN DE VUELOS EXCLUSIVO ADMIN */}
+                            {puedeVerVuelos && (
+                                <button 
+                                    onClick={() => setView('vuelos')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'vuelos' ? '#1b3a57' : '#4a69bd'}}
+                                >✈️ Vuelos</button>
                             )}
 
                             {puedeVerPlaneamiento && (
@@ -175,6 +185,7 @@ function App() {
                 ) : (
                     (() => {
                         if (view === 'tripulantes' && puedeVerTripulantes) return <Tripulantes />;
+                        if (view === 'vuelos' && puedeVerVuelos) return <Vuelos />; // RENDERIZADO PROTEGIDO
                         if (view === 'planeamiento' && puedeVerPlaneamiento) return <PlaneamientoMapa />;
                         if (view === 'admin' && esAdmin) return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;

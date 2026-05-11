@@ -5,14 +5,12 @@ import axios from 'axios';
  * Manejo dinámico de comunicación entre Frontend y Backend.
  */
 const getBaseURL = () => {
-    // Forzamos el uso del Web Service en producción para evitar el 404 del static site
     const envUrl = import.meta.env.VITE_API_URL;
     if (envUrl) {
         let url = envUrl.trim().replace(/\/$/, "");
         return url.endsWith('/api') ? url : `${url}/api`;
     }
     
-    // Fallback manual para asegurar conexión con el Web Service de Render
     const isProduction = window.location.hostname !== 'localhost';
     return isProduction 
         ? 'https://appae.onrender.com/api' 
@@ -73,6 +71,32 @@ export const getTripulanteById = (id) => API.get(`/tripulantes/${id}`);
 export const createTripulante = (data) => API.post('/tripulantes', data);
 export const updateTripulante = (id, data) => API.put(`/tripulantes/${id}`, data);
 export const deleteTripulante = (id) => API.delete(`/tripulantes/${id}`);
+
+/**
+ * SERVICIOS DE GESTIÓN DE VUELOS (LIBRETA DE VUELO DIGITAL)
+ * Impacto automático en legajos de Tripulantes.
+ */
+export const getVuelos = (params = {}) => API.get('/vuelos', { params });
+
+export const registrarVuelo = (vueloData) => {
+    const dataNormalized = {
+        ...vueloData,
+        matricula: vueloData.matricula?.toUpperCase().trim(),
+        desde: vueloData.desde?.toUpperCase().trim(),
+        hasta: vueloData.hasta?.toUpperCase().trim(),
+        tipoMision: vueloData.tipoMision?.trim(),
+        elementoApoyado: (vueloData.elementoApoyado || "").toUpperCase().trim(),
+        horasVoladas: Number(vueloData.horasVoladas) || 0,
+        // Sanitización de IDs de Tripulación
+        instructor: vueloData.instructor || null,
+        piloto: vueloData.piloto || null,
+        copiloto: vueloData.copiloto || null,
+        mecanico: vueloData.mecanico || null
+    };
+    return API.post('/vuelos', dataNormalized);
+};
+
+export const deleteVuelo = (id) => API.delete(`/vuelos/${id}`);
 
 /**
  * SERVICIOS DE EVENTOS Y OPERACIONES (MAPA TÁCTICO)
@@ -270,6 +294,9 @@ const EventService = {
     deleteTripulante,
     getWeatherData,
     getAstronomyData,
+    getVuelos,
+    registrarVuelo,
+    deleteVuelo
 };
 
 export { EventService };
