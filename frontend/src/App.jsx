@@ -55,18 +55,13 @@ function App() {
 
     // --- REGLAS DE ACCESO ---
     const esAdmin = role === 'admin';
-    
-    // Módulos restringidos SOLO a Admin
     const puedeVerTripulantes = esAdmin;
     const puedeVerPlaneamiento = esAdmin;
     const puedeVerUsuarios = esAdmin;
 
-    // Módulos visibles para todos los autenticados
-    const puedeVerMapa = true; 
-    const puedeVerStats = true; 
-    const puedeCargarOperaciones = true; 
-    const puedeVerVuelos = true;
-    const puedeVerMaterial = true;
+    // --- LÓGICA DE CONTENEDOR DINÁMICO ---
+    // Si la vista es Stats, Mapa o Planeamiento, eliminamos márgenes y paddings
+    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -90,7 +85,6 @@ function App() {
                                 style={{...styles.btnNav, backgroundColor: view === 'calendar' ? '#1e3799' : '#4a69bd'}}
                             >📅 Calendario</button>
                             
-                            {/* EXCLUSIVO ADMIN: Usuarios */}
                             {puedeVerUsuarios && (
                                 <button 
                                     onClick={() => setView('admin')} 
@@ -98,7 +92,6 @@ function App() {
                                 >⚙️ Usuarios</button>
                             )}
 
-                            {/* EXCLUSIVO ADMIN: Personal */}
                             {puedeVerTripulantes && (
                                 <button 
                                     onClick={() => setView('tripulantes')} 
@@ -106,7 +99,6 @@ function App() {
                                 >👥 Personal</button>
                             )}
 
-                            {/* EXCLUSIVO ADMIN: Planeamiento */}
                             {puedeVerPlaneamiento && (
                                 <button 
                                     onClick={() => setView('planeamiento')} 
@@ -153,7 +145,7 @@ function App() {
             </nav>
 
             {/* CONTENIDO PRINCIPAL */}
-            <main style={(view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin') ? styles.containerFull : styles.container}>
+            <main style={esVistaFull ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
@@ -172,10 +164,12 @@ function App() {
                 )}
             </main>
 
-            {/* FOOTER */}
-            <footer style={styles.footer}>
-                <div>© 2026 Aviación de Ejército - Comando y Control</div>
-            </footer>
+            {/* FOOTER - Solo visible en vistas que no son Full para no tapar reportes */}
+            {!esVistaFull && (
+                <footer style={styles.footer}>
+                    <div>© 2026 Aviación de Ejército - Comando y Control</div>
+                </footer>
+            )}
         </div>
     );
 }
@@ -187,7 +181,15 @@ const styles = {
     btnNav: { color: 'white', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '0.7rem', transition: '0.3s' },
     btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
     container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
-    containerFull: { width: '100%', flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 65px)' },
+    containerFull: { 
+        width: '100%', 
+        flex: 1, 
+        position: 'relative', 
+        overflow: 'hidden', 
+        height: 'calc(100vh - 65px)',
+        display: 'flex',
+        flexDirection: 'column'
+    },
     footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.6rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' }
 };
 
