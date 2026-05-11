@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import 'leaflet/dist/leaflet.css'; 
 
-// IMPORTANTE: Ruta corregida para Render (./ en lugar de ../)
+// IMPORTANTE: Ruta relativa corregida para entorno de despliegue
 import { EventService } from './services/api'; 
 
 import CalendarPage from './pages/CalendarPage';
@@ -15,17 +15,12 @@ import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
 
-// Mantenemos el import pero no lo usaremos en el render por ahora
-// import Tripulantes from './pages/Tripulantes'; 
-
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
     const [role, setRole] = useState(localStorage.getItem('role'));
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [lastSync, setLastSync] = useState(localStorage.getItem('lastSync') || '---');
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -33,7 +28,6 @@ function App() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // GESTIÓN DE ESTADO ONLINE/OFFLINE
     useEffect(() => {
         const handleStatusChange = () => setIsOnline(navigator.onLine);
         window.addEventListener('online', handleStatusChange);
@@ -51,7 +45,7 @@ function App() {
         setView('calendar');
     };
 
-    // REGLAS DE ACCESO (Personal desactivado temporalmente)
+    // REGLAS DE ACCESO (RBAC)
     const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
     const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OFICINA_TECNICA' || role === 'BOSS';
     const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
@@ -73,26 +67,28 @@ function App() {
                 <div style={styles.navActions}>
                     {auth ? (
                         <>
-                            <button onClick={() => setView('calendar')} style={styles.btnNav}>📅 Calendario</button>
-                            
-                            {/* BOTÓN PERSONAL OCULTO HASTA ESTABILIZAR */}
+                            <button 
+                                onClick={() => setView('calendar')} 
+                                style={{...styles.btnNav, backgroundColor: view === 'calendar' ? '#1e3799' : '#4a69bd'}}
+                            >📅 Calendario</button>
                             
                             {puedeVerMapa && (
-                                <button onClick={() => setView('mapa')} style={{...styles.btnNav, backgroundColor: '#d35400'}}>📍 Mapa</button>
+                                <button 
+                                    onClick={() => setView('mapa')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'mapa' ? '#d35400' : '#4a69bd'}}
+                                >📍 Mapa</button>
                             )}
 
-                            {puedeVerVuelos && (
-                                <button onClick={() => setView('despacho')} style={{...styles.btnNav, backgroundColor: '#e67e22'}}>⚡ Vuelos</button>
-                            )}
-
-                            <button onClick={() => setView('estado')} style={{...styles.btnNav, backgroundColor: '#2c3e50'}}>🚁 Material</button>
-
-                            {puedeVerStats && (
-                                <button onClick={() => setView('stats')} style={{...styles.btnNav, backgroundColor: '#007bff'}}>📊 Stats</button>
-                            )}
+                            <button 
+                                onClick={() => setView('estado')} 
+                                style={{...styles.btnNav, backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd'}}
+                            >🚁 Material</button>
 
                             {puedeCargarOperaciones && (
-                                <button onClick={() => setView('operaciones')} style={{...styles.btnNav, backgroundColor: '#60a3bc'}}>📝 Carga</button>
+                                <button 
+                                    onClick={() => setView('operaciones')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'operaciones' ? '#60a3bc' : '#4a69bd'}}
+                                >📝 Carga</button>
                             )}
 
                             <button onClick={handleLogout} style={styles.btnLogout}>Salir</button>
@@ -103,7 +99,7 @@ function App() {
                 </div>
             </nav>
 
-            <main style={(view === 'mapa' || view === 'stats' || view === 'material' || view === 'estado') ? styles.containerFull : styles.container}>
+            <main style={(view === 'mapa' || view === 'estado') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
@@ -114,7 +110,7 @@ function App() {
                         if (view === 'despacho' && puedeVerVuelos) return <CargaTactica />;
                         if (view === 'operaciones' && puedeCargarOperaciones) return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
-                        if (view === 'material' && puedeGestionarMaterial) return <Material />;
+                        if (view === 'material') return <Material />;
                         return <CalendarPage />;
                     })()
                 )}
@@ -130,7 +126,7 @@ function App() {
                         <span>{isOnline ? 'CONECTADO' : 'MODO OFFLINE'}</span>
                     </div>
                 </div>
-                <div>© 2026 Aviación de Ejército - Sistema de Comando y Control</div>
+                <div>© 2026 Aviación de Ejército - Comando y Control</div>
             </footer>
         </div>
     );
@@ -139,12 +135,12 @@ function App() {
 const styles = {
     navbar: { backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', position: 'sticky', top: 0, zIndex: 3000 },
     logo: { fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer' },
-    navActions: { display: 'flex', alignItems: 'center', gap: '6px' },
-    btnNav: { color: 'white', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '0.75rem', backgroundColor: '#4a69bd' },
+    navActions: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' },
+    btnNav: { color: 'white', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '0.7rem', transition: '0.3s' },
     btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
     container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
     containerFull: { width: '100%', flex: 1, position: 'relative', overflow: 'hidden' },
-    footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.65rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' },
+    footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.6rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' },
     statusRow: { display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '4px', fontWeight: 'bold' }
 };
 
