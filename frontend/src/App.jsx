@@ -59,8 +59,9 @@ function App() {
     // Módulos restringidos SOLO a Admin
     const puedeVerTripulantes = esAdmin;
     const puedeVerPlaneamiento = esAdmin;
+    const puedeVerUsuarios = esAdmin;
 
-    // Módulos visibles para todos los autenticados (según tu pedido anterior)
+    // Módulos visibles para todos los autenticados
     const puedeVerMapa = true; 
     const puedeVerStats = true; 
     const puedeCargarOperaciones = true; 
@@ -89,7 +90,15 @@ function App() {
                                 style={{...styles.btnNav, backgroundColor: view === 'calendar' ? '#1e3799' : '#4a69bd'}}
                             >📅 Calendario</button>
                             
-                            {/* EXCLUSIVO ADMIN */}
+                            {/* EXCLUSIVO ADMIN: Usuarios */}
+                            {puedeVerUsuarios && (
+                                <button 
+                                    onClick={() => setView('admin')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'admin' ? '#2c3e50' : '#4a69bd'}}
+                                >⚙️ Usuarios</button>
+                            )}
+
+                            {/* EXCLUSIVO ADMIN: Personal */}
                             {puedeVerTripulantes && (
                                 <button 
                                     onClick={() => setView('tripulantes')} 
@@ -97,7 +106,7 @@ function App() {
                                 >👥 Personal</button>
                             )}
 
-                            {/* EXCLUSIVO ADMIN */}
+                            {/* EXCLUSIVO ADMIN: Planeamiento */}
                             {puedeVerPlaneamiento && (
                                 <button 
                                     onClick={() => setView('planeamiento')} 
@@ -113,12 +122,17 @@ function App() {
                             <button 
                                 onClick={() => setView('despacho')} 
                                 style={{...styles.btnNav, backgroundColor: view === 'despacho' ? '#e67e22' : '#4a69bd'}}
-                            >⚡ Vuelos</button>
+                            >⚡ Op en Desarrollo</button>
 
                             <button 
                                 onClick={() => setView('estado')} 
                                 style={{...styles.btnNav, backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd'}}
-                            >🚁 Material</button>
+                            >🚁 Estado Aeronaves</button>
+
+                            <button 
+                                onClick={() => setView('material')} 
+                                style={{...styles.btnNav, backgroundColor: view === 'material' ? '#27ae60' : '#4a69bd'}}
+                            >🔧 Oficina Tecnica</button>
 
                             <button 
                                 onClick={() => setView('stats')} 
@@ -139,7 +153,7 @@ function App() {
             </nav>
 
             {/* CONTENIDO PRINCIPAL */}
-            <main style={(view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento') ? styles.containerFull : styles.container}>
+            <main style={(view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
