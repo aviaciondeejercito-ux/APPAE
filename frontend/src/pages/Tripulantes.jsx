@@ -43,7 +43,6 @@ const Tripulantes = () => {
         const hoy = new Date();
         const fVenc = new Date(fecha);
         const difDias = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24));
-
         if (difDias < 0) return { label: 'VENCIDO', color: '#e74c3c' };
         if (difDias <= 30) return { label: 'PRÓXIMO A VENCER', color: '#f39c12' };
         return { label: 'AL DÍA', color: '#27ae60' };
@@ -64,7 +63,10 @@ const Tripulantes = () => {
                 vueloVisual: seleccionado.totalesHistoricos?.vueloVisual || 0
             });
         } else if (type === 'habilitacion') {
-            setFormData({ aeronave: '', rolActual: '', fechaHabilitacion: '', totalHorasSistema: 0 });
+            setFormData({ 
+                aeronave: '', rolActual: '', fechaHabilitacion: '', 
+                hsVisual: 0, hsInstrumental: 0, hsNocturno: 0, hsNVG: 0 
+            });
         } else if (type === 'capacitacion') {
             setFormData({ tipo: '', fechaAdquisicion: '', horasAcreditadas: 0 });
         }
@@ -87,17 +89,25 @@ const Tripulantes = () => {
                 } else if (modalType === 'horas') {
                     await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
                 } else if (modalType === 'habilitacion') {
-                    // SUMA AUTOMÁTICA DE HORAS AL TOTAL GENERAL AL DAR DE ALTA SdA
-                    const nuevasHorasDiurnas = (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.totalHorasSistema || 0);
-                    await updateTripulante(seleccionado._id, { 
-                        totalesHistoricos: { ...seleccionado.totalesHistoricos, vueloDiurno: nuevasHorasDiurnas } 
+                    // LÓGICA DE SUMA INTEGRAL POR CATEGORÍA
+                    const totalSdA = Number(formData.hsVisual) + Number(formData.hsInstrumental) + Number(formData.hsNocturno) + Number(formData.hsNVG);
+                    
+                    const nuevosTotales = {
+                        vueloDiurno: (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.hsVisual || 0),
+                        vueloNocturno: (seleccionado.totalesHistoricos?.vueloNocturno || 0) + Number(formData.hsNocturno || 0),
+                        vueloInstrumental: (seleccionado.totalesHistoricos?.vueloInstrumental || 0) + Number(formData.hsInstrumental || 0),
+                        vueloVisual: (seleccionado.totalesHistoricos?.vueloVisual || 0) + Number(formData.hsNVG || 0)
+                    };
+
+                    await updateTripulante(seleccionado._id, { totalesHistoricos: nuevosTotales });
+                    await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, {
+                        ...formData,
+                        totalHorasSistema: totalSdA // Guardamos la suma total en el objeto de la aeronave
                     });
-                    await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, formData);
                 } else if (modalType === 'capacitacion') {
-                    // SUMA AUTOMÁTICA DE HORAS AL TOTAL GENERAL (NVG/VISUAL) AL DAR DE ALTA CAPACITACIÓN
-                    const nuevasHorasVisual = (seleccionado.totalesHistoricos?.vueloVisual || 0) + Number(formData.horasAcreditadas || 0);
+                    const nuevasHorasVisual = (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.horasAcreditadas || 0);
                     await updateTripulante(seleccionado._id, { 
-                        totalesHistoricos: { ...seleccionado.totalesHistoricos, vueloVisual: nuevasHorasVisual } 
+                        totalesHistoricos: { ...seleccionado.totalesHistoricos, vueloDiurno: nuevasHorasVisual } 
                     });
                     await API.post(`/tripulantes/${seleccionado._id}/capacitacion`, formData);
                 }
@@ -164,6 +174,7 @@ const Tripulantes = () => {
                         </div>
 
                         <div style={styles.legajoBody}>
+                            {/* CERTIFICACIONES */}
                             <div style={styles.sectionHeader}>
                                 <ShieldCheck size={18} /> <span>CERTIFICACIONES PERIÓDICAS</span>
                                 <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall}><Edit3 size={14}/></button>
@@ -189,6 +200,7 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
+                            {/* HORAS */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES)</span>
                                 <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>
@@ -200,6 +212,7 @@ const Tripulantes = () => {
                                 <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloVisual || 0} hs</span></div>
                             </div>
 
+                            {/* SdA */}
                             <div style={styles.sectionHeader}>
                                 <Award size={18} /> <span>EXPERIENCIA POR SdA</span>
                                 <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR</button>
@@ -213,13 +226,14 @@ const Tripulantes = () => {
                                         </div>
                                         <div style={{display: 'flex', gap: '25px', alignItems: 'center'}}>
                                             <div style={styles.habYears}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
-                                            <div style={styles.habHours}><Clock size={12} /> {h.totalHorasSistema || 0} hs</div>
+                                            <div style={styles.habHours}><Clock size={12} /> {h.totalHorasSistema || 0} hs totales</div>
                                             <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={14}/></button>
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
+                            {/* CAPACITACIONES */}
                             <div style={styles.sectionHeader}>
                                 <Star size={18} /> <span>CAPACITACIONES TÁCTICAS</span>
                                 <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>
@@ -299,8 +313,16 @@ const Tripulantes = () => {
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
                                         <option value="">Seleccionar Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
                                     </select>
-                                    <label style={styles.label}>Horas Acumuladas en este SdA</label>
-                                    <input type="number" style={styles.formInput} value={formData.totalHorasSistema} onChange={e => setFormData({...formData, totalHorasSistema: e.target.value})} required />
+                                    <div style={styles.modalGrid2}>
+                                        <div style={styles.formGroup}><label style={styles.label}>Hs Visual</label>
+                                        <input type="number" style={styles.formInput} value={formData.hsVisual} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required /></div>
+                                        <div style={styles.formGroup}><label style={styles.label}>Hs Nocturno</label>
+                                        <input type="number" style={styles.formInput} value={formData.hsNocturno} onChange={e => setFormData({...formData, hsNocturno: e.target.value})} required /></div>
+                                        <div style={styles.formGroup}><label style={styles.label}>Hs Instrumental</label>
+                                        <input type="number" style={styles.formInput} value={formData.hsInstrumental} onChange={e => setFormData({...formData, hsInstrumental: e.target.value})} required /></div>
+                                        <div style={styles.formGroup}><label style={styles.label}>Hs NVG</label>
+                                        <input type="number" style={styles.formInput} value={formData.hsNVG} onChange={e => setFormData({...formData, hsNVG: e.target.value})} required /></div>
+                                    </div>
                                     <label style={styles.label}>Fecha Aptitud Inicial</label>
                                     <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
                                 </div>
@@ -311,7 +333,7 @@ const Tripulantes = () => {
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
                                         <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
-                                    <label style={styles.label}>Horas Acumuladas en esta actividad</label>
+                                    <label style={styles.label}>Horas Acumuladas</label>
                                     <input type="number" style={styles.formInput} value={formData.horasAcreditadas} onChange={e => setFormData({...formData, horasAcreditadas: e.target.value})} required />
                                     <label style={styles.label}>Fecha Adquisición</label>
                                     <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
