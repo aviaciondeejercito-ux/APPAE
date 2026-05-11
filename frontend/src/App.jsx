@@ -24,14 +24,12 @@ function App() {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-    // Escucha cambios de tamaño de pantalla
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Gestión de estado de conexión
     useEffect(() => {
         const handleStatusChange = () => setIsOnline(navigator.onLine);
         window.addEventListener('online', handleStatusChange);
@@ -42,7 +40,6 @@ function App() {
         };
     }, []);
 
-    // Actualiza el rol cuando cambia la autenticación
     useEffect(() => {
         if (auth) {
             setRole(localStorage.getItem('role') || 'user');
@@ -56,14 +53,19 @@ function App() {
         setView('calendar');
     };
 
-    // --- ACCESO TOTAL TEMPORAL ---
-    // Seteamos todas las reglas en true para que cualquier usuario logueado vea todo
+    // --- REGLAS DE ACCESO ---
+    const esAdmin = role === 'admin';
+    
+    // Módulos restringidos SOLO a Admin
+    const puedeVerTripulantes = esAdmin;
+    const puedeVerPlaneamiento = esAdmin;
+
+    // Módulos visibles para todos los autenticados (según tu pedido anterior)
     const puedeVerMapa = true; 
     const puedeVerStats = true; 
     const puedeCargarOperaciones = true; 
-    const puedeVerTripulantes = true; 
-    const puedeGestionarMaterial = true; 
     const puedeVerVuelos = true;
+    const puedeVerMaterial = true;
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -87,6 +89,7 @@ function App() {
                                 style={{...styles.btnNav, backgroundColor: view === 'calendar' ? '#1e3799' : '#4a69bd'}}
                             >📅 Calendario</button>
                             
+                            {/* EXCLUSIVO ADMIN */}
                             {puedeVerTripulantes && (
                                 <button 
                                     onClick={() => setView('tripulantes')} 
@@ -94,38 +97,38 @@ function App() {
                                 >👥 Personal</button>
                             )}
 
-                            {puedeVerMapa && (
+                            {/* EXCLUSIVO ADMIN */}
+                            {puedeVerPlaneamiento && (
                                 <button 
-                                    onClick={() => setView('mapa')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'mapa' ? '#d35400' : '#4a69bd'}}
-                                >📍 Mapa</button>
+                                    onClick={() => setView('planeamiento')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'planeamiento' ? '#8e44ad' : '#4a69bd'}}
+                                >🗺️ Planeamiento</button>
                             )}
 
-                            {puedeVerVuelos && (
-                                <button 
-                                    onClick={() => setView('despacho')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'despacho' ? '#e67e22' : '#4a69bd'}}
-                                >⚡ Vuelos</button>
-                            )}
+                            <button 
+                                onClick={() => setView('mapa')} 
+                                style={{...styles.btnNav, backgroundColor: view === 'mapa' ? '#d35400' : '#4a69bd'}}
+                            >📍 Mapa</button>
+
+                            <button 
+                                onClick={() => setView('despacho')} 
+                                style={{...styles.btnNav, backgroundColor: view === 'despacho' ? '#e67e22' : '#4a69bd'}}
+                            >⚡ Vuelos</button>
 
                             <button 
                                 onClick={() => setView('estado')} 
                                 style={{...styles.btnNav, backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd'}}
                             >🚁 Material</button>
 
-                            {puedeVerStats && (
-                                <button 
-                                    onClick={() => setView('stats')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd'}}
-                                >📊 Stats</button>
-                            )}
+                            <button 
+                                onClick={() => setView('stats')} 
+                                style={{...styles.btnNav, backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd'}}
+                            >📊 Stats</button>
 
-                            {puedeCargarOperaciones && (
-                                <button 
-                                    onClick={() => setView('operaciones')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'operaciones' ? '#60a3bc' : '#4a69bd'}}
-                                >📝 Carga</button>
-                            )}
+                            <button 
+                                onClick={() => setView('operaciones')} 
+                                style={{...styles.btnNav, backgroundColor: view === 'operaciones' ? '#60a3bc' : '#4a69bd'}}
+                            >📝 Carga</button>
 
                             <button onClick={handleLogout} style={styles.btnLogout}>Salir</button>
                         </>
@@ -136,14 +139,15 @@ function App() {
             </nav>
 
             {/* CONTENIDO PRINCIPAL */}
-            <main style={(view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'stats' || view === 'despacho') ? styles.containerFull : styles.container}>
+            <main style={(view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
-                        if (view === 'admin') return <AdminPanel />;
+                        if (view === 'tripulantes' && puedeVerTripulantes) return <Tripulantes />;
+                        if (view === 'planeamiento' && puedeVerPlaneamiento) return <PlaneamientoMapa />;
+                        if (view === 'admin' && esAdmin) return <AdminPanel />;
                         if (view === 'stats') return <Estadisticas />;
-                        if (view === 'tripulantes') return <Tripulantes />;
                         if (view === 'mapa') return <OperacionesMapa />;
                         if (view === 'despacho') return <CargaTactica />;
                         if (view === 'operaciones') return <Operaciones />; 
@@ -156,16 +160,7 @@ function App() {
 
             {/* FOOTER */}
             <footer style={styles.footer}>
-                <div style={styles.statusRow}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <div style={{
-                            width: '8px', height: '8px', borderRadius: '50%', 
-                            backgroundColor: isOnline ? '#2ecc71' : '#e74c3c'
-                        }} />
-                        <span>{isOnline ? 'CONECTADO' : 'MODO OFFLINE'}</span>
-                    </div>
-                </div>
-                <div>© 2026 Aviación de Ejército - Sistema de Comando y Control</div>
+                <div>© 2026 Aviación de Ejército - Comando y Control</div>
             </footer>
         </div>
     );
@@ -179,8 +174,7 @@ const styles = {
     btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
     container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
     containerFull: { width: '100%', flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 65px)' },
-    footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.6rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' },
-    statusRow: { display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '4px', fontWeight: 'bold' }
+    footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.6rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' }
 };
 
 export default App;
