@@ -17,7 +17,6 @@ import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
 
 function App() {
-    // Sincronizamos estados con localStorage de entrada
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
     const [role, setRole] = useState(localStorage.getItem('role') || 'user');
     const [view, setView] = useState('calendar'); 
@@ -60,11 +59,10 @@ function App() {
     const puedeVerUsuarios = esAdmin;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    // Si la vista es Stats, Mapa o Planeamiento, eliminamos márgenes y paddings
     const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats';
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
             
             {/* NAVBAR */}
             <nav style={{
@@ -164,7 +162,7 @@ function App() {
                 )}
             </main>
 
-            {/* FOOTER - Solo visible en vistas que no son Full para no tapar reportes */}
+            {/* FOOTER - Solo visible en vistas que no son Full */}
             {!esVistaFull && (
                 <footer style={styles.footer}>
                     <div>© 2026 Aviación de Ejército - Comando y Control</div>
@@ -182,13 +180,12 @@ const styles = {
     btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
     container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
     containerFull: { 
-        width: '100%', 
-        flex: 1, 
-        position: 'relative', 
-        overflow: 'hidden', 
+        width: '100vw', 
         height: 'calc(100vh - 65px)',
-        display: 'flex',
-        flexDirection: 'column'
+        margin: 0,
+        padding: 0,
+        overflow: 'hidden',
+        display: 'block' 
     },
     footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.6rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' }
 };
