@@ -73,22 +73,22 @@ function App() {
 
     const puedeVerUsuarios = esAdmin;
 
-    // Tripulantes: Admin + Operaciones + Jefe
-    const puedeVerTripulantes = esAdmin || esOperaciones || esJefe; 
+    // Tripulantes: Admin + Operaciones + Jefe + Personal
+    const puedeVerTripulantes = esAdmin || esOperaciones || esJefe || esPersonal; 
 
     // Vuelos: Admin + Operaciones
     const puedeVerVuelos = esAdmin || esOperaciones; 
 
-    // Planeamiento: Admin + todos los roles tipo user
+    // Planeamiento: Admin + todos los roles operativos
     const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
 
-    // Mapa: Mandos + todos los roles tipo user
+    // Mapa: Mandos + todos los roles operativos
     const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
 
-    // Estado Aeronaves: Mandos + Oficina Técnica + todos los roles tipo user
+    // Estado Aeronaves: Mandos + Oficina Técnica + todos los roles operativos
     const puedeVerEstadoAeronaves = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
 
-    // Carga de Actividades: Todos menos el nivel puramente de consulta (si hubiera), pero incluimos a todos por operatividad
+    // Carga de Actividades: Todos operativos
     const puedeVerCarga = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
 
     // Oficina Técnica: Solo Admin y Oficina Técnica
@@ -178,7 +178,7 @@ function App() {
                                 <button 
                                     onClick={() => setView('material')} 
                                     style={{...styles.btnNav, backgroundColor: view === 'material' ? '#27ae60' : '#4a69bd'}}
-                                >🔧 Oficina Tecnica</button>
+                                >🔧 Oficina Técnica</button>
                             )}
 
                             {puedeVerStats && (
@@ -203,23 +203,36 @@ function App() {
                 </div>
             </nav>
 
-            {/* CONTENIDO PRINCIPAL */}
+            {/* CONTENIDO PRINCIPAL - SWITCH CORREGIDO */}
             <main style={esVistaFull ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
-                        if (view === 'tripulantes' && puedeVerTripulantes) return <Tripulantes />;
-                        if (view === 'vuelos' && puedeVerVuelos) return <Vuelos />;
-                        if (view === 'planeamiento' && puedeVerPlaneamiento) return <PlaneamientoMapa />;
-                        if (view === 'admin' && esAdmin) return <AdminPanel />;
-                        if (view === 'stats' && puedeVerStats) return <Estadisticas />;
-                        if (view === 'mapa' && puedeVerMapa) return <OperacionesMapa />;
-                        if (view === 'despacho' && puedeVerOpEnDesarrollo) return <CargaTactica />;
-                        if (view === 'operaciones' && puedeVerCarga) return <Operaciones />; 
-                        if (view === 'estado' && puedeVerEstadoAeronaves) return <EstadoAeronaves />;
-                        if (view === 'material' && puedeVerOficinaTecnica) return <Material />;
-                        return <CalendarPage />;
+                        switch(view) {
+                            case 'tripulantes':
+                                return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
+                            case 'vuelos':
+                                return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
+                            case 'planeamiento':
+                                return puedeVerPlaneamiento ? <PlaneamientoMapa /> : <CalendarPage />;
+                            case 'admin':
+                                return esAdmin ? <AdminPanel /> : <CalendarPage />;
+                            case 'stats':
+                                return puedeVerStats ? <Estadisticas /> : <CalendarPage />;
+                            case 'mapa':
+                                return puedeVerMapa ? <OperacionesMapa /> : <CalendarPage />;
+                            case 'despacho':
+                                return puedeVerOpEnDesarrollo ? <CargaTactica /> : <CalendarPage />;
+                            case 'operaciones':
+                                return puedeVerCarga ? <Operaciones /> : <CalendarPage />;
+                            case 'estado':
+                                return puedeVerEstadoAeronaves ? <EstadoAeronaves /> : <CalendarPage />;
+                            case 'material':
+                                return puedeVerOficinaTecnica ? <Material /> : <CalendarPage />;
+                            default:
+                                return <CalendarPage />;
+                        }
                     })()
                 )}
             </main>
