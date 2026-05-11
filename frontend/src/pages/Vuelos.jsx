@@ -7,10 +7,17 @@ const Vuelos = () => {
     const [tripulantes, setTripulantes] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    const [user] = useState({
-        role: localStorage.getItem('role')?.toLowerCase() || 'user',
-        unidad: localStorage.getItem('elemento')?.trim().toUpperCase() || ''
-    });
+    // --- NORMALIZACIÓN SINCRO JOKER ---
+    const rawRole = localStorage.getItem('role') || 'user';
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
+    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
+
+    // --- REGLAS DE ACCESO ---
+    const esAdmin = roleNormalizado === 'ADMIN';
+    // Solo Admin, Operaciones y el usuario base pueden cargar
+    const puedeCargarVuelos = ['ADMIN', 'OPERACIONES', 'USER'].includes(roleNormalizado);
+    // Mandos superiores ven todo el historial
+    const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
 
     const [formData, setFormData] = useState({
         fecha: '', aeronave: '', matricula: '',
@@ -28,12 +35,19 @@ const Vuelos = () => {
     useEffect(() => {
         fetchVuelos();
         fetchTripulantes();
-    }, []);
+    }, [userUnidad]);
 
     const fetchVuelos = async () => {
         try {
             const res = await API.get('/vuelos');
-            setVuelos(res.data);
+            // Filtrado de seguridad AE
+            const dataFinal = esMandoEstrategico
+                ? res.data 
+                : res.data.filter(v => 
+                    v.unidadResponsable?.toUpperCase() === userUnidad || 
+                    v.matricula?.includes(userUnidad)
+                );
+            setVuelos(dataFinal);
         } catch (error) { console.error("Error cargando vuelos", error); }
     };
 
@@ -50,6 +64,7 @@ const Vuelos = () => {
 
         const payload = {
             ...formData,
+            unidadResponsable: userUnidad, // Inyectamos la unidad del operador
             instructor: formData.instructor || null,
             copiloto: formData.copiloto || null,
             mecanico: formData.mecanico || null,
@@ -61,7 +76,7 @@ const Vuelos = () => {
 
         try {
             await API.post('/vuelos', payload);
-            alert("Vuelo registrado correctamente.");
+            alert("✅ Vuelo registrado y horas computadas correctamente.");
             setFormData({ 
                 ...formData, 
                 horasVoladas: 0, desde: '', hasta: '', matricula: '',
@@ -70,12 +85,16 @@ const Vuelos = () => {
             });
             fetchVuelos();
         } catch (error) {
-            alert("Error: " + (error.response?.data?.mensaje || "Fallo en la conexión"));
+            alert("❌ Error: " + (error.response?.data?.mensaje || "Fallo en la validación de carga"));
         } finally { setLoading(false); }
     };
 
     const eliminarVuelo = async (id) => {
-        if (window.confirm("¿Seguro desea eliminar este registro?")) {
+        if (!esAdmin) {
+            alert("Acceso Denegado: Solo el Administrador puede anular registros de vuelo.");
+            return;
+        }
+        if (window.confirm("¿Seguro desea eliminar este registro? Esta acción es irreversible y afectará el cómputo de horas.")) {
             try {
                 await API.delete(`/vuelos/${id}`);
                 fetchVuelos();
@@ -87,17 +106,16 @@ const Vuelos = () => {
         <div style={styles.container}>
             <div style={styles.header}>
                 <div>
-                    <h1 style={styles.title}>Registro de Vuelos</h1>
-                    <span style={styles.subtitle}>Unidad: {user.unidad}</span>
+                    <h1 style={styles.title}>Libro de Vuelo Digital - Sistema AE</h1>
+                    <span style={styles.subtitle}>Unidad: {userUnidad || "SIN UNIDAD"} | Nivel de Acceso: {roleNormalizado}</span>
                 </div>
             </div>
 
             <div style={styles.mainGrid}>
-                {/* FORMULARIO */}
-                <div style={styles.card}>
+                {/* FORMULARIO DE CARGA */}
+                <div style={{...styles.card, display: puedeCargarVuelos ? 'block' : 'none'}}>
                     <h2 style={styles.cardTitle}><Save size={18} /> Nueva Carga - Formulario -12</h2>
                     <form onSubmit={handleSubmit} style={styles.form}>
-                        {/* Fecha y Aeronave */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Fecha</label>
                             <input type="date" style={styles.input} onChange={e => setFormData({...formData, fecha: e.target.value})} required/></div>
@@ -108,7 +126,6 @@ const Vuelos = () => {
                             </select></div>
                         </div>
 
-                        {/* Matrícula y Elemento Apoyado */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Matrícula</label>
                             <input placeholder="AE-XXX" style={styles.input} value={formData.matricula} onChange={e => setFormData({...formData, matricula: e.target.value.toUpperCase()})} required/></div>
@@ -116,7 +133,6 @@ const Vuelos = () => {
                             <input placeholder="Ej: DIR AE" style={styles.input} value={formData.elementoApoyado} onChange={e => setFormData({...formData, elementoApoyado: e.target.value.toUpperCase()})} required/></div>
                         </div>
 
-                        {/* Piloto y Copiloto */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Piloto</label>
                             <select style={styles.input} value={formData.piloto} onChange={e => setFormData({...formData, piloto: e.target.value})} required>
@@ -130,59 +146,21 @@ const Vuelos = () => {
                             </select></div>
                         </div>
 
-                        {/* Mecánicos */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Mecánico 1</label>
                             <select style={styles.input} value={formData.mecanico} onChange={e => setFormData({...formData, mecanico: e.target.value})}>
                                 <option value="">Ninguno</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
                             </select></div>
-                            <div style={styles.group}><label style={styles.label}>Mecánico 2 (Opt)</label>
-                            <select style={styles.input} value={formData.segundoMecanico} onChange={e => setFormData({...formData, segundoMecanico: e.target.value})}>
-                                <option value="">Ninguno</option>
-                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
-                            </select></div>
+                            <div style={styles.group}><label style={styles.label}>Hs Voladas</label>
+                            <input type="number" step="0.1" style={styles.input} value={formData.horasVoladas} onChange={e => setFormData({...formData, horasVoladas: e.target.value})} required/></div>
                         </div>
 
-                        {/* Ruta */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Desde</label>
                             <input placeholder="ORIGEN" style={styles.input} value={formData.desde} onChange={e => setFormData({...formData, desde: e.target.value.toUpperCase()})} required/></div>
                             <div style={styles.group}><label style={styles.label}>Hasta</label>
                             <input placeholder="DESTINO" style={styles.input} value={formData.hasta} onChange={e => setFormData({...formData, hasta: e.target.value.toUpperCase()})} required/></div>
-                        </div>
-
-                        {/* Pax y Carga */}
-                        <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Pasajeros</label>
-                            <input type="number" style={styles.input} value={formData.cantidadPasajeros} onChange={e => setFormData({...formData, cantidadPasajeros: e.target.value})} /></div>
-                            <div style={styles.group}><label style={styles.label}>Carga (Kg)</label>
-                            <input type="number" style={styles.input} value={formData.pesoCarga} onChange={e => setFormData({...formData, pesoCarga: e.target.value})} /></div>
-                        </div>
-
-                        {/* Horas y Reglas */}
-                        <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Horas</label>
-                            <input type="number" step="0.1" style={styles.input} value={formData.horasVoladas} onChange={e => setFormData({...formData, horasVoladas: e.target.value})} required/></div>
-                            <div style={styles.group}><label style={styles.label}>Reglas Vuelo</label>
-                            <select style={styles.input} value={formData.reglasVuelo} onChange={e => setFormData({...formData, reglasVuelo: e.target.value})}>
-                                <option value="VFR">VFR</option>
-                                <option value="IFR">IFR</option>
-                            </select></div>
-                        </div>
-
-                        {/* Local y Condición */}
-                        <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Local/Travesía</label>
-                            <select style={styles.input} value={formData.localTravesia} onChange={e => setFormData({...formData, localTravesia: e.target.value})}>
-                                <option value="Local">Local</option>
-                                <option value="Travesia">Travesía</option>
-                            </select></div>
-                            <div style={styles.group}><label style={styles.label}>Condición</label>
-                            <select style={styles.input} value={formData.condicion} onChange={e => setFormData({...formData, condicion: e.target.value})}>
-                                <option value="Diurno">Diurno</option>
-                                <option value="Nocturno">Nocturno</option>
-                            </select></div>
                         </div>
 
                         <div style={styles.row}>
@@ -191,17 +169,27 @@ const Vuelos = () => {
                                 <option value="">Seleccionar...</option>
                                 {misiones.map(m => <option key={m} value={m}>{m}</option>)}
                             </select></div>
-                            <div style={styles.group}><label style={styles.label}>NVG</label>
-                            <input type="checkbox" checked={formData.usoNVG} onChange={e => setFormData({...formData, usoNVG: e.target.checked})} /></div>
+                            <div style={styles.group}><label style={styles.label}>Condición</label>
+                            <select style={styles.input} value={formData.condicion} onChange={e => setFormData({...formData, condicion: e.target.value})}>
+                                <option value="Diurno">Diurno</option>
+                                <option value="Nocturno">Nocturno</option>
+                            </select></div>
                         </div>
 
                         <button disabled={loading} type="submit" style={styles.btnSave}>
-                            {loading ? "SINCRONIZANDO..." : "REGISTRAR VUELO"}
+                            {loading ? "SINCRONIZANDO CON BASE DE DATOS..." : "REGISTRAR VUELO"}
                         </button>
                     </form>
                 </div>
 
-                {/* TABLA DE HISTORIAL EXPANDIDA */}
+                {!puedeCargarVuelos && (
+                    <div style={styles.card}>
+                        <h2 style={styles.cardTitle}><Info size={18} /> Información de Acceso</h2>
+                        <p style={{fontSize: '0.85rem', color: '#666'}}>Su nivel jerárquico actual es de <strong>SOLO CONSULTA</strong> para el historial de vuelos.</p>
+                    </div>
+                )}
+
+                {/* TABLA DE HISTORIAL */}
                 <div style={{...styles.card, flex: 1}}>
                     <h2 style={styles.cardTitle}><Clock size={18} /> Historial Operativo Detallado</h2>
                     <div style={styles.tableContainer}>
@@ -220,61 +208,46 @@ const Vuelos = () => {
                             <tbody>
                                 {vuelos.map(v => (
                                     <tr key={v._id} style={styles.tr}>
-                                        {/* Fecha y Ruta */}
                                         <td style={styles.td}>
                                             <div style={{fontWeight: 'bold'}}>{new Date(v.fecha).toLocaleDateString()}</div>
                                             <div style={{fontSize: '0.7rem', color: '#666'}}>{v.desde} ➔ {v.hasta}</div>
                                             <div style={styles.hsBadge}>{v.horasVoladas} hs</div>
                                         </td>
-
-                                        {/* Aeronave */}
                                         <td style={styles.td}>
                                             <div style={{fontWeight: 'bold'}}>{v.aeronave}</div>
                                             <div style={{fontSize: '0.75rem', color: '#004a99'}}>{v.matricula}</div>
                                         </td>
-
-                                        {/* Tripulación */}
                                         <td style={styles.td}>
                                             <div style={styles.tripuList}>
                                                 <span><Users size={10} /> P: {v.piloto?.apellido || 'S/D'}</span>
                                                 {v.copiloto && <span><Users size={10} /> C: {v.copiloto.apellido}</span>}
-                                                {v.mecanico && <span style={{color: '#555'}}><Info size={10} /> M: {v.mecanico.apellido}</span>}
                                             </div>
                                         </td>
-
-                                        {/* Carga y Pax */}
                                         <td style={styles.td}>
                                             <div style={styles.dataRow}>< Luggage size={12} /> {v.pesoCarga || 0} kg</div>
                                             <div style={styles.dataRow}><Users size={12} /> {v.cantidadPasajeros || 0} pax</div>
                                         </td>
-
-                                        {/* Condiciones */}
                                         <td style={styles.td}>
                                             <div style={styles.miniTag}>{v.reglasVuelo}</div>
                                             <div style={styles.miniTag}>{v.condicion}</div>
-                                            <div style={styles.miniTag}>{v.localTravesia}</div>
                                             {v.usoNVG && <div style={{...styles.miniTag, backgroundColor: '#dcfce7', color: '#166534'}}>NVG</div>}
                                         </td>
-
-                                        {/* Misión y Apoyo */}
                                         <td style={styles.td}>
                                             <span style={styles.misionTag}>{v.tipoMision}</span>
-                                            <div style={{fontSize: '0.7rem', marginTop: '4px', fontWeight: '600', color: '#444'}}>
-                                                APOYO: {v.elementoApoyado || 'S/D'}
-                                            </div>
+                                            <div style={{fontSize: '0.7rem', marginTop: '4px', color: '#444'}}>APOYO: {v.elementoApoyado}</div>
                                         </td>
-
-                                        {/* Acción */}
                                         <td style={styles.td}>
-                                            <button onClick={() => eliminarVuelo(v._id)} style={styles.btnDel} title="Eliminar Registro">
-                                                <Trash2 size={16}/>
-                                            </button>
+                                            {esAdmin && (
+                                                <button onClick={() => eliminarVuelo(v._id)} style={styles.btnDel}>
+                                                    <Trash2 size={16}/>
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                        {vuelos.length === 0 && <div style={styles.noData}>No hay vuelos registrados para esta unidad.</div>}
+                        {vuelos.length === 0 && <div style={styles.noData}>No hay vuelos registrados bajo esta jurisdicción.</div>}
                     </div>
                 </div>
             </div>
@@ -283,9 +256,9 @@ const Vuelos = () => {
 };
 
 const styles = {
-    container: { padding: '20px', backgroundColor: '#f4f7f6', minHeight: '100vh' },
+    container: { padding: '20px', backgroundColor: '#f4f7f6', minHeight: 'calc(100vh - 65px)' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    title: { margin: 0, fontSize: '1.4rem', color: '#1b3a57' },
+    title: { margin: 0, fontSize: '1.4rem', color: '#1b3a57', fontWeight: 'bold' },
     subtitle: { color: '#7f8c8d', fontSize: '0.85rem' },
     mainGrid: { display: 'flex', gap: '20px', alignItems: 'flex-start' },
     card: { backgroundColor: 'white', borderRadius: '8px', padding: '15px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', minWidth: '400px' },
@@ -299,7 +272,7 @@ const styles = {
     tableContainer: { overflowX: 'auto' },
     table: { width: '100%', borderCollapse: 'collapse' },
     thead: { backgroundColor: '#f9fafb' },
-    th: { padding: '12px 8px', textAlign: 'left', fontSize: '0.65rem', color: '#4b5563', borderBottom: '2px solid #e5e7eb', textTransform: 'uppercase', letterSpacing: '0.025em' },
+    th: { padding: '12px 8px', textAlign: 'left', fontSize: '0.65rem', color: '#4b5563', borderBottom: '2px solid #e5e7eb', textTransform: 'uppercase' },
     tr: { borderBottom: '1px solid #f3f4f6', transition: '0.2s' },
     td: { padding: '10px 8px', fontSize: '0.8rem', verticalAlign: 'top' },
     hsBadge: { backgroundColor: '#1b3a57', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', display: 'inline-block', marginTop: '4px', fontWeight: 'bold' },
@@ -307,7 +280,7 @@ const styles = {
     dataRow: { display: 'flex', alignItems: 'center', gap: '4px', color: '#444', marginBottom: '2px' },
     miniTag: { display: 'inline-block', backgroundColor: '#f3f4f6', color: '#374151', padding: '1px 5px', borderRadius: '3px', fontSize: '0.65rem', marginRight: '3px', marginBottom: '3px', fontWeight: '600' },
     misionTag: { backgroundColor: '#eff6ff', color: '#1e40af', padding: '3px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' },
-    btnDel: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px', transition: '0.2s' },
+    btnDel: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' },
     noData: { textAlign: 'center', padding: '40px', color: '#9ca3af', fontSize: '0.9rem' }
 };
 

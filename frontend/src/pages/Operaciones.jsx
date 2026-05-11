@@ -6,8 +6,12 @@ const Operaciones = () => {
     const [events, setEvents] = useState([]);
     const [filteredEvents, setFilteredEvents] = useState([]); 
     const [searchTerm, setSearchTerm] = useState(""); 
-    const [role] = useState(localStorage.getItem('role')?.toLowerCase());
-    const [userUnidad] = useState(localStorage.getItem('elemento')?.trim().toUpperCase());
+    
+    // NORMALIZACIÓN SINCRO JOKER
+    const rawRole = localStorage.getItem('role') || 'user';
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
+    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || "";
+
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [isMobile] = useState(window.innerWidth < 768);
@@ -16,8 +20,9 @@ const Operaciones = () => {
     const [availableAircraft, setAvailableAircraft] = useState([]);
     const [loadingAircraft, setLoadingAircraft] = useState(false);
 
-    const rolesMando = ['admin', 'boss', 'director', 'oto'];
-    const esMando = rolesMando.includes(role);
+    // Definición de Jerarquías
+    const esMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+    const esGestorUnidad = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
 
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
@@ -32,8 +37,8 @@ const Operaciones = () => {
 
     const misionesConfig = {
         'SOSTENIMIENTO': '#3498db',
-        'FUERZA OPERATIVA': '#e74c3c',
-        'EDUCACION': '#f1c40f',
+        'FUERZA OPERATIVA': '#28a745',
+        'EDUCACION': '#800000',
         'OTROS': '#95a5a6'
     };
 
@@ -56,7 +61,7 @@ const Operaciones = () => {
 
     useEffect(() => { 
         fetchData(); 
-    }, [userUnidad]);
+    }, [userUnidad, roleNormalizado]);
 
     useEffect(() => {
         const results = events.filter(ev => 
@@ -69,13 +74,10 @@ const Operaciones = () => {
 
     useEffect(() => {
         const fetchAeronaves = async () => {
-            if (esMando) return;
-            const unidadABuscar = userUnidad;
-            if (!unidadABuscar) return;
-            
+            if (esMando || !userUnidad) return;
             setLoadingAircraft(true);
             try {
-                const data = await getAvailableAircraft(unidadABuscar);
+                const data = await getAvailableAircraft(userUnidad);
                 const cleanData = data
                     .filter(a => a.estado === 'E/S')
                     .map(a => ({
@@ -98,21 +100,24 @@ const Operaciones = () => {
             const data = await getEvents();
             const logicFiltered = data.filter(ev => {
                 if (ev.isRealTime) return false;
-                if (role === 'admin') return true;
+                if (roleNormalizado === 'ADMIN') return true;
+
                 const creador = ev.creadorUnidad?.toUpperCase() || "";
                 const unidadesResponsables = ev.elemento?.toUpperCase() || "";
                 const unidadUsuario = userUnidad?.toUpperCase() || "";
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
                 const esGlobal = ev.esGlobal === true;
 
-                if (['director', 'boss', 'oto'].includes(role)) {
+                // Lógica para Mandos
+                if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
                     if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
                     if (esGlobal && etapa === 'ordenada') return true;
                     return false;
                 }
 
-                // Se incluye OFICINA_TECNICA con el mismo criterio que 'user'
-                if (role === 'user' || role === 'oficina_tecnica') {
+                // Lógica para Roles de Unidad (Nuevos + Estándar)
+                const rolesDeUnidad = ['USER', 'OFICINATECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
+                if (rolesDeUnidad.includes(roleNormalizado)) {
                     if (creador === unidadUsuario) return true;
                     if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
                 }
@@ -142,8 +147,7 @@ const Operaciones = () => {
         const cantidad = parseInt(formData.sdaCantidad) || 1;
         const nuevoSdaObj = { sda: formData.sdaSelected.toUpperCase(), cantidad: cantidad };
         
-        const exists = formData.sdaListado.some(item => item.sda === nuevoSdaObj.sda);
-        if (!exists) {
+        if (!formData.sdaListado.some(item => item.sda === nuevoSdaObj.sda)) {
             setFormData(prev => ({ 
                 ...prev, 
                 sdaListado: [...prev.sdaListado, nuevoSdaObj], 
@@ -161,10 +165,7 @@ const Operaciones = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.start || !formData.end) {
-            alert("Complete fechas.");
-            return;
-        }
+        if (!formData.start || !formData.end) return alert("Complete fechas.");
 
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
         const finalElemento = (formData.unidadesInvolucradas.length > 0)
@@ -172,22 +173,15 @@ const Operaciones = () => {
             : userUnidad;
 
         const finalData = {
+            ...formData,
             title: formData.title.toUpperCase(),
-            start: formData.start, 
-            end: formData.end,
-            color: formData.color,
-            mision: formData.mision,
             tipoApoyo: formData.tipoApoyo.toUpperCase(),
-            sdaListado: formData.sdaListado,
-            etapa: formData.etapa,
             esGlobal: publicarGlobal,
             notes: `SdA: ${formData.sdaListado.map(s => `${s.cantidad}x ${s.sda}`).join(', ')} | Apoyado: ${formData.unidadApoyada} | Obs: ${cleanNotes}`,
             elemento: finalElemento,
             unidadApoyada: formData.unidadApoyada.toUpperCase(),
             pntoContactoNom: formData.pntoContactoNom.toUpperCase(),
-            pntoContactoTel: formData.pntoContactoTel,
-            responsableNom: formData.responsableNom.toUpperCase(),
-            responsableTel: formData.responsableTel
+            responsableNom: formData.responsableNom.toUpperCase()
         };
 
         try {
@@ -198,20 +192,18 @@ const Operaciones = () => {
             }
             resetForm();
             fetchData();
-            alert("✅ Operación procesada.");
+            alert("✅ Operación procesada correctamente.");
         } catch (error) { 
-            alert("❌ Error de red."); 
+            alert("❌ Error al procesar la orden."); 
         }
     };
 
     const resetForm = () => {
         setFormData({ 
             title: '', start: '', end: '', color: '#3498db', notes: '', 
-            mision: '',
-            tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
+            mision: '', tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
             etapa: 'recepcion', unidadesInvolucradas: [], unidadApoyada: '',
-            pntoContactoNom: '', pntoContactoTel: '',
-            responsableNom: '', responsableTel: ''
+            pntoContactoNom: '', pntoContactoTel: '', responsableNom: '', responsableTel: ''
         });
         setPublicarGlobal(false);
         setIsEditing(false);
@@ -224,157 +216,140 @@ const Operaciones = () => {
         setPublicarGlobal(ev.esGlobal || false);
         const parts = ev.notes?.split(' | Obs: ');
         setFormData({
+            ...ev,
             title: ev.title || '',
             start: parseFromBackend(ev.start),
             end: parseFromBackend(ev.end),
-            color: ev.color || '#3498db',
-            mision: ev.mision || '',
             notes: parts && parts.length > 1 ? parts[1] : ev.notes || '',
-            sdaListado: Array.isArray(ev.sdaListado) ? ev.sdaListado : [], 
-            tipoApoyo: ev.tipoApoyo || '',
-            etapa: ev.etapa || 'recepcion',
-            unidadesInvolucradas: ev.elemento ? ev.elemento.split(', ') : [],
-            unidadApoyada: ev.unidadApoyada || '',
-            pntoContactoNom: ev.pntoContactoNom || '',
-            pntoContactoTel: ev.pntoContactoTel || '',
-            responsableNom: ev.responsableNom || '',
-            responsableTel: ev.responsableTel || ''
+            unidadesInvolucradas: ev.elemento ? ev.elemento.split(', ') : []
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleDelete = async (ev) => {
-        if (window.confirm("¿Eliminar?")) {
+        if (window.confirm("¿Confirmar eliminación definitiva?")) {
             try {
                 await deleteEvent(ev._id);
                 fetchData();
                 if(isEditing && selectedId === ev._id) resetForm();
-            } catch (error) {
-                alert("Error.");
-            }
+            } catch (error) { alert("Error al eliminar."); }
         }
     };
 
     return (
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
-                <div style={styles.card}>
-                    <h3 style={styles.title}>{isEditing ? "📝 Editar Orden" : "➕ Nueva Orden"}</h3>
-                    
-                    <button type="button" 
-                        onClick={() => setPublicarGlobal(!publicarGlobal)}
-                        style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px', cursor: 'pointer' }}>
-                        {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (Visible para DIR AE)" : "🏠 PUBLICACIÓN LOCAL (Solo Unidad)"}
-                    </button>
-
-                    <div style={styles.etapaWrapper}>
-                        <label style={styles.labelEtapa}>ESTADO DE LA ORDEN:</label>
-                        <div style={styles.etapaGrid}>
-                            {Object.keys(etapaColors).map(e => (
-                                <button key={e} type="button" onClick={() => setFormData({...formData, etapa: e})} 
-                                    style={{...styles.btnStep, background: formData.etapa === e ? etapaColors[e] : 'white', color: formData.etapa === e ? 'white' : '#555'}}>
-                                    {e.toUpperCase()}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <form onSubmit={handleSubmit} style={styles.form}>
-                        <div style={styles.sectionTitle}>CLASIFICACIÓN DE MISIÓN</div>
-                        <select 
-                            value={formData.mision} 
-                            onChange={e => setFormData({...formData, mision: e.target.value, color: misionesConfig[e.target.value] || '#3498db'})} 
-                            style={styles.input} 
-                            required
-                        >
-                            <option value="">Seleccione Misión...</option>
-                            {Object.keys(misionesConfig).map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-
-                        <input type="text" required placeholder="Nombre de la Misión" value={formData.title} 
-                               onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} />
+                {/* COLUMNA FORMULARIO: Solo visible para roles con permiso de gestión */}
+                {esGestorUnidad ? (
+                    <div style={styles.card}>
+                        <h3 style={styles.title}>{isEditing ? "📝 Editar Orden" : "➕ Nueva Orden de Vuelo"}</h3>
                         
-                        <div style={styles.row}>
-                            <div style={{flex: 1}}><label style={styles.label}>H-Inicio</label>
-                            <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/></div>
-                            <div style={{flex: 1}}><label style={styles.label}>H-Fin</label>
-                            <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
-                        </div>
-
-                        {esMando && (
-                            <div style={styles.unidadSelector}>
-                                <label style={styles.label}>Asignar Unidad AE Responsable:</label>
-                                <div style={styles.unidadChips}>
-                                    {unidadesAE.map(u => (
-                                        <button key={u} type="button" onClick={() => toggleUnidad(u)}
-                                                style={{...styles.chip, backgroundColor: formData.unidadesInvolucradas.includes(u) ? '#1b3a57' : '#eee', color: formData.unidadesInvolucradas.includes(u) ? 'white' : '#555'}}>
-                                            {u}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        <div style={styles.sectionTitle}>UNIDAD APOYADA</div>
-                        <input type="text" placeholder="Unidad que recibe el apoyo..." value={formData.unidadApoyada} 
-                               onChange={e => setFormData({...formData, unidadApoyada: e.target.value})} style={styles.input} />
-
-                        <div style={styles.sectionTitle}>PUNTO DE CONTACTO</div>
-                        <div style={styles.row}>
-                            <input type="text" placeholder="Grado / Nombre" value={formData.pntoContactoNom} 
-                                   onChange={e => setFormData({...formData, pntoContactoNom: e.target.value})} style={{...styles.input, flex: 2}} />
-                            <input type="text" placeholder="Tel" value={formData.pntoContactoTel} 
-                                   onChange={e => setFormData({...formData, pntoContactoTel: e.target.value})} style={{...styles.input, flex: 1}} />
-                        </div>
-
-                        <div style={styles.sectionTitle}>TIPO DE APOYO</div>
-                        <select value={formData.tipoApoyo} onChange={e => setFormData({...formData, tipoApoyo: e.target.value})} style={styles.input} required>
-                            <option value="">Seleccione...</option>
-                            {TIPOS_DE_APOYO.map((apoyo, idx) => <option key={idx} value={apoyo}>{apoyo}</option>)}
-                        </select>
-
-                        <div style={styles.sectionTitle}>RESPONSABLE DE EJECUCIÓN</div>
-                        <div style={styles.row}>
-                            <input type="text" placeholder="Cte Aeronave / Jefe" value={formData.responsableNom} 
-                                   onChange={e => setFormData({...formData, responsableNom: e.target.value})} style={{...styles.input, flex: 2}} />
-                            <input type="text" placeholder="Tel" value={formData.responsableTel} 
-                                   onChange={e => setFormData({...formData, responsableTel: e.target.value})} style={{...styles.input, flex: 1}} />
-                        </div>
-
-                        <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA)</div>
-                        <div style={styles.sdaBox}>
-                            <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar SdA..."}</option>
-                                {esMando ? (
-                                    sdaListadoDirAe.map((sda, idx) => <option key={idx} value={sda}>{sda}</option>)
-                                ) : (
-                                    availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} - {air.matricula}</option>)
-                                )}
-                            </select>
-                            <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
-                            <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
-                        </div>
-
-                        <div style={styles.tagWrap}>
-                            {formData.sdaListado.map((s, i) => (
-                                <span key={i} style={styles.tag}>{s.cantidad}x {s.sda} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
-                            ))}
-                        </div>
-
-                        <textarea placeholder="Observaciones adicionales..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
-                        
-                        <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
-                            {isEditing ? "ACTUALIZAR ORDEN" : "GRABAR ORDEN"}
+                        <button type="button" 
+                            onClick={() => setPublicarGlobal(!publicarGlobal)}
+                            style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px' }}>
+                            {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL" : "🏠 PUBLICACIÓN LOCAL (Solo Unidad)"}
                         </button>
-                        {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#95a5a6', marginTop: '5px'}}>CANCELAR</button>}
-                    </form>
-                </div>
 
+                        <div style={styles.etapaWrapper}>
+                            <label style={styles.labelEtapa}>ETAPA OPERATIVA:</label>
+                            <div style={styles.etapaGrid}>
+                                {Object.keys(etapaColors).map(e => (
+                                    <button key={e} type="button" onClick={() => setFormData({...formData, etapa: e})} 
+                                        style={{...styles.btnStep, background: formData.etapa === e ? etapaColors[e] : 'white', color: formData.etapa === e ? 'white' : '#555'}}>
+                                        {e.toUpperCase()}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleSubmit} style={styles.form}>
+                            <div style={styles.sectionTitle}>CLASIFICACIÓN</div>
+                            <select value={formData.mision} onChange={e => setFormData({...formData, mision: e.target.value, color: misionesConfig[e.target.value] || '#3498db'})} style={styles.input} required>
+                                <option value="">Seleccione Misión...</option>
+                                {Object.keys(misionesConfig).map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+
+                            <input type="text" required placeholder="Nombre de la Misión / Orden" value={formData.title} 
+                                   onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} />
+                            
+                            <div style={styles.row}>
+                                <div style={{flex: 1}}><label style={styles.label}>Inicio</label>
+                                <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/></div>
+                                <div style={{flex: 1}}><label style={styles.label}>Fin</label>
+                                <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
+                            </div>
+
+                            {esMando && (
+                                <div style={styles.unidadSelector}>
+                                    <label style={styles.label}>Asignar Unidad Ejecutora:</label>
+                                    <div style={styles.unidadChips}>
+                                        {unidadesAE.map(u => (
+                                            <button key={u} type="button" onClick={() => toggleUnidad(u)}
+                                                    style={{...styles.chip, backgroundColor: formData.unidadesInvolucradas.includes(u) ? '#1b3a57' : '#eee', color: formData.unidadesInvolucradas.includes(u) ? 'white' : '#555'}}>
+                                                {u}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div style={styles.sectionTitle}>DATOS DE APOYO</div>
+                            <input type="text" placeholder="Unidad Apoyada" value={formData.unidadApoyada} 
+                                   onChange={e => setFormData({...formData, unidadApoyada: e.target.value})} style={styles.input} />
+
+                            <div style={styles.row}>
+                                <input type="text" placeholder="Punto de Contacto" value={formData.pntoContactoNom} 
+                                       onChange={e => setFormData({...formData, pntoContactoNom: e.target.value})} style={{...styles.input, flex: 2}} />
+                                <input type="text" placeholder="Teléfono" value={formData.pntoContactoTel} 
+                                       onChange={e => setFormData({...formData, pntoContactoTel: e.target.value})} style={{...styles.input, flex: 1}} />
+                            </div>
+
+                            <select value={formData.tipoApoyo} onChange={e => setFormData({...formData, tipoApoyo: e.target.value})} style={styles.input} required>
+                                <option value="">Tipo de Apoyo...</option>
+                                {TIPOS_DE_APOYO.map((apoyo, idx) => <option key={idx} value={apoyo}>{apoyo}</option>)}
+                            </select>
+
+                            <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA)</div>
+                            <div style={styles.sdaBox}>
+                                <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
+                                    <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave..."}</option>
+                                    {esMando ? (
+                                        sdaListadoDirAe.map((sda, idx) => <option key={idx} value={sda}>{sda}</option>)
+                                    ) : (
+                                        availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} - {air.matricula}</option>)
+                                    )}
+                                </select>
+                                <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
+                                <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
+                            </div>
+
+                            <div style={styles.tagWrap}>
+                                {formData.sdaListado.map((s, i) => (
+                                    <span key={i} style={styles.tag}>{s.cantidad}x {s.sda} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
+                                ))}
+                            </div>
+
+                            <textarea placeholder="Observaciones de la misión..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
+                            
+                            <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
+                                {isEditing ? "ACTUALIZAR DATOS" : "GRABAR ORDEN"}
+                            </button>
+                            {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#95a5a6', marginTop: '5px'}}>CANCELAR</button>}
+                        </form>
+                    </div>
+                ) : (
+                    <div style={styles.card}>
+                        <h3 style={styles.title}>📋 Información</h3>
+                        <p style={{fontSize: '0.9rem', color: '#666'}}>Su nivel de acceso (<strong>{rawRole.toUpperCase()}</strong>) es de solo consulta para el registro de misiones.</p>
+                    </div>
+                )}
+
+                {/* COLUMNA REGISTRO */}
                 <div style={styles.card}>
-                    <h3 style={styles.title}>📜 Registro de Misiones</h3>
-                    <input type="text" placeholder="🔍 Filtrar misión, unidad o apoyo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
+                    <h3 style={styles.title}>📜 Misiones Registradas</h3>
+                    <input type="text" placeholder="🔍 Filtrar por nombre, unidad o apoyo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
                     <div style={styles.scrollList}>
-                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay misiones visibles.</p> : 
+                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay misiones bajo su jurisdicción.</p> : 
                         filteredEvents.map(ev => {
                             const esCreador = ev.creadorUnidad?.toUpperCase() === userUnidad;
                             const esResponsable = ev.elemento?.toUpperCase().includes(userUnidad);
@@ -385,12 +360,9 @@ const Operaciones = () => {
                                 <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
                                     <div style={{flex: 1}}>
                                         <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.esGlobal && "🌐 "}{ev.title}</div>
-                                        <div style={{fontSize: '0.7rem', color: ev.color, fontWeight: 'bold'}}>{ev.mision || 'SIN CLASIFICAR'}</div>
-                                        <div style={{display: 'inline-block', fontSize: '0.65rem', background: '#e1e8ed', color: '#1b3a57', padding: '2px 6px', borderRadius: '4px', marginBottom: '4px'}}>
-                                            ORIGEN: {ev.creadorUnidad || 'S/D'}
-                                        </div>
+                                        <div style={{fontSize: '0.7rem', color: ev.color, fontWeight: 'bold'}}>{ev.mision}</div>
                                         <div style={{fontSize: '0.75rem', color: '#666'}}>Resp: {ev.elemento} | Apoyado: {ev.unidadApoyada}</div>
-                                        <div style={{display: 'flex', gap: '6px', marginTop: '8px'}}>
+                                        <div style={{marginTop: '5px'}}>
                                             <span style={{...styles.miniBadge, backgroundColor: etapaColors[ev.etapa] || '#95a5a6'}}>{ev.etapa?.toUpperCase()}</span>
                                         </div>
                                     </div>
@@ -409,13 +381,13 @@ const Operaciones = () => {
 };
 
 const styles = {
-    container: { padding: '20px', maxWidth: '1200px', margin: '0 auto', fontFamily: 'Arial, sans-serif' },
+    container: { padding: '20px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'Arial, sans-serif' },
     grid: { display: 'grid', gap: '25px', alignItems: 'start' },
     card: { background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f0f2f5' },
-    title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '12px', fontSize: '1.2rem', color: '#1b3a57', marginBottom: '20px' },
-    sectionTitle: { fontSize: '0.85rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '10px', borderLeft: '3px solid #3498db', paddingLeft: '8px' },
+    title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '12px', fontSize: '1.2rem', color: '#1b3a57', marginBottom: '20px', fontWeight: 'bold' },
+    sectionTitle: { fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '10px', borderLeft: '3px solid #3498db', paddingLeft: '8px', textTransform: 'uppercase' },
     form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    btnGlobal: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold' },
+    btnGlobal: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
     etapaWrapper: { marginBottom: '20px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' },
     labelEtapa: { fontSize: '0.7rem', fontWeight: 'bold', color: '#777', marginBottom: '8px', display: 'block' },
     etapaGrid: { display: 'flex', gap: '8px' },
@@ -431,7 +403,7 @@ const styles = {
     btnAdd: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', width: '40px', cursor: 'pointer' },
     tagWrap: { display: 'flex', flexWrap: 'wrap', gap: '5px' },
     tag: { background: '#e1e8ed', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', color: '#1b3a57', display: 'flex', alignItems: 'center' },
-    btnTagX: { background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', marginLeft: '5px' },
+    btnTagX: { background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', marginLeft: '5px', fontSize: '1rem' },
     btnSave: { color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', marginTop: '10px' },
     scrollList: { maxHeight: '600px', overflowY: 'auto' },
     logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', borderBottom: '1px solid #f0f0f0' },

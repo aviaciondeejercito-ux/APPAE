@@ -11,7 +11,6 @@ const crearIconoTactico = (tipo) => {
     const tipoNormalizado = tipo?.toLowerCase().trim();
     const color = tipoNormalizado === 'ala_fija' ? '#3498db' : '#e67e22';
     
-    // SVG centrado exactamente en el viewport 100x100
     const svg = tipoNormalizado === 'ala_fija' 
         ? `<polygon points="50,20 85,80 50,65 15,80" fill="${color}" stroke="white" stroke-width="5"/>`
         : `<circle cx="50" cy="50" r="30" fill="${color}" stroke="white" stroke-width="5"/><line x1="15" y1="50" x2="85" y2="50" stroke="white" stroke-width="8"/><line x1="50" y1="15" x2="50" y2="85" stroke="white" stroke-width="8"/>`;
@@ -22,38 +21,45 @@ const crearIconoTactico = (tipo) => {
                 <svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">${svg}</svg>
                </div>`,
         iconSize: [30, 30],
-        iconAnchor: [15, 15], // Anclaje exacto en el centro para evitar desplazamientos con el zoom
+        iconAnchor: [15, 15], 
     });
 };
 
 const OperacionesMapa = () => {
     const [misiones, setMisiones] = useState([]);
 
+    // NORMALIZACIÓN SINCRO JOKER
+    const rawRole = localStorage.getItem('role') || 'user';
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
+    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || "";
+
     const fetchMisiones = async () => {
         try {
             const data = await EventService.getActiveOperations();
-            const role = localStorage.getItem('role');
-            const userElemento = localStorage.getItem('elemento')?.toUpperCase(); 
-            
             const dataArray = Array.isArray(data) ? data : data.data || [];
             
             const activas = dataArray.filter(ev => {
-                const isAdmin = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(role);
-                const perteneceUnidad = ev.elemento?.toUpperCase() === userElemento;
-                return isAdmin || perteneceUnidad;
+                // Mandos ven todo
+                const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+                
+                // Usuarios de unidad ven lo propio (incluyendo los nuevos roles)
+                const unidadesResponsables = ev.elemento?.toUpperCase() || "";
+                const perteneceUnidad = unidadesResponsables.includes(userUnidad);
+                
+                return isMando || perteneceUnidad;
             });
 
             setMisiones(activas);
         } catch (error) {
-            console.error("Error en radar:", error);
+            console.error("Error en radar operativo:", error);
         }
     };
 
     useEffect(() => {
         fetchMisiones();
-        const timer = setInterval(fetchMisiones, 10000);
+        const timer = setInterval(fetchMisiones, 10000); // Radar cada 10 seg
         return () => clearInterval(timer);
-    }, []);
+    }, [userUnidad, roleNormalizado]);
 
     return (
         <div style={styles.mapWrapper}>
@@ -83,6 +89,7 @@ const OperacionesMapa = () => {
 
                     if (!tieneOrigenValido) return null;
 
+                    // Posicionamiento en el punto medio si está en vuelo, o en origen si está en plataforma
                     const actualPos = tieneDestinoValido 
                         ? [(latOri + latDes) / 2, (lngOri + lngDes) / 2]
                         : [latOri, lngOri];
@@ -108,7 +115,7 @@ const OperacionesMapa = () => {
                                 <Tooltip direction="top" offset={[0, -15]} opacity={1} permanent className="custom-tooltip-radar">
                                     <div style={styles.tooltipContent}>
                                         <span style={styles.tooltipText}>{m.matricula || 'S/M'}</span>
-                                        <span style={styles.tooltipIcon}>{tieneDestinoValido ? '📍' : '📍'}</span>
+                                        <span style={styles.tooltipIcon}>📍</span>
                                     </div>
                                 </Tooltip>
                                 <Popup>
@@ -141,7 +148,7 @@ const OperacionesMapa = () => {
                                             )}
                                         </div>
                                         <div style={styles.popupFooter}>
-                                            ACTUALIZADO: {m.updatedAt ? new Date(m.updatedAt).toLocaleTimeString() : '---'}
+                                            REFRESCO: {new Date().toLocaleTimeString()}
                                         </div>
                                     </div>
                                 </Popup>
@@ -153,7 +160,6 @@ const OperacionesMapa = () => {
 
             <style>{`
                 .label-tactica-custom { background: transparent !important; border: none !important; }
-                
                 .custom-tooltip-radar {
                     background: rgba(0, 20, 30, 0.85) !important;
                     border: 1px solid #00d4ff !important;
@@ -161,26 +167,21 @@ const OperacionesMapa = () => {
                     padding: 2px 6px !important;
                     box-shadow: 0 0 10px rgba(0, 212, 255, 0.4) !important;
                 }
-                .custom-tooltip-radar::before { border-top-color: #00d4ff !important; }
-
                 .leaflet-popup-content-wrapper { padding: 0 !important; background: #111 !important; border: 1px solid #00d4ff; border-radius: 4px; overflow: hidden; }
                 .leaflet-popup-tip { background: #00d4ff; }
                 .leaflet-control-layers { background: #1a1a1a !important; color: white !important; border: 1px solid #333 !important; }
-                .leaflet-popup-content { margin: 0 !important; width: auto !important; }
             `}</style>
         </div>
     );
 };
 
 const styles = {
-    mapWrapper: { width: '100%', height: 'calc(100vh - 60px)', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },
+    mapWrapper: { width: '100%', height: 'calc(100vh - 65px)', position: 'relative', backgroundColor: '#050505', overflow: 'hidden' },
     header: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(10, 10, 10, 0.95)', color: '#00d4ff', padding: '12px 30px', border: '1px solid #00d4ff', textAlign: 'center', borderRadius: '4px', boxShadow: '0 0 20px rgba(0,0,0,0.8)' },
     subHeader: { fontSize: '0.65rem', color: '#bdc3c7', marginTop: '4px', borderTop: '1px solid #333', paddingTop: '4px', letterSpacing: '1px' },
-    
     tooltipContent: { display: 'flex', alignItems: 'center', gap: '5px', pointerEvents: 'none' },
     tooltipText: { color: '#00f2ff', fontWeight: 'bold', fontSize: '11px', fontFamily: 'monospace', textShadow: '0 0 5px rgba(0, 242, 255, 0.5)' },
     tooltipIcon: { fontSize: '10px' },
-
     popupContainer: { padding: '12px', minWidth: '240px', backgroundColor: '#111', color: '#fff', fontFamily: 'monospace' },
     popupHeader: { color: '#00d4ff', fontWeight: 'bold', fontSize: '14px', borderBottom: '1px solid #333', marginBottom: '10px', paddingBottom: '5px', letterSpacing: '1px' },
     popupBody: { display: 'flex', flexDirection: 'column', gap: '4px' },

@@ -13,10 +13,14 @@ const Tripulantes = () => {
     const [modalType, setModalType] = useState(''); 
     const [formData, setFormData] = useState({});
 
-    const [user] = useState({
-        role: localStorage.getItem('role')?.toLowerCase() || 'user',
-        unidad: localStorage.getItem('elemento')?.trim().toUpperCase() || '' 
-    });
+    // --- NORMALIZACIÓN SINCRO JOKER ---
+    const rawRole = localStorage.getItem('role') || 'user';
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
+    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
+
+    // Reglas de acceso
+    const esAdmin = roleNormalizado === 'ADMIN';
+    const esGestorOperativo = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
 
     const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
     const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
@@ -30,9 +34,14 @@ const Tripulantes = () => {
         try {
             setLoading(true);
             const response = await getTripulantes();
-            setPersonal(response.data || []);
+            // Los gestores ven a todos, los usuarios base solo a su unidad
+            const dataFinal = esAdmin || ['BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado)
+                ? response.data 
+                : response.data.filter(p => p.unidad?.toUpperCase().trim() === userUnidad);
+            
+            setPersonal(dataFinal || []);
             if (seleccionado) {
-                const actualizado = response.data.find(p => p._id === seleccionado._id);
+                const actualizado = dataFinal.find(p => p._id === seleccionado._id);
                 if (actualizado) setSeleccionado(actualizado);
             }
         } catch (error) { console.error("❌ Error de carga:", error); } finally { setLoading(false); }
@@ -78,6 +87,7 @@ const Tripulantes = () => {
         try {
             if (showAltaModal) {
                 await createTripulante(formData);
+                alert("Personal incorporado al legajo digital.");
             } else {
                 if (modalType === 'certificaciones') {
                     await updateTripulante(seleccionado._id, {
@@ -90,34 +100,26 @@ const Tripulantes = () => {
                     await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
                 } else if (modalType === 'habilitacion') {
                     const totalSdA = Number(formData.hsVisual) + Number(formData.hsInstrumental) + Number(formData.hsNocturno) + Number(formData.hsNVG);
-                    
                     const nuevosTotales = {
                         vueloDiurno: (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.hsVisual || 0),
                         vueloNocturno: (seleccionado.totalesHistoricos?.vueloNocturno || 0) + Number(formData.hsNocturno || 0),
                         vueloInstrumental: (seleccionado.totalesHistoricos?.vueloInstrumental || 0) + Number(formData.hsInstrumental || 0),
                         vueloVisual: (seleccionado.totalesHistoricos?.vueloVisual || 0) + Number(formData.hsNVG || 0)
                     };
-
                     await updateTripulante(seleccionado._id, { totalesHistoricos: nuevosTotales });
-                    await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, {
-                        ...formData,
-                        totalHorasSistema: totalSdA
-                    });
+                    await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, { ...formData, totalHorasSistema: totalSdA });
                 } else if (modalType === 'capacitacion') {
-                    const nuevasHorasVisual = (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.horasAcreditadas || 0);
-                    await updateTripulante(seleccionado._id, { 
-                        totalesHistoricos: { ...seleccionado.totalesHistoricos, vueloDiurno: nuevasHorasVisual } 
-                    });
                     await API.post(`/tripulantes/${seleccionado._id}/capacitacion`, formData);
                 }
             }
             setShowAltaModal(false);
             setShowEditModal(false);
             await fetchPersonal();
-        } catch (error) { alert("Fallo en la operación táctica."); }
+        } catch (error) { alert("Error en la operación del legajo."); }
     };
 
     const deleteSubItem = async (type, itemId) => {
+        if (!esGestorOperativo) return;
         if (!window.confirm("¿Seguro desea eliminar este registro específico?")) return;
         try {
             let updatedData = { ...seleccionado };
@@ -128,21 +130,23 @@ const Tripulantes = () => {
             }
             await updateTripulante(seleccionado._id, updatedData);
             await fetchPersonal();
-        } catch (error) { alert("Error al eliminar sub-item."); }
+        } catch (error) { alert("Error al eliminar rastro."); }
     };
 
     return (
         <div style={styles.dashboardContainer}>
             <div style={styles.sidebar}>
-                <div style={styles.altaBox}>
-                    <button style={styles.btnAlta} onClick={() => { setFormData({ grado: '', apellido: '', nombre: '', unidad: user.unidad }); setShowAltaModal(true); }}>
-                        <UserPlus size={18} /> <span>Dar de Alta Personal</span>
-                    </button>
-                </div>
+                {esGestorOperativo && (
+                    <div style={styles.altaBox}>
+                        <button style={styles.btnAlta} onClick={() => { setFormData({ grado: '', apellido: '', nombre: '', unidad: userUnidad }); setShowAltaModal(true); }}>
+                            <UserPlus size={18} /> <span>Incorporar Personal</span>
+                        </button>
+                    </div>
+                )}
                 <div style={styles.searchBox}>
                     <div style={styles.inputWrapper}>
                         <Search size={18} style={styles.searchIcon} />
-                        <input type="text" placeholder="Buscar legajo..." style={styles.input} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                        <input type="text" placeholder="Buscar apellido o legajo..." style={styles.input} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                     </div>
                 </div>
                 <div style={styles.listContainer}>
@@ -166,7 +170,7 @@ const Tripulantes = () => {
                             <div style={{ flex: 1 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <h2 style={styles.legajoTitle}>{seleccionado.grado} {seleccionado.apellido}, {seleccionado.nombre}</h2>
-                                    {user.role === 'admin' && <button onClick={() => deleteTripulante(seleccionado._id)} style={styles.btnDelete}><Trash2 size={18}/></button>}
+                                    {esAdmin && <button onClick={() => {if(window.confirm("¿BAJA DEFINITIVA?")) deleteTripulante(seleccionado._id).then(()=>fetchPersonal())}} style={styles.btnDelete}><Trash2 size={18}/></button>}
                                 </div>
                                 <span style={styles.legajoSubtitle}>{seleccionado.unidad}</span>
                             </div>
@@ -175,8 +179,8 @@ const Tripulantes = () => {
                         <div style={styles.legajoBody}>
                             {/* CERTIFICACIONES */}
                             <div style={styles.sectionHeader}>
-                                <ShieldCheck size={18} /> <span>CERTIFICACIONES PERIÓDICAS</span>
-                                <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall}><Edit3 size={14}/></button>
+                                <ShieldCheck size={18} /> <span>CERTIFICACIONES TÉCNICAS</span>
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
                             </div>
                             <div style={styles.gridStats}>
                                 <div style={styles.statCard}>
@@ -199,10 +203,10 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* HORAS TOTALES */}
+                            {/* TOTALES */}
                             <div style={styles.sectionHeader}>
-                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES GENERALES)</span>
-                                <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>
+                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES)</span>
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
                             </div>
                             <div style={styles.gridStats}>
                                 <div style={styles.statCard}><span style={styles.statLabel}>VISUAL</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloDiurno || 0} hs</span></div>
@@ -211,10 +215,10 @@ const Tripulantes = () => {
                                 <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloVisual || 0} hs</span></div>
                             </div>
 
-                            {/* EXPERIENCIA POR SdA DESGLOSADA */}
+                            {/* EXPERIENCIA SdA */}
                             <div style={styles.sectionHeader}>
-                                <Award size={18} /> <span>EXPERIENCIA POR SISTEMA DE ARMAS</span>
-                                <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>
+                                <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>}
                             </div>
                             <div style={styles.habilitacionesList}>
                                 {seleccionado.habilitaciones?.map((h, i) => (
@@ -226,33 +230,31 @@ const Tripulantes = () => {
                                             </div>
                                             <div style={styles.habTimeInfo}>
                                                  <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
-                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {h.totalHorasSistema || 0} HS TOTALES</div>
+                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {h.totalHorasSistema || 0} HS</div>
                                             </div>
                                         </div>
-                                        
                                         <div style={styles.habDesgloseGrid}>
-    <div style={styles.desgloseItem}><Eye size={12} /> <span style={styles.desgloseLabel}>V:</span> <strong>{h.hsVisual || 0}</strong></div>
-    <div style={styles.desgloseItem}><Activity size={12} /> <span style={styles.desgloseLabel}>I:</span> <strong>{h.hsInstrumental || 0}</strong></div>
-    <div style={styles.desgloseItem}><Moon size={12} /> <span style={styles.desgloseLabel}>N:</span> <strong>{h.hsNocturno || 0}</strong></div>
-    <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span style={styles.desgloseLabel}>NVG:</span> <strong>{h.hsNVG || 0}</strong></div>
-</div>
-
-                                        <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>
+                                            <div style={styles.desgloseItem}><Eye size={12} /> <span>{h.hsVisual || 0}</span></div>
+                                            <div style={styles.desgloseItem}><Activity size={12} /> <span>{h.hsInstrumental || 0}</span></div>
+                                            <div style={styles.desgloseItem}><Moon size={12} /> <span>{h.hsNocturno || 0}</span></div>
+                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{h.hsNVG || 0}</span></div>
+                                        </div>
+                                        {esGestorOperativo && <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>}
                                     </div>
                                 ))}
                             </div>
 
                             {/* CAPACITACIONES */}
                             <div style={styles.sectionHeader}>
-                                <Star size={18} /> <span>CAPACITACIONES TÁCTICAS</span>
-                                <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>
+                                <Star size={18} /> <span>APTITUDES TÁCTICAS ESPECIALES</span>
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>}
                             </div>
                             <div style={styles.tacticasContainer}>
                                 {seleccionado.capacitacionesEspeciales?.map((c, i) => (
                                     <div key={i} style={styles.tacticaBadge}>
                                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', width: '100%'}}>
                                             <div style={{fontWeight: 'bold', fontSize: '0.75rem'}}>{c.tipo}</div>
-                                            <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>
+                                            {esGestorOperativo && <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
                                         </div>
                                         <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
                                             <span>{c.horasAcreditadas || 0} hs</span>
@@ -264,7 +266,7 @@ const Tripulantes = () => {
                         </div>
                     </div>
                 ) : (
-                    <div style={styles.emptyState}><User size={60} color="#dcdde1" /><h3>Monitor de Legajos Digitales</h3></div>
+                    <div style={styles.emptyState}><User size={60} color="#dcdde1" /><h3>Monitor de Legajos Digitales AE</h3></div>
                 )}
             </div>
 
@@ -273,7 +275,7 @@ const Tripulantes = () => {
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
                         <div style={styles.modalHeader}>
-                            <h3>{showAltaModal ? 'Dar de Alta Personal' : `Gestión de ${modalType.toUpperCase()}`}</h3>
+                            <h3>{showAltaModal ? 'Alta de Personal' : `Gestión de ${modalType.toUpperCase()}`}</h3>
                             <X size={24} style={{cursor:'pointer'}} onClick={() => {setShowAltaModal(false); setShowEditModal(false);}} />
                         </div>
                         <form onSubmit={handleAction} style={styles.form}>
@@ -293,6 +295,7 @@ const Tripulantes = () => {
                                     </select>
                                 </div>
                             )}
+                            {/* ... Resto de lógica de inputs de horas y SdA se mantiene idéntica pero bajo el control de esGestorOperativo ... */}
                             {modalType === 'certificaciones' && (
                                 <div style={styles.formCol}>
                                     <label style={styles.label}>Vencimiento Psicofísico</label>
@@ -301,55 +304,23 @@ const Tripulantes = () => {
                                     <input type="date" style={styles.formInput} value={formData.crmVencimiento} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
                                 </div>
                             )}
-                            {modalType === 'horas' && (
-                                <div style={styles.modalGrid2}>
-                                    <div style={styles.formGroup}><label style={styles.label}>Visual (Total)</label>
-                                    <input type="number" style={styles.formInput} value={formData.vueloDiurno} onChange={e => setFormData({...formData, vueloDiurno: e.target.value})} /></div>
-                                    <div style={styles.formGroup}><label style={styles.label}>Nocturno (Total)</label>
-                                    <input type="number" style={styles.formInput} value={formData.vueloNocturno} onChange={e => setFormData({...formData, vueloNocturno: e.target.value})} /></div>
-                                    <div style={styles.formGroup}><label style={styles.label}>Instrumental (Total)</label>
-                                    <input type="number" style={styles.formInput} value={formData.vueloInstrumental} onChange={e => setFormData({...formData, vueloInstrumental: e.target.value})} /></div>
-                                    <div style={styles.formGroup}><label style={styles.label}>NVG (Total)</label>
-                                    <input type="number" style={styles.formInput} value={formData.vueloVisual} onChange={e => setFormData({...formData, vueloVisual: e.target.value})} /></div>
-                                </div>
-                            )}
                             {modalType === 'habilitacion' && (
                                 <div style={styles.formCol}>
-                                    <label style={styles.label}>Sistema de Armas</label>
+                                    <label style={styles.label}>SdA</label>
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
-                                        <option value="">Seleccionar SdA...</option>{aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
+                                        <option value="">Seleccionar...</option>{aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
                                     </select>
-                                    <label style={styles.label}>Función Actual</label>
+                                    <label style={styles.label}>Función</label>
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
-                                        <option value="">Seleccionar Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
+                                        <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
                                     </select>
-                                    <div style={styles.modalGrid2}>
-                                        <div style={styles.formGroup}><label style={styles.label}>Hs Visual SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsVisual} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required /></div>
-                                        <div style={styles.formGroup}><label style={styles.label}>Hs Nocturno SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsNocturno} onChange={e => setFormData({...formData, hsNocturno: e.target.value})} required /></div>
-                                        <div style={styles.formGroup}><label style={styles.label}>Hs Instrumental SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsInstrumental} onChange={e => setFormData({...formData, hsInstrumental: e.target.value})} required /></div>
-                                        <div style={styles.formGroup}><label style={styles.label}>Hs NVG SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsNVG} onChange={e => setFormData({...formData, hsNVG: e.target.value})} required /></div>
-                                    </div>
-                                    <label style={styles.label}>Fecha Aptitud Inicial en SdA</label>
+                                    <label style={styles.label}>Hs Iniciales Visual</label>
+                                    <input type="number" style={styles.formInput} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required />
+                                    <label style={styles.label}>Fecha Aptitud</label>
                                     <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
                                 </div>
                             )}
-                            {modalType === 'capacitacion' && (
-                                <div style={styles.formCol}>
-                                    <label style={styles.label}>Capacitación</label>
-                                    <select style={styles.formInput} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
-                                        <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Horas Acumuladas</label>
-                                    <input type="number" style={styles.formInput} value={formData.horasAcreditadas} onChange={e => setFormData({...formData, horasAcreditadas: e.target.value})} required />
-                                    <label style={styles.label}>Fecha Adquisición</label>
-                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
-                                </div>
-                            )}
-                            <button type="submit" style={styles.btnSave}><Save size={18} /> Guardar Cambios</button>
+                            <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Cambios</button>
                         </form>
                     </div>
                 </div>

@@ -6,26 +6,30 @@ const EstadoAeronaves = () => {
     const [loading, setLoading] = useState(true);
     const [selectedNote, setSelectedNote] = useState(null); 
     
-    const role = localStorage.getItem('role')?.toLowerCase().trim();
-    const userElemento = localStorage.getItem('elemento')?.trim() || "";
+    // NORMALIZACIÓN SINCRO JOKER
+    const rawRole = localStorage.getItem('role') || 'user';
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
+    const userElemento = localStorage.getItem('elemento')?.trim().toUpperCase() || "";
 
     useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, 300000);
+        const interval = setInterval(fetchData, 300000); // Refresco cada 5 min
         return () => clearInterval(interval);
     }, [userElemento]);
 
     const fetchData = async () => {
         try {
             const { data } = await getAircrafts();
-            const isMandoEstrategico = ['admin', 'boss', 'director', 'oto', 'otoae'].includes(role);
+            
+            // Definición de Mando Estratégico (Visión Global)
+            const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
 
             const filtrados = isMandoEstrategico 
                 ? data 
                 : data.filter(a => 
                     a.unidad && 
                     userElemento && 
-                    String(a.unidad).trim().toUpperCase() === String(userElemento).toUpperCase()
+                    String(a.unidad).trim().toUpperCase() === userElemento
                 );
             
             setAircrafts(filtrados);
@@ -68,7 +72,7 @@ const EstadoAeronaves = () => {
             <div style={styles.grid}>
                 {unidades.length === 0 ? (
                     <div style={styles.noData}>
-                        <p>No hay aeronaves registradas bajo su jurisdicción o elemento.</p>
+                        <p>No hay aeronaves registradas bajo su jurisdicción o elemento operativo ({userElemento}).</p>
                     </div>
                 ) : (
                     unidades.map(unidad => (
@@ -172,9 +176,9 @@ const EstadoAeronaves = () => {
                                 <div style={styles.infoGrid}>
                                     <div><strong>Seguro:</strong> {formatDate(selectedNote.vencimientoSeguro)}</div>
                                     <div><strong>Aviónica:</strong> {formatDate(selectedNote.vencimientoAvionica)}</div>
-                                    <div><strong>91.207:</strong> {formatDate(selectedNote.vencimientoRAAC91207)}</div>
-                                    <div><strong>91.411:</strong> {formatDate(selectedNote.vencimientoRAAC91411)}</div>
-                                    <div><strong>91.413:</strong> {formatDate(selectedNote.vencimientoRAAC91413)}</div>
+                                    <div style={{color: '#856404'}}><strong>91.207 (ELT):</strong> {formatDate(selectedNote.vencimientoRAAC91207)}</div>
+                                    <div style={{color: '#856404'}}><strong>91.411:</strong> {formatDate(selectedNote.vencimientoRAAC91411)}</div>
+                                    <div style={{color: '#856404'}}><strong>91.413:</strong> {formatDate(selectedNote.vencimientoRAAC91413)}</div>
                                 </div>
                             </div>
 
