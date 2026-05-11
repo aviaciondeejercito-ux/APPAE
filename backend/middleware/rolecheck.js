@@ -1,73 +1,71 @@
 /**
  * MIDDLEWARE DE AUTORIZACIÓN JERÁRQUICA - SISTEMA AE
- * Restringe el acceso a rutas específicas y valida propiedad de recursos.
- * Estandarización: Uso estricto de guion bajo para roles (Sincro Joker).
+ * Guardian de la jerarquía SINCRO JOKER.
  * @param {...string} rolesPermitidos - Lista de roles autorizados
  */
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
         // 1. Verificación de Identidad
-        // Se extrae el rol directamente del objeto inyectado por la autenticación
         const userRole = req.user?.role || req.user?.user?.role;
 
         if (!req.user || !userRole) {
-            console.error('[SEGURIDAD] Intento de autorización sin usuario identificado o sin rol asignado.');
+            console.error('[SEGURIDAD] Intento de acceso sin rol identificado.');
             return res.status(401).json({ 
                 success: false, 
-                message: 'No autorizado: Usuario no identificado por el sistema o sesión inválida' 
+                message: 'No autorizado: Sesión inválida o rol no asignado' 
             });
         }
 
         // 2. Normalización Estricta (Sincro Joker)
-        // Convertimos a MAYÚSCULAS y eliminamos espacios para asegurar consistencia
+        // Eliminamos guiones bajos y espacios para la comparación lógica de flags
         const normalizedUserRole = String(userRole).toUpperCase().trim();
+        const roleSinFormato = normalizedUserRole.replace(/[\s_]/g, '');
+        
         const allowedRoles = rolesPermitidos.map(r => String(r).toUpperCase().trim());
 
         // 3. Comprobación de Permisos (Búsqueda Exacta)
-        // Al usar OFICINA_TECNICA en la DB y en el código, la comparación es directa y segura
         const hasPermission = allowedRoles.includes(normalizedUserRole);
 
         if (!hasPermission) {
-            console.warn(`[BLOQUEO CRÍTICO] Acceso Denegado: Usuario ${req.user.username || 'N/A'} (Rol: ${normalizedUserRole}) intentó acceder a una ruta restringida.`);
-            
+            console.warn(`[BLOQUEO] Acceso Denegado: ${req.user.username} (Rol: ${normalizedUserRole})`);
             return res.status(403).json({ 
                 success: false, 
-                message: `Acceso denegado: El nivel jerárquico '${normalizedUserRole}' no posee permisos para esta acción específica.` 
+                message: `Acceso denegado: El nivel '${normalizedUserRole}' no tiene permisos aquí.` 
             });
         }
 
         /**
-         * 4. LÓGICA DE MANDO (ADMIN / BOSS / DIRECTOR / OTO / OTOAE)
-         * Inyectamos flag de mando para visión global del sistema.
-         * Estos roles tienen visibilidad total sobre los eventos y operaciones.
+         * 4. LÓGICA DE MANDO GLOBAL (Flags de Inyección)
+         * Roles con visión total del sistema.
          */
-        const mandoRoles = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'];
+        const mandoRoles = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'];
         req.isMando = mandoRoles.includes(normalizedUserRole);
 
         /**
-         * 5. COMPROBACIÓN DE GESTIÓN TÉCNICA Y OPERATIVA
-         * Inyectamos flags de gestión por unidad basados en el estándar de guion bajo.
-         * Define quién puede cargar datos técnicos o modificar órdenes asignadas.
+         * 5. COMPROBACIÓN DE GESTIÓN OPERATIVA Y TÉCNICA
+         * Seteamos quién puede "tocar" datos en los controladores.
          */
-        req.isOficinaTecnica = (normalizedUserRole === 'OFICINA_TECNICA');
         
-        // Gestión de unidad: Incluye a los gestores técnicos, S4, usuarios operativos y mandos superiores
+        // Gestión Técnica (Aeronaves/Material)
+        req.isOficinaTecnica = (roleSinFormato === 'OFICINATECNICA');
+
+        // Gestión de Personal/Vuelos (Nuevos Roles)
+        const esGestorOperativo = ['OPERACIONES', 'JEFE'].includes(normalizedUserRole);
+        
+        // Flag General de Gestión (Para controladores de eventos/vuelos)
         req.isGestionUnidad = (
+            req.isMando || 
             req.isOficinaTecnica || 
-            normalizedUserRole === 'S4_UNIDAD' || 
-            normalizedUserRole === 'user' || 
-            req.isMando // Si es mando, por defecto tiene permisos de gestión
+            esGestorOperativo || 
+            normalizedUserRole === 'USER' ||
+            normalizedUserRole === 'LOGISTICO' ||
+            normalizedUserRole === 'PERSONAL'
         );
 
-        // Registro de Auditoría interna de accesos exitosos.
-        console.log(`[AUTORIZADO] Acceso concedido a ${req.user.username || 'Sistema'} (Rol: ${normalizedUserRole}) ${req.isMando ? '[MODO MANDO ACTIVO]' : ''}`);
+        console.log(`[AUTORIZADO] ${req.user.username} (${normalizedUserRole}) ${req.isMando ? '[MANDO]' : ''}`);
         
         next(); 
     };
 };
 
-/**
- * EXPORTACIÓN DE SEGURIDAD
- * Guardián de la jerarquía de mandos en las rutas del backend.
- */
 module.exports = { authorize };
