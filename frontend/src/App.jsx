@@ -56,7 +56,7 @@ function App() {
 
     // --- REGLAS DE ACCESO (RBAC) ---
     const esAdmin = role === 'admin';
-    const esOfTecnica = role === 'OFICINA TECNICA';
+    const esOfTecnica = role === 'OFICINA_TECNICA';
     const esBoss = role === 'BOSS';
     const esDirector = role === 'DIRECTOR';
     const esOTO = role === 'OTO';
