@@ -53,14 +53,27 @@ function App() {
         setView('calendar');
     };
 
-    // --- REGLAS DE ACCESO ---
+    // --- REGLAS DE ACCESO (RBAC) ---
     const esAdmin = role === 'admin';
-    const puedeVerTripulantes = esAdmin;
-    const puedeVerPlaneamiento = esAdmin;
+    const esOfTecnica = role === 'OFICINA TECNICA';
+    const esBoss = role === 'BOSS';
+    const esDirector = role === 'DIRECTOR';
+    const esOTO = role === 'OTO';
+    const esUser = role === 'user';
+
+    // Configuración de visibilidad según la tabla acordada
     const puedeVerUsuarios = esAdmin;
+    const puedeVerTripulantes = esAdmin; 
+    const puedeVerPlaneamiento = esAdmin || esUser;
+    const puedeVerMapa = esAdmin || esUser || esBoss || esDirector || esOTO;
+    const puedeVerEstadoAeronaves = esAdmin || esUser || esOfTecnica || esBoss || esDirector || esOTO;
+    const puedeVerCarga = esAdmin || esUser || esOfTecnica || esBoss || esOTO;
+    const puedeVerOficinaTecnica = esAdmin || esOfTecnica;
+    const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
+    const puedeVerOpEnDesarrollo = esAdmin || esOTO;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats';
+    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -105,35 +118,47 @@ function App() {
                                 >🗺️ Planeamiento</button>
                             )}
 
-                            <button 
-                                onClick={() => setView('mapa')} 
-                                style={{...styles.btnNav, backgroundColor: view === 'mapa' ? '#d35400' : '#4a69bd'}}
-                            >📍 Mapa</button>
+                            {puedeVerMapa && (
+                                <button 
+                                    onClick={() => setView('mapa')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'mapa' ? '#d35400' : '#4a69bd'}}
+                                >📍 Mapa</button>
+                            )}
 
-                            <button 
-                                onClick={() => setView('despacho')} 
-                                style={{...styles.btnNav, backgroundColor: view === 'despacho' ? '#e67e22' : '#4a69bd'}}
-                            >⚡ Op en Desarrollo</button>
+                            {puedeVerOpEnDesarrollo && (
+                                <button 
+                                    onClick={() => setView('despacho')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'despacho' ? '#e67e22' : '#4a69bd'}}
+                                >⚡ Op en Desarrollo</button>
+                            )}
 
-                            <button 
-                                onClick={() => setView('estado')} 
-                                style={{...styles.btnNav, backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd'}}
-                            >🚁 Estado Aeronaves</button>
+                            {puedeVerEstadoAeronaves && (
+                                <button 
+                                    onClick={() => setView('estado')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd'}}
+                                >🚁 Estado Aeronaves</button>
+                            )}
 
-                            <button 
-                                onClick={() => setView('material')} 
-                                style={{...styles.btnNav, backgroundColor: view === 'material' ? '#27ae60' : '#4a69bd'}}
-                            >🔧 Oficina Tecnica</button>
+                            {puedeVerOficinaTecnica && (
+                                <button 
+                                    onClick={() => setView('material')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'material' ? '#27ae60' : '#4a69bd'}}
+                                >🔧 Oficina Tecnica</button>
+                            )}
 
-                            <button 
-                                onClick={() => setView('stats')} 
-                                style={{...styles.btnNav, backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd'}}
-                            >📊 Stats</button>
+                            {puedeVerStats && (
+                                <button 
+                                    onClick={() => setView('stats')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd'}}
+                                >📊 Stats</button>
+                            )}
 
-                            <button 
-                                onClick={() => setView('operaciones')} 
-                                style={{...styles.btnNav, backgroundColor: view === 'operaciones' ? '#60a3bc' : '#4a69bd'}}
-                            >📝 Carga</button>
+                            {puedeVerCarga && (
+                                <button 
+                                    onClick={() => setView('operaciones')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'operaciones' ? '#60a3bc' : '#4a69bd'}}
+                                >📝 Carga</button>
+                            )}
 
                             <button onClick={handleLogout} style={styles.btnLogout}>Salir</button>
                         </>
@@ -152,18 +177,18 @@ function App() {
                         if (view === 'tripulantes' && puedeVerTripulantes) return <Tripulantes />;
                         if (view === 'planeamiento' && puedeVerPlaneamiento) return <PlaneamientoMapa />;
                         if (view === 'admin' && esAdmin) return <AdminPanel />;
-                        if (view === 'stats') return <Estadisticas />;
-                        if (view === 'mapa') return <OperacionesMapa />;
-                        if (view === 'despacho') return <CargaTactica />;
-                        if (view === 'operaciones') return <Operaciones />; 
-                        if (view === 'estado') return <EstadoAeronaves />;
-                        if (view === 'material') return <Material />;
+                        if (view === 'stats' && puedeVerStats) return <Estadisticas />;
+                        if (view === 'mapa' && puedeVerMapa) return <OperacionesMapa />;
+                        if (view === 'despacho' && puedeVerOpEnDesarrollo) return <CargaTactica />;
+                        if (view === 'operaciones' && puedeVerCarga) return <Operaciones />; 
+                        if (view === 'estado' && puedeVerEstadoAeronaves) return <EstadoAeronaves />;
+                        if (view === 'material' && puedeVerOficinaTecnica) return <Material />;
                         return <CalendarPage />;
                     })()
                 )}
             </main>
 
-            {/* FOOTER - Solo visible en vistas que no son Full */}
+            {/* FOOTER */}
             {!esVistaFull && (
                 <footer style={styles.footer}>
                     <div>© 2026 Aviación de Ejército - Comando y Control</div>
@@ -184,7 +209,7 @@ const styles = {
         width: '100%', 
         flex: 1, 
         position: 'relative', 
-        overflowY: 'auto', // CAMBIADO: Permite el desplazamiento vertical
+        overflowY: 'auto', 
         height: 'calc(100vh - 65px)',
         display: 'block',
         margin: 0,
