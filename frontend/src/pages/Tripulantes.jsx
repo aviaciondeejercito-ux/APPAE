@@ -25,7 +25,7 @@ const Tripulantes = () => {
     "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", 
     "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"
 ];
-    const rolesVuelo = ['Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
+    const rolesVuelo = ['Cursante','Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
     const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
 
     useEffect(() => { fetchPersonal(); }, []);
