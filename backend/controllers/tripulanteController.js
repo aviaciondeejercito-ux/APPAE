@@ -286,30 +286,46 @@ exports.eliminarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
         const usuarioLogueado = req.user;
+        
+        // Normalización Sincro Joker
         const roleBase = String(usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
-
-        if (roleBase !== 'ADMIN') {
-            return res.status(403).json({ mensaje: "Solo el Administrador puede eliminar legajos" });
-        }
+        const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         const tripulante = await Tripulante.findById(id);
         if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
 
+        const unidadTripulante = obtenerUnidadLimpia(tripulante);
+
+        // LÓGICA DE PERMISOS PARA ELIMINAR
+        const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase);
+        const esGestorConPermisoBorrado = ['OPERACIONES', 'JEFE'].includes(roleBase);
+
+        // Un gestor operativo (Operaciones/Jefe) solo puede borrar si el piloto es de su unidad
+        const tienePermiso = esMandoEstrategico || (esGestorConPermisoBorrado && miUnidad === unidadTripulante);
+
+        if (!tienePermiso) {
+            return res.status(403).json({ 
+                mensaje: `ACCESO DENEGADO: El nivel ${usuarioLogueado.role} no tiene permisos para eliminar legajos de esta unidad.` 
+            });
+        }
+
+        // Ejecución de la eliminación
         await Tripulante.findByIdAndDelete(id);
 
+        // Registro en Auditoría
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: obtenerUnidadLimpia(usuarioLogueado),
+            usuarioUnidad: miUnidad,
             accion: 'ELIMINACION',
-            entidadAfectada: `Tripulante: ${tripulante.grado} ${tripulante.apellido}`,
+            entidadAfectada: `Tripulante: ${tripulante.grado} ${tripulante.apellido} (Unidad: ${unidadTripulante})`,
             entidadId: tripulante._id,
             cambios: { eliminado: tripulante }
         });
 
-        res.status(200).json({ mensaje: "Tripulante eliminado correctamente" });
+        res.status(200).json({ mensaje: "Legajo eliminado correctamente del sistema operativo." });
     } catch (error) {
-        res.status(500).json({ mensaje: "Error al eliminar", error: error.message });
+        res.status(500).json({ mensaje: "Error al procesar la baja", error: error.message });
     }
 };
 

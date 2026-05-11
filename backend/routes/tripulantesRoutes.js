@@ -10,27 +10,31 @@ const { protect } = require('../middleware/authMiddleware');
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
         // Normalizamos el rol del usuario que viene del Token
-        const userRole = req.user?.role?.toUpperCase().replace(/[\s_]/g, '') || '';
+        const userRole = req.user?.role?.toUpperCase().replace(/[\s_-]/g, '') || '';
         
         // Normalizamos la lista de roles permitidos para la comparación
-        const permitidosLimpios = rolesPermitidos.map(r => r.toUpperCase().replace(/[\s_]/g, ''));
+        const permitidosLimpios = rolesPermitidos.map(r => r.toUpperCase().replace(/[\s_-]/g, ''));
         
         if (!permitidosLimpios.includes(userRole)) {
             return res.status(403).json({ 
                 success: false, 
-                message: `Acceso denegado: El nivel ${userRole} no tiene permisos para esta gestión de personal.` 
+                message: `Acceso denegado: El nivel ${req.user?.role} no tiene permisos para esta gestión de personal.` 
             });
         }
         next();
     };
 };
 
-// --- GRUPOS DE ACCESO ---
-// Roles con capacidad de gestión (Escritura/Modificación)
+// --- GRUPOS DE ACCESO ACTUALIZADOS ---
+
+// Roles con capacidad de gestión (Alta, Modificación, Carga de Cursos)
 const rolesGestion = ['admin', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE'];
 
-// Roles con capacidad de consulta (Lectura)
+// Roles con capacidad de consulta (Lectura de legajos)
 const rolesConsulta = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'user', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
+
+// Roles con capacidad de dar la Baja (Eliminación)
+const rolesBaja = ['admin', 'OPERACIONES', 'JEFE'];
 
 // --- PROTECCIÓN GLOBAL ---
 router.use(protect);
@@ -60,8 +64,8 @@ router.get('/buscar/:termino',
 
 router.route('/:id')
     .put(authorize(...rolesGestion), tripulanteController.actualizarTripulante) 
-    // El borrado físico de legajos permanece exclusivo para el Administrador
-    .delete(authorize('admin'), tripulanteController.eliminarTripulante); 
+    // MODIFICADO: Ahora permite que Operaciones y Jefe ejecuten la eliminación (validada por unidad en el controlador)
+    .delete(authorize(...rolesBaja), tripulanteController.eliminarTripulante); 
 
 /**
  * 4. CAPACITACIONES ESPECIALES (Cursos, NVG, etc.)
