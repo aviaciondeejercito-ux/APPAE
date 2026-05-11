@@ -54,13 +54,15 @@ function App() {
         setView('calendar');
     };
 
-    // --- REGLAS DE ACCESO (RBAC) ---
-    const esAdmin = role === 'admin';
-    const esOfTecnica = role === 'OFICINA_TECNICA';
-    const esBoss = role === 'BOSS';
-    const esDirector = role === 'DIRECTOR';
-    const esOTO = role === 'OTO';
-    const esUser = role === 'user';
+  // --- REGLAS DE ACCESO (RBAC) ---
+    const roleNormalizado = role?.toUpperCase().replace(/[\s_]/g, '') || '';
+
+    const esAdmin = roleNormalizado === 'ADMIN';
+    const esOfTecnica = roleNormalizado === 'OFICINATECNICA';
+    const esBoss = roleNormalizado === 'BOSS';
+    const esDirector = roleNormalizado === 'DIRECTOR';
+    const esOTO = roleNormalizado === 'OTO';
+    const esUser = roleNormalizado === 'USER';
 
     // Configuración de visibilidad
     const puedeVerUsuarios = esAdmin;
