@@ -26,12 +26,14 @@ exports.crearTripulante = async (req, res) => {
         const nuevoTripulante = new Tripulante(datosNuevoTripulante);
         await nuevoTripulante.save();
 
+        // Auditoría con campos normalizados
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento, 
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U", 
             accion: 'CREACION',
             entidadAfectada: `Tripulante: ${nuevoTripulante.grado} ${nuevoTripulante.apellido}`,
+            entidadId: nuevoTripulante._id,
             cambios: { nuevo: nuevoTripulante }
         });
 
@@ -41,7 +43,7 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Gestionar Habilitación (NUEVA FUNCIÓN ACUMULATIVA)
+// 2. Gestionar Habilitación (Acumulativa)
 exports.gestionarHabilitacion = async (req, res) => {
     try {
         const { id } = req.params;
@@ -51,17 +53,14 @@ exports.gestionarHabilitacion = async (req, res) => {
         const tripulante = await Tripulante.findById(id);
         if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
 
-        // Verificación de permisos
         const role = usuarioLogueado.role?.toLowerCase();
         if (role !== 'admin' && usuarioLogueado.unidad !== tripulante.unidad) {
             return res.status(403).json({ mensaje: "No autorizado para modificar este legajo" });
         }
 
-        // Buscar si ya existe la habilitación para esa aeronave específica
         const index = tripulante.habilitaciones.findIndex(h => h.aeronave === aeronave);
 
         if (index !== -1) {
-            // Si ya existe, guardamos el rol anterior en el historial si cambió
             const anterior = tripulante.habilitaciones[index];
             if (anterior.rolActual !== rolActual) {
                 tripulante.habilitaciones[index].historialRoles.push({
@@ -70,12 +69,10 @@ exports.gestionarHabilitacion = async (req, res) => {
                     fechaHasta: new Date()
                 });
             }
-            // Actualizamos datos actuales
             tripulante.habilitaciones[index].rolActual = rolActual;
             tripulante.habilitaciones[index].fechaHabilitacion = fechaHabilitacion;
             tripulante.habilitaciones[index].observaciones = observaciones;
         } else {
-            // Si no existe, la añadimos (Acumulativa)
             tripulante.habilitaciones.push({
                 aeronave,
                 fechaHabilitacion,
@@ -91,9 +88,10 @@ exports.gestionarHabilitacion = async (req, res) => {
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento,
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
             accion: 'MODIFICACION',
             entidadAfectada: `Habilitación SdA: ${aeronave} - ${tripulante.apellido}`,
+            entidadId: tripulante._id,
             detalles: `Actualización de capacidad a ${rolActual}`
         });
 
@@ -138,7 +136,7 @@ exports.actualizarTripulante = async (req, res) => {
         if (!tripulantePrevio) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
 
         if (role !== 'admin' && usuarioLogueado.unidad !== tripulantePrevio.unidad) {
-            return res.status(403).json({ mensaje: "Acceso denegado: No pertenece a tu unidad" });
+            return res.status(403).json({ mensaje: "Acceso denegado" });
         }
 
         const cambiosRealizados = {};
@@ -163,9 +161,10 @@ exports.actualizarTripulante = async (req, res) => {
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento,
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
             accion: 'MODIFICACION',
             entidadAfectada: `Tripulante: ${actualizado.grado} ${actualizado.apellido}`,
+            entidadId: actualizado._id,
             cambios: cambiosRealizados 
         });
 
@@ -186,7 +185,7 @@ exports.eliminarTripulante = async (req, res) => {
         if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
 
         if (role !== 'admin' && usuarioLogueado.unidad !== tripulante.unidad) {
-            return res.status(403).json({ mensaje: "No tienes permiso para eliminar este registro" });
+            return res.status(403).json({ mensaje: "No tienes permiso para eliminar" });
         }
 
         await Tripulante.findByIdAndDelete(id);
@@ -194,9 +193,10 @@ exports.eliminarTripulante = async (req, res) => {
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento,
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
             accion: 'ELIMINACION',
             entidadAfectada: `Tripulante: ${tripulante.grado} ${tripulante.apellido} (Unidad: ${tripulante.unidad})`,
+            entidadId: tripulante._id,
             cambios: { eliminado: tripulante }
         });
 
