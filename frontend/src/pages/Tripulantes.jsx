@@ -20,11 +20,7 @@ const Tripulantes = () => {
 
     const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
     const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
-    const aeronavesAE = [
-    "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
-    "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", 
-    "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"
-];
+    const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"];
     const rolesVuelo = ['Cursante','Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
     const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
 
@@ -42,7 +38,6 @@ const Tripulantes = () => {
         } catch (error) { console.error("❌ Error de carga:", error); } finally { setLoading(false); }
     };
 
-    // FUNCIÓN PARA EL SEMÁFORO DE VENCIMIENTOS
     const getEstadoVencimiento = (fecha) => {
         if (!fecha) return { label: 'SIN DATOS', color: '#95a5a6' };
         const hoy = new Date();
@@ -92,8 +87,18 @@ const Tripulantes = () => {
                 } else if (modalType === 'horas') {
                     await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
                 } else if (modalType === 'habilitacion') {
+                    // SUMA AUTOMÁTICA DE HORAS AL TOTAL GENERAL AL DAR DE ALTA SdA
+                    const nuevasHorasDiurnas = (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.totalHorasSistema || 0);
+                    await updateTripulante(seleccionado._id, { 
+                        totalesHistoricos: { ...seleccionado.totalesHistoricos, vueloDiurno: nuevasHorasDiurnas } 
+                    });
                     await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, formData);
                 } else if (modalType === 'capacitacion') {
+                    // SUMA AUTOMÁTICA DE HORAS AL TOTAL GENERAL (NVG/VISUAL) AL DAR DE ALTA CAPACITACIÓN
+                    const nuevasHorasVisual = (seleccionado.totalesHistoricos?.vueloVisual || 0) + Number(formData.horasAcreditadas || 0);
+                    await updateTripulante(seleccionado._id, { 
+                        totalesHistoricos: { ...seleccionado.totalesHistoricos, vueloVisual: nuevasHorasVisual } 
+                    });
                     await API.post(`/tripulantes/${seleccionado._id}/capacitacion`, formData);
                 }
             }
@@ -159,7 +164,6 @@ const Tripulantes = () => {
                         </div>
 
                         <div style={styles.legajoBody}>
-                            {/* CERTIFICACIONES */}
                             <div style={styles.sectionHeader}>
                                 <ShieldCheck size={18} /> <span>CERTIFICACIONES PERIÓDICAS</span>
                                 <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall}><Edit3 size={14}/></button>
@@ -170,22 +174,21 @@ const Tripulantes = () => {
                                     <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).color}}>
                                         {seleccionado.certificaciones?.psicofisico?.vencimiento ? new Date(seleccionado.certificaciones.psicofisico.vencimiento).toLocaleDateString() : 'S/D'}
                                     </span>
-                                    <span style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).color}}>
+                                    <div style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).color}}>
                                         {getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).label}
-                                    </span>
+                                    </div>
                                 </div>
                                 <div style={styles.statCard}>
                                     <span style={styles.statLabel}>CRM</span>
                                     <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).color}}>
                                         {seleccionado.certificaciones?.crm?.vencimiento ? new Date(seleccionado.certificaciones.crm.vencimiento).toLocaleDateString() : 'S/D'}
                                     </span>
-                                    <span style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).color}}>
+                                    <div style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).color}}>
                                         {getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).label}
-                                    </span>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* HORAS */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES)</span>
                                 <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>
@@ -197,9 +200,8 @@ const Tripulantes = () => {
                                 <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloVisual || 0} hs</span></div>
                             </div>
 
-                            {/* SdA */}
                             <div style={styles.sectionHeader}>
-                                <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
+                                <Award size={18} /> <span>EXPERIENCIA POR SdA</span>
                                 <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR</button>
                             </div>
                             <div style={styles.habilitacionesList}>
@@ -218,7 +220,6 @@ const Tripulantes = () => {
                                 ))}
                             </div>
 
-                            {/* CAPACITACIONES */}
                             <div style={styles.sectionHeader}>
                                 <Star size={18} /> <span>CAPACITACIONES TÁCTICAS</span>
                                 <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>
@@ -298,7 +299,7 @@ const Tripulantes = () => {
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
                                         <option value="">Seleccionar Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
                                     </select>
-                                    <label style={styles.label}>Horas Totales (SdA)</label>
+                                    <label style={styles.label}>Horas Acumuladas en este SdA</label>
                                     <input type="number" style={styles.formInput} value={formData.totalHorasSistema} onChange={e => setFormData({...formData, totalHorasSistema: e.target.value})} required />
                                     <label style={styles.label}>Fecha Aptitud Inicial</label>
                                     <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
@@ -310,7 +311,7 @@ const Tripulantes = () => {
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
                                         <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
-                                    <label style={styles.label}>Horas Voladas</label>
+                                    <label style={styles.label}>Horas Acumuladas en esta actividad</label>
                                     <input type="number" style={styles.formInput} value={formData.horasAcreditadas} onChange={e => setFormData({...formData, horasAcreditadas: e.target.value})} required />
                                     <label style={styles.label}>Fecha Adquisición</label>
                                     <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
@@ -351,14 +352,14 @@ const styles = {
     statCard: { padding: '12px', border: '1px solid #f1f2f6', borderRadius: '10px', display: 'flex', flexDirection: 'column', backgroundColor: '#fafbfc', position: 'relative' },
     statLabel: { fontSize: '0.55rem', color: '#7f8c8d', fontWeight: 'bold', textTransform: 'uppercase' },
     statValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1b3a57' },
-    statusTag: { fontSize: '0.5rem', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', marginTop: '5px', alignSelf: 'flex-start' },
+    statusTag: { fontSize: '0.5rem', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', marginTop: '5px', alignSelf: 'flex-start', textAlign: 'center' },
     habilitacionesList: { display: 'flex', flexDirection: 'column', gap: '8px' },
     habItem: { padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     habInfo: { display: 'flex', flexDirection: 'column' },
     habYears: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#27ae60', fontWeight: 'bold' },
     habHours: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#1b3a57', fontWeight: 'bold' },
     tacticasContainer: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
-    tacticaBadge: { padding: '8px 14px', backgroundColor: '#1b3a57', color: 'white', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '130px' },
+    tacticaBadge: { padding: '8px 14px', backgroundColor: '#1b3a57', color: 'white', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '140px' },
     btnEditSmall: { background: 'none', border: 'none', cursor: 'pointer', color: '#3498db', marginLeft: 'auto' },
     btnAddSmall: { background: '#27ae60', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' },
     btnIconDelete: { background: 'none', border: 'none', cursor: 'pointer', color: '#e74c3c', opacity: 0.7 },
