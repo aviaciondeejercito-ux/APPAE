@@ -8,7 +8,6 @@ const Tripulantes = () => {
     const [personal, setPersonal] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // ESTADOS DE MODALES
     const [showAltaModal, setShowAltaModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [modalType, setModalType] = useState(''); 
@@ -19,7 +18,6 @@ const Tripulantes = () => {
         unidad: localStorage.getItem('elemento')?.trim().toUpperCase() || '' 
     });
 
-    // CONFIGURACIÓN DE OPCIONES ESTRATÉGICAS
     const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
     const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
     const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"];
@@ -47,10 +45,18 @@ const Tripulantes = () => {
                 psicofisicoVencimiento: seleccionado.certificaciones?.psicofisico?.vencimiento?.split('T')[0] || '',
                 crmVencimiento: seleccionado.certificaciones?.crm?.vencimiento?.split('T')[0] || ''
             });
+        } else if (type === 'horas') {
+            setFormData({
+                vueloDiurno: seleccionado.totalesHistoricos?.vueloDiurno || 0,
+                vueloNocturno: seleccionado.totalesHistoricos?.vueloNocturno || 0,
+                vueloInstrumental: seleccionado.totalesHistoricos?.vueloInstrumental || 0,
+                vueloVisual: seleccionado.totalesHistoricos?.vueloVisual || 0
+            });
+        } else if (type === 'habilitacion') {
+            setFormData({ aeronave: '', rolActual: '', fechaHabilitacion: '', totalHorasSistema: 0 });
+        } else if (type === 'capacitacion') {
+            setFormData({ tipo: '', fechaAdquisicion: '' });
         }
-        if (type === 'horas') setFormData(seleccionado.totalesHistoricos || {});
-        if (type === 'habilitacion') setFormData({ aeronave: '', rolActual: '', fechaHabilitacion: '', observaciones: '' });
-        if (type === 'capacitacion') setFormData({ tipo: '', fechaAdquisicion: '', observaciones: '' });
         setShowEditModal(true);
     };
 
@@ -78,18 +84,17 @@ const Tripulantes = () => {
             setShowAltaModal(false);
             setShowEditModal(false);
             await fetchPersonal();
-        } catch (error) { alert("Fallo en la operación táctica del servidor."); }
+        } catch (error) { alert("Fallo en la operación táctica."); }
     };
 
     const handleDelete = async () => {
         if (window.confirm(`¿Seguro desea eliminar a ${seleccionado.apellido}?`)) {
-            try { await deleteTripulante(seleccionado._id); setSeleccionado(null); fetchPersonal(); } catch (error) { alert("Error al eliminar registro."); }
+            try { await deleteTripulante(seleccionado._id); setSeleccionado(null); fetchPersonal(); } catch (error) { alert("Error."); }
         }
     };
 
     return (
         <div style={styles.dashboardContainer}>
-            {/* PANEL LATERAL */}
             <div style={styles.sidebar}>
                 <div style={styles.altaBox}>
                     <button style={styles.btnAlta} onClick={() => { setFormData({ grado: '', apellido: '', nombre: '', unidad: user.unidad }); setShowAltaModal(true); }}>
@@ -115,7 +120,6 @@ const Tripulantes = () => {
                 </div>
             </div>
 
-            {/* MONITOR DE LEGAJO */}
             <div style={styles.mainView}>
                 {seleccionado ? (
                     <div style={styles.legajoCard}>
@@ -131,7 +135,6 @@ const Tripulantes = () => {
                         </div>
 
                         <div style={styles.legajoBody}>
-                            {/* SECCIÓN 1: HORAS ACUMULADAS */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES)</span>
                                 <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>
@@ -143,9 +146,8 @@ const Tripulantes = () => {
                                 <div style={styles.statCard}><span style={styles.statLabel}>IFR / NVG</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloVisual || 0} hs</span></div>
                             </div>
 
-                            {/* SECCIÓN 2: CARRERA POR SdA */}
                             <div style={styles.sectionHeader}>
-                                <Award size={18} /> <span>SISTEMAS DE ARMAS (CARRERA)</span>
+                                <Award size={18} /> <span>EXPERIENCIA POR SISTEMA DE ARMAS</span>
                                 <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR</button>
                             </div>
                             <div style={styles.habilitacionesList}>
@@ -155,15 +157,14 @@ const Tripulantes = () => {
                                             <strong>{h.aeronave}</strong>
                                             <span style={{color: '#1b3a57', fontWeight: 'bold'}}>{h.rolActual}</span>
                                         </div>
-                                        <div style={styles.habYears}>
-                                            <Calendar size={12} />
-                                            <span>{h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años exp.</span>
+                                        <div style={{display: 'flex', gap: '20px'}}>
+                                            <div style={styles.habYears}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
+                                            <div style={styles.habHours}><Clock size={12} /> {h.totalHorasSistema || 0} hs</div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* SECCIÓN 3: APTITUDES TÁCTICAS */}
                             <div style={styles.sectionHeader}>
                                 <Star size={18} /> <span>CAPACITACIONES TÁCTICAS</span>
                                 <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>
@@ -179,15 +180,10 @@ const Tripulantes = () => {
                         </div>
                     </div>
                 ) : (
-                    <div style={styles.emptyState}>
-                        <User size={60} color="#dcdde1" />
-                        <h3>Monitor de Legajos Digitales</h3>
-                        <p>Seleccione un tripulante del panel para gestionar su historial operativo.</p>
-                    </div>
+                    <div style={styles.emptyState}><User size={60} color="#dcdde1" /><h3>Monitor de Legajos Digitales</h3></div>
                 )}
             </div>
 
-            {/* MODAL DE GESTIÓN */}
             {(showAltaModal || showEditModal) && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
@@ -196,33 +192,58 @@ const Tripulantes = () => {
                             <X size={24} style={{cursor:'pointer'}} onClick={() => {setShowAltaModal(false); setShowEditModal(false);}} />
                         </div>
                         <form onSubmit={handleAction} style={styles.form}>
+                            {showAltaModal && (
+                                <>
+                                    <div style={styles.formGroup}><label style={styles.label}>Grado</label>
+                                    <select style={styles.formInput} value={formData.grado} onChange={e => setFormData({...formData, grado: e.target.value})} required>
+                                        <option value="">Seleccionar...</option>{gradosAE.map(g => <option key={g} value={g}>{g}</option>)}
+                                    </select></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>Apellido</label>
+                                    <input type="text" placeholder="APELLIDO" style={styles.formInput} value={formData.apellido} onChange={e => setFormData({...formData, apellido: e.target.value.toUpperCase()})} required /></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>Nombre</label>
+                                    <input type="text" placeholder="Nombre" style={styles.formInput} value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} required /></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>Unidad</label>
+                                    <select style={styles.formInput} value={formData.unidad} onChange={e => setFormData({...formData, unidad: e.target.value})} required>
+                                        <option value="">Unidad...</option>{unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select></div>
+                                </>
+                            )}
                             {modalType === 'horas' && (
-                                <div style={styles.gridStats}>
-                                    <div><label style={styles.label}>Diurno</label><input type="number" style={styles.formInput} value={formData.vueloDiurno} onChange={e => setFormData({...formData, vueloDiurno: e.target.value})} /></div>
-                                    <div><label style={styles.label}>Nocturno</label><input type="number" style={styles.formInput} value={formData.vueloNocturno} onChange={e => setFormData({...formData, vueloNocturno: e.target.value})} /></div>
-                                    <div><label style={styles.label}>Instrumental</label><input type="number" style={styles.formInput} value={formData.vueloInstrumental} onChange={e => setFormData({...formData, vueloInstrumental: e.target.value})} /></div>
-                                    <div><label style={styles.label}>IFR/NVG</label><input type="number" style={styles.formInput} value={formData.vueloVisual} onChange={e => setFormData({...formData, vueloVisual: e.target.value})} /></div>
+                                <div style={styles.modalGrid2}>
+                                    <div style={styles.formGroup}><label style={styles.label}>Diurno</label>
+                                    <input type="number" style={styles.formInput} value={formData.vueloDiurno} onChange={e => setFormData({...formData, vueloDiurno: e.target.value})} /></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>Nocturno</label>
+                                    <input type="number" style={styles.formInput} value={formData.vueloNocturno} onChange={e => setFormData({...formData, vueloNocturno: e.target.value})} /></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>Instrumental</label>
+                                    <input type="number" style={styles.formInput} value={formData.vueloInstrumental} onChange={e => setFormData({...formData, vueloInstrumental: e.target.value})} /></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>IFR/NVG</label>
+                                    <input type="number" style={styles.formInput} value={formData.vueloVisual} onChange={e => setFormData({...formData, vueloVisual: e.target.value})} /></div>
                                 </div>
                             )}
                             {modalType === 'habilitacion' && (
                                 <>
+                                    <div style={styles.formGroup}><label style={styles.label}>Sistema de Armas</label>
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
                                         <option value="">Seleccionar SdA...</option>{aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
-                                    </select>
+                                    </select></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>Función Actual</label>
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
-                                        <option value="">Función Actual...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Fecha de Habilitación Inicial</label>
-                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
+                                        <option value="">Seleccionar Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
+                                    </select></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>Horas Totales en este Sistema</label>
+                                    <input type="number" style={styles.formInput} value={formData.totalHorasSistema} onChange={e => setFormData({...formData, totalHorasSistema: e.target.value})} required /></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>Fecha Aptitud Inicial</label>
+                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required /></div>
                                 </>
                             )}
                             {modalType === 'capacitacion' && (
                                 <>
+                                    <div style={styles.formGroup}><label style={styles.label}>Capacitación</label>
                                     <select style={styles.formInput} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
-                                        <option value="">Seleccionar Capacitación...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Fecha de Adquisición</label>
-                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
+                                        <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select></div>
+                                    <div style={styles.formGroup}><label style={styles.label}>Fecha Adquisición</label>
+                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required /></div>
                                 </>
                             )}
                             <button type="submit" style={styles.btnSave}><Save size={18} /> Guardar Cambios</button>
@@ -264,6 +285,7 @@ const styles = {
     habItem: { padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     habInfo: { display: 'flex', flexDirection: 'column' },
     habYears: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#27ae60', fontWeight: 'bold' },
+    habHours: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#1b3a57', fontWeight: 'bold' },
     tacticasContainer: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
     tacticaBadge: { padding: '8px 14px', backgroundColor: '#1b3a57', color: 'white', borderRadius: '8px', textAlign: 'center', minWidth: '100px' },
     btnEditSmall: { background: 'none', border: 'none', cursor: 'pointer', color: '#3498db', marginLeft: 'auto' },
@@ -273,7 +295,9 @@ const styles = {
     modal: { backgroundColor: 'white', width: '450px', borderRadius: '15px', padding: '25px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' },
     modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
     form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    formInput: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', outline: 'none' },
+    formGroup: { display: 'flex', flexDirection: 'column', gap: '5px' },
+    modalGrid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' },
+    formInput: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', outline: 'none', width: '100%' },
     label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#7f8c8d' },
     btnSave: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' },
     emptyState: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#bdc3c7', textAlign: 'center' }
