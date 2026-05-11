@@ -1,441 +1,298 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity } from 'lucide-react';
-import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
+import { Plane, Users, Clock, Save, Trash2, Map, Luggage, UserPlus, Info } from 'lucide-react';
+import API from '../services/api';
 
-const Tripulantes = () => {
-    const [busqueda, setBusqueda] = useState('');
-    const [seleccionado, setSeleccionado] = useState(null);
-    const [personal, setPersonal] = useState([]);
-    const [loading, setLoading] = useState(true);
-    
-    const [showAltaModal, setShowAltaModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [modalType, setModalType] = useState(''); 
-    const [formData, setFormData] = useState({});
+const Vuelos = () => {
+    const [vuelos, setVuelos] = useState([]);
+    const [tripulantes, setTripulantes] = useState([]);
+    const [loading, setLoading] = useState(false);
 
     // --- NORMALIZACIÓN SINCRO JOKER ---
     const rawRole = localStorage.getItem('role') || 'user';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
 
-    // Reglas de acceso actualizadas: Se incluye permiso de borrado para Operaciones y Jefe
+    // --- REGLAS DE ACCESO ---
     const esAdmin = roleNormalizado === 'ADMIN';
-    const esGestorOperativo = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
-    const puedeEliminarPersonal = ['ADMIN', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
+    const esOperaciones = roleNormalizado === 'OPERACIONES';
+    const esJefe = roleNormalizado === 'JEFE';
+    
+    // Solo Admin, Operaciones y el usuario base pueden cargar
+    const puedeCargarVuelos = ['ADMIN', 'OPERACIONES', 'USER'].includes(roleNormalizado);
+    // Definimos quiénes pueden anular registros (Admin + Operaciones + Jefe)
+    const puedeEliminarVuelo = ['ADMIN', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
+    // Mandos superiores ven todo el historial
+    const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
 
-    const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
-    const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
+    const [formData, setFormData] = useState({
+        fecha: '', aeronave: '', matricula: '',
+        instructor: '', piloto: '', copiloto: '', 
+        mecanico: '', segundoMecanico: '',
+        desde: '', hasta: '', horasVoladas: 0,
+        condicion: 'Diurno', reglasVuelo: 'VFR', usoNVG: false,
+        tipoMision: '', localTravesia: 'Local', 
+        elementoApoyado: '', cantidadPasajeros: 0, pesoCarga: 0
+    });
+
     const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"];
-    const rolesVuelo = ['Cursante','Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
-    const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
+    const misiones = ["Entrenamiento","Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
 
-    useEffect(() => { fetchPersonal(); }, []);
+    useEffect(() => {
+        fetchVuelos();
+        fetchTripulantes();
+    }, [userUnidad]);
 
-    const fetchPersonal = async () => {
+    const fetchVuelos = async () => {
         try {
-            setLoading(true);
-            const response = await getTripulantes();
-            const miUnidadLogueada = userUnidad.trim().toUpperCase();
-            const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
-
+            const res = await API.get('/vuelos');
+            // Filtrado de seguridad AE
             const dataFinal = esMandoEstrategico
-                ? response.data 
-                : response.data.filter(p => {
-                    const unidadDelPiloto = p.elemento || p.unidad;
-                    if (!unidadDelPiloto) return false;
-                    return unidadDelPiloto.trim().toUpperCase() === miUnidadLogueada;
-                });
-            
-            setPersonal(dataFinal || []);
-            if (seleccionado) {
-                const actualizado = dataFinal.find(p => p._id === seleccionado._id);
-                if (actualizado) setSeleccionado(actualizado);
-                else setSeleccionado(null);
-            }
-        } catch (error) { 
-            console.error("❌ Error de carga de personal:", error); 
-        } finally { 
-            setLoading(false); 
-        }
+                ? res.data 
+                : res.data.filter(v => 
+                    v.unidadResponsable?.toUpperCase() === userUnidad || 
+                    v.matricula?.includes(userUnidad)
+                );
+            setVuelos(dataFinal);
+        } catch (error) { console.error("Error cargando vuelos", error); }
     };
 
-    // Función específica para eliminar legajo completo
-    const handleEliminarTripulante = async (id) => {
-        if (!window.confirm("¿ESTÁ SEGURO? Esta acción eliminará el legajo digital completo y todo su historial de vuelo de forma definitiva.")) return;
-        
+    const fetchTripulantes = async () => {
         try {
-            await deleteTripulante(id);
-            alert("Legajo eliminado correctamente.");
-            setSeleccionado(null);
-            await fetchPersonal();
-        } catch (error) {
-            alert("Error al eliminar legajo. Verifique permisos.");
-        }
+            const res = await API.get('/tripulantes');
+            setTripulantes(res.data);
+        } catch (error) { console.error("Error cargando tripulantes", error); }
     };
 
-    const getEstadoVencimiento = (fecha) => {
-        if (!fecha) return { label: 'SIN DATOS', color: '#95a5a6' };
-        const hoy = new Date();
-        const fVenc = new Date(fecha);
-        const difDias = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24));
-        if (difDias < 0) return { label: 'VENCIDO', color: '#e74c3c' };
-        if (difDias <= 30) return { label: 'PRÓXIMO A VENCER', color: '#f39c12' };
-        return { label: 'AL DÍA', color: '#27ae60' };
-    };
-
-    const handleOpenEdit = (type) => {
-        setModalType(type);
-        if (type === 'certificaciones') {
-            setFormData({
-                psicofisicoVencimiento: seleccionado.certificaciones?.psicofisico?.vencimiento?.split('T')[0] || '',
-                crmVencimiento: seleccionado.certificaciones?.crm?.vencimiento?.split('T')[0] || ''
-            });
-        } else if (type === 'horas') {
-            setFormData({
-                vueloDiurno: seleccionado.totalesHistoricos?.vueloDiurno || 0,
-                vueloNocturno: seleccionado.totalesHistoricos?.vueloNocturno || 0,
-                vueloInstrumental: seleccionado.totalesHistoricos?.vueloInstrumental || 0,
-                vueloVisual: seleccionado.totalesHistoricos?.vueloVisual || 0
-            });
-        } else if (type === 'habilitacion') {
-            setFormData({ 
-                aeronave: '', rolActual: '', fechaHabilitacion: '', 
-                hsVisual: 0, hsInstrumental: 0, hsNocturno: 0, hsNVG: 0 
-            });
-        } else if (type === 'capacitacion') {
-            setFormData({ tipo: '', fechaAdquisicion: '', horasAcreditadas: 0 });
-        }
-        setShowEditModal(true);
-    };
-
-    const handleAction = async (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setLoading(true);
+
+        const payload = {
+            ...formData,
+            unidadResponsable: userUnidad, // Inyectamos la unidad del operador
+            instructor: formData.instructor || null,
+            copiloto: formData.copiloto || null,
+            mecanico: formData.mecanico || null,
+            segundoMecanico: formData.segundoMecanico || null,
+            horasVoladas: Number(formData.horasVoladas),
+            cantidadPasajeros: Number(formData.cantidadPasajeros),
+            pesoCarga: Number(formData.pesoCarga)
+        };
+
         try {
-            if (showAltaModal) {
-                // Al dar de alta, enviamos elemento para coincidir con la DB
-                await createTripulante({ ...formData, elemento: formData.unidad });
-                alert("Personal incorporado al legajo digital.");
-            } else {
-                if (modalType === 'certificaciones') {
-                    await updateTripulante(seleccionado._id, {
-                        certificaciones: {
-                            psicofisico: { vencimiento: formData.psicofisicoVencimiento },
-                            crm: { vencimiento: formData.crmVencimiento }
-                        }
-                    });
-                } else if (modalType === 'horas') {
-                    await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
-                } else if (modalType === 'habilitacion') {
-                    const totalSdA = Number(formData.hsVisual) + Number(formData.hsInstrumental) + Number(formData.hsNocturno) + Number(formData.hsNVG);
-                    const nuevosTotales = {
-                        vueloDiurno: (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.hsVisual || 0),
-                        vueloNocturno: (seleccionado.totalesHistoricos?.vueloNocturno || 0) + Number(formData.hsNocturno || 0),
-                        vueloInstrumental: (seleccionado.totalesHistoricos?.vueloInstrumental || 0) + Number(formData.hsInstrumental || 0),
-                        vueloVisual: (seleccionado.totalesHistoricos?.vueloVisual || 0) + Number(formData.hsNVG || 0)
-                    };
-                    await updateTripulante(seleccionado._id, { totalesHistoricos: nuevosTotales });
-                    await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, { ...formData, totalHorasSistema: totalSdA });
-                } else if (modalType === 'capacitacion') {
-                    await API.post(`/tripulantes/${seleccionado._id}/capacitacion`, formData);
-                }
-            }
-            setShowAltaModal(false);
-            setShowEditModal(false);
-            await fetchPersonal();
-        } catch (error) { alert("Error en la operación del legajo."); }
+            await API.post('/vuelos', payload);
+            alert("✅ Vuelo registrado y horas computadas correctamente.");
+            setFormData({ 
+                ...formData, 
+                horasVoladas: 0, desde: '', hasta: '', matricula: '',
+                instructor: '', piloto: '', copiloto: '', mecanico: '', segundoMecanico: '',
+                cantidadPasajeros: 0, pesoCarga: 0, elementoApoyado: ''
+            });
+            fetchVuelos();
+        } catch (error) {
+            alert("❌ Error: " + (error.response?.data?.mensaje || "Fallo en la validación de carga"));
+        } finally { setLoading(false); }
     };
 
-    const deleteSubItem = async (type, itemId) => {
-        if (!esGestorOperativo) return;
-        if (!window.confirm("¿Desea eliminar este registro de historial?")) return;
-        try {
-            let updatedData = { ...seleccionado };
-            if (type === 'habilitacion') {
-                updatedData.habilitaciones = seleccionado.habilitaciones.filter(h => h._id !== itemId);
-            } else if (type === 'capacitacion') {
-                updatedData.capacitacionesEspeciales = seleccionado.capacitacionesEspeciales.filter(c => c._id !== itemId);
+    const eliminarVuelo = async (id) => {
+        if (!puedeEliminarVuelo) {
+            alert("Acceso Denegado: Su nivel jerárquico no permite anular registros de vuelo.");
+            return;
+        }
+
+        if (window.confirm("¿Seguro desea eliminar este registro? Esta acción es irreversible, afectará el cómputo de horas de la aeronave y el legajo de los pilotos.")) {
+            try {
+                await API.delete(`/vuelos/${id}`);
+                alert("✅ Registro eliminado correctamente.");
+                fetchVuelos();
+            } catch (error) { 
+                console.error("Error al eliminar:", error);
+                alert("❌ Error: " + (error.response?.data?.mensaje || "No se pudo eliminar el registro. Verifique permisos del servidor.")); 
             }
-            await updateTripulante(seleccionado._id, updatedData);
-            await fetchPersonal();
-        } catch (error) { alert("Error al eliminar registro."); }
+        }
     };
 
     return (
-        <div style={styles.dashboardContainer}>
-            <div style={styles.sidebar}>
-                {esGestorOperativo && (
-                    <div style={styles.altaBox}>
-                        <button style={styles.btnAlta} onClick={() => { setFormData({ grado: '', apellido: '', nombre: '', unidad: userUnidad }); setShowAltaModal(true); }}>
-                            <UserPlus size={18} /> <span>Incorporar Personal</span>
+        <div style={styles.container}>
+            <div style={styles.header}>
+                <div>
+                    <h1 style={styles.title}>Libro de Vuelo Digital - Sistema AE</h1>
+                    <span style={styles.subtitle}>Unidad: {userUnidad || "SIN UNIDAD"} | Nivel de Acceso: {roleNormalizado}</span>
+                </div>
+            </div>
+
+            <div style={styles.mainGrid}>
+                {/* FORMULARIO DE CARGA */}
+                <div style={{...styles.card, display: puedeCargarVuelos ? 'block' : 'none'}}>
+                    <h2 style={styles.cardTitle}><Save size={18} /> Nueva Carga - Formulario -12</h2>
+                    <form onSubmit={handleSubmit} style={styles.form}>
+                        <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Fecha</label>
+                            <input type="date" style={styles.input} onChange={e => setFormData({...formData, fecha: e.target.value})} required/></div>
+                            <div style={styles.group}><label style={styles.label}>Aeronave (SdA)</label>
+                            <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
+                                <option value="">Seleccionar...</option>
+                                {aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select></div>
+                        </div>
+
+                        <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Matrícula</label>
+                            <input placeholder="AE-XXX" style={styles.input} value={formData.matricula} onChange={e => setFormData({...formData, matricula: e.target.value.toUpperCase()})} required/></div>
+                            <div style={styles.group}><label style={styles.label}>Elemento Apoyado</label>
+                            <input placeholder="Ej: DIR AE" style={styles.input} value={formData.elementoApoyado} onChange={e => setFormData({...formData, elementoApoyado: e.target.value.toUpperCase()})} required/></div>
+                        </div>
+
+                        <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Piloto</label>
+                            <select style={styles.input} value={formData.piloto} onChange={e => setFormData({...formData, piloto: e.target.value})} required>
+                                <option value="">Seleccionar...</option>
+                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                            </select></div>
+                            <div style={styles.group}><label style={styles.label}>Copiloto (Opt)</label>
+                            <select style={styles.input} value={formData.copiloto} onChange={e => setFormData({...formData, copiloto: e.target.value})}>
+                                <option value="">Ninguno</option>
+                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                            </select></div>
+                        </div>
+
+                        <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Mecánico 1</label>
+                            <select style={styles.input} value={formData.mecanico} onChange={e => setFormData({...formData, mecanico: e.target.value})}>
+                                <option value="">Ninguno</option>
+                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                            </select></div>
+                            <div style={styles.group}><label style={styles.label}>Hs Voladas</label>
+                            <input type="number" step="0.1" style={styles.input} value={formData.horasVoladas} onChange={e => setFormData({...formData, horasVoladas: e.target.value})} required/></div>
+                        </div>
+
+                        <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Desde</label>
+                            <input placeholder="ORIGEN" style={styles.input} value={formData.desde} onChange={e => setFormData({...formData, desde: e.target.value.toUpperCase()})} required/></div>
+                            <div style={styles.group}><label style={styles.label}>Hasta</label>
+                            <input placeholder="DESTINO" style={styles.input} value={formData.hasta} onChange={e => setFormData({...formData, hasta: e.target.value.toUpperCase()})} required/></div>
+                        </div>
+
+                        <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Misión</label>
+                            <select style={styles.input} value={formData.tipoMision} onChange={e => setFormData({...formData, tipoMision: e.target.value})} required>
+                                <option value="">Seleccionar...</option>
+                                {misiones.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select></div>
+                            <div style={styles.group}><label style={styles.label}>Condición</label>
+                            <select style={styles.input} value={formData.condicion} onChange={e => setFormData({...formData, condicion: e.target.value})}>
+                                <option value="Diurno">Diurno</option>
+                                <option value="Nocturno">Nocturno</option>
+                            </select></div>
+                        </div>
+
+                        <button disabled={loading} type="submit" style={styles.btnSave}>
+                            {loading ? "SINCRONIZANDO CON BASE DE DATOS..." : "REGISTRAR VUELO"}
                         </button>
+                    </form>
+                </div>
+
+                {!puedeCargarVuelos && (
+                    <div style={styles.card}>
+                        <h2 style={styles.cardTitle}><Info size={18} /> Información de Acceso</h2>
+                        <p style={{fontSize: '0.85rem', color: '#666'}}>Su nivel jerárquico actual es de <strong>SOLO CONSULTA</strong> para el historial de vuelos.</p>
                     </div>
                 )}
-                <div style={styles.searchBox}>
-                    <div style={styles.inputWrapper}>
-                        <Search size={18} style={styles.searchIcon} />
-                        <input type="text" placeholder="Buscar apellido o legajo..." style={styles.input} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+
+                {/* TABLA DE HISTORIAL */}
+                <div style={{...styles.card, flex: 1}}>
+                    <h2 style={styles.cardTitle}><Clock size={18} /> Historial Operativo Detallado</h2>
+                    <div style={styles.tableContainer}>
+                        <table style={styles.table}>
+                            <thead>
+                                <tr style={styles.thead}>
+                                    <th style={styles.th}>Fecha / Ruta</th>
+                                    <th style={styles.th}>Aeronave</th>
+                                    <th style={styles.th}>Tripulación</th>
+                                    <th style={styles.th}>Carga / Pax</th>
+                                    <th style={styles.th}>Condiciones</th>
+                                    <th style={styles.th}>Misión</th>
+                                    <th style={styles.th}>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {vuelos.map(v => (
+                                    <tr key={v._id} style={styles.tr}>
+                                        <td style={styles.td}>
+                                            <div style={{fontWeight: 'bold'}}>{new Date(v.fecha).toLocaleDateString()}</div>
+                                            <div style={{fontSize: '0.7rem', color: '#666'}}>{v.desde} ➔ {v.hasta}</div>
+                                            <div style={styles.hsBadge}>{v.horasVoladas} hs</div>
+                                        </td>
+                                        <td style={styles.td}>
+                                            <div style={{fontWeight: 'bold'}}>{v.aeronave}</div>
+                                            <div style={{fontSize: '0.75rem', color: '#004a99'}}>{v.matricula}</div>
+                                        </td>
+                                        <td style={styles.td}>
+                                            <div style={styles.tripuList}>
+                                                <span><Users size={10} /> P: {v.piloto?.apellido || 'S/D'}</span>
+                                                {v.copiloto && <span><Users size={10} /> C: {v.copiloto.apellido}</span>}
+                                            </div>
+                                        </td>
+                                        <td style={styles.td}>
+                                            <div style={styles.dataRow}>< Luggage size={12} /> {v.pesoCarga || 0} kg</div>
+                                            <div style={styles.dataRow}><Users size={12} /> {v.cantidadPasajeros || 0} pax</div>
+                                        </td>
+                                        <td style={styles.td}>
+                                            <div style={styles.miniTag}>{v.reglasVuelo}</div>
+                                            <div style={styles.miniTag}>{v.condicion}</div>
+                                            {v.usoNVG && <div style={{...styles.miniTag, backgroundColor: '#dcfce7', color: '#166534'}}>NVG</div>}
+                                        </td>
+                                        <td style={styles.td}>
+                                            <span style={styles.misionTag}>{v.tipoMision}</span>
+                                            <div style={{fontSize: '0.7rem', marginTop: '4px', color: '#444'}}>APOYO: {v.elementoApoyado}</div>
+                                        </td>
+                                        <td style={styles.td}>
+                                            {/* CORREGIDO: Visible para Admin, Operaciones y Jefe */}
+                                            {puedeEliminarVuelo && (
+                                                <button onClick={() => eliminarVuelo(v._id)} style={styles.btnDel}>
+                                                    <Trash2 size={16}/>
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {vuelos.length === 0 && <div style={styles.noData}>No hay vuelos registrados bajo esta jurisdicción.</div>}
                     </div>
-                </div>
-                <div style={styles.listContainer}>
-                    {personal.filter(p => p.apellido?.toLowerCase().includes(busqueda.toLowerCase())).map(p => (
-                        <div key={p._id} onClick={() => setSeleccionado(p)} style={{...styles.personItem, backgroundColor: seleccionado?._id === p._id ? '#e3f2fd' : 'white', borderLeft: seleccionado?._id === p._id ? '4px solid #1b3a57' : '4px solid transparent'}}>
-                            <div style={styles.personInfo}>
-                                <span style={styles.itemGrado}>{p.grado} - {p.elemento || p.unidad}</span>
-                                <span style={styles.itemNombre}>{p.apellido}, {p.nombre}</span>
-                            </div>
-                            <ChevronRight size={16} color="#bdc3c7" />
-                        </div>
-                    ))}
                 </div>
             </div>
-
-            <div style={styles.mainView}>
-                {seleccionado ? (
-                    <div style={styles.legajoCard}>
-                        <div style={styles.legajoHeader}>
-                            <div style={styles.avatar}><User size={35} color="white" /></div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <h2 style={styles.legajoTitle}>{seleccionado.grado} {seleccionado.apellido}, {seleccionado.nombre}</h2>
-                                    
-                                    {/* BOTÓN DE ELIMINACIÓN LEGAJO: Visible para Admin, Operaciones y Jefe */}
-                                    {puedeEliminarPersonal && (
-                                        <button onClick={() => handleEliminarTripulante(seleccionado._id)} style={styles.btnDelete}>
-                                            <Trash2 size={22}/>
-                                        </button>
-                                    )}
-                                </div>
-                                <span style={styles.legajoSubtitle}>{seleccionado.elemento || seleccionado.unidad}</span>
-                            </div>
-                        </div>
-
-                        <div style={styles.legajoBody}>
-                            {/* CERTIFICACIONES */}
-                            <div style={styles.sectionHeader}>
-                                <ShieldCheck size={18} /> <span>CERTIFICACIONES TÉCNICAS</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
-                            </div>
-                            <div style={styles.gridStats}>
-                                <div style={styles.statCard}>
-                                    <span style={styles.statLabel}>PSICOFÍSICO</span>
-                                    <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).color}}>
-                                        {seleccionado.certificaciones?.psicofisico?.vencimiento ? new Date(seleccionado.certificaciones.psicofisico.vencimiento).toLocaleDateString() : 'S/D'}
-                                    </span>
-                                    <div style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).color}}>
-                                        {getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).label}
-                                    </div>
-                                </div>
-                                <div style={styles.statCard}>
-                                    <span style={styles.statLabel}>CRM</span>
-                                    <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).color}}>
-                                        {seleccionado.certificaciones?.crm?.vencimiento ? new Date(seleccionado.certificaciones.crm.vencimiento).toLocaleDateString() : 'S/D'}
-                                    </span>
-                                    <div style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).color}}>
-                                        {getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).label}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* TOTALES */}
-                            <div style={styles.sectionHeader}>
-                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES)</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
-                            </div>
-                            <div style={styles.gridStats}>
-                                <div style={styles.statCard}><span style={styles.statLabel}>VISUAL</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloDiurno || 0} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>NOCTURNO</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloNocturno || 0} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloInstrumental || 0} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloVisual || 0} hs</span></div>
-                            </div>
-
-                            {/* EXPERIENCIA SdA */}
-                            <div style={styles.sectionHeader}>
-                                <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>}
-                            </div>
-                            <div style={styles.habilitacionesList}>
-                                {seleccionado.habilitaciones?.map((h, i) => (
-                                    <div key={i} style={styles.habItem}>
-                                        <div style={styles.habInfoMain}>
-                                            <div style={styles.habTitleGroup}>
-                                                <strong style={styles.habAeronave}>{h.aeronave}</strong>
-                                                <span style={styles.habRol}>{h.rolActual}</span>
-                                            </div>
-                                            <div style={styles.habTimeInfo}>
-                                                 <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
-                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {h.totalHorasSistema || 0} HS</div>
-                                            </div>
-                                        </div>
-                                        <div style={styles.habDesgloseGrid}>
-                                            <div style={styles.desgloseItem}><Eye size={12} /> <span>{h.hsVisual || 0}</span></div>
-                                            <div style={styles.desgloseItem}><Activity size={12} /> <span>{h.hsInstrumental || 0}</span></div>
-                                            <div style={styles.desgloseItem}><Moon size={12} /> <span>{h.hsNocturno || 0}</span></div>
-                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{h.hsNVG || 0}</span></div>
-                                        </div>
-                                        {esGestorOperativo && <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* CAPACITACIONES */}
-                            <div style={styles.sectionHeader}>
-                                <Star size={18} /> <span>APTITUDES TÁCTICAS ESPECIALES</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>}
-                            </div>
-                            <div style={styles.tacticasContainer}>
-                                {seleccionado.capacitacionesEspeciales?.map((c, i) => (
-                                    <div key={i} style={styles.tacticaBadge}>
-                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', width: '100%'}}>
-                                            <div style={{fontWeight: 'bold', fontSize: '0.75rem'}}>{c.tipo}</div>
-                                            {esGestorOperativo && <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
-                                        </div>
-                                        <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
-                                            <span>{c.horasAcreditadas || 0} hs</span>
-                                            <span>{c.fechaAdquisicion ? new Date(c.fechaAdquisicion).toLocaleDateString() : ''}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div style={styles.emptyState}><User size={60} color="#dcdde1" /><h3>Monitor de Legajos Digitales AE</h3></div>
-                )}
-            </div>
-
-            {/* MODALES */}
-            {(showAltaModal || showEditModal) && (
-                <div style={styles.overlay}>
-                    <div style={styles.modal}>
-                        <div style={styles.modalHeader}>
-                            <h3>{showAltaModal ? 'Incorporación de Personal' : `Gestión de ${modalType.toUpperCase()}`}</h3>
-                            <X size={24} style={{cursor:'pointer'}} onClick={() => {setShowAltaModal(false); setShowEditModal(false);}} />
-                        </div>
-                        <form onSubmit={handleAction} style={styles.form}>
-                            {showAltaModal && (
-                                <div style={styles.formCol}>
-                                    <label style={styles.label}>Grado</label>
-                                    <select style={styles.formInput} value={formData.grado} onChange={e => setFormData({...formData, grado: e.target.value})} required>
-                                        <option value="">Seleccionar...</option>{gradosAE.map(g => <option key={g} value={g}>{g}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Apellido</label>
-                                    <input type="text" placeholder="APELLIDO" style={styles.formInput} value={formData.apellido} onChange={e => setFormData({...formData, apellido: e.target.value.toUpperCase()})} required />
-                                    <label style={styles.label}>Nombre</label>
-                                    <input type="text" placeholder="Nombre" style={styles.formInput} value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
-                                    <label style={styles.label}>Unidad</label>
-                                    <select style={styles.formInput} value={formData.unidad} onChange={e => setFormData({...formData, unidad: e.target.value})} required>
-                                        <option value="">Unidad...</option>{unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
-                                    </select>
-                                </div>
-                            )}
-                            
-                            {modalType === 'certificaciones' && (
-                                <div style={styles.formCol}>
-                                    <label style={styles.label}>Vencimiento Psicofísico</label>
-                                    <input type="date" style={styles.formInput} value={formData.psicofisicoVencimiento} onChange={e => setFormData({...formData, psicofisicoVencimiento: e.target.value})} />
-                                    <label style={styles.label}>Vencimiento CRM</label>
-                                    <input type="date" style={styles.formInput} value={formData.crmVencimiento} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
-                                </div>
-                            )}
-
-                            {modalType === 'habilitacion' && (
-                                <div style={styles.formCol}>
-                                    <label style={styles.label}>SdA</label>
-                                    <select style={styles.formInput} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
-                                        <option value="">Seleccionar...</option>{aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Función</label>
-                                    <select style={styles.formInput} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
-                                        <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Hs Visual SdA</label>
-                                    <input type="number" style={styles.formInput} value={formData.hsVisual} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required />
-                                    <label style={styles.label}>Hs Nocturno SdA</label>
-                                    <input type="number" style={styles.formInput} value={formData.hsNocturno} onChange={e => setFormData({...formData, hsNocturno: e.target.value})} required />
-                                    <label style={styles.label}>Hs Instrumental SdA</label>
-                                    <input type="number" style={styles.formInput} value={formData.hsInstrumental} onChange={e => setFormData({...formData, hsInstrumental: e.target.value})} required />
-                                    <label style={styles.label}>Hs NVG SdA</label>
-                                    <input type="number" style={styles.formInput} value={formData.hsNVG} onChange={e => setFormData({...formData, hsNVG: e.target.value})} required />
-                                    <label style={styles.label}>Fecha Aptitud Inicial</label>
-                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
-                                </div>
-                            )}
-
-                            {modalType === 'capacitacion' && (
-                                <div style={styles.formCol}>
-                                    <label style={styles.label}>Capacitación</label>
-                                    <select style={styles.formInput} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
-                                        <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Horas Acreditadas</label>
-                                    <input type="number" style={styles.formInput} value={formData.horasAcreditadas} onChange={e => setFormData({...formData, horasAcreditadas: e.target.value})} required />
-                                    <label style={styles.label}>Fecha Adquisición</label>
-                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
-                                </div>
-                            )}
-
-                            <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Cambios</button>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
 
 const styles = {
-    dashboardContainer: { display: 'flex', height: 'calc(100vh - 65px)', backgroundColor: '#f5f6fa' },
-    sidebar: { width: '350px', backgroundColor: 'white', borderRight: '1px solid #dcdde1', display: 'flex', flexDirection: 'column' },
-    altaBox: { padding: '15px', borderBottom: '1px solid #eee' },
-    btnAlta: { width: '100%', backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontWeight: 'bold', cursor: 'pointer' },
-    searchBox: { padding: '15px', backgroundColor: '#f8f9fa' },
-    inputWrapper: { position: 'relative', display: 'flex', alignItems: 'center' },
-    searchIcon: { position: 'absolute', left: '10px', color: '#7f8c8d' },
-    input: { width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid #dcdde1', outline: 'none' },
-    listContainer: { flex: 1, overflowY: 'auto' },
-    personItem: { padding: '15px', borderBottom: '1px solid #f1f2f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: '0.2s' },
-    personInfo: { display: 'flex', flexDirection: 'column' },
-    itemGrado: { fontSize: '0.7rem', color: '#7f8c8d', fontWeight: 'bold' },
-    itemNombre: { fontSize: '0.9rem', color: '#2f3640', fontWeight: '600' },
-    mainView: { flex: 1, padding: '30px', overflowY: 'auto' },
-    legajoCard: { backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', overflow: 'hidden' },
-    legajoHeader: { padding: '25px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', alignItems: 'center', gap: '20px' },
-    avatar: { width: '70px', height: '70px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid rgba(255,255,255,0.2)' },
-    legajoTitle: { margin: 0, fontSize: '1.4rem', fontWeight: 'bold' },
-    legajoSubtitle: { opacity: 0.8, fontSize: '0.9rem' },
-    legajoBody: { padding: '25px' },
-    sectionHeader: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 'bold', color: '#1b3a57', borderBottom: '2px solid #f1f2f6', paddingBottom: '10px', marginBottom: '20px', marginTop: '30px' },
-    gridStats: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' },
-    statCard: { padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '10px', border: '1px solid #eee', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' },
-    statLabel: { fontSize: '0.65rem', color: '#7f8c8d', fontWeight: 'bold', textTransform: 'uppercase' },
-    statValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1b3a57' },
-    statusTag: { fontSize: '0.6rem', color: 'white', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', marginTop: '5px' },
-    habilitacionesList: { display: 'flex', flexDirection: 'column', gap: '10px' },
-    habItem: { padding: '15px', backgroundColor: '#fcfcfc', borderRadius: '10px', border: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-    habInfoMain: { flex: 1 },
-    habTitleGroup: { display: 'flex', alignItems: 'center', gap: '10px' },
-    habAeronave: { fontSize: '1rem', color: '#1b3a57' },
-    habRol: { fontSize: '0.75rem', background: '#e1e8ed', padding: '2px 8px', borderRadius: '4px', color: '#1b3a57', fontWeight: 'bold' },
-    habTimeInfo: { display: 'flex', gap: '10px', marginTop: '5px' },
-    habBadge: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.65rem', color: '#7f8c8d', background: '#eee', padding: '2px 6px', borderRadius: '4px' },
-    habDesgloseGrid: { display: 'flex', gap: '15px', marginRight: '20px' },
-    desgloseItem: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', color: '#1b3a57', fontWeight: 'bold' },
-    tacticasContainer: { display: 'flex', flexWrap: 'wrap', gap: '10px' },
-    tacticaBadge: { background: '#1b3a57', color: 'white', padding: '8px 12px', borderRadius: '8px', minWidth: '140px' },
-    btnEditSmall: { background: 'none', border: 'none', color: '#3498db', cursor: 'pointer', marginLeft: '10px' },
-    btnAddSmall: { background: '#27ae60', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', marginLeft: 'auto' },
-    btnDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', transition: '0.2s', padding: '5px', borderRadius: '5px' },
-    btnIconDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', opacity: 0.6 },
-    btnIconDeleteWhite: { background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8 },
-    overlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000 },
-    modal: { backgroundColor: 'white', width: '400px', borderRadius: '15px', overflow: 'hidden' },
-    modalHeader: { padding: '20px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    form: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' },
-    formCol: { display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '60vh', overflowY: 'auto' },
-    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#666' },
-    formInput: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd' },
-    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' },
-    emptyState: { height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#bdc3c7' }
+    container: { padding: '20px', backgroundColor: '#f4f7f6', minHeight: 'calc(100vh - 65px)' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+    title: { margin: 0, fontSize: '1.4rem', color: '#1b3a57', fontWeight: 'bold' },
+    subtitle: { color: '#7f8c8d', fontSize: '0.85rem' },
+    mainGrid: { display: 'flex', gap: '20px', alignItems: 'flex-start' },
+    card: { backgroundColor: 'white', borderRadius: '8px', padding: '15px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', minWidth: '400px' },
+    cardTitle: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: '#1b3a57', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px', fontWeight: 'bold', textTransform: 'uppercase' },
+    form: { display: 'flex', flexDirection: 'column', gap: '10px' },
+    row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
+    group: { display: 'flex', flexDirection: 'column', gap: '3px' },
+    label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' },
+    input: { padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.85rem', outline: 'none' },
+    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px', transition: '0.2s' },
+    tableContainer: { overflowX: 'auto' },
+    table: { width: '100%', borderCollapse: 'collapse' },
+    thead: { backgroundColor: '#f9fafb' },
+    th: { padding: '12px 8px', textAlign: 'left', fontSize: '0.65rem', color: '#4b5563', borderBottom: '2px solid #e5e7eb', textTransform: 'uppercase' },
+    tr: { borderBottom: '1px solid #f3f4f6', transition: '0.2s' },
+    td: { padding: '10px 8px', fontSize: '0.8rem', verticalAlign: 'top' },
+    hsBadge: { backgroundColor: '#1b3a57', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', display: 'inline-block', marginTop: '4px', fontWeight: 'bold' },
+    tripuList: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.75rem' },
+    dataRow: { display: 'flex', alignItems: 'center', gap: '4px', color: '#444', marginBottom: '2px' },
+    miniTag: { display: 'inline-block', backgroundColor: '#f3f4f6', color: '#374151', padding: '1px 5px', borderRadius: '3px', fontSize: '0.65rem', marginRight: '3px', marginBottom: '3px', fontWeight: '600' },
+    misionTag: { backgroundColor: '#eff6ff', color: '#1e40af', padding: '3px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' },
+    btnDel: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' },
+    noData: { textAlign: 'center', padding: '40px', color: '#9ca3af', fontSize: '0.9rem' }
 };
 
-export default Tripulantes;
+export default Vuelos;
