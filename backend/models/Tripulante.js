@@ -18,18 +18,19 @@ const tripulanteSchema = new mongoose.Schema({
   // --- HABILITACIONES POR SISTEMA DE ARMAS (ROL Y FUNCIÓN) ---
   habilitaciones: [{
     aeronave: {
-      type: String,
-      required: true,
-      enum: [
-        "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
-        "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
-      ]
-    },
+  type: String,
+  required: true,
+  enum: [
+    "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
+    "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", 
+    "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"
+  ]
+},
     fechaHabilitacion: { type: Date, required: true },
     
     rolActual: {
       type: String,
-      enum: ['Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'],
+      enum: ['Cursante','Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'],
       required: true
     },
     
