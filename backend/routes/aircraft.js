@@ -7,23 +7,17 @@ const { authorize } = require('../middleware/rolecheck');
 /**
  * RUTAS DE MATERIAL AERONÁUTICO - SISTEMA AE
  * Seguridad jerárquica: Autenticación -> Autorización por Rol -> Lógica de Unidad.
- * ESTADO: ACTUALIZADO PARA DESPACHO TÁCTICO (SINCRO JOKER)
  */
 
-// 1. Todas las rutas de aeronaves requieren estar logueado (JWT Válido)
+// 1. Protección Global
 const protect = authMiddleware.protect || authMiddleware.verifyToken || authMiddleware;
 router.use(protect);
 
 /**
- * 2. Consultar flota completa / Filtrada
- * Se coloca arriba para que el "/" no sea capturado por el parámetro ":elemento"
+ * 2. RUTAS ESTÁTICAS (Deben ir primero)
  */
 router.get('/', aircraftController.getAircrafts);
 
-/**
- * 3. Crear nueva aeronave
- * Permitido para admin, BOSS, DIRECTOR, OTO, OFICINA_TECNICA y S4_UNIDAD.
- */
 router.post(
     '/', 
     authorize('admin', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'S4_UNIDAD'), 
@@ -31,42 +25,39 @@ router.post(
 );
 
 /**
- * 4. Consultar disponibilidad por Elemento (ESENCIAL PARA CARGA TÁCTICA)
- * Se mantienen ambas para asegurar compatibilidad total.
+ * 3. RUTAS CON PREFIJO ESPECÍFICO
+ * Esto evita confusiones con los IDs de MongoDB.
  */
-
-// Versión con prefijo /elemento/
 router.get(
     '/elemento/:elemento', 
     authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
-    aircraftController.getAircraftsByElemento || aircraftController.getAircrafts
-);
-
-// Versión directa (Búsqueda del frontend para evitar 404)
-router.get(
-    '/:elemento', 
-    authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
-    aircraftController.getAircraftsByElemento || aircraftController.getAircrafts
+    aircraftController.getAircraftsByElemento
 );
 
 /**
- * 5. Actualizar Estado/Horas/Novedades (Punto de Gestión Técnica)
- * Nota: El ID de MongoDB suele ser más largo que el nombre de un elemento, 
- * pero Express prioriza por orden de llegada.
+ * 4. RUTAS POR ID (Operaciones sobre una aeronave específica)
+ * Se colocan al final para que no capturen las rutas anteriores.
  */
 router.put(
     '/:id', 
     authorize('admin', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'S4_UNIDAD'), 
-    aircraftController.updateAircraftStatus
+    aircraftController.updateAircraftStatus // Aquí es donde se guarda el RAAC 91.207
 );
 
-/**
- * 6. Eliminar aeronave del sistema (Acción crítica)
- */
 router.delete(
     '/:id', 
     authorize('admin', 'BOSS', 'OFICINA_TECNICA', 'S4_UNIDAD'), 
     aircraftController.deleteAircraft
+);
+
+/**
+ * 5. RUTA DE COMPATIBILIDAD (Opcional)
+ * Solo si el frontend hace llamadas directas como /api/aircraft/CUEAE
+ */
+router.get(
+    '/:elemento', 
+    authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
+    aircraftController.getAircraftsByElemento
 );
 
 module.exports = router;
