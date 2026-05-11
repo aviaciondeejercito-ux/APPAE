@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star } from 'lucide-react';
+import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity } from 'lucide-react';
 import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
 
 const Tripulantes = () => {
@@ -89,7 +89,6 @@ const Tripulantes = () => {
                 } else if (modalType === 'horas') {
                     await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
                 } else if (modalType === 'habilitacion') {
-                    // LÓGICA DE SUMA INTEGRAL POR CATEGORÍA
                     const totalSdA = Number(formData.hsVisual) + Number(formData.hsInstrumental) + Number(formData.hsNocturno) + Number(formData.hsNVG);
                     
                     const nuevosTotales = {
@@ -102,7 +101,7 @@ const Tripulantes = () => {
                     await updateTripulante(seleccionado._id, { totalesHistoricos: nuevosTotales });
                     await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, {
                         ...formData,
-                        totalHorasSistema: totalSdA // Guardamos la suma total en el objeto de la aeronave
+                        totalHorasSistema: totalSdA
                     });
                 } else if (modalType === 'capacitacion') {
                     const nuevasHorasVisual = (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.horasAcreditadas || 0);
@@ -200,9 +199,9 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* HORAS */}
+                            {/* HORAS TOTALES */}
                             <div style={styles.sectionHeader}>
-                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES)</span>
+                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES GENERALES)</span>
                                 <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>
                             </div>
                             <div style={styles.gridStats}>
@@ -212,23 +211,33 @@ const Tripulantes = () => {
                                 <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloVisual || 0} hs</span></div>
                             </div>
 
-                            {/* SdA */}
+                            {/* EXPERIENCIA POR SdA DESGLOSADA */}
                             <div style={styles.sectionHeader}>
-                                <Award size={18} /> <span>EXPERIENCIA POR SdA</span>
-                                <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR</button>
+                                <Award size={18} /> <span>EXPERIENCIA POR SISTEMA DE ARMAS</span>
+                                <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>
                             </div>
                             <div style={styles.habilitacionesList}>
                                 {seleccionado.habilitaciones?.map((h, i) => (
                                     <div key={i} style={styles.habItem}>
-                                        <div style={styles.habInfo}>
-                                            <strong>{h.aeronave}</strong>
-                                            <span style={{color: '#1b3a57', fontWeight: 'bold'}}>{h.rolActual}</span>
+                                        <div style={styles.habInfoMain}>
+                                            <div style={styles.habTitleGroup}>
+                                                <strong style={styles.habAeronave}>{h.aeronave}</strong>
+                                                <span style={styles.habRol}>{h.rolActual}</span>
+                                            </div>
+                                            <div style={styles.habTimeInfo}>
+                                                 <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
+                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {h.totalHorasSistema || 0} HS TOTALES</div>
+                                            </div>
                                         </div>
-                                        <div style={{display: 'flex', gap: '25px', alignItems: 'center'}}>
-                                            <div style={styles.habYears}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
-                                            <div style={styles.habHours}><Clock size={12} /> {h.totalHorasSistema || 0} hs totales</div>
-                                            <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={14}/></button>
+                                        
+                                        <div style={styles.habDesgloseGrid}>
+                                            <div style={styles.desgloseItem}><Eye size={12} /> <span style={styles.desgloseLabel}>V:</span> <strong>{h.hsVisual || 0}</strong></div>
+                                            <div style={styles.desgloseItem}><Activity size={12} /> <span style={styles.desgloseLabel}>I:</span> <strong>{h.hsInstrumental || 0}</strong></div>
+                                            <div style={styles.desgloseItem}><Moon size={12} /> <span style={styles.desgloseLabel}>N:</span> <strong>{h.hsNocturno || 0}</strong></div>
+                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span style={styles.desgloseLabel}>NVG:</span> <strong>{h.hsNVG || 0}</strong></div>
                                         </div>
+
+                                        <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>
                                     </div>
                                 ))}
                             </div>
@@ -259,6 +268,7 @@ const Tripulantes = () => {
                 )}
             </div>
 
+            {/* MODALES */}
             {(showAltaModal || showEditModal) && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
@@ -293,13 +303,13 @@ const Tripulantes = () => {
                             )}
                             {modalType === 'horas' && (
                                 <div style={styles.modalGrid2}>
-                                    <div style={styles.formGroup}><label style={styles.label}>Visual</label>
+                                    <div style={styles.formGroup}><label style={styles.label}>Visual (Total)</label>
                                     <input type="number" style={styles.formInput} value={formData.vueloDiurno} onChange={e => setFormData({...formData, vueloDiurno: e.target.value})} /></div>
-                                    <div style={styles.formGroup}><label style={styles.label}>Nocturno</label>
+                                    <div style={styles.formGroup}><label style={styles.label}>Nocturno (Total)</label>
                                     <input type="number" style={styles.formInput} value={formData.vueloNocturno} onChange={e => setFormData({...formData, vueloNocturno: e.target.value})} /></div>
-                                    <div style={styles.formGroup}><label style={styles.label}>Instrumental</label>
+                                    <div style={styles.formGroup}><label style={styles.label}>Instrumental (Total)</label>
                                     <input type="number" style={styles.formInput} value={formData.vueloInstrumental} onChange={e => setFormData({...formData, vueloInstrumental: e.target.value})} /></div>
-                                    <div style={styles.formGroup}><label style={styles.label}>NVG</label>
+                                    <div style={styles.formGroup}><label style={styles.label}>NVG (Total)</label>
                                     <input type="number" style={styles.formInput} value={formData.vueloVisual} onChange={e => setFormData({...formData, vueloVisual: e.target.value})} /></div>
                                 </div>
                             )}
@@ -314,16 +324,16 @@ const Tripulantes = () => {
                                         <option value="">Seleccionar Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
                                     </select>
                                     <div style={styles.modalGrid2}>
-                                        <div style={styles.formGroup}><label style={styles.label}>Hs Visual</label>
+                                        <div style={styles.formGroup}><label style={styles.label}>Hs Visual SdA</label>
                                         <input type="number" style={styles.formInput} value={formData.hsVisual} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required /></div>
-                                        <div style={styles.formGroup}><label style={styles.label}>Hs Nocturno</label>
+                                        <div style={styles.formGroup}><label style={styles.label}>Hs Nocturno SdA</label>
                                         <input type="number" style={styles.formInput} value={formData.hsNocturno} onChange={e => setFormData({...formData, hsNocturno: e.target.value})} required /></div>
-                                        <div style={styles.formGroup}><label style={styles.label}>Hs Instrumental</label>
+                                        <div style={styles.formGroup}><label style={styles.label}>Hs Instrumental SdA</label>
                                         <input type="number" style={styles.formInput} value={formData.hsInstrumental} onChange={e => setFormData({...formData, hsInstrumental: e.target.value})} required /></div>
-                                        <div style={styles.formGroup}><label style={styles.label}>Hs NVG</label>
+                                        <div style={styles.formGroup}><label style={styles.label}>Hs NVG SdA</label>
                                         <input type="number" style={styles.formInput} value={formData.hsNVG} onChange={e => setFormData({...formData, hsNVG: e.target.value})} required /></div>
                                     </div>
-                                    <label style={styles.label}>Fecha Aptitud Inicial</label>
+                                    <label style={styles.label}>Fecha Aptitud Inicial en SdA</label>
                                     <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
                                 </div>
                             )}
@@ -375,16 +385,22 @@ const styles = {
     statLabel: { fontSize: '0.55rem', color: '#7f8c8d', fontWeight: 'bold', textTransform: 'uppercase' },
     statValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1b3a57' },
     statusTag: { fontSize: '0.5rem', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', marginTop: '5px', alignSelf: 'flex-start', textAlign: 'center' },
-    habilitacionesList: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    habItem: { padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    habInfo: { display: 'flex', flexDirection: 'column' },
-    habYears: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#27ae60', fontWeight: 'bold' },
-    habHours: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#1b3a57', fontWeight: 'bold' },
+    habilitacionesList: { display: 'flex', flexDirection: 'column', gap: '10px' },
+    habItem: { padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '12px', border: '1px solid #e9ecef', display: 'flex', flexWrap: 'wrap', gap: '15px', alignItems: 'center', justifyContent: 'space-between' },
+    habInfoMain: { flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '5px' },
+    habTitleGroup: { display: 'flex', alignItems: 'baseline', gap: '10px' },
+    habAeronave: { fontSize: '1.1rem', color: '#1b3a57' },
+    habRol: { fontSize: '0.75rem', fontWeight: 'bold', color: '#636e72', textTransform: 'uppercase' },
+    habTimeInfo: { display: 'flex', gap: '10px' },
+    habBadge: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.65rem', backgroundColor: '#e8f5e9', color: '#27ae60', padding: '3px 8px', borderRadius: '5px', fontWeight: 'bold' },
+    habDesgloseGrid: { flex: '2 1 350px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', backgroundColor: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid #f1f2f6' },
+    desgloseItem: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: '#1b3a57' },
+    desgloseLabel: { color: '#95a5a6', fontSize: '0.65rem', fontWeight: 'bold' },
     tacticasContainer: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
     tacticaBadge: { padding: '8px 14px', backgroundColor: '#1b3a57', color: 'white', borderRadius: '8px', display: 'flex', flexDirection: 'column', minWidth: '140px' },
     btnEditSmall: { background: 'none', border: 'none', cursor: 'pointer', color: '#3498db', marginLeft: 'auto' },
     btnAddSmall: { background: '#27ae60', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' },
-    btnIconDelete: { background: 'none', border: 'none', cursor: 'pointer', color: '#e74c3c', opacity: 0.7 },
+    btnIconDelete: { background: 'none', border: 'none', cursor: 'pointer', color: '#e74c3c', opacity: 0.7, padding: '5px' },
     btnIconDeleteWhite: { background: 'none', border: 'none', cursor: 'pointer', color: 'white', opacity: 0.8, display: 'flex', alignItems: 'center' },
     btnDelete: { background: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', color: '#ff7675', padding: '8px', borderRadius: '8px' },
     overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 5000 },
