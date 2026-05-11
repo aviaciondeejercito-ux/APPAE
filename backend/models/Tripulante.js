@@ -15,25 +15,32 @@ const tripulanteSchema = new mongoose.Schema({
     ]
   },
 
-  // --- HABILITACIONES POR SISTEMA DE ARMAS (ROL Y FUNCIÓN) ---
+  // --- HABILITACIONES POR SISTEMA DE ARMAS ---
   habilitaciones: [{
     aeronave: {
-  type: String,
-  required: true,
-  enum: [
-    "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
-    "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", 
-    "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"
-  ]
-},
+      type: String,
+      required: true,
+      enum: [
+        "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
+        "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", 
+        "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"
+      ]
+    },
     fechaHabilitacion: { type: Date, required: true },
-    
     rolActual: {
       type: String,
       enum: ['Cursante','Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'],
       required: true
     },
-    
+
+    // --- ACUMULADOS POR SISTEMA (Esto es lo que te faltaba) ---
+    // Estos campos deben estar aquí para que el Label los pueda leer
+    hsVisual: { type: Number, default: 0 },
+    hsInstrumental: { type: Number, default: 0 },
+    hsNocturno: { type: Number, default: 0 },
+    hsNVG: { type: Number, default: 0 },
+    totalHorasSistema: { type: Number, default: 0 }, 
+
     historialRoles: [{
       rol: String,
       fechaDesde: Date,
@@ -43,8 +50,8 @@ const tripulanteSchema = new mongoose.Schema({
     ultimaActividad: {
       fecha: Date,
       matricula: String,
-      mision: String,
-      totalHorasSistema: { type: Number, default: 0 }
+      mision: String
+      // totalHorasSistema se movió un nivel arriba para mayor claridad
     },
     fechaBajaHabilitacion: { type: Date },
     observaciones: String
@@ -77,7 +84,7 @@ const tripulanteSchema = new mongoose.Schema({
     }
   },
 
-  // --- IDENTIKIT: TOTALES ACUMULADOS ---
+  // --- IDENTIKIT: TOTALES ACUMULADOS GENERALES ---
   totalesHistoricos: {
     vueloDiurno: { type: Number, default: 0 },
     vueloNocturno: { type: Number, default: 0 },
@@ -86,16 +93,8 @@ const tripulanteSchema = new mongoose.Schema({
     aterrizajes: { type: Number, default: 0 }
   },
 
-  // --- REGISTRO DE CONTROL Y AUDITORÍA ---
-  ultimoEditor: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  fechaUltimaModificacion: {
-    type: Date,
-    default: Date.now
-  },
-
+  ultimoEditor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  fechaUltimaModificacion: { type: Date, default: Date.now },
   activo: { type: Boolean, default: true }
 
 }, { 
@@ -104,39 +103,29 @@ const tripulanteSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// --- ÍNDICES PARA OPTIMIZACIÓN ---
+// --- ÍNDICES ---
 tripulanteSchema.index({ apellido: 1, unidad: 1 });
 tripulanteSchema.index({ "habilitaciones.aeronave": 1 });
 
-// Virtual para ver la experiencia total en años
+// VIRTUAL: Antigüedad
 tripulanteSchema.virtual('antiguedadResumen').get(function() {
   const hoy = new Date();
   if (!this.habilitaciones) return [];
-  
   return this.habilitaciones.map(h => {
     let anios = hoy.getFullYear() - h.fechaHabilitacion.getFullYear();
     const mes = hoy.getMonth() - h.fechaHabilitacion.getMonth();
-    
-    // Ajuste por si aún no cumplió el mes/día del aniversario
-    if (mes < 0 || (mes === 0 && hoy.getDate() < h.fechaHabilitacion.getDate())) {
-      anios--;
-    }
-    
-    return {
-      aeronave: h.aeronave,
-      rol: h.rolActual,
-      anios: anios < 0 ? 0 : anios // Evita números negativos si la fecha es futura
-    };
+    if (mes < 0 || (mes === 0 && hoy.getDate() < h.fechaHabilitacion.getDate())) anios--;
+    return { aeronave: h.aeronave, rol: h.rolActual, anios: anios < 0 ? 0 : anios };
   });
 });
 
-// VIRTUAL: Suma de horas totales a través de todos los sistemas
+// VIRTUAL: Suma de horas totales (Ajustado a la nueva ubicación del campo)
 tripulanteSchema.virtual('totalVueloGeneral').get(function() {
   if (!this.habilitaciones) return 0;
-  return this.habilitaciones.reduce((acc, h) => acc + (h.ultimaActividad?.totalHorasSistema || 0), 0);
+  return this.habilitaciones.reduce((acc, h) => acc + (h.totalHorasSistema || 0), 0);
 });
 
-// VIRTUAL: Estado de Vencimientos (útil para alertas en el Frontend)
+// VIRTUAL: Estado de Vencimientos
 tripulanteSchema.virtual('estadoCertificaciones').get(function() {
   const hoy = new Date();
   return {
