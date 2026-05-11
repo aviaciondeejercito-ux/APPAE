@@ -14,25 +14,26 @@ const Tripulantes = () => {
         grado: '', apellido: '', nombre: '', unidad: '', antiguedad: ''
     });
 
-    // DATOS DE SESIÓN (Basados en localStorage del Login)
+    // DATOS DE SESIÓN (Extraídos de localStorage)
     const [user] = useState({
         role: localStorage.getItem('role')?.toLowerCase() || 'user',
         unidad: localStorage.getItem('unidad') || '' 
     });
 
-    // CONFIGURACIÓN BASADA EN TU MODELO DE MONGOOSE
+    // CONFIGURACIÓN DE GRADOS Y UNIDADES (Enum de tu modelo)
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
         "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
         "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"
     ];
-    const gradosAE = ['Cnel', 'Tcnl', 'My', 'Cap', 'Ten', 'Subt', 'Subof My', 'Subof Pr', 'Subof Prpal', 'Sarg Ay', 'Sarg 1ro', 'Sarg', 'Cabo 1ro', 'Cabo'];
+
+    const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
 
     useEffect(() => {
         fetchPersonal();
     }, []);
 
-    // 1. OBTENER TRIPULANTES (Endpoint GET /api/tripulantes)
+    // 1. OBTENER TRIPULANTES (GET /api/tripulantes)
     const fetchPersonal = async () => {
         try {
             setLoading(true);
@@ -43,25 +44,25 @@ const Tripulantes = () => {
             const data = await response.json();
             if (response.ok) setPersonal(data);
         } catch (error) {
-            console.error("Error al sincronizar con el servidor:", error);
+            console.error("Error de sincronización:", error);
         } finally {
             setLoading(false);
         }
     };
 
-    // 2. FUNCIÓN PARA ABRIR ALTA (Lógica Admin vs User)
+    // 2. ABRIR MODAL CON LÓGICA DE UNIDAD
     const handleOpenModal = () => {
         setFormData({
             grado: '', 
             apellido: '', 
             nombre: '', 
-            unidad: user.role === 'admin' ? '' : user.unidad, // Si no es admin, queda fija su unidad
+            unidad: user.role === 'admin' ? '' : user.unidad, 
             antiguedad: ''
         });
         setShowModal(true);
     };
 
-    // 3. GUARDAR NUEVO TRIPULANTE (Endpoint POST /api/tripulantes)
+    // 3. ENVIAR ALTA (POST /api/tripulantes)
     const handleSave = async (e) => {
         e.preventDefault();
         try {
@@ -76,13 +77,13 @@ const Tripulantes = () => {
             });
             if (response.ok) {
                 setShowModal(false);
-                fetchPersonal(); // Recargar lista
+                fetchPersonal();
             } else {
                 const err = await response.json();
-                alert(err.mensaje);
+                alert(err.mensaje || "Error al procesar el alta");
             }
         } catch (error) {
-            console.error("Error en el alta:", error);
+            console.error("Error en la conexión:", error);
         }
     };
 
@@ -94,7 +95,7 @@ const Tripulantes = () => {
     return (
         <div style={styles.dashboardContainer}>
             
-            {/* COLUMNA IZQUIERDA: GESTIÓN */}
+            {/* BARRA LATERAL */}
             <div style={styles.sidebar}>
                 <div style={styles.altaBox}>
                     <button style={styles.btnAlta} onClick={handleOpenModal}>
@@ -117,9 +118,9 @@ const Tripulantes = () => {
                 </div>
 
                 <div style={styles.listContainer}>
-                    <div style={styles.listHeader}>TRIPULANTES DE LA UNIDAD</div>
+                    <div style={styles.listHeader}>PERSONAL CARGADO</div>
                     {loading ? (
-                        <div style={styles.loadingArea}>Sincronizando...</div>
+                        <div style={styles.infoText}>Sincronizando base de datos...</div>
                     ) : (
                         personalFiltrado.map(p => (
                             <div 
@@ -145,7 +146,7 @@ const Tripulantes = () => {
                 </div>
             </div>
 
-            {/* MODAL DE ALTA (Logic Admin/User) */}
+            {/* MODAL DE FORMULARIO */}
             {showModal && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
@@ -172,7 +173,7 @@ const Tripulantes = () => {
                                 </div>
                             </div>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>Unidad</label>
+                                <label style={styles.label}>Unidad Destino</label>
                                 {user.role === 'admin' ? (
                                     <select required style={styles.formInput} value={formData.unidad} onChange={e => setFormData({...formData, unidad: e.target.value})}>
                                         <option value="">Seleccionar Unidad</option>
@@ -182,13 +183,13 @@ const Tripulantes = () => {
                                     <input type="text" readOnly style={{...styles.formInput, backgroundColor: '#f5f5f5'}} value={user.unidad} />
                                 )}
                             </div>
-                            <button type="submit" style={styles.btnSave}><Save size={18} /> Dar de Alta en Sistema</button>
+                            <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Alta</button>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* COLUMNA DERECHA: LEGAJO */}
+            {/* PANEL DE DETALLE */}
             <div style={styles.mainView}>
                 {seleccionado ? (
                     <div style={styles.legajoCard}>
@@ -208,7 +209,9 @@ const Tripulantes = () => {
                                     <Clock size={20} color="#1b3a57" />
                                     <div style={styles.statData}>
                                         <span style={styles.statLabel}>HORAS TOTALES</span>
-                                        <span style={styles.statValue}>{(seleccionado.totalesHistoricos?.vueloDiurno || 0) + (seleccionado.totalesHistoricos?.vueloNocturno || 0)} hs</span>
+                                        <span style={styles.statValue}>
+                                            {(seleccionado.totalesHistoricos?.vueloDiurno || 0) + (seleccionado.totalesHistoricos?.vueloNocturno || 0)} hs
+                                        </span>
                                     </div>
                                 </div>
                                 <div style={styles.statCard}>
@@ -221,17 +224,18 @@ const Tripulantes = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div style={styles.sectionHeader}><FileText size={16} /> <span>DATOS OPERATIVOS</span></div>
+                            <div style={styles.sectionHeader}><FileText size={16} /> <span>HISTORIAL DE MODIFICACIONES</span></div>
                             <div style={styles.placeholderMsg}>
-                                Última modificación: {new Date(seleccionado.fechaUltimaModificacion).toLocaleDateString()} hs.
+                                Última edición por: {seleccionado.ultimoEditor?.grado} {seleccionado.ultimoEditor?.apellido || 'Sistema'} <br/>
+                                el {new Date(seleccionado.fechaUltimaModificacion).toLocaleString()} hs.
                             </div>
                         </div>
                     </div>
                 ) : (
                     <div style={styles.emptyState}>
                         <User size={60} color="#dcdde1" />
-                        <h3>Gestión de Personal AE</h3>
-                        <p>Seleccione un tripulante para visualizar su historial inmutable.</p>
+                        <h3>Monitor de Legajos Digitales</h3>
+                        <p>Seleccione un integrante del personal para gestionar su legajo inmutable.</p>
                     </div>
                 )}
             </div>
@@ -270,9 +274,7 @@ const styles = {
     sectionHeader: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57', marginBottom: '15px', borderBottom: '2px solid #1b3a57', paddingBottom: '5px' },
     placeholderMsg: { padding: '40px', textAlign: 'center', color: '#bdc3c7', fontSize: '0.9rem', border: '2px dashed #f1f2f6', borderRadius: '12px' },
     emptyState: { height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#bdc3c7', textAlign: 'center' },
-    loadingArea: { padding: '20px', textAlign: 'center', color: '#7f8c8d', fontSize: '0.85rem' },
-    
-    // OVERLAY Y MODAL
+    infoText: { padding: '20px', textAlign: 'center', color: '#7f8c8d', fontSize: '0.85rem' },
     overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 5000 },
     modal: { backgroundColor: 'white', width: '450px', borderRadius: '15px', padding: '25px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' },
     modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', color: '#1b3a57' },
