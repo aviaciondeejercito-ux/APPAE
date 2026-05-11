@@ -8,29 +8,21 @@ import { getEvents } from '../services/EventService';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
-    const [role] = useState(localStorage.getItem('role')?.trim().toLowerCase() || 'guest');
-    const [userUnidad] = useState(localStorage.getItem('elemento')?.toUpperCase() || ''); 
+    // Normalización de rol para comparaciones seguras
+    const rawRole = localStorage.getItem('role') || 'guest';
+    const role = rawRole.trim().toLowerCase();
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
+
+    const [userUnidad] = useState(localStorage.getItem('elemento')?.toUpperCase().trim() || ''); 
     const [selectedEvent, setSelectedEvent] = useState(null); 
     const [isMobile] = useState(window.innerWidth < 768);
 
     useEffect(() => { 
         fetchData(); 
-        // Inyectamos estilo para resaltar el día de hoy
         const style = document.createElement('style');
         style.innerHTML = `
-            /* Resaltado del día actual */
-            .fc .fc-day-today {
-                background-color: rgba(27, 58, 87, 0.08) !important; /* Azul AE muy suave */
-                border-top: 4px solid #1b3a57 !important; /* Borde superior grueso */
-            }
-            /* Resaltado del número del día hoy */
-            .fc .fc-day-today .fc-daygrid-day-number {
-                background-color: #1b3a57;
-                color: white;
-                border-radius: 50%;
-                padding: 4px 8px;
-                margin: 2px;
-            }
+            .fc .fc-day-today { background-color: rgba(27, 58, 87, 0.08) !important; border-top: 4px solid #1b3a57 !important; }
+            .fc .fc-day-today .fc-daygrid-day-number { background-color: #1b3a57; color: white; border-radius: 50%; padding: 4px 8px; margin: 2px; }
         `;
         document.head.appendChild(style);
     }, []);
@@ -40,23 +32,32 @@ const CalendarPage = () => {
             const data = await getEvents();
             
             const filteredData = data.filter(ev => {
-                const evElemento = ev.elemento ? String(ev.elemento).toUpperCase() : '';
-                const evCreador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase() : '';
+                const evElemento = ev.elemento ? String(ev.elemento).toUpperCase().trim() : '';
+                const evCreador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase().trim() : '';
                 const unidadUsuario = userUnidad.toUpperCase();
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
+                // 1. ADMIN: Control total
                 if (role === 'admin') return true;
 
-                const normalizedRole = role.toUpperCase();
-                if (normalizedRole === 'DIRECTOR' || normalizedRole === 'BOSS' || normalizedRole === 'OTO') {
+                // 2. MANDOS SUPERIORES: Ven todo lo de DIR AE y lo que ya fue ORDENADO a las unidades
+                if (roleNormalizado === 'DIRECTOR' || roleNormalizado === 'BOSS' || roleNormalizado === 'OTO') {
                     const esDeDirAe = evCreador.includes('DIR AE') || evElemento.includes('DIR AE');
                     const esUnidadOrdenado = etapa === 'ordenada'; 
                     return esDeDirAe || esUnidadOrdenado;
                 }
 
-                if (role === 'user' || normalizedRole === 'OFICINA_TECNICA') {
+                // 3. ROLES DE UNIDAD (Nuevos y Estándar): 
+                // OFICINA_TECNICA, OPERACIONES, JEFE, LOGISTICO, PERSONAL y USER
+                // Ven solo lo que ellos crearon o lo que DIR AE les ordenó específicamente (o globalmente)
+                const rolesUnidad = ['USER', 'OFICINATECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
+                
+                if (rolesUnidad.includes(roleNormalizado)) {
+                    // Si su unidad lo creó, lo ven siempre (incluso en recepción/borrador)
                     if (evCreador === unidadUsuario) return true;
+                    // Si DIR AE lo ordenó a su unidad específica
                     if (evCreador.includes('DIR AE') && evElemento === unidadUsuario && etapa === 'ordenada') return true;
+                    // Si es una actividad global de DIR AE ya ordenada
                     if (evCreador.includes('DIR AE') && ev.esGlobal && etapa === 'ordenada') return true;
                     return false;
                 }
@@ -66,7 +67,7 @@ const CalendarPage = () => {
 
             setEvents(Array.isArray(filteredData) ? filteredData : []);
         } catch (error) { 
-            console.error("❌ ERROR CRÍTICO:", error); 
+            console.error("❌ ERROR CRÍTICO CALENDARIO:", error); 
         }
     };
 
