@@ -26,7 +26,6 @@ exports.crearTripulante = async (req, res) => {
         const nuevoTripulante = new Tripulante(datosNuevoTripulante);
         await nuevoTripulante.save();
 
-        // Auditoría con campos normalizados
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
@@ -43,7 +42,7 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Gestionar Habilitación (Acumulativa)
+// 2. Gestionar Habilitación SdA (Acumulativa)
 exports.gestionarHabilitacion = async (req, res) => {
     try {
         const { id } = req.params;
@@ -101,7 +100,42 @@ exports.gestionarHabilitacion = async (req, res) => {
     }
 };
 
-// 3. Obtener Tripulantes
+// 3. Agregar Capacitación Especial (Táctica)
+exports.agregarCapacitacion = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const usuarioLogueado = req.user;
+        const tripulante = await Tripulante.findById(id);
+        
+        if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+
+        const role = usuarioLogueado.role?.toLowerCase();
+        if (role !== 'admin' && usuarioLogueado.unidad !== tripulante.unidad) {
+            return res.status(403).json({ mensaje: "No autorizado" });
+        }
+
+        tripulante.capacitacionesEspeciales.push(req.body);
+        tripulante.ultimoEditor = usuarioLogueado._id;
+        tripulante.fechaUltimaModificacion = Date.now();
+        
+        await tripulante.save();
+
+        await Auditoria.create({
+            usuarioId: usuarioLogueado._id,
+            usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
+            accion: 'MODIFICACION',
+            entidadAfectada: `Capacitación: ${req.body.tipo} para ${tripulante.apellido}`,
+            entidadId: tripulante._id
+        });
+
+        res.status(200).json({ mensaje: "Capacitación añadida con éxito", tripulante });
+    } catch (error) {
+        res.status(400).json({ mensaje: "Error al agregar capacitación", error: error.message });
+    }
+};
+
+// 4. Obtener Tripulantes
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -125,7 +159,7 @@ exports.obtenerTripulantes = async (req, res) => {
     }
 };
 
-// 4. Actualizar Tripulante (General)
+// 5. Actualizar Tripulante (General)
 exports.actualizarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
@@ -174,7 +208,7 @@ exports.actualizarTripulante = async (req, res) => {
     }
 };
 
-// 5. Eliminar Tripulante
+// 6. Eliminar Tripulante
 exports.eliminarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
@@ -206,7 +240,7 @@ exports.eliminarTripulante = async (req, res) => {
     }
 };
 
-// 6. Buscar Tripulante
+// 7. Buscar Tripulante
 exports.buscarTripulante = async (req, res) => {
     try {
         const { termino } = req.params;
