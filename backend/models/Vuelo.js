@@ -13,21 +13,19 @@ const vueloSchema = new mongoose.Schema({
       "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"
     ]
   },
-  matricula: { type: String, required: true, trim: true, uppercase: true }, // Ej: AE-228
+  matricula: { type: String, required: true, trim: true, uppercase: true },
 
   // --- TRIPULACIÓN ---
-  // Nota: Solo el piloto es estrictamente obligatorio para el esquema.
-  // Los demás se definen como opcionales permitiendo null si vienen vacíos.
   instructor: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
   piloto: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', required: true },
   copiloto: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
   mecanico: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
-  segundoMecanico: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null }, // Para casos de dos mecánicos
+  segundoMecanico: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
 
   // --- RUTA Y TIEMPOS ---
   desde: { type: String, required: true, uppercase: true }, 
   hasta: { type: String, required: true, uppercase: true }, 
-  horasVoladas: { type: Number, required: true }, // Asegurate que el front mande número (ej: 5.6)
+  horasVoladas: { type: Number, required: true },
 
   // --- CONDICIONES DE VUELO ---
   condicion: { 
@@ -38,7 +36,8 @@ const vueloSchema = new mongoose.Schema({
   reglasVuelo: { 
     type: String, 
     required: true, 
-    enum: ['VFR', 'IFR'] 
+    enum: ['VFR', 'IFR'],
+    default: 'VFR'
   },
   usoNVG: { type: Boolean, default: false },
 
@@ -56,7 +55,6 @@ const vueloSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-// Índice para búsquedas rápidas
 vueloSchema.index({ fecha: -1, aeronave: 1 });
 
 module.exports = mongoose.model('Vuelo', vueloSchema);

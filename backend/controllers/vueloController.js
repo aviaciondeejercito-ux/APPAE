@@ -13,19 +13,19 @@ exports.registrarVuelo = async (req, res) => {
         // 1. Limpieza y Normalización de IDs (Evita error 400 por strings vacíos "")
         const limpiarId = (id) => (id && id.toString().trim() !== "" && id !== "undefined") ? id : null;
 
-        // 2. Crear el registro del vuelo con IDs saneados y Matrícula estandarizada
+        // 2. Crear el registro del vuelo con IDs saneados y campos adicionales
         const nuevoVuelo = new Vuelo({
             ...datosVuelo,
-            // Aeronave y Matrícula
             aeronave: datosVuelo.aeronave?.trim(),
             matricula: datosVuelo.matricula?.toUpperCase().trim(),
+            elementoApoyado: datosVuelo.elementoApoyado?.toUpperCase().trim(),
             
             // Tripulación saneada
             instructor: limpiarId(datosVuelo.instructor),
             piloto: limpiarId(datosVuelo.piloto),
             copiloto: limpiarId(datosVuelo.copiloto),
             mecanico: limpiarId(datosVuelo.mecanico),
-            segundoMecanico: limpiarId(datosVuelo.segundoMecanico), // Soporte para dos mecánicos
+            segundoMecanico: limpiarId(datosVuelo.segundoMecanico),
 
             unidadResponsable: usuarioLogueado.unidad || usuarioLogueado.elemento,
             creadoPor: usuarioLogueado._id
@@ -33,7 +33,7 @@ exports.registrarVuelo = async (req, res) => {
 
         await nuevoVuelo.save();
 
-        // 3. Definir quiénes volaron para impactar legajos (filtramos los null)
+        // 3. Definir tripulantes afectados (filtramos los null)
         const tripulantesIds = [
             nuevoVuelo.instructor,
             nuevoVuelo.piloto,
@@ -52,8 +52,9 @@ exports.registrarVuelo = async (req, res) => {
             const tripulante = await Tripulante.findById(tId);
             if (!tripulante) continue;
 
-            // A. Actualizar Totales Históricos
+            // A. Totales Históricos
             if (esIFR) tripulante.totalesHistoricos.vueloInstrumental += hs;
+            
             if (esNVG) {
                 tripulante.totalesHistoricos.vueloVisual += hs; 
             } else if (esNocturno) {
@@ -62,7 +63,7 @@ exports.registrarVuelo = async (req, res) => {
                 tripulante.totalesHistoricos.vueloDiurno += hs;
             }
 
-            // B. Actualizar Habilitación Específica (SdA)
+            // B. Habilitación Específica (SdA)
             const indexHab = tripulante.habilitaciones.findIndex(h => h.aeronave === nuevoVuelo.aeronave);
             if (indexHab !== -1) {
                 if (esIFR) tripulante.habilitaciones[indexHab].hsInstrumental += hs;
@@ -94,25 +95,21 @@ exports.registrarVuelo = async (req, res) => {
             await tripulante.save();
         }
 
-        // 5. Auditoría
+        // 5. Auditoría Reforzada
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
             usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
             accion: 'CARGA_HS',
             entidadAfectada: `Vuelo ${nuevoVuelo.aeronave} Mat: ${nuevoVuelo.matricula}`,
-            detalles: `Carga automática: ${hs} hs impactadas en legajos. Tripulación: ${tripulantesIds.length}`
+            detalles: `Apoyo: ${nuevoVuelo.elementoApoyado} | Pax: ${nuevoVuelo.cantidadPasajeros} | Carga: ${nuevoVuelo.pesoCarga}kg | Modo: ${nuevoVuelo.localTravesia} | Reglas: ${nuevoVuelo.reglasVuelo}`
         });
 
-        res.status(201).json({ mensaje: "Vuelo registrado e impacto total en legajos completado", vuelo: nuevoVuelo });
+        res.status(201).json({ mensaje: "Vuelo registrado e impacto total procesado", vuelo: nuevoVuelo });
 
     } catch (error) {
         console.error("❌ Error en carga de vuelo:", error);
-        res.status(400).json({ 
-            mensaje: "Error al registrar vuelo", 
-            error: error.message,
-            detalles: "Verifique que todos los campos obligatorios estén completos y los tripulantes seleccionados sean válidos."
-        });
+        res.status(400).json({ mensaje: "Error al registrar vuelo", detalles: error.message });
     }
 };
 
@@ -124,6 +121,7 @@ exports.obtenerVuelos = async (req, res) => {
         const { unidad } = req.query;
         let filtro = {};
         
+        // Si no es admin, filtramos por la unidad del usuario logueado
         if (req.user.role !== 'admin') {
             filtro.unidadResponsable = req.user.unidad || req.user.elemento;
         } else if (unidad && unidad !== 'all') {
@@ -141,7 +139,7 @@ exports.obtenerVuelos = async (req, res) => {
 };
 
 /**
- * ELIMINAR VUELO (Lógica Inversa: Descuenta horas de todos los sectores del legajo)
+ * ELIMINAR VUELO (Lógica Inversa completa)
  */
 exports.eliminarVuelo = async (req, res) => {
     try {
@@ -199,7 +197,7 @@ exports.eliminarVuelo = async (req, res) => {
         }
 
         await Vuelo.findByIdAndDelete(req.params.id);
-        res.json({ mensaje: "Vuelo eliminado y horas descontadas de legajos correctamente" });
+        res.json({ mensaje: "Vuelo eliminado y horas descontadas correctamente" });
     } catch (error) {
         res.status(500).json({ mensaje: "Error al eliminar el vuelo", error: error.message });
     }

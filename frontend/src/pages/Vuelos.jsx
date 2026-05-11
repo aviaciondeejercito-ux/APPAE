@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Users, Clock, Save, Trash2 } from 'lucide-react';
+import { Plane, Users, Clock, Save, Trash2, Map, Luggage, UserPlus } from 'lucide-react';
 import API from '../services/api';
 
 const Vuelos = () => {
@@ -7,7 +7,6 @@ const Vuelos = () => {
     const [tripulantes, setTripulantes] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    // Estado para el usuario logueado
     const [user] = useState({
         role: localStorage.getItem('role')?.toLowerCase() || 'user',
         unidad: localStorage.getItem('elemento')?.trim().toUpperCase() || ''
@@ -16,10 +15,11 @@ const Vuelos = () => {
     const [formData, setFormData] = useState({
         fecha: '', aeronave: '', matricula: '',
         instructor: '', piloto: '', copiloto: '', 
-        mecanico: '', segundoMecanico: '', // Agregado segundo mecánico
+        mecanico: '', segundoMecanico: '',
         desde: '', hasta: '', horasVoladas: 0,
         condicion: 'Diurno', reglasVuelo: 'VFR', usoNVG: false,
-        tipoMision: '', localTravesia: 'Local', elementoApoyado: ''
+        tipoMision: '', localTravesia: 'Local', 
+        elementoApoyado: '', cantidadPasajeros: 0, pesoCarga: 0
     });
 
     const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"];
@@ -48,32 +48,34 @@ const Vuelos = () => {
         e.preventDefault();
         setLoading(true);
 
-        // LIMPIEZA DE DATOS: Convertir strings vacíos en null para no romper el ObjectId de MongoDB
         const payload = {
             ...formData,
             instructor: formData.instructor || null,
             copiloto: formData.copiloto || null,
             mecanico: formData.mecanico || null,
             segundoMecanico: formData.segundoMecanico || null,
-            horasVoladas: Number(formData.horasVoladas)
+            horasVoladas: Number(formData.horasVoladas),
+            cantidadPasajeros: Number(formData.cantidadPasajeros),
+            pesoCarga: Number(formData.pesoCarga)
         };
 
         try {
             await API.post('/vuelos', payload);
-            alert("Vuelo registrado e impacto en legajos correctamente.");
+            alert("Vuelo registrado correctamente.");
             setFormData({ 
                 ...formData, 
                 horasVoladas: 0, desde: '', hasta: '', matricula: '',
-                instructor: '', piloto: '', copiloto: '', mecanico: '', segundoMecanico: ''
+                instructor: '', piloto: '', copiloto: '', mecanico: '', segundoMecanico: '',
+                cantidadPasajeros: 0, pesoCarga: 0, elementoApoyado: ''
             });
             fetchVuelos();
         } catch (error) {
-            alert("Error: " + (error.response?.data?.mensaje || error.response?.data?.detalles || "Fallo en la conexión"));
+            alert("Error: " + (error.response?.data?.mensaje || "Fallo en la conexión"));
         } finally { setLoading(false); }
     };
 
     const eliminarVuelo = async (id) => {
-        if (window.confirm("¿Seguro desea eliminar este registro? Se descontarán las horas de los legajos.")) {
+        if (window.confirm("¿Seguro desea eliminar este registro?")) {
             try {
                 await API.delete(`/vuelos/${id}`);
                 fetchVuelos();
@@ -83,7 +85,6 @@ const Vuelos = () => {
 
     return (
         <div style={styles.container}>
-            {/* HEADER SIMPLIFICADO */}
             <div style={styles.header}>
                 <div>
                     <h1 style={styles.title}>Registro de Vuelos</h1>
@@ -92,50 +93,48 @@ const Vuelos = () => {
             </div>
 
             <div style={styles.mainGrid}>
-                {/* FORMULARIO DE CARGA */}
+                {/* FORMULARIO */}
                 <div style={styles.card}>
                     <h2 style={styles.cardTitle}><Save size={18} /> Nueva Carga - Formulario -12</h2>
                     <form onSubmit={handleSubmit} style={styles.form}>
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Fecha</label>
                             <input type="date" style={styles.input} onChange={e => setFormData({...formData, fecha: e.target.value})} required/></div>
-                            <div style={styles.group}><label style={styles.label}>SdA</label>
+                            <div style={styles.group}><label style={styles.label}>Aeronave (SdA)</label>
                             <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
                                 <option value="">Seleccionar...</option>
                                 {aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
                             </select></div>
                         </div>
 
-                        <div style={styles.group}><label style={styles.label}>Matrícula</label>
-                        <input placeholder="Ej: AE-452" style={styles.input} value={formData.matricula} onChange={e => setFormData({...formData, matricula: e.target.value.toUpperCase()})} required/></div>
-
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Instructor (Opt)</label>
-                            <select style={styles.input} value={formData.instructor} onChange={e => setFormData({...formData, instructor: e.target.value})}>
-                                <option value="">Ninguno</option>
-                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
-                            </select></div>
+                            <div style={styles.group}><label style={styles.label}>Matrícula</label>
+                            <input placeholder="AE-XXX" style={styles.input} value={formData.matricula} onChange={e => setFormData({...formData, matricula: e.target.value.toUpperCase()})} required/></div>
+                            <div style={styles.group}><label style={styles.label}>Elemento Apoyado</label>
+                            <input placeholder="Ej: DIR AE" style={styles.input} value={formData.elementoApoyado} onChange={e => setFormData({...formData, elementoApoyado: e.target.value.toUpperCase()})} required/></div>
+                        </div>
+
+                        {/* TRIPULACIÓN */}
+                        <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Piloto</label>
                             <select style={styles.input} value={formData.piloto} onChange={e => setFormData({...formData, piloto: e.target.value})} required>
                                 <option value="">Seleccionar...</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
                             </select></div>
+                            <div style={styles.group}><label style={styles.label}>Copiloto (Opt)</label>
+                            <select style={styles.input} value={formData.copiloto} onChange={e => setFormData({...formData, copiloto: e.target.value})}>
+                                <option value="">Ninguno</option>
+                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                            </select></div>
                         </div>
 
-                        <div style={styles.group}><label style={styles.label}>Copiloto (Opt)</label>
-                        <select style={styles.input} value={formData.copiloto} onChange={e => setFormData({...formData, copiloto: e.target.value})}>
-                            <option value="">Ninguno</option>
-                            {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
-                        </select></div>
-
-                        {/* SECCIÓN MECÁNICOS */}
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Mecánico 1</label>
                             <select style={styles.input} value={formData.mecanico} onChange={e => setFormData({...formData, mecanico: e.target.value})}>
                                 <option value="">Ninguno</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
                             </select></div>
-                            <div style={styles.group}><label style={styles.label}>Mecánico 2</label>
+                            <div style={styles.group}><label style={styles.label}>Mecánico 2 (Opt)</label>
                             <select style={styles.input} value={formData.segundoMecanico} onChange={e => setFormData({...formData, segundoMecanico: e.target.value})}>
                                 <option value="">Ninguno</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
@@ -150,8 +149,28 @@ const Vuelos = () => {
                         </div>
 
                         <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Pasajeros</label>
+                            <input type="number" style={styles.input} value={formData.cantidadPasajeros} onChange={e => setFormData({...formData, cantidadPasajeros: e.target.value})} /></div>
+                            <div style={styles.group}><label style={styles.label}>Carga (Kg)</label>
+                            <input type="number" style={styles.input} value={formData.pesoCarga} onChange={e => setFormData({...formData, pesoCarga: e.target.value})} /></div>
+                        </div>
+
+                        <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Horas</label>
                             <input type="number" step="0.1" style={styles.input} value={formData.horasVoladas} onChange={e => setFormData({...formData, horasVoladas: e.target.value})} required/></div>
+                            <div style={styles.group}><label style={styles.label}>Reglas Vuelo</label>
+                            <select style={styles.input} value={formData.reglasVuelo} onChange={e => setFormData({...formData, reglasVuelo: e.target.value})}>
+                                <option value="VFR">VFR</option>
+                                <option value="IFR">IFR</option>
+                            </select></div>
+                        </div>
+
+                        <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Local/Travesía</label>
+                            <select style={styles.input} value={formData.localTravesia} onChange={e => setFormData({...formData, localTravesia: e.target.value})}>
+                                <option value="Local">Local</option>
+                                <option value="Travesia">Travesía</option>
+                            </select></div>
                             <div style={styles.group}><label style={styles.label}>Condición</label>
                             <select style={styles.input} value={formData.condicion} onChange={e => setFormData({...formData, condicion: e.target.value})}>
                                 <option value="Diurno">Diurno</option>
@@ -159,19 +178,23 @@ const Vuelos = () => {
                             </select></div>
                         </div>
 
-                        <div style={styles.group}><label style={styles.label}>Misión</label>
-                        <select style={styles.input} value={formData.tipoMision} onChange={e => setFormData({...formData, tipoMision: e.target.value})} required>
-                            <option value="">Seleccionar misión...</option>
-                            {misiones.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select></div>
+                        <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Misión</label>
+                            <select style={styles.input} value={formData.tipoMision} onChange={e => setFormData({...formData, tipoMision: e.target.value})} required>
+                                <option value="">Seleccionar...</option>
+                                {misiones.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select></div>
+                            <div style={styles.group}><label style={styles.label}>NVG</label>
+                            <input type="checkbox" checked={formData.usoNVG} onChange={e => setFormData({...formData, usoNVG: e.target.checked})} /></div>
+                        </div>
 
                         <button disabled={loading} type="submit" style={styles.btnSave}>
-                            {loading ? "SINCRONIZANDO LEGAJOS..." : "REGISTRAR VUELO"}
+                            {loading ? "SINCRONIZANDO..." : "REGISTRAR VUELO"}
                         </button>
                     </form>
                 </div>
 
-                {/* TABLA DE HISTORIAL */}
+                {/* TABLA */}
                 <div style={{...styles.card, flex: 1}}>
                     <h2 style={styles.cardTitle}><Clock size={18} /> Historial Operativo</h2>
                     <div style={styles.tableContainer}>
@@ -179,10 +202,10 @@ const Vuelos = () => {
                             <thead>
                                 <tr style={styles.thead}>
                                     <th style={styles.th}>Fecha</th>
-                                    <th style={styles.th}>SdA</th>
-                                    <th style={styles.th}>Piloto / Cop</th>
-                                    <th style={styles.th}>Hs</th>
-                                    <th style={styles.th}>Misión</th>
+                                    <th style={styles.th}>SdA/Mat</th>
+                                    <th style={styles.th}>Tripulación</th>
+                                    <th style={styles.th}>Ruta/Hs</th>
+                                    <th style={styles.th}>Misión/Apoyo</th>
                                     <th style={styles.th}>Acción</th>
                                 </tr>
                             </thead>
@@ -190,10 +213,16 @@ const Vuelos = () => {
                                 {vuelos.map(v => (
                                     <tr key={v._id} style={styles.tr}>
                                         <td style={styles.td}>{new Date(v.fecha).toLocaleDateString()}</td>
-                                        <td style={styles.td}><strong>{v.aeronave}</strong><br/><small>{v.matricula}</small></td>
-                                        <td style={styles.td}>{v.piloto?.apellido} {v.copiloto ? `/ ${v.copiloto.apellido}` : ''}</td>
-                                        <td style={styles.td}>{v.horasVoladas}</td>
-                                        <td style={styles.td}><span style={styles.misionTag}>{v.tipoMision}</span></td>
+                                        <td style={styles.td}><strong>{v.aeronave}</strong><br/>{v.matricula}</td>
+                                        <td style={styles.td}>
+                                            <small>P: {v.piloto?.apellido}</small><br/>
+                                            {v.copiloto && <small>C: {v.copiloto.apellido}</small>}
+                                        </td>
+                                        <td style={styles.td}>{v.desde}-{v.hasta}<br/><strong>{v.horasVoladas}hs</strong></td>
+                                        <td style={styles.td}>
+                                            <span style={styles.misionTag}>{v.tipoMision}</span><br/>
+                                            <small>{v.elementoApoyado}</small>
+                                        </td>
                                         <td style={styles.td}>
                                             <button onClick={() => eliminarVuelo(v._id)} style={styles.btnDel}><Trash2 size={14}/></button>
                                         </td>
@@ -210,25 +239,25 @@ const Vuelos = () => {
 
 const styles = {
     container: { padding: '30px', backgroundColor: '#f4f7f6', minHeight: '100vh' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' },
-    title: { margin: 0, fontSize: '1.6rem', color: '#1b3a57' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+    title: { margin: 0, fontSize: '1.5rem', color: '#1b3a57' },
     subtitle: { color: '#7f8c8d', fontSize: '0.9rem' },
     mainGrid: { display: 'flex', gap: '20px', alignItems: 'flex-start' },
-    card: { backgroundColor: 'white', borderRadius: '10px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', minWidth: '400px' },
-    cardTitle: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1rem', color: '#1b3a57', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' },
-    form: { display: 'flex', flexDirection: 'column', gap: '12px' },
-    row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
-    group: { display: 'flex', flexDirection: 'column', gap: '4px' },
-    label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#7f8c8d', textTransform: 'uppercase' },
-    input: { padding: '8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '0.9rem' },
+    card: { backgroundColor: 'white', borderRadius: '10px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', minWidth: '420px' },
+    cardTitle: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#1b3a57', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px', fontWeight: 'bold' },
+    form: { display: 'flex', flexDirection: 'column', gap: '10px' },
+    row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
+    group: { display: 'flex', flexDirection: 'column', gap: '2px' },
+    label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#7f8c8d', textTransform: 'uppercase' },
+    input: { padding: '8px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '0.85rem' },
     btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
     tableContainer: { overflowX: 'auto' },
     table: { width: '100%', borderCollapse: 'collapse' },
     thead: { backgroundColor: '#f8f9fa' },
-    th: { padding: '10px', textAlign: 'left', fontSize: '0.75rem', color: '#7f8c8d', borderBottom: '2px solid #eee' },
+    th: { padding: '10px', textAlign: 'left', fontSize: '0.7rem', color: '#7f8c8d', borderBottom: '2px solid #eee', textTransform: 'uppercase' },
     tr: { borderBottom: '1px solid #eee' },
-    td: { padding: '10px', fontSize: '0.85rem' },
-    misionTag: { backgroundColor: '#e8f4fd', color: '#1b3a57', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' },
+    td: { padding: '10px', fontSize: '0.8rem' },
+    misionTag: { backgroundColor: '#e8f4fd', color: '#1b3a57', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 'bold' },
     btnDel: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer' }
 };
 

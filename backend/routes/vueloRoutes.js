@@ -5,22 +5,21 @@ const { protect } = require('../middleware/authMiddleware');
 
 /**
  * RUTAS DE GESTIÓN DE VUELOS - SISTEMA GESTIÓN AE
- * Estándar de seguridad: Solo personal autenticado.
+ * Configuración híbrida: Acceso para Admin y User (Operadores de Unidad).
  */
 
-// 1. Protección Global: Nadie entra sin Token
+// 1. Protección Global: Requiere Token para cualquier operación
 router.use(protect);
 
 // 2. Middleware de Autorización por Rol
 const authorize = (...roles) => {
     return (req, res, next) => {
         const userRole = req.user.role?.toLowerCase();
-        // Normalizamos los roles para evitar errores de mayúsculas
         const rolesPermitidos = roles.map(r => r.toLowerCase());
         
         if (!rolesPermitidos.includes(userRole)) {
             return res.status(403).json({ 
-                mensaje: `El rol ${req.user.role} no tiene permiso para ejecutar esta acción.` 
+                mensaje: `ACCESO DENEGADO: El rol ${req.user.role} no tiene permisos para este módulo.` 
             });
         }
         next();
@@ -28,12 +27,15 @@ const authorize = (...roles) => {
 };
 
 // 3. Definición de Endpoints
-// Nota: Verificamos que los nombres coincidan con el controlador (obtenerVuelos / registrarVuelo)
+// Permitimos que tanto 'admin' como 'user' puedan listar y cargar vuelos.
+// La lógica de qué ve cada uno (su unidad vs todo) ya está resuelta en el controlador.
+
 router.route('/')
-    .get(vueloController.obtenerVuelos) 
-    .post(vueloController.registrarVuelo); 
+    .get(authorize('admin', 'user'), vueloController.obtenerVuelos) 
+    .post(authorize('admin', 'user'), vueloController.registrarVuelo); 
 
 router.route('/:id')
+    // El borrado lo mantenemos exclusivo de Admin por seguridad operativa (impacto en legajos)
     .delete(authorize('admin'), vueloController.eliminarVuelo); 
 
 module.exports = router;
