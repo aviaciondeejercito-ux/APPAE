@@ -31,21 +31,40 @@ const Tripulantes = () => {
     useEffect(() => { fetchPersonal(); }, []);
 
     const fetchPersonal = async () => {
-        try {
-            setLoading(true);
-            const response = await getTripulantes();
-            // Los gestores ven a todos, los usuarios base solo a su unidad
-            const dataFinal = esAdmin || ['BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado)
-                ? response.data 
-                : response.data.filter(p => p.unidad?.toUpperCase().trim() === userUnidad);
-            
-            setPersonal(dataFinal || []);
-            if (seleccionado) {
-                const actualizado = dataFinal.find(p => p._id === seleccionado._id);
-                if (actualizado) setSeleccionado(actualizado);
-            }
-        } catch (error) { console.error("❌ Error de carga:", error); } finally { setLoading(false); }
-    };
+    try {
+        setLoading(true);
+        const response = await getTripulantes();
+        
+        // 1. Normalizamos la unidad del usuario logueado (Jefe/Operaciones)
+        const miUnidad = userUnidad.trim().toUpperCase();
+
+        // 2. Definimos quiénes tienen visión global (Mandos)
+        const mandosEstrategicos = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'];
+        const esMando = mandosEstrategicos.includes(roleNormalizado);
+
+        // 3. Aplicamos el filtro blindado
+        const dataFinal = esMando
+            ? response.data 
+            : response.data.filter(p => {
+                // Si el piloto no tiene unidad asignada, no lo mostramos a unidades base
+                if (!p.unidad) return false;
+                
+                // Comparamos ambas unidades normalizadas (sin espacios y en mayúsculas)
+                return p.unidad.trim().toUpperCase() === miUnidad;
+            });
+        
+        setPersonal(dataFinal || []);
+
+        if (seleccionado) {
+            const actualizado = dataFinal.find(p => p._id === seleccionado._id);
+            if (actualizado) setSeleccionado(actualizado);
+        }
+    } catch (error) { 
+        console.error("❌ Error de carga de personal:", error); 
+    } finally { 
+        setLoading(false); 
+    }
+};
 
     const getEstadoVencimiento = (fecha) => {
         if (!fecha) return { label: 'SIN DATOS', color: '#95a5a6' };
