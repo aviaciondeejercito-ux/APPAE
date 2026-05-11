@@ -15,10 +15,9 @@ import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
-import Vuelos from './pages/Vuelos'; // NUEVA IMPORTACIÓN
+import Vuelos from './pages/Vuelos';
 
 function App() {
-    // Sincronizamos estados con localStorage de entrada
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
     const [role, setRole] = useState(localStorage.getItem('role') || 'user');
     const [view, setView] = useState('calendar'); 
@@ -54,7 +53,7 @@ function App() {
         setView('calendar');
     };
 
-  // --- REGLAS DE ACCESO (RBAC) ---
+    // --- REGLAS DE ACCESO (RBAC) - SINCRO JOKER ---
     const roleNormalizado = role?.toUpperCase().replace(/[\s_]/g, '') || '';
 
     const esAdmin = roleNormalizado === 'ADMIN';
@@ -63,21 +62,46 @@ function App() {
     const esDirector = roleNormalizado === 'DIRECTOR';
     const esOTO = roleNormalizado === 'OTO';
     const esUser = roleNormalizado === 'USER';
+    
+    // NUEVOS ROLES DEFINIDOS
+    const esOperaciones = roleNormalizado === 'OPERACIONES';
+    const esLogistico = roleNormalizado === 'LOGISTICO';
+    const esJefe = roleNormalizado === 'JEFE';
+    const esPersonal = roleNormalizado === 'PERSONAL';
 
-    // Configuración de visibilidad
+    // --- CONFIGURACIÓN DE VISIBILIDAD DE MÓDULOS ---
+
     const puedeVerUsuarios = esAdmin;
-    const puedeVerTripulantes = esAdmin; 
-    const puedeVerVuelos = esAdmin; // RESTRICCIÓN: Solo Admin puede ver vuelos
-    const puedeVerPlaneamiento = esAdmin || esUser;
-    const puedeVerMapa = esAdmin || esUser || esBoss || esDirector || esOTO;
-    const puedeVerEstadoAeronaves = esAdmin || esUser || esOfTecnica || esBoss || esDirector || esOTO;
-    const puedeVerCarga = esAdmin || esUser || esOfTecnica || esBoss || esOTO;
+
+    // Tripulantes: Admin + Operaciones + Jefe
+    const puedeVerTripulantes = esAdmin || esOperaciones || esJefe; 
+
+    // Vuelos: Admin + Operaciones
+    const puedeVerVuelos = esAdmin || esOperaciones; 
+
+    // Planeamiento: Admin + todos los roles tipo user
+    const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
+
+    // Mapa: Mandos + todos los roles tipo user
+    const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
+
+    // Estado Aeronaves: Mandos + Oficina Técnica + todos los roles tipo user
+    const puedeVerEstadoAeronaves = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
+
+    // Carga de Actividades: Todos menos el nivel puramente de consulta (si hubiera), pero incluimos a todos por operatividad
+    const puedeVerCarga = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
+
+    // Oficina Técnica: Solo Admin y Oficina Técnica
     const puedeVerOficinaTecnica = esAdmin || esOfTecnica;
+
+    // Estadísticas: Solo niveles de Mando
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
+
+    // Operaciones en Desarrollo: Solo Admin y OTO
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho' || view === 'vuelos';
+    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho' || view === 'vuelos' || view === 'material';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -115,7 +139,6 @@ function App() {
                                 >👥 Personal</button>
                             )}
 
-                            {/* BOTÓN DE VUELOS EXCLUSIVO ADMIN */}
                             {puedeVerVuelos && (
                                 <button 
                                     onClick={() => setView('vuelos')} 
@@ -187,7 +210,7 @@ function App() {
                 ) : (
                     (() => {
                         if (view === 'tripulantes' && puedeVerTripulantes) return <Tripulantes />;
-                        if (view === 'vuelos' && puedeVerVuelos) return <Vuelos />; // RENDERIZADO PROTEGIDO
+                        if (view === 'vuelos' && puedeVerVuelos) return <Vuelos />;
                         if (view === 'planeamiento' && puedeVerPlaneamiento) return <PlaneamientoMapa />;
                         if (view === 'admin' && esAdmin) return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
