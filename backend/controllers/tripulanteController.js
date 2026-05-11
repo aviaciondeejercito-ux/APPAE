@@ -3,7 +3,7 @@ const Auditoria = require('../models/Auditoria');
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
- * Restricción estricta: Solo ADMIN y USER de la unidad.
+ * Estándar de seguridad: Restricción por Unidad y Rol.
  */
 
 // 1. Crear Tripulante
@@ -12,7 +12,6 @@ exports.crearTripulante = async (req, res) => {
         const usuarioLogueado = req.user;
         const { unidad } = req.body;
 
-        // Solo admin o user de la misma unidad
         const role = usuarioLogueado.role?.toLowerCase();
         if (role !== 'admin' && usuarioLogueado.unidad !== unidad) {
             return res.status(403).json({ mensaje: "No tienes permiso para dar de alta personal en otra unidad" });
@@ -27,11 +26,10 @@ exports.crearTripulante = async (req, res) => {
         const nuevoTripulante = new Tripulante(datosNuevoTripulante);
         await nuevoTripulante.save();
 
-        // CORRECCIÓN: Se añade usuarioUnidad
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: usuarioLogueado.unidad, // <--- CAMPO REQUERIDO POR EL MODELO
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento, 
             accion: 'CREACION',
             entidadAfectada: `Tripulante: ${nuevoTripulante.grado} ${nuevoTripulante.apellido}`,
             cambios: { nuevo: nuevoTripulante }
@@ -43,7 +41,69 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Obtener Tripulantes (Optimizado con índices)
+// 2. Gestionar Habilitación (NUEVA FUNCIÓN ACUMULATIVA)
+exports.gestionarHabilitacion = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { aeronave, fechaHabilitacion, rolActual, observaciones } = req.body;
+        const usuarioLogueado = req.user;
+
+        const tripulante = await Tripulante.findById(id);
+        if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+
+        // Verificación de permisos
+        const role = usuarioLogueado.role?.toLowerCase();
+        if (role !== 'admin' && usuarioLogueado.unidad !== tripulante.unidad) {
+            return res.status(403).json({ mensaje: "No autorizado para modificar este legajo" });
+        }
+
+        // Buscar si ya existe la habilitación para esa aeronave específica
+        const index = tripulante.habilitaciones.findIndex(h => h.aeronave === aeronave);
+
+        if (index !== -1) {
+            // Si ya existe, guardamos el rol anterior en el historial si cambió
+            const anterior = tripulante.habilitaciones[index];
+            if (anterior.rolActual !== rolActual) {
+                tripulante.habilitaciones[index].historialRoles.push({
+                    rol: anterior.rolActual,
+                    fechaDesde: anterior.fechaHabilitacion,
+                    fechaHasta: new Date()
+                });
+            }
+            // Actualizamos datos actuales
+            tripulante.habilitaciones[index].rolActual = rolActual;
+            tripulante.habilitaciones[index].fechaHabilitacion = fechaHabilitacion;
+            tripulante.habilitaciones[index].observaciones = observaciones;
+        } else {
+            // Si no existe, la añadimos (Acumulativa)
+            tripulante.habilitaciones.push({
+                aeronave,
+                fechaHabilitacion,
+                rolActual,
+                observaciones
+            });
+        }
+
+        tripulante.ultimoEditor = usuarioLogueado._id;
+        tripulante.fechaUltimaModificacion = Date.now();
+        await tripulante.save();
+
+        await Auditoria.create({
+            usuarioId: usuarioLogueado._id,
+            usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento,
+            accion: 'MODIFICACION',
+            entidadAfectada: `Habilitación SdA: ${aeronave} - ${tripulante.apellido}`,
+            detalles: `Actualización de capacidad a ${rolActual}`
+        });
+
+        res.status(200).json({ mensaje: "Habilitación actualizada correctamente", tripulante });
+    } catch (error) {
+        res.status(400).json({ mensaje: "Error al gestionar habilitación", error: error.message });
+    }
+};
+
+// 3. Obtener Tripulantes
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -67,7 +127,7 @@ exports.obtenerTripulantes = async (req, res) => {
     }
 };
 
-// 3. Actualizar Tripulante
+// 4. Actualizar Tripulante (General)
 exports.actualizarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
@@ -100,11 +160,10 @@ exports.actualizarTripulante = async (req, res) => {
             { new: true, runValidators: true }
         );
 
-        // CORRECCIÓN: Se añade usuarioUnidad
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: usuarioLogueado.unidad, // <--- CAMPO REQUERIDO POR EL MODELO
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento,
             accion: 'MODIFICACION',
             entidadAfectada: `Tripulante: ${actualizado.grado} ${actualizado.apellido}`,
             cambios: cambiosRealizados 
@@ -116,7 +175,7 @@ exports.actualizarTripulante = async (req, res) => {
     }
 };
 
-// 4. Eliminar Tripulante
+// 5. Eliminar Tripulante
 exports.eliminarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
@@ -132,11 +191,10 @@ exports.eliminarTripulante = async (req, res) => {
 
         await Tripulante.findByIdAndDelete(id);
 
-        // CORRECCIÓN: Se añade usuarioUnidad
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: usuarioLogueado.unidad, // <--- CAMPO REQUERIDO POR EL MODELO
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento,
             accion: 'ELIMINACION',
             entidadAfectada: `Tripulante: ${tripulante.grado} ${tripulante.apellido} (Unidad: ${tripulante.unidad})`,
             cambios: { eliminado: tripulante }
@@ -145,41 +203,6 @@ exports.eliminarTripulante = async (req, res) => {
         res.status(200).json({ mensaje: "Tripulante eliminado correctamente" });
     } catch (error) {
         res.status(500).json({ mensaje: "Error al eliminar", error: error.message });
-    }
-};
-
-// 5. Agregar Capacitación Especial
-exports.agregarCapacitacion = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const usuarioLogueado = req.user;
-        const tripulante = await Tripulante.findById(id);
-        const role = usuarioLogueado.role?.toLowerCase();
-
-        if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
-
-        if (role !== 'admin' && usuarioLogueado.unidad !== tripulante.unidad) {
-            return res.status(403).json({ mensaje: "No autorizado" });
-        }
-
-        tripulante.capacitacionesEspeciales.push(req.body);
-        tripulante.ultimoEditor = usuarioLogueado._id;
-        tripulante.fechaUltimaModificacion = Date.now();
-        
-        await tripulante.save();
-
-        // CORRECCIÓN: Se añade usuarioUnidad
-        await Auditoria.create({
-            usuarioId: usuarioLogueado._id,
-            usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: usuarioLogueado.unidad, // <--- CAMPO REQUERIDO POR EL MODELO
-            accion: 'MODIFICACION',
-            entidadAfectada: `Nueva Capacitación: ${req.body.tipo} para ${tripulante.apellido}`,
-        });
-
-        res.status(200).json({ mensaje: "Capacitación añadida", tripulante });
-    } catch (error) {
-        res.status(400).json({ mensaje: "Error", error: error.message });
     }
 };
 

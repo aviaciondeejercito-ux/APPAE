@@ -111,11 +111,22 @@ tripulanteSchema.index({ "habilitaciones.aeronave": 1 });
 tripulanteSchema.virtual('antiguedadResumen').get(function() {
   const hoy = new Date();
   if (!this.habilitaciones) return [];
-  return this.habilitaciones.map(h => ({
-    aeronave: h.aeronave,
-    rol: h.rolActual,
-    anios: hoy.getFullYear() - h.fechaHabilitacion.getFullYear()
-  }));
+  
+  return this.habilitaciones.map(h => {
+    let anios = hoy.getFullYear() - h.fechaHabilitacion.getFullYear();
+    const mes = hoy.getMonth() - h.fechaHabilitacion.getMonth();
+    
+    // Ajuste por si aún no cumplió el mes/día del aniversario
+    if (mes < 0 || (mes === 0 && hoy.getDate() < h.fechaHabilitacion.getDate())) {
+      anios--;
+    }
+    
+    return {
+      aeronave: h.aeronave,
+      rol: h.rolActual,
+      anios: anios < 0 ? 0 : anios // Evita números negativos si la fecha es futura
+    };
+  });
 });
 
 // VIRTUAL: Suma de horas totales a través de todos los sistemas
