@@ -8,7 +8,6 @@ import { getEvents } from '../services/EventService';
 
 const CalendarPage = () => {
     const [events, setEvents] = useState([]);
-    // CORRECCIÓN: Normalizamos el rol a minúsculas y quitamos espacios para evitar errores de comparación
     const [role] = useState(localStorage.getItem('role')?.trim().toLowerCase() || 'guest');
     const [userUnidad] = useState(localStorage.getItem('elemento')?.toUpperCase() || ''); 
     const [selectedEvent, setSelectedEvent] = useState(null); 
@@ -16,6 +15,24 @@ const CalendarPage = () => {
 
     useEffect(() => { 
         fetchData(); 
+        // Inyectamos estilo para resaltar el día de hoy
+        const style = document.createElement('style');
+        style.innerHTML = `
+            /* Resaltado del día actual */
+            .fc .fc-day-today {
+                background-color: rgba(27, 58, 87, 0.08) !important; /* Azul AE muy suave */
+                border-top: 4px solid #1b3a57 !important; /* Borde superior grueso */
+            }
+            /* Resaltado del número del día hoy */
+            .fc .fc-day-today .fc-daygrid-day-number {
+                background-color: #1b3a57;
+                color: white;
+                border-radius: 50%;
+                padding: 4px 8px;
+                margin: 2px;
+            }
+        `;
+        document.head.appendChild(style);
     }, []);
 
     const fetchData = async () => {
@@ -28,10 +45,8 @@ const CalendarPage = () => {
                 const unidadUsuario = userUnidad.toUpperCase();
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
 
-                // 1. ADMIN: Ve todo (Ya está normalizado a minúsculas arriba)
                 if (role === 'admin') return true;
 
-                // 2. Lógica para DIR AE (Director, Boss, OTO) - Normalizamos para comparar
                 const normalizedRole = role.toUpperCase();
                 if (normalizedRole === 'DIRECTOR' || normalizedRole === 'BOSS' || normalizedRole === 'OTO') {
                     const esDeDirAe = evCreador.includes('DIR AE') || evElemento.includes('DIR AE');
@@ -39,7 +54,6 @@ const CalendarPage = () => {
                     return esDeDirAe || esUnidadOrdenado;
                 }
 
-                // 3. Lógica para UNIDADES SUBALTERNAS
                 if (role === 'user' || normalizedRole === 'OFICINA_TECNICA') {
                     if (evCreador === unidadUsuario) return true;
                     if (evCreador.includes('DIR AE') && evElemento === unidadUsuario && etapa === 'ordenada') return true;
