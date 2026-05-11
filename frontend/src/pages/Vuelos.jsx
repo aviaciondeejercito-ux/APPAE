@@ -90,17 +90,28 @@ const Vuelos = () => {
     };
 
     const eliminarVuelo = async (id) => {
-        if (!esAdmin) {
-            alert("Acceso Denegado: Solo el Administrador puede anular registros de vuelo.");
-            return;
+    // Definimos quiénes tienen permiso de borrado (Admin + Gestores de Unidad)
+    const rolesAutorizadosBorrado = ['ADMIN', 'OPERACIONES', 'JEFE'];
+    
+    // Normalizamos el rol actual para la comparación
+    const puedeEliminar = rolesAutorizadosBorrado.includes(roleNormalizado);
+
+    if (!puedeEliminar) {
+        alert("Acceso Denegado: Su nivel jerárquico no permite anular registros de vuelo.");
+        return;
+    }
+
+    if (window.confirm("¿Seguro desea eliminar este registro? Esta acción es irreversible, afectará el cómputo de horas de la aeronave y el legajo de los pilotos.")) {
+        try {
+            await API.delete(`/vuelos/${id}`);
+            alert("✅ Registro eliminado correctamente.");
+            fetchVuelos();
+        } catch (error) { 
+            console.error("Error al eliminar:", error);
+            alert("❌ Error: " + (error.response?.data?.mensaje || "No se pudo eliminar el registro. Verifique permisos del servidor.")); 
         }
-        if (window.confirm("¿Seguro desea eliminar este registro? Esta acción es irreversible y afectará el cómputo de horas.")) {
-            try {
-                await API.delete(`/vuelos/${id}`);
-                fetchVuelos();
-            } catch (error) { alert("Error al eliminar"); }
-        }
-    };
+    }
+};
 
     return (
         <div style={styles.container}>
