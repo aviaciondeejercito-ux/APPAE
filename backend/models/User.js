@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 /**
  * Modelo de Usuario - Estándar de Seguridad Aviación de Ejército
- * Actualización: Jerarquía de Roles con lógica mixta (minúsculas y MAYÚSCULAS).
+ * Roles actualizados según requerimiento operativo.
  */
 const userSchema = new mongoose.Schema({
     nombreReal: { 
@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema({
         type: String, 
         required: [true, 'El elemento/unidad es obligatorio'],
         trim: true,
-        uppercase: true // La unidad siempre se mantiene en MAYÚSCULAS
+        uppercase: true 
     },
     email: { 
         type: String, 
@@ -39,20 +39,20 @@ const userSchema = new mongoose.Schema({
     },
     role: { 
         type: String, 
-        // Se define el enum respetando minúsculas para admin/user
+        required: true,
         enum: [
             'admin', 
-            'user', 
             'BOSS', 
-            'DIRECTOR', 
             'OTO', 
-            'OTOAE',
-            'S4',
-            'S4_UNIDAD',
-            'OFICINA_TECNICA'
+            'DIRECTOR', 
+            'user', 
+            'OFICINA_TECNICA', 
+            'OPERACIONES', 
+            'JEFE', 
+            'LOGISTICO', 
+            'PERSONAL'
         ], 
         default: 'user',
-        // IMPORTANTE: Se quitó 'uppercase: true' para permitir 'admin' y 'user' en minúsculas
         trim: true
     }
 }, { 
@@ -77,7 +77,6 @@ userSchema.pre('save', async function(next) {
 // --- VERIFICACIÓN DE CREDENCIALES ---
 userSchema.methods.comparePassword = async function(enteredPassword) {
     try {
-        // Validación de seguridad: si no hay password guardado, no comparar
         if (!this.password) return false;
         return await bcrypt.compare(enteredPassword, this.password);
     } catch (error) {

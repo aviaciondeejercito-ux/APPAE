@@ -4,12 +4,12 @@ const authController = require('../controllers/authController');
 
 /**
  * RUTAS DE AUTENTICACIÓN - SISTEMA GESTIÓN AE
- * * Estas rutas son de acceso público, pero gestionan el ingreso 
- * a la jerarquía de Admin, Boss y User.
+ * Estas rutas gestionan el ingreso a la jerarquía operativa:
+ * [admin, BOSS, OTO, DIRECTOR, user, OFICINA_TECNICA, OPERACIONES, JEFE, LOGISTICO, PERSONAL]
  */
 
 // @route   POST /api/auth/register
-// @desc    Registrar un nuevo usuario (Cumple con validaciones de User.js)
+// @desc    Registrar un nuevo usuario (Cumple con validaciones de User.js y Sincro Joker)
 // @access  Public
 router.post('/register', authController.register);
 
@@ -20,10 +20,9 @@ router.post('/login', authController.login);
 
 /**
  * SEGURIDAD Y CRÍTICA: 
- * Se eliminan las verificaciones de consola redundantes para mantener 
- * el log limpio en Render. Si el controlador no existe, Express 
- * lanzará un error de referencia al iniciar, lo cual es más seguro 
- * que un console.log que permite que el servidor siga corriendo.
+ * El controlador authController gestiona la normalización de roles:
+ * - admin y user se mantienen en minúsculas.
+ * - Roles técnicos y jerárquicos se fuerzan a MAYÚSCULAS_CON_GUION.
  */
 
 module.exports = router;

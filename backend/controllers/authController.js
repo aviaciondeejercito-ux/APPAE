@@ -11,12 +11,13 @@ const generateToken = (user) => {
     }
 
     // NORMALIZACIÓN SINCRO JOKER: 
-    // admin y user van en minúscula, el resto en MAYÚSCULA.
+    // admin y user van en minúscula, el resto en MAYÚSCULA con guion bajo.
     let roleForToken = String(user.role || 'user').trim();
     if (['admin', 'user'].includes(roleForToken.toLowerCase())) {
         roleForToken = roleForToken.toLowerCase();
     } else {
-        roleForToken = roleForToken.toUpperCase().replace(/\s+/g, '_');
+        // Convierte "Oficina Tecnica" o "oficina tecnica" en "OFICINA_TECNICA"
+        roleForToken = roleForToken.toUpperCase().replace(/[\s-]+/g, '_');
     }
 
     const elementoNormalized = String(user.elemento || 'SIN_UNIDAD').toUpperCase().trim();
@@ -42,7 +43,7 @@ exports.register = async (req, res) => {
             return res.status(400).json({ message: 'Por favor, complete todos los campos obligatorios' });
         }
 
-        // 2. Verificación de existencia previa (Evita Error 500 por duplicados)
+        // 2. Verificación de existencia previa
         const finalUsername = username.toLowerCase().trim();
         const finalEmail = email.toLowerCase().trim();
 
@@ -55,12 +56,12 @@ exports.register = async (req, res) => {
             return res.status(400).json({ message: `${campo} ya está registrado.` });
         }
 
-        // 3. Normalización de campos según pedido (admin/user en minúscula, resto MAYÚS)
+        // 3. Normalización de rol según estándar AE
         let finalRole = (role || 'user').trim();
         if (['admin', 'user'].includes(finalRole.toLowerCase())) {
             finalRole = finalRole.toLowerCase();
         } else {
-            finalRole = finalRole.toUpperCase().replace(/\s+/g, '_');
+            finalRole = finalRole.toUpperCase().replace(/[\s-]+/g, '_');
         }
 
         const finalElemento = elemento.toUpperCase().trim();
@@ -88,17 +89,11 @@ exports.register = async (req, res) => {
 
     } catch (error) {
         console.error("🔥 ERROR EN REGISTER:", error.message);
-        
-        // Manejo de errores de validación de Mongoose (ej: password corto)
         if (error.name === 'ValidationError') {
             const msg = Object.values(error.errors).map(val => val.message);
             return res.status(400).json({ message: msg.join(', ') });
         }
-
-        res.status(500).json({ 
-            message: 'Error en el servidor al registrar', 
-            error: error.message 
-        });
+        res.status(500).json({ message: 'Error en el servidor al registrar', error: error.message });
     }
 };
 
@@ -111,6 +106,7 @@ exports.login = async (req, res) => {
             return res.status(400).json({ message: 'Ingrese sus credenciales' });
         }
 
+        // Búsqueda flexible (por GDE, Email o Nombre Real)
         const user = await User.findOne({ 
             $or: [
                 { nombreReal: username }, 
@@ -123,6 +119,7 @@ exports.login = async (req, res) => {
             return res.status(401).json({ message: 'Credenciales inválidas' });
         }
 
+        // Comparación de password (método definido en el modelo User)
         const isMatch = await user.comparePassword(password);
         
         if (isMatch) {
