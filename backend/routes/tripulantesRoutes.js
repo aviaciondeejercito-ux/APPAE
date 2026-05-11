@@ -1,40 +1,45 @@
 const express = require('express');
 const router = express.Router();
 const tripulanteController = require('../controllers/tripulanteController');
-
-// Importamos protect (autenticación)
 const { protect } = require('../middleware/authMiddleware'); 
 
 /**
- * ESTÁNDAR DE SEGURIDAD AE
- * Protección de rutas de legajos y personal.
+ * MIDDLEWARE INTERNO DE AUTORIZACIÓN
+ * Como no tienes authorize.js, usamos esta función para validar roles
  */
+const authorize = (...rolesPermitidos) => {
+    return (req, res, next) => {
+        // Normalizamos el rol que viene del token (inyectado por 'protect')
+        const userRole = req.user?.role?.toUpperCase().trim();
+        
+        if (!rolesPermitidos.map(r => r.toUpperCase()).includes(userRole)) {
+            return res.status(403).json({ 
+                success: false, 
+                message: `Acceso denegado: El rol ${userRole} no tiene permisos.` 
+            });
+        }
+        next();
+    };
+};
 
 // --- TODAS LAS RUTAS REQUIEREN LOGIN ---
 router.use(protect);
 
 // 1. Rutas base: /api/tripulantes
-// GET: Obtener todos (el controlador filtra por Unidad si no es Admin)
-// POST: Crear nuevo (el controlador valida que sea Admin o de la misma Unidad)
 router.route('/')
     .get(tripulanteController.obtenerTripulantes)
-    .post(tripulanteController.crearTripulante); 
+    // Solo permitimos crear a ADMIN o USER (puedes agregar 'OFICINA TECNICA' si existe)
+    .post(authorize('admin', 'user', 'OFICINA TECNICA'), tripulanteController.crearTripulante); 
 
-// 2. Búsqueda específica: /api/tripulantes/buscar/:termino
-router.get('/buscar/:termino', tripulanteController.buscarTripulante);
+// 2. Búsqueda
+router.get('/buscar/:termino', authorize('admin', 'user'), tripulanteController.buscarTripulante);
 
-// 3. Gestión individual: /api/tripulantes/:id
+// 3. Gestión individual
 router.route('/:id')
-    .put(tripulanteController.actualizarTripulante) 
-    .delete(tripulanteController.eliminarTripulante); 
+    .put(authorize('admin', 'user'), tripulanteController.actualizarTripulante) 
+    .delete(authorize('admin'), tripulanteController.eliminarTripulante); 
 
-// 4. Rutas de actualizaciones específicas (Capacitaciones especiales)
-router.post('/:id/capacitacion', tripulanteController.agregarCapacitacion);
-
-/**
- * NOTA TÉCNICA: 
- * La actualización de certificaciones (psicofísico/CRM) se maneja 
- * a través de la ruta PUT general (/:id) enviando el objeto 'certificaciones'.
- */
+// 4. Capacitaciones
+router.post('/:id/capacitacion', authorize('admin', 'user'), tripulanteController.agregarCapacitacion);
 
 module.exports = router;

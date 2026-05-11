@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save } from 'lucide-react';
+import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save } from 'lucide-center';
+// IMPORTACIÓN DEL SERVICIO OFICIAL
+import { getTripulantes, createTripulante } from '../services/api';
 
 const Tripulantes = () => {
     // ESTADOS PRINCIPALES
@@ -11,16 +13,16 @@ const Tripulantes = () => {
     // ESTADOS PARA EL MODAL DE ALTA
     const [showModal, setShowModal] = useState(false);
     const [formData, setFormData] = useState({
-        grado: '', apellido: '', nombre: '', unidad: '', antiguedad: ''
+        grado: '', apellido: '', nombre: '', unidad: ''
     });
 
-    // DATOS DE SESIÓN (Extraídos de localStorage)
+    // DATOS DE SESIÓN (Sincronizado con authMiddleware y api.js)
     const [user] = useState({
         role: localStorage.getItem('role')?.toLowerCase() || 'user',
-        unidad: localStorage.getItem('unidad') || '' 
+        unidad: localStorage.getItem('elemento')?.trim().toUpperCase() || '' 
     });
 
-    // CONFIGURACIÓN DE GRADOS Y UNIDADES (Enum de tu modelo)
+    // CONFIGURACIÓN ESTRATÉGICA
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
         "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
@@ -33,69 +35,55 @@ const Tripulantes = () => {
         fetchPersonal();
     }, []);
 
-    // 1. OBTENER TRIPULANTES (GET /api/tripulantes)
+    // 1. OBTENER TRIPULANTES (Usando Axios para evitar errores 404 de Render)
     const fetchPersonal = async () => {
         try {
             setLoading(true);
-            const token = localStorage.getItem('token');
-            const response = await fetch('/api/tripulantes', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await response.json();
-            if (response.ok) setPersonal(data);
+            const response = await getTripulantes();
+            // Axios devuelve la data en response.data
+            setPersonal(response.data || []);
         } catch (error) {
-            console.error("Error de sincronización:", error);
+            console.error("❌ Error de sincronización táctica:", error);
         } finally {
             setLoading(false);
         }
     };
 
-    // 2. ABRIR MODAL CON LÓGICA DE UNIDAD
+    // 2. ABRIR MODAL CON RESTRICCIÓN DE UNIDAD
     const handleOpenModal = () => {
         setFormData({
             grado: '', 
             apellido: '', 
             nombre: '', 
-            unidad: user.role === 'admin' ? '' : user.unidad, 
-            antiguedad: ''
+            unidad: user.role === 'admin' ? '' : user.unidad
         });
         setShowModal(true);
     };
 
-    // 3. ENVIAR ALTA (POST /api/tripulantes)
+    // 3. ENVIAR ALTA (Usando Axios)
     const handleSave = async (e) => {
         e.preventDefault();
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch('/api/tripulantes', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(formData)
-            });
-            if (response.ok) {
+            const response = await createTripulante(formData);
+            if (response.status === 201 || response.status === 200) {
                 setShowModal(false);
-                fetchPersonal();
-            } else {
-                const err = await response.json();
-                alert(err.mensaje || "Error al procesar el alta");
+                fetchPersonal(); // Recarga automática
             }
         } catch (error) {
-            console.error("Error en la conexión:", error);
+            const msg = error.response?.data?.mensaje || "Error al procesar el alta en el servidor";
+            alert(`🛑 FALLO OPERATIVO: ${msg}`);
         }
     };
 
     const personalFiltrado = personal.filter(p => 
-        p.apellido.toLowerCase().includes(busqueda.toLowerCase()) ||
-        p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+        p.apellido?.toLowerCase().includes(busqueda.toLowerCase()) ||
+        p.nombre?.toLowerCase().includes(busqueda.toLowerCase())
     );
 
     return (
         <div style={styles.dashboardContainer}>
             
-            {/* BARRA LATERAL */}
+            {/* BARRA LATERAL: LISTADO */}
             <div style={styles.sidebar}>
                 <div style={styles.altaBox}>
                     <button style={styles.btnAlta} onClick={handleOpenModal}>
@@ -120,7 +108,7 @@ const Tripulantes = () => {
                 <div style={styles.listContainer}>
                     <div style={styles.listHeader}>PERSONAL CARGADO</div>
                     {loading ? (
-                        <div style={styles.infoText}>Sincronizando base de datos...</div>
+                        <div style={styles.infoText}>Sincronizando frecuencias con Render...</div>
                     ) : (
                         personalFiltrado.map(p => (
                             <div 
@@ -146,12 +134,12 @@ const Tripulantes = () => {
                 </div>
             </div>
 
-            {/* MODAL DE FORMULARIO */}
+            {/* MODAL DE FORMULARIO: ALTA DE PERSONAL */}
             {showModal && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
                         <div style={styles.modalHeader}>
-                            <h3><UserPlus size={20}/> Nuevo Legajo de Personal</h3>
+                            <h3><UserPlus size={20}/> Registro de Nuevo Tripulante</h3>
                             <X size={24} style={{cursor:'pointer'}} onClick={() => setShowModal(false)} />
                         </div>
                         <form onSubmit={handleSave} style={styles.form}>
@@ -165,11 +153,11 @@ const Tripulantes = () => {
                             <div style={styles.row}>
                                 <div style={styles.formGroup}>
                                     <label style={styles.label}>Apellido</label>
-                                    <input type="text" required style={styles.formInput} placeholder="Ej: PEREZ" onChange={e => setFormData({...formData, apellido: e.target.value.toUpperCase()})} />
+                                    <input type="text" required style={styles.formInput} placeholder="Ej: GOMEZ" value={formData.apellido} onChange={e => setFormData({...formData, apellido: e.target.value.toUpperCase()})} />
                                 </div>
                                 <div style={styles.formGroup}>
                                     <label style={styles.label}>Nombre</label>
-                                    <input type="text" required style={styles.formInput} onChange={e => setFormData({...formData, nombre: e.target.value})} />
+                                    <input type="text" required style={styles.formInput} value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} />
                                 </div>
                             </div>
                             <div style={styles.formGroup}>
@@ -183,13 +171,13 @@ const Tripulantes = () => {
                                     <input type="text" readOnly style={{...styles.formInput, backgroundColor: '#f5f5f5'}} value={user.unidad} />
                                 )}
                             </div>
-                            <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Alta</button>
+                            <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar en Base de Datos</button>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* PANEL DE DETALLE */}
+            {/* PANEL DERECHO: VISTA DEL LEGAJO */}
             <div style={styles.mainView}>
                 {seleccionado ? (
                     <div style={styles.legajoCard}>
@@ -210,7 +198,7 @@ const Tripulantes = () => {
                                     <div style={styles.statData}>
                                         <span style={styles.statLabel}>HORAS TOTALES</span>
                                         <span style={styles.statValue}>
-                                            {(seleccionado.totalesHistoricos?.vueloDiurno || 0) + (seleccionado.totalesHistoricos?.vueloNocturno || 0)} hs
+                                            {((seleccionado.totalesHistoricos?.vueloDiurno || 0) + (seleccionado.totalesHistoricos?.vueloNocturno || 0)).toFixed(1)} hs
                                         </span>
                                     </div>
                                 </div>
@@ -224,18 +212,18 @@ const Tripulantes = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div style={styles.sectionHeader}><FileText size={16} /> <span>HISTORIAL DE MODIFICACIONES</span></div>
+                            <div style={styles.sectionHeader}><FileText size={16} /> <span>AUDITORÍA DE MODIFICACIONES</span></div>
                             <div style={styles.placeholderMsg}>
-                                Última edición por: {seleccionado.ultimoEditor?.grado} {seleccionado.ultimoEditor?.apellido || 'Sistema'} <br/>
-                                el {new Date(seleccionado.fechaUltimaModificacion).toLocaleString()} hs.
+                                Última edición realizada por: {seleccionado.ultimoEditor?.apellido || 'Sistema central'} <br/>
+                                Fecha: {new Date(seleccionado.fechaUltimaModificacion).toLocaleString()} hs.
                             </div>
                         </div>
                     </div>
                 ) : (
                     <div style={styles.emptyState}>
                         <User size={60} color="#dcdde1" />
-                        <h3>Monitor de Legajos Digitales</h3>
-                        <p>Seleccione un integrante del personal para gestionar su legajo inmutable.</p>
+                        <h3>Monitor de Legajos AE</h3>
+                        <p>Seleccione un integrante del personal para gestionar su información operativa.</p>
                     </div>
                 )}
             </div>
