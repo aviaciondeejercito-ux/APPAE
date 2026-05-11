@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save } from 'lucide-center';
-// IMPORTACIÓN DEL SERVICIO OFICIAL
+// CORRECCIÓN: Importación desde lucide-react (fijate que antes decía lucide-center)
+import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save } from 'lucide-react';
+// IMPORTACIÓN DEL SERVICIO OFICIAL AXIOS
 import { getTripulantes, createTripulante } from '../services/api';
 
 const Tripulantes = () => {
@@ -35,12 +36,11 @@ const Tripulantes = () => {
         fetchPersonal();
     }, []);
 
-    // 1. OBTENER TRIPULANTES (Usando Axios para evitar errores 404 de Render)
+    // 1. OBTENER TRIPULANTES (Usando tu instancia de Axios configurada)
     const fetchPersonal = async () => {
         try {
             setLoading(true);
             const response = await getTripulantes();
-            // Axios devuelve la data en response.data
             setPersonal(response.data || []);
         } catch (error) {
             console.error("❌ Error de sincronización táctica:", error);
@@ -60,14 +60,14 @@ const Tripulantes = () => {
         setShowModal(true);
     };
 
-    // 3. ENVIAR ALTA (Usando Axios)
+    // 3. ENVIAR ALTA (POST /api/tripulantes)
     const handleSave = async (e) => {
         e.preventDefault();
         try {
             const response = await createTripulante(formData);
             if (response.status === 201 || response.status === 200) {
                 setShowModal(false);
-                fetchPersonal(); // Recarga automática
+                fetchPersonal(); 
             }
         } catch (error) {
             const msg = error.response?.data?.mensaje || "Error al procesar el alta en el servidor";
@@ -83,7 +83,6 @@ const Tripulantes = () => {
     return (
         <div style={styles.dashboardContainer}>
             
-            {/* BARRA LATERAL: LISTADO */}
             <div style={styles.sidebar}>
                 <div style={styles.altaBox}>
                     <button style={styles.btnAlta} onClick={handleOpenModal}>
@@ -134,7 +133,6 @@ const Tripulantes = () => {
                 </div>
             </div>
 
-            {/* MODAL DE FORMULARIO: ALTA DE PERSONAL */}
             {showModal && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
@@ -171,13 +169,12 @@ const Tripulantes = () => {
                                     <input type="text" readOnly style={{...styles.formInput, backgroundColor: '#f5f5f5'}} value={user.unidad} />
                                 )}
                             </div>
-                            <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar en Base de Datos</button>
+                            <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Alta</button>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* PANEL DERECHO: VISTA DEL LEGAJO */}
             <div style={styles.mainView}>
                 {seleccionado ? (
                     <div style={styles.legajoCard}>
@@ -212,10 +209,9 @@ const Tripulantes = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div style={styles.sectionHeader}><FileText size={16} /> <span>AUDITORÍA DE MODIFICACIONES</span></div>
+                            <div style={styles.sectionHeader}><FileText size={16} /> <span>AUDITORÍA</span></div>
                             <div style={styles.placeholderMsg}>
-                                Última edición realizada por: {seleccionado.ultimoEditor?.apellido || 'Sistema central'} <br/>
-                                Fecha: {new Date(seleccionado.fechaUltimaModificacion).toLocaleString()} hs.
+                                Última edición: {new Date(seleccionado.fechaUltimaModificacion).toLocaleString()} hs.
                             </div>
                         </div>
                     </div>
@@ -223,7 +219,7 @@ const Tripulantes = () => {
                     <div style={styles.emptyState}>
                         <User size={60} color="#dcdde1" />
                         <h3>Monitor de Legajos AE</h3>
-                        <p>Seleccione un integrante del personal para gestionar su información operativa.</p>
+                        <p>Seleccione un tripulante para gestionar su información operativa.</p>
                     </div>
                 )}
             </div>
