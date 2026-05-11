@@ -1,11 +1,10 @@
 /**
  * MIDDLEWARE DE AUTORIZACIÓN JERÁRQUICA - SISTEMA AE
  * Guardian de la jerarquía SINCRO JOKER.
- * @param {...string} rolesPermitidos - Lista de roles autorizados
  */
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
-        // 1. Verificación de Identidad
+        // 1. Verificación de Identidad (Búsqueda en req.user inyectado por protect)
         const userRole = req.user?.role || req.user?.user?.role;
 
         if (!req.user || !userRole) {
@@ -16,53 +15,57 @@ const authorize = (...rolesPermitidos) => {
             });
         }
 
-        // 2. Normalización Estricta (Sincro Joker)
-        // Eliminamos guiones bajos y espacios para la comparación lógica de flags
-        const normalizedUserRole = String(userRole).toUpperCase().trim();
-        const roleSinFormato = normalizedUserRole.replace(/[\s_]/g, '');
+        // 2. Normalización Estricta SINCRO JOKER
+        // Convertimos a MAYÚSCULAS y quitamos TODO (espacios, guiones, bajos) para la lógica interna
+        const roleBase = String(userRole).toUpperCase().trim();
+        const roleLimpio = roleBase.replace(/[\s_-]/g, ''); 
         
-        const allowedRoles = rolesPermitidos.map(r => String(r).toUpperCase().trim());
+        // Normalizamos la lista de permitidos de la misma forma para que coincidan siempre
+        const allowedRolesNormalized = rolesPermitidos.map(r => 
+            String(r).toUpperCase().trim().replace(/[\s_-]/g, '')
+        );
 
-        // 3. Comprobación de Permisos (Búsqueda Exacta)
-        const hasPermission = allowedRoles.includes(normalizedUserRole);
+        // 3. Comprobación de Permisos
+        const hasPermission = allowedRolesNormalized.includes(roleLimpio);
 
         if (!hasPermission) {
-            console.warn(`[BLOQUEO] Acceso Denegado: ${req.user.username} (Rol: ${normalizedUserRole})`);
+            console.warn(`[BLOQUEO] Acceso Denegado: ${req.user.username} (Rol: ${roleBase})`);
             return res.status(403).json({ 
                 success: false, 
-                message: `Acceso denegado: El nivel '${normalizedUserRole}' no tiene permisos aquí.` 
+                message: `Acceso denegado: El nivel '${roleBase}' no tiene permisos para esta función.` 
             });
         }
 
         /**
-         * 4. LÓGICA DE MANDO GLOBAL (Flags de Inyección)
-         * Roles con visión total del sistema.
+         * 4. INYECCIÓN DE FLAGS TÁCTICAS (Para uso en controladores)
+         * Usamos roleLimpio para que 'OFICINA_TECNICA' sea igual a 'OFICINATECNICA'
          */
-        const mandoRoles = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'];
-        req.isMando = mandoRoles.includes(normalizedUserRole);
+        
+        // Mando Estratégico
+        const mandos = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'];
+        req.isMando = mandos.includes(roleLimpio);
 
+        // Oficina Técnica
+        req.isOficinaTecnica = (roleLimpio === 'OFICINATECNICA');
+
+        // Gestores Operativos (Los nuevos roles que pueden CARGAR datos)
+        const esGestorOperativo = ['OPERACIONES', 'JEFE'].includes(roleLimpio);
+        
         /**
-         * 5. COMPROBACIÓN DE GESTIÓN OPERATIVA Y TÉCNICA
-         * Seteamos quién puede "tocar" datos en los controladores.
+         * 5. FLAG GENERAL DE GESTIÓN (isGestionUnidad)
+         * Define quién puede hacer POST/PUT/DELETE en los controladores.
          */
-        
-        // Gestión Técnica (Aeronaves/Material)
-        req.isOficinaTecnica = (roleSinFormato === 'OFICINATECNICA');
-
-        // Gestión de Personal/Vuelos (Nuevos Roles)
-        const esGestorOperativo = ['OPERACIONES', 'JEFE'].includes(normalizedUserRole);
-        
-        // Flag General de Gestión (Para controladores de eventos/vuelos)
         req.isGestionUnidad = (
             req.isMando || 
             req.isOficinaTecnica || 
             esGestorOperativo || 
-            normalizedUserRole === 'USER' ||
-            normalizedUserRole === 'LOGISTICO' ||
-            normalizedUserRole === 'PERSONAL'
+            roleLimpio === 'USER' ||
+            roleLimpio === 'LOGISTICO' ||
+            roleLimpio === 'PERSONAL'
         );
 
-        console.log(`[AUTORIZADO] ${req.user.username} (${normalizedUserRole}) ${req.isMando ? '[MANDO]' : ''}`);
+        // Auditoría en consola del servidor
+        console.log(`[AUTORIZADO] ${req.user.username} (${roleBase}) ${req.isMando ? '[MODO MANDO]' : ''}`);
         
         next(); 
     };
