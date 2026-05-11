@@ -3,9 +3,6 @@ const router = express.Router();
 
 /**
  * IMPORTACIÓN DE CONTROLADORES - SISTEMA GESTIÓN AE
- * - Despacho Táctico: getActiveOperations para Mapa en Tiempo Real.
- * - Gestión Técnica: getAvailableAircraft para disponibilidad E/S.
- * - Separación de Dominios: Rutas blindadas para Calendario y Mapa.
  */
 const { 
     getEvents, 
@@ -18,15 +15,15 @@ const {
 
 /**
  * IMPORTACIÓN DE SEGURIDAD
- * 'protect' verifica el token; 'authorize' verifica el rango jerárquico.
  */
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/rolecheck');
 
-/**
- * SISTEMA GESTIÓN AE - CAPA DE RUTAS OPERATIVAS BLINDADAS
- * Jerarquía de permisos actualizada según Matriz Operativa.
- */
+// LISTA OFICIAL DE ROLES SINCRO JOKER
+const todosLosRoles = [
+    'admin', 'BOSS', 'OTO', 'DIRECTOR', 'user', 
+    'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'
+];
 
 // --- 1. PROTECCIÓN DE IDENTIDAD (TOKEN JWT) ---
 router.use(protect);
@@ -35,43 +32,39 @@ router.use(protect);
 
 /**
  * @route    GET /api/events/active-map
- * @desc     Obtener misiones de VUELO TÁCTICO en curso para el Mapa
- * @note     Debe ir ANTES de las rutas con :id para evitar colisiones
+ * @desc     Obtener misiones para el Mapa
  */
-router.get('/active-map', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getActiveOperations);
+router.get('/active-map', authorize(...todosLosRoles), getActiveOperations);
 
 /**
  * @route    GET /api/events/aircraft-available/:elemento
- * @desc     Consultar disponibilidad de aeronaves E/S para la unidad específica
+ * @desc     Consultar disponibilidad de aeronaves E/S
  */
-router.get('/aircraft-available/:elemento', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getAvailableAircraft);
+router.get('/aircraft-available/:elemento', authorize(...todosLosRoles), getAvailableAircraft);
 
 /**
  * @route    GET /api/events
- * @desc     Obtener lista de eventos (Calendario / Log / Monitor)
- * @note     La lógica de filtrado por creador/responsable se aplica en el controlador.
+ * @desc     Obtener lista de eventos (Calendario)
  */
-router.get('/', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), getEvents);
+router.get('/', authorize(...todosLosRoles), getEvents);
 
 /**
  * @route    POST /api/events
- * @desc     Registrar nuevo VUELO TÁCTICO o Actividad de Monitor
- * @note     Sella automáticamente el 'creadorUnidad' desde el perfil del usuario.
+ * @desc     Registrar nuevo VUELO TÁCTICO
+ * @note     Restringimos a roles con capacidad de carga operativa
  */
-router.post('/', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), createEvent);
+router.post('/', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'user'), createEvent);
 
 /**
  * @route    PUT /api/events/:id
- * @desc     Actualizar misión (Cambio de ubicación, tripulación o etapa operativa)
- * @note     Valida permisos de edición: Creador siempre, Responsable solo en 'ordenada'.
+ * @desc     Actualizar misión
  */
-router.put('/:id', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), updateEvent);
+router.put('/:id', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'user'), updateEvent);
 
 /**
  * @route    DELETE /api/events/:id
- * @desc     Eliminación de registro y limpieza de rastro
- * @note     Solo permitido para Creador o Mandos Superiores.
+ * @desc     Eliminación de registro
  */
-router.delete('/:id', authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), deleteEvent);
+router.delete('/:id', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE'), deleteEvent);
 
 module.exports = router;
