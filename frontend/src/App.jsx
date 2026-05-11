@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import 'leaflet/dist/leaflet.css'; 
 
-// IMPORTANTE: Ruta relativa corregida para entorno de despliegue
+// IMPORTANTE: Ruta relativa para entorno de despliegue
 import { EventService } from './services/api'; 
 
 import CalendarPage from './pages/CalendarPage';
@@ -14,20 +14,24 @@ import Material from './pages/Material';
 import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
+import Tripulantes from './pages/Tripulantes'; 
 
 function App() {
+    // Sincronizamos estados con localStorage de entrada
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
-    const [role, setRole] = useState(localStorage.getItem('role'));
+    const [role, setRole] = useState(localStorage.getItem('role') || 'user');
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+    // Escucha cambios de tamaño de pantalla
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // Gestión de estado de conexión
     useEffect(() => {
         const handleStatusChange = () => setIsOnline(navigator.onLine);
         window.addEventListener('online', handleStatusChange);
@@ -38,6 +42,13 @@ function App() {
         };
     }, []);
 
+    // Actualiza el rol cuando cambia la autenticación
+    useEffect(() => {
+        if (auth) {
+            setRole(localStorage.getItem('role') || 'user');
+        }
+    }, [auth]);
+
     const handleLogout = () => {
         localStorage.clear();
         setAuth(false);
@@ -45,15 +56,17 @@ function App() {
         setView('calendar');
     };
 
-    // REGLAS DE ACCESO (RBAC)
-    const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
-    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OFICINA_TECNICA' || role === 'BOSS';
+    // REGLAS DE ACCESO (RBAC) - Ajustadas para asegurar visibilidad
+    const puedeVerMapa = true; // Habilitado para todos los autenticados
     const puedeVerStats = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR';
-    const puedeVerMapa = role === 'admin' || role === 'BOSS' || role === 'DIRECTOR' || role === 'OTO' || role === 'user';
-    const puedeVerVuelos = role === 'admin' || role === 'OTO';
+    const puedeCargarOperaciones = role === 'admin' || role === 'user' || role === 'OFICINA_TECNICA' || role === 'BOSS';
+    const puedeVerTripulantes = role === 'admin' || role === 'OTO' || role === 'BOSS' || role === 'user';
+    const puedeGestionarMaterial = role === 'admin' || role === 'OFICINA_TECNICA';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
+            
+            {/* NAVBAR */}
             <nav style={{
                 ...styles.navbar,
                 flexDirection: isMobile ? 'column' : 'row',
@@ -72,6 +85,13 @@ function App() {
                                 style={{...styles.btnNav, backgroundColor: view === 'calendar' ? '#1e3799' : '#4a69bd'}}
                             >📅 Calendario</button>
                             
+                            {puedeVerTripulantes && (
+                                <button 
+                                    onClick={() => setView('tripulantes')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'tripulantes' ? '#2980b9' : '#4a69bd'}}
+                                >👥 Personal</button>
+                            )}
+
                             {puedeVerMapa && (
                                 <button 
                                     onClick={() => setView('mapa')} 
@@ -99,16 +119,18 @@ function App() {
                 </div>
             </nav>
 
-            <main style={(view === 'mapa' || view === 'estado') ? styles.containerFull : styles.container}>
+            {/* CONTENIDO PRINCIPAL */}
+            <main style={(view === 'mapa' || view === 'estado' || view === 'tripulantes') ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
                         if (view === 'admin' && role === 'admin') return <AdminPanel />;
                         if (view === 'stats' && puedeVerStats) return <Estadisticas />;
-                        if (view === 'mapa' && puedeVerMapa) return <OperacionesMapa />;
-                        if (view === 'despacho' && puedeVerVuelos) return <CargaTactica />;
-                        if (view === 'operaciones' && puedeCargarOperaciones) return <Operaciones />; 
+                        if (view === 'tripulantes') return <Tripulantes />;
+                        if (view === 'mapa') return <OperacionesMapa />;
+                        if (view === 'despacho') return <CargaTactica />;
+                        if (view === 'operaciones') return <Operaciones />; 
                         if (view === 'estado') return <EstadoAeronaves />;
                         if (view === 'material') return <Material />;
                         return <CalendarPage />;
@@ -116,6 +138,7 @@ function App() {
                 )}
             </main>
 
+            {/* FOOTER */}
             <footer style={styles.footer}>
                 <div style={styles.statusRow}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -126,7 +149,7 @@ function App() {
                         <span>{isOnline ? 'CONECTADO' : 'MODO OFFLINE'}</span>
                     </div>
                 </div>
-                <div>© 2026 Aviación de Ejército - Comando y Control</div>
+                <div>© 2026 Aviación de Ejército - Sistema de Comando y Control</div>
             </footer>
         </div>
     );
@@ -135,11 +158,11 @@ function App() {
 const styles = {
     navbar: { backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', position: 'sticky', top: 0, zIndex: 3000 },
     logo: { fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer' },
-    navActions: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' },
+    navActions: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'center' },
     btnNav: { color: 'white', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '0.7rem', transition: '0.3s' },
     btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
     container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
-    containerFull: { width: '100%', flex: 1, position: 'relative', overflow: 'hidden' },
+    containerFull: { width: '100%', flex: 1, position: 'relative', overflow: 'hidden', height: 'calc(100vh - 65px)' },
     footer: { textAlign: 'center', padding: '10px', color: '#7f8c8d', fontSize: '0.6rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa' },
     statusRow: { display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '4px', fontWeight: 'bold' }
 };
