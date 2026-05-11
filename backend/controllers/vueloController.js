@@ -10,33 +10,49 @@ exports.registrarVuelo = async (req, res) => {
         const datosVuelo = req.body;
         const usuarioLogueado = req.user;
 
-        // 1. Crear el registro del vuelo
+        // 1. Limpieza y Normalización de IDs (Evita error 400 por strings vacíos "")
+        const limpiarId = (id) => (id && id.toString().trim() !== "" && id !== "undefined") ? id : null;
+
+        // 2. Crear el registro del vuelo con IDs saneados y Matrícula estandarizada
         const nuevoVuelo = new Vuelo({
             ...datosVuelo,
+            // Aeronave y Matrícula
+            aeronave: datosVuelo.aeronave?.trim(),
+            matricula: datosVuelo.matricula?.toUpperCase().trim(),
+            
+            // Tripulación saneada
+            instructor: limpiarId(datosVuelo.instructor),
+            piloto: limpiarId(datosVuelo.piloto),
+            copiloto: limpiarId(datosVuelo.copiloto),
+            mecanico: limpiarId(datosVuelo.mecanico),
+            segundoMecanico: limpiarId(datosVuelo.segundoMecanico), // Soporte para dos mecánicos
+
             unidadResponsable: usuarioLogueado.unidad || usuarioLogueado.elemento,
             creadoPor: usuarioLogueado._id
         });
+
         await nuevoVuelo.save();
 
-        // 2. Definir quiénes volaron
+        // 3. Definir quiénes volaron para impactar legajos (filtramos los null)
         const tripulantesIds = [
-            datosVuelo.instructor,
-            datosVuelo.piloto,
-            datosVuelo.copiloto,
-            datosVuelo.mecanico
-        ].filter(id => id && id !== "");
+            nuevoVuelo.instructor,
+            nuevoVuelo.piloto,
+            nuevoVuelo.copiloto,
+            nuevoVuelo.mecanico,
+            nuevoVuelo.segundoMecanico
+        ].filter(id => id !== null);
 
         const hs = Number(datosVuelo.horasVoladas);
         const esNocturno = datosVuelo.condicion === 'Nocturno';
         const esIFR = datosVuelo.reglasVuelo === 'IFR';
         const esNVG = datosVuelo.usoNVG === true;
 
-        // 3. Impactar cada legajo
+        // 4. Impactar cada legajo
         for (const tId of tripulantesIds) {
             const tripulante = await Tripulante.findById(tId);
             if (!tripulante) continue;
 
-            // A. Actualizar Totales Históricos (Parte superior)
+            // A. Actualizar Totales Históricos
             if (esIFR) tripulante.totalesHistoricos.vueloInstrumental += hs;
             if (esNVG) {
                 tripulante.totalesHistoricos.vueloVisual += hs; 
@@ -46,8 +62,8 @@ exports.registrarVuelo = async (req, res) => {
                 tripulante.totalesHistoricos.vueloDiurno += hs;
             }
 
-            // B. Actualizar Habilitación Específica (Desglose por SdA)
-            const indexHab = tripulante.habilitaciones.findIndex(h => h.aeronave === datosVuelo.aeronave);
+            // B. Actualizar Habilitación Específica (SdA)
+            const indexHab = tripulante.habilitaciones.findIndex(h => h.aeronave === nuevoVuelo.aeronave);
             if (indexHab !== -1) {
                 if (esIFR) tripulante.habilitaciones[indexHab].hsInstrumental += hs;
                 if (esNVG) tripulante.habilitaciones[indexHab].hsNVG += hs;
@@ -56,20 +72,18 @@ exports.registrarVuelo = async (req, res) => {
 
                 tripulante.habilitaciones[indexHab].totalHorasSistema += hs;
                 tripulante.habilitaciones[indexHab].ultimaActividad = {
-                    fecha: datosVuelo.fecha,
-                    matricula: datosVuelo.matricula,
-                    mision: datosVuelo.tipoMision
+                    fecha: nuevoVuelo.fecha,
+                    matricula: nuevoVuelo.matricula,
+                    mision: nuevoVuelo.tipoMision
                 };
             }
 
-            // C. IMPACTO EN CAPACITACIONES TÁCTICAS
-            // Si la misión coincide con una capacitación que el tripulante ya tiene, sumamos hs.
-            const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === datosVuelo.tipoMision);
+            // C. Impacto en Capacitaciones Tácticas
+            const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === nuevoVuelo.tipoMision);
             if (indexTactico !== -1) {
                 tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas += hs;
             }
 
-            // Caso especial: Si voló con NVG, impactamos la capacitación de NVG si la tiene.
             if (esNVG) {
                 const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
                 if (indexNVG !== -1) {
@@ -80,21 +94,25 @@ exports.registrarVuelo = async (req, res) => {
             await tripulante.save();
         }
 
-        // 4. Auditoría
+        // 5. Auditoría
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
             usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
             accion: 'CARGA_HS',
-            entidadAfectada: `Vuelo ${datosVuelo.aeronave} Mat: ${datosVuelo.matricula}`,
-            detalles: `Carga automática: ${hs} hs impactadas en legajos de tripulación.`
+            entidadAfectada: `Vuelo ${nuevoVuelo.aeronave} Mat: ${nuevoVuelo.matricula}`,
+            detalles: `Carga automática: ${hs} hs impactadas en legajos. Tripulación: ${tripulantesIds.length}`
         });
 
         res.status(201).json({ mensaje: "Vuelo registrado e impacto total en legajos completado", vuelo: nuevoVuelo });
 
     } catch (error) {
         console.error("❌ Error en carga de vuelo:", error);
-        res.status(400).json({ mensaje: "Error al registrar vuelo", error: error.message });
+        res.status(400).json({ 
+            mensaje: "Error al registrar vuelo", 
+            error: error.message,
+            detalles: "Verifique que todos los campos obligatorios estén completos y los tripulantes seleccionados sean válidos."
+        });
     }
 };
 
@@ -113,7 +131,7 @@ exports.obtenerVuelos = async (req, res) => {
         }
 
         const vuelos = await Vuelo.find(filtro)
-            .populate('instructor piloto copiloto mecanico', 'grado apellido nombre')
+            .populate('instructor piloto copiloto mecanico segundoMecanico', 'grado apellido nombre')
             .sort({ fecha: -1 });
 
         res.json(vuelos);
@@ -131,7 +149,14 @@ exports.eliminarVuelo = async (req, res) => {
         if (!vuelo) return res.status(404).json({ mensaje: "Vuelo no encontrado" });
 
         const hs = Number(vuelo.horasVoladas);
-        const tripulantesIds = [vuelo.instructor, vuelo.piloto, vuelo.copiloto, vuelo.mecanico].filter(id => id);
+        const tripulantesIds = [
+            vuelo.instructor, 
+            vuelo.piloto, 
+            vuelo.copiloto, 
+            vuelo.mecanico, 
+            vuelo.segundoMecanico
+        ].filter(id => id);
+
         const esNocturno = vuelo.condicion === 'Nocturno';
         const esIFR = vuelo.reglasVuelo === 'IFR';
         const esNVG = vuelo.usoNVG === true;

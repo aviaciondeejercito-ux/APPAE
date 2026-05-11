@@ -13,20 +13,23 @@ const vueloSchema = new mongoose.Schema({
       "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"
     ]
   },
-  matricula: { type: String, required: true, trim: true }, // Ej: AE-228
+  matricula: { type: String, required: true, trim: true, uppercase: true }, // Ej: AE-228
 
-  // --- TRIPULACIÓN (Referencias a la colección Tripulante) ---
-  instructor: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante' },
+  // --- TRIPULACIÓN ---
+  // Nota: Solo el piloto es estrictamente obligatorio para el esquema.
+  // Los demás se definen como opcionales permitiendo null si vienen vacíos.
+  instructor: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
   piloto: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', required: true },
-  copiloto: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante' },
-  mecanico: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante' },
+  copiloto: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
+  mecanico: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
+  segundoMecanico: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null }, // Para casos de dos mecánicos
 
   // --- RUTA Y TIEMPOS ---
-  desde: { type: String, required: true, uppercase: true }, // Ej: SAVE
-  hasta: { type: String, required: true, uppercase: true }, // Ej: SADO
-  horasVoladas: { type: Number, required: true }, // Ej: 5.6
+  desde: { type: String, required: true, uppercase: true }, 
+  hasta: { type: String, required: true, uppercase: true }, 
+  horasVoladas: { type: Number, required: true }, // Asegurate que el front mande número (ej: 5.6)
 
-  // --- CONDICIONES DE VUELO (Clave para el legajo) ---
+  // --- CONDICIONES DE VUELO ---
   condicion: { 
     type: String, 
     required: true, 
@@ -40,20 +43,20 @@ const vueloSchema = new mongoose.Schema({
   usoNVG: { type: Boolean, default: false },
 
   // --- DETALLES DE LA MISIÓN ---
-  tipoMision: { type: String, required: true }, // Ej: Transporte Pers.
-  localTravesia: { type: String, enum: ['Local', 'Travesia'] },
+  tipoMision: { type: String, required: true }, 
+  localTravesia: { type: String, enum: ['Local', 'Travesia'], default: 'Local' },
   cantidadPasajeros: { type: Number, default: 0 },
-  pesoCarga: { type: Number, default: 0 }, // En kg
-  elementoApoyado: { type: String, trim: true }, // Ej: Dir AE
+  pesoCarga: { type: Number, default: 0 }, 
+  elementoApoyado: { type: String, trim: true, uppercase: true }, 
 
   // --- AUDITORÍA ---
-  unidadResponsable: { type: String, required: true }, // La unidad que carga el vuelo
-  observaciones: { type: String },
+  unidadResponsable: { type: String, required: true, uppercase: true }, 
+  observaciones: { type: String, uppercase: true },
   creadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 
 }, { timestamps: true });
 
-// Índice para búsquedas rápidas por fecha y aeronave
+// Índice para búsquedas rápidas
 vueloSchema.index({ fecha: -1, aeronave: 1 });
 
 module.exports = mongoose.model('Vuelo', vueloSchema);

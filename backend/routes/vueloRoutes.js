@@ -5,28 +5,35 @@ const { protect } = require('../middleware/authMiddleware');
 
 /**
  * RUTAS DE GESTIÓN DE VUELOS - SISTEMA GESTIÓN AE
- * Todas las rutas requieren autenticación.
+ * Estándar de seguridad: Solo personal autenticado.
  */
 
-// Aplicar protección a todas las rutas del módulo
+// 1. Protección Global: Nadie entra sin Token
 router.use(protect);
 
-// Middleware opcional para restringir por roles si fuera necesario
+// 2. Middleware de Autorización por Rol
 const authorize = (...roles) => {
     return (req, res, next) => {
-        if (!roles.includes(req.user.role)) {
-            return res.status(403).json({ mensaje: "No autorizado para esta operación operativa" });
+        const userRole = req.user.role?.toLowerCase();
+        // Normalizamos los roles para evitar errores de mayúsculas
+        const rolesPermitidos = roles.map(r => r.toLowerCase());
+        
+        if (!rolesPermitidos.includes(userRole)) {
+            return res.status(403).json({ 
+                mensaje: `El rol ${req.user.role} no tiene permiso para ejecutar esta acción.` 
+            });
         }
         next();
     };
 };
 
-// Rutas principales
+// 3. Definición de Endpoints
+// Nota: Verificamos que los nombres coincidan con el controlador (obtenerVuelos / registrarVuelo)
 router.route('/')
-    .get(vueloController.obtenerVuelos) // Listado con filtros de unidad
-    .post(vueloController.registrarVuelo); // Carga de vuelo e impacto en legajos
+    .get(vueloController.obtenerVuelos) 
+    .post(vueloController.registrarVuelo); 
 
 router.route('/:id')
-    .delete(authorize('admin'), vueloController.eliminarVuelo); // Solo admin borra vuelos por seguridad
+    .delete(authorize('admin'), vueloController.eliminarVuelo); 
 
 module.exports = router;
