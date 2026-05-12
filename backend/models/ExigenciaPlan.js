@@ -7,7 +7,8 @@ const exigenciaPlanSchema = new mongoose.Schema({
         {
             numero: { type: Number, enum: [1, 2, 3, 4], required: true },
             rol: { type: String, enum: ['Copiloto', 'Piloto', 'Instructor'], default: 'Copiloto' },
-            tipo: { type: String, enum: ['A', 'B', 'C', 'D'], default: 'A' }
+            tipo: { type: String, enum: ['A', 'B', 'C', 'D'], default: 'A' },
+            causaNoCumplimiento: { type: String, default: '', uppercase: true }
         }
     ],
     unidad: { type: String, required: true, uppercase: true }

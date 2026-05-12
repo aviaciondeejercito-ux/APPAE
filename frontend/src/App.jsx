@@ -16,6 +16,7 @@ import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
 import Vuelos from './pages/Vuelos';
+import EBM from './components/EBM'; // Importación confirmada
 
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
@@ -53,7 +54,7 @@ function App() {
         setView('calendar');
     };
 
-    // --- REGLAS DE ACCESO (RBAC) - SINCRO JOKER ---
+    // --- REGLAS DE ACCESO (RBAC) ---
     const roleNormalizado = role?.toUpperCase().replace(/[\s_]/g, '') || '';
 
     const esAdmin = roleNormalizado === 'ADMIN';
@@ -62,46 +63,28 @@ function App() {
     const esDirector = roleNormalizado === 'DIRECTOR';
     const esOTO = roleNormalizado === 'OTO';
     const esUser = roleNormalizado === 'USER';
-    
-    // NUEVOS ROLES DEFINIDOS
     const esOperaciones = roleNormalizado === 'OPERACIONES';
     const esLogistico = roleNormalizado === 'LOGISTICO';
     const esJefe = roleNormalizado === 'JEFE';
     const esPersonal = roleNormalizado === 'PERSONAL';
 
     // --- CONFIGURACIÓN DE VISIBILIDAD DE MÓDULOS ---
-
     const puedeVerUsuarios = esAdmin;
-
-    // Tripulantes: Admin + Operaciones + Jefe + Personal
     const puedeVerTripulantes = esAdmin || esOperaciones || esJefe || esPersonal; 
-
-    // Vuelos: Admin + Operaciones
     const puedeVerVuelos = esAdmin || esOperaciones; 
-
-    // Planeamiento: Admin + todos los roles operativos
     const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
-
-    // Mapa: Mandos + todos los roles operativos
     const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
-
-    // Estado Aeronaves: Mandos + Oficina Técnica + todos los roles operativos
     const puedeVerEstadoAeronaves = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
-
-    // Carga de Actividades: Todos operativos
     const puedeVerCarga = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
-
-    // Oficina Técnica: Solo Admin y Oficina Técnica
     const puedeVerOficinaTecnica = esAdmin || esOfTecnica;
-
-    // Estadísticas: Solo niveles de Mando
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
-
-    // Operaciones en Desarrollo: Solo Admin y OTO
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
+    
+    // El EBM lo ven los administradores, mandos y operaciones
+    const puedeVerEBM = esAdmin || esBoss || esDirector || esOTO || esOperaciones;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho' || view === 'vuelos' || view === 'material';
+    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho' || view === 'vuelos' || view === 'material' || view === 'ebm';
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -137,6 +120,13 @@ function App() {
                                     onClick={() => setView('tripulantes')} 
                                     style={{...styles.btnNav, backgroundColor: view === 'tripulantes' ? '#2980b9' : '#4a69bd'}}
                                 >👥 Personal</button>
+                            )}
+
+                            {puedeVerEBM && (
+                                <button 
+                                    onClick={() => setView('ebm')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'ebm' ? '#d63031' : '#4a69bd'}}
+                                >🎯 EBM</button>
                             )}
 
                             {puedeVerVuelos && (
@@ -203,7 +193,7 @@ function App() {
                 </div>
             </nav>
 
-            {/* CONTENIDO PRINCIPAL - SWITCH CORREGIDO */}
+            {/* CONTENIDO PRINCIPAL */}
             <main style={esVistaFull ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
@@ -212,6 +202,8 @@ function App() {
                         switch(view) {
                             case 'tripulantes':
                                 return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
+                            case 'ebm':
+                                return puedeVerEBM ? <EBM /> : <CalendarPage />;
                             case 'vuelos':
                                 return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
                             case 'planeamiento':
