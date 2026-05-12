@@ -79,9 +79,8 @@ const aircraftRoutes = require('./routes/aircraft');
 const weatherRoutes = require('./routes/metar'); 
 const astronomyRoutes = require('./routes/astronomy');
 const tripulanteRoutes = require('./routes/tripulantesRoutes'); 
-// NUEVO: Importación de Rutas de Vuelos
 const vueloRoutes = require('./routes/vueloRoutes');
-
+const ebmRoutes = require('./routes/ebmRoutes');
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
 app.get('/api/health', (req, res) => {
@@ -99,8 +98,8 @@ app.use('/api/aircraft', aircraftRoutes);
 app.use('/api/weather', weatherRoutes); 
 app.use('/api/astronomy', astronomyRoutes); 
 app.use('/api/tripulantes', tripulanteRoutes); 
-// NUEVO: Uso de Rutas de Vuelos
 app.use('/api/vuelos', vueloRoutes);
+app.use('/api/ebm', ebmRoutes);
 
 // --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
 app.use((req, res) => {
@@ -124,7 +123,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`🚀 SISTEMA OPERATIVO EN PUERTO: ${PORT}`);
-    console.log(`📡 FRECUENCIAS ACTIVAS: /api/tripulantes y /api/vuelos habilitadas`);
+    console.log(`📡 FRECUENCIAS ACTIVAS: /api/tripulantes, /api/vuelos y /api/ebm habilitadas`);
 });
 
 module.exports = app;
