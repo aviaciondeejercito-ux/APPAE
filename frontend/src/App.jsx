@@ -16,7 +16,7 @@ import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
 import Vuelos from './pages/Vuelos';
-import EBM from './pages/Ebm'; // Corregido según tu estructura de archivos
+import EbmPage from './pages/EbmPage'; 
 
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
@@ -79,9 +79,7 @@ function App() {
     const puedeVerOficinaTecnica = esAdmin || esOfTecnica;
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
-    
-    // Agregado esOTO para que también pueda ver el EBM
-    const puedeVerEBM = esAdmin || esBoss || esDirector || esOperaciones || esOTO;
+    const puedeVerEbm = esAdmin || esBoss || esDirector || esOperaciones || esOTO;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
     const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho' || view === 'vuelos' || view === 'material' || view === 'ebm';
@@ -122,7 +120,7 @@ function App() {
                                 >👥 Personal</button>
                             )}
 
-                            {puedeVerEBM && (
+                            {puedeVerEbm && (
                                 <button 
                                     onClick={() => setView('ebm')} 
                                     style={{...styles.btnNav, backgroundColor: view === 'ebm' ? '#d63031' : '#4a69bd'}}
@@ -203,7 +201,7 @@ function App() {
                             case 'tripulantes':
                                 return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
                             case 'ebm':
-                                return puedeVerEBM ? <EBM /> : <CalendarPage />;
+                                return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
                             case 'vuelos':
                                 return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
                             case 'planeamiento':
