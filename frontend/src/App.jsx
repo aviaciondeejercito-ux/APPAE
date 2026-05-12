@@ -16,7 +16,7 @@ import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
 import Vuelos from './pages/Vuelos';
-import EBM from './pages/Ebm'
+import EBM from './pages/Ebm'; // Corregido según tu estructura de archivos
 
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
@@ -79,7 +79,9 @@ function App() {
     const puedeVerOficinaTecnica = esAdmin || esOfTecnica;
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
-    const puedeVerEBM = esAdmin || esBoss || esDirector || esOperaciones;
+    
+    // Agregado esOTO para que también pueda ver el EBM
+    const puedeVerEBM = esAdmin || esBoss || esDirector || esOperaciones || esOTO;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
     const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho' || view === 'vuelos' || view === 'material' || view === 'ebm';
