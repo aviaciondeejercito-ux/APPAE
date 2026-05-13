@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import 'leaflet/dist/leaflet.css'; 
 
-// IMPORTANTE: Ruta relativa para entorno de despliegue
+// IMPORTANTE: Comunicación centralizada con el backend
 import { EventService } from './services/api'; 
 
 import CalendarPage from './pages/CalendarPage';
@@ -20,7 +20,7 @@ import EbmPage from './pages/EbmPage';
 
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
-    const [role, setRole] = useState(localStorage.getItem('role') || 'user');
+    const [role, setRole] = useState(localStorage.getItem('role') || localStorage.getItem('rol') || 'user');
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -41,9 +41,12 @@ function App() {
         };
     }, []);
 
+    // SINCRO JOKER: Sincronización de sesión y normalización de rol
     useEffect(() => {
         if (auth) {
-            setRole(localStorage.getItem('role') || 'user');
+            const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
+            const normalized = rawRole.toUpperCase().replace(/[\s_-]/g, '');
+            setRole(normalized);
         }
     }, [auth]);
 
@@ -54,19 +57,19 @@ function App() {
         setView('calendar');
     };
 
-    // --- REGLAS DE ACCESO (RBAC) ---
-    const roleNormalizado = role?.toUpperCase().replace(/[\s_]/g, '') || '';
+    // --- REGLAS DE ACCESO (RBAC) BASADAS EN ROL NORMALIZADO ---
+    const roleBase = role?.toUpperCase() || '';
 
-    const esAdmin = roleNormalizado === 'ADMIN';
-    const esOfTecnica = roleNormalizado === 'OFICINATECNICA';
-    const esBoss = roleNormalizado === 'BOSS';
-    const esDirector = roleNormalizado === 'DIRECTOR';
-    const esOTO = roleNormalizado === 'OTO';
-    const esUser = roleNormalizado === 'USER';
-    const esOperaciones = roleNormalizado === 'OPERACIONES';
-    const esLogistico = roleNormalizado === 'LOGISTICO';
-    const esJefe = roleNormalizado === 'JEFE';
-    const esPersonal = roleNormalizado === 'PERSONAL';
+    const esAdmin = roleBase === 'ADMIN';
+    const esOfTecnica = roleBase === 'OFICINATECNICA';
+    const esBoss = roleBase === 'BOSS';
+    const esDirector = roleBase === 'DIRECTOR';
+    const esOTO = roleBase === 'OTO' || roleBase === 'OTOAE';
+    const esUser = roleBase === 'USER';
+    const esOperaciones = roleBase === 'OPERACIONES';
+    const esLogistico = roleBase === 'LOGISTICO';
+    const esJefe = roleBase === 'JEFE';
+    const esPersonal = roleBase === 'PERSONAL';
 
     // --- CONFIGURACIÓN DE VISIBILIDAD DE MÓDULOS ---
     const puedeVerUsuarios = esAdmin;
@@ -82,12 +85,12 @@ function App() {
     const puedeVerEbm = esAdmin || esBoss || esDirector || esOperaciones || esOTO;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = view === 'mapa' || view === 'estado' || view === 'tripulantes' || view === 'planeamiento' || view === 'admin' || view === 'stats' || view === 'despacho' || view === 'vuelos' || view === 'material' || view === 'ebm';
+    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm'].includes(view);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
             
-            {/* NAVBAR */}
+            {/* NAVBAR TÁCTICA */}
             <nav style={{
                 ...styles.navbar,
                 flexDirection: isMobile ? 'column' : 'row',
@@ -191,37 +194,25 @@ function App() {
                 </div>
             </nav>
 
-            {/* CONTENIDO PRINCIPAL */}
+            {/* CONTENIDO PRINCIPAL DINÁMICO */}
             <main style={esVistaFull ? styles.containerFull : styles.container}>
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
                     (() => {
                         switch(view) {
-                            case 'tripulantes':
-                                return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
-                            case 'ebm':
-                                return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
-                            case 'vuelos':
-                                return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
-                            case 'planeamiento':
-                                return puedeVerPlaneamiento ? <PlaneamientoMapa /> : <CalendarPage />;
-                            case 'admin':
-                                return esAdmin ? <AdminPanel /> : <CalendarPage />;
-                            case 'stats':
-                                return puedeVerStats ? <Estadisticas /> : <CalendarPage />;
-                            case 'mapa':
-                                return puedeVerMapa ? <OperacionesMapa /> : <CalendarPage />;
-                            case 'despacho':
-                                return puedeVerOpEnDesarrollo ? <CargaTactica /> : <CalendarPage />;
-                            case 'operaciones':
-                                return puedeVerCarga ? <Operaciones /> : <CalendarPage />;
-                            case 'estado':
-                                return puedeVerEstadoAeronaves ? <EstadoAeronaves /> : <CalendarPage />;
-                            case 'material':
-                                return puedeVerOficinaTecnica ? <Material /> : <CalendarPage />;
-                            default:
-                                return <CalendarPage />;
+                            case 'tripulantes': return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
+                            case 'ebm': return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
+                            case 'vuelos': return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
+                            case 'planeamiento': return puedeVerPlaneamiento ? <PlaneamientoMapa /> : <CalendarPage />;
+                            case 'admin': return esAdmin ? <AdminPanel /> : <CalendarPage />;
+                            case 'stats': return puedeVerStats ? <Estadisticas /> : <CalendarPage />;
+                            case 'mapa': return puedeVerMapa ? <OperacionesMapa /> : <CalendarPage />;
+                            case 'despacho': return puedeVerOpEnDesarrollo ? <CargaTactica /> : <CalendarPage />;
+                            case 'operaciones': return puedeVerCarga ? <Operaciones /> : <CalendarPage />;
+                            case 'estado': return puedeVerEstadoAeronaves ? <EstadoAeronaves /> : <CalendarPage />;
+                            case 'material': return puedeVerOficinaTecnica ? <Material /> : <CalendarPage />;
+                            default: return <CalendarPage />;
                         }
                     })()
                 )}
@@ -230,7 +221,7 @@ function App() {
             {/* FOOTER */}
             {!esVistaFull && (
                 <footer style={styles.footer}>
-                    <div>© 2026 Aviación de Ejército - Comando y Control</div>
+                    <div>© 2026 Aviación de Ejército - Sistema Operativo</div>
                 </footer>
             )}
         </div>

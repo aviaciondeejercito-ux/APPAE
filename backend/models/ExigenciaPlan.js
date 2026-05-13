@@ -1,20 +1,35 @@
 const mongoose = require('mongoose');
 
-const exigenciaPlanSchema = new mongoose.Schema({
-    piloto: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', required: true },
-    año: { type: Number, required: true, default: new Date().getFullYear() },
-    trimestres: [
-        {
-            numero: { type: Number, enum: [1, 2, 3, 4], required: true },
-            rol: { type: String, enum: ['Copiloto', 'Piloto', 'Instructor'], default: 'Copiloto' },
-            tipo: { type: String, enum: ['A', 'B', 'C', 'D'], default: 'A' },
-            causaNoCumplimiento: { type: String, default: '', uppercase: true }
-        }
-    ],
-    unidad: { type: String, required: true, uppercase: true }
+const ExigenciaPlanSchema = new mongoose.Schema({
+    piloto: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Tripulante',
+        required: true
+    },
+    año: {
+        type: Number,
+        required: true,
+        default: 2026
+    },
+    unidad: {
+        type: String,
+        required: true,
+        uppercase: true,
+        trim: true
+    },
+    trimestres: [{
+        numero: { type: Number, required: true }, // 1, 2, 3, 4
+        rol: { type: String, default: '' },       // Piloto, Copiloto, etc.
+        tipo: { type: String, default: '' },      // A, B, C, D
+        causaNoCumplimiento: { type: String, default: '' }
+    }],
+    ultimaActualizacion: {
+        type: Date,
+        default: Date.now
+    }
 }, { timestamps: true });
 
-// Índice para buscar rápido el plan de un piloto por año
-exigenciaPlanSchema.index({ piloto: 1, año: -1 });
+// Índice para búsqueda rápida por piloto y año
+ExigenciaPlanSchema.index({ piloto: 1, año: 1 }, { unique: true });
 
-module.exports = mongoose.model('ExigenciaPlan', exigenciaPlanSchema);
+module.exports = mongoose.model('ExigenciaPlan', ExigenciaPlanSchema);
