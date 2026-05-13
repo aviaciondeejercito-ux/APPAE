@@ -120,20 +120,26 @@ exports.obtenerVuelos = async (req, res) => {
     try {
         const { unidad } = req.query;
         let filtro = {};
-        
-        // Si no es admin, filtramos por la unidad del usuario logueado
-        if (req.user.role !== 'admin') {
+        // 1. Normalizamos el rol para que no falle por mayúsculas/minúsculas
+        const rolUsuario = req.user.role ? req.user.role.toLowerCase() : 'user';
+        // 2. Lógica de Filtrado:
+        if (rolUsuario !== 'admin') {
             filtro.unidadResponsable = req.user.unidad || req.user.elemento;
-        } else if (unidad && unidad !== 'all') {
+        } 
+        // Si ES admin y el usuario seleccionó una unidad específica en el frontend
+        else if (unidad && unidad !== 'all') {
             filtro.unidadResponsable = unidad;
         }
-
         const vuelos = await Vuelo.find(filtro)
             .populate('instructor piloto copiloto mecanico segundoMecanico', 'grado apellido nombre')
             .sort({ fecha: -1 });
 
+        // LOG de control para vos en la consola de Render
+        console.log(`📡 Solicitud de vuelos por: ${req.user.apellido} (Rol: ${rolUsuario}). Vuelos encontrados: ${vuelos.length}`);
+
         res.json(vuelos);
     } catch (error) {
+        console.error("❌ Error al obtener vuelos:", error);
         res.status(500).json({ mensaje: "Error al obtener historial de vuelos" });
     }
 };
