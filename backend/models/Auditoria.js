@@ -14,13 +14,13 @@ const auditoriaSchema = new mongoose.Schema({
   },
   usuarioNombre: { type: String, required: true }, 
   
-  // CORRECCIÓN: Quitamos el 'required' estricto para evitar bloqueos del sistema
-  // Si por alguna razón el token no trae la unidad, la auditoría se guarda igual.
+  // Mantenemos la flexibilidad que pediste
   usuarioUnidad: { type: String }, 
   
   accion: { 
     type: String, 
-    enum: ['CREACION', 'MODIFICACION', 'ELIMINACION', 'CARGA_HS', 'PASE_UNIDAD'],
+    // Agregamos 'LOGIN' y 'LOGOUT' por si los necesitas luego, mantenemos los tuyos
+    enum: ['CREACION', 'MODIFICACION', 'ELIMINACION', 'CARGA_HS', 'PASE_UNIDAD', 'LOGIN', 'LOGOUT'],
     required: true 
   },
   
@@ -33,10 +33,8 @@ const auditoriaSchema = new mongoose.Schema({
     index: true 
   },
 
-  cambios: {
-    anterior: { type: mongoose.Schema.Types.Mixed },
-    nuevo: { type: mongoose.Schema.Types.Mixed }
-  },
+  // CAMBIO CRÍTICO: Definimos cambios como Mixed directamente para máxima flexibilidad
+  cambios: { type: mongoose.Schema.Types.Mixed },
   
   detalles: { type: String, trim: true }, 
   ip: { type: String } 
@@ -46,6 +44,7 @@ const auditoriaSchema = new mongoose.Schema({
   versionKey: false 
 });
 
+// Índices para que las búsquedas de los jefes sean rápidas
 auditoriaSchema.index({ entidadId: 1, fecha: -1 });
 auditoriaSchema.index({ usuarioUnidad: 1, fecha: -1 });
 auditoriaSchema.index({ usuarioId: 1, fecha: -1 });
