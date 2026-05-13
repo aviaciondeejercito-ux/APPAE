@@ -1,34 +1,22 @@
 const ExigenciaPlan = require('../models/ExigenciaPlan');
 const Tripulante = require('../models/Tripulante');
 
-/**
- * CONTROLADOR EBM - EXIGENCIAS BÁSICAS MÍNIMAS
- * Sincroniza legajos de Tripulantes con Planes Trimestrales.
- * ESTÁNDAR: SINCRO JOKER v3.5
- */
-
-// 1. Obtener planificación completa
 exports.getPlanificacionCompleta = async (req, res) => {
     try {
-        const { unidad, anio, role, rol } = req.query;
-        const currentAnio = Number(anio) || new Date().getFullYear();
+        const { unidad, anio, rol } = req.query;
+        const currentAnio = Number(anio) || 2026;
 
-        // Normalización Joker: Detecta el rol sin importar el nombre del campo
-        const rawRole = role || rol || '';
-        const roleBase = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
-
-        // Grados habilitados para EBM
-        const gradosOficiales = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
+        // 1. Ampliamos los grados para incluir Suboficiales y todos los niveles de Oficiales
+        // Incluimos "TP" (Teniente Primero) que es el grado de Galmarini en tu foto.
+        const gradosHabilitados = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SP', 'SA', 'SI', 'SAY', 'Sarg', 'Cabo'];
         
         let queryOficiales = { 
-            grado: { $in: gradosOficiales }, 
-            activo: { $ne: false } 
+            grado: { $in: gradosHabilitados }, 
+            activo: true 
         };
 
-        // Filtro de unidad: Busca en 'unidad' o 'elemento' para no perder pilotos
-        const esMandoSuperior = ['ADMIN', 'DIRECTOR', 'BOSS', 'OTO'].includes(roleBase);
-        
-        if (!esMandoSuperior && unidad) {
+        // 2. Filtro de unidad (Sincro Joker)
+        if (unidad && unidad !== 'all') {
             const unidadLimpia = unidad.trim().toUpperCase();
             queryOficiales.$or = [
                 { unidad: unidadLimpia },
@@ -36,15 +24,13 @@ exports.getPlanificacionCompleta = async (req, res) => {
             ];
         }
 
-        // Búsqueda en paralelo de pilotos y sus planes
         const [oficiales, planes] = await Promise.all([
             Tripulante.find(queryOficiales).sort({ grado: 1, apellido: 1 }).lean(),
             ExigenciaPlan.find({ año: currentAnio }).lean()
         ]);
 
-        // Merge de datos: Si el piloto no tiene plan, inyectamos uno vacío en memoria
         const respuesta = oficiales.map(oficial => {
-            const planExistente = planes.find(p => p.piloto?.toString() === oficial._id?.toString());
+            const planExistente = planes.find(p => p.piloto?.toString() === oficial._id.toString());
             
             return {
                 _id: oficial._id,
@@ -52,7 +38,8 @@ exports.getPlanificacionCompleta = async (req, res) => {
                 apellido: oficial.apellido,
                 nombre: oficial.nombre,
                 unidad: oficial.elemento || oficial.unidad,
-                habilitaciones: oficial.habilitaciones || [], 
+                habilitaciones: oficial.habilitaciones || [],
+                // Si no hay plan, inyectamos la estructura para Galmarini y el resto
                 plan: planExistente || {
                     año: currentAnio,
                     unidad: oficial.elemento || oficial.unidad,
@@ -67,39 +54,21 @@ exports.getPlanificacionCompleta = async (req, res) => {
         });
 
         res.status(200).json(respuesta);
-
     } catch (error) {
-        console.error("❌ ERROR EBM_CONTROLLER:", error.message);
-        res.status(500).json({ mensaje: "Error interno del servidor", detalle: error.message });
+        res.status(500).json({ mensaje: "Error en servidor", error: error.message });
     }
 };
 
-// 2. Guardar o actualizar plan
 exports.savePlanIndividual = async (req, res) => {
     try {
         const { pilotoId, año, trimestres, unidad } = req.body;
-
-        if (!pilotoId || !año) {
-            return res.status(400).json({ mensaje: "Faltan IDs o Año" });
-        }
-
-        const unidadLimpia = unidad ? unidad.toUpperCase().trim() : "";
-
         const plan = await ExigenciaPlan.findOneAndUpdate(
             { piloto: pilotoId, año: año },
-            { 
-                trimestres, 
-                unidad: unidadLimpia, 
-                piloto: pilotoId,
-                año: Number(año) 
-            },
+            { piloto: pilotoId, año, trimestres, unidad: unidad?.toUpperCase().trim() },
             { upsert: true, new: true }
         );
-
         res.status(200).json({ success: true, plan });
-
     } catch (error) {
-        console.error("❌ ERROR AL GUARDAR PLAN:", error.message);
         res.status(500).json({ mensaje: "Error al guardar" });
     }
 };

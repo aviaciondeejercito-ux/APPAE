@@ -6,7 +6,6 @@ const EBM = () => {
     const [loading, setLoading] = useState(true);
     
     // --- NORMALIZACIÓN SINCRO JOKER ---
-    // Usamos 'elemento' como prioridad para que coincida con el nuevo controlador
     const unidadUsuario = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
     const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
     const role = rawRole.toUpperCase().replace(/[\s_]/g, '');
@@ -33,17 +32,17 @@ const EBM = () => {
             setLoading(true);
             const token = localStorage.getItem('token');
             
-            // SINCRO JOKER: Llamada limpia al endpoint
+            // Llamada al endpoint de planificación
             const response = await axios.get(`/api/ebm/planificacion-completa`, {
                 params: {
                     unidad: puedeCambiarUnidad ? unidadFiltro : unidadUsuario,
                     anio: anioActual,
-                    rol: role // Enviamos 'rol' para que el controlador lo reciba correctamente
+                    rol: role 
                 },
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // Si el piloto no tiene plan, inyectamos estructura vacía para que no rompa el .map
+            // SINCRO JOKER: Inyectamos estructura de plan vacía si no existe en la DB
             const datosNormalizados = response.data.map(p => ({
                 ...p,
                 plan: p.plan || { 
@@ -58,10 +57,14 @@ const EBM = () => {
 
             setDatos(datosNormalizados);
             
-            // Selección automática del primer Sistema de Armas disponible
+            // Selección automática del SdA basada en las habilitaciones reales (Ej: C-208)
             if (datosNormalizados.length > 0 && !sdaSeleccionado) {
                 const todosSdas = new Set();
-                datosNormalizados.forEach(p => p.habilitaciones?.forEach(h => todosSdas.add(h.aeronave)));
+                datosNormalizados.forEach(p => {
+                    p.habilitaciones?.forEach(h => {
+                        if (h.aeronave) todosSdas.add(h.aeronave);
+                    });
+                });
                 const listaSdas = Array.from(todosSdas).sort();
                 if (listaSdas.length > 0) setSdaSeleccionado(listaSdas[0]);
             }
@@ -79,7 +82,9 @@ const EBM = () => {
     const sdasEnUnidad = useMemo(() => {
         const sistemas = new Set();
         datos.forEach(p => {
-            p.habilitaciones?.forEach(h => sistemas.add(h.aeronave));
+            p.habilitaciones?.forEach(h => {
+                if (h.aeronave) sistemas.add(h.aeronave);
+            });
         });
         return Array.from(sistemas).sort();
     }, [datos]);
@@ -177,8 +182,10 @@ const EBM = () => {
                     </thead>
                     <tbody>
                         {pilotosFiltrados.map(item => {
-                            const habilitacion = item.habilitaciones.find(h => h.aeronave === sdaSeleccionado);
+                            // Buscamos la habilitación específica del SdA seleccionado (Ej: C-208)
+                            const habilitacion = item.habilitaciones?.find(h => h.aeronave === sdaSeleccionado);
                             const editable = puedeEditarFila(item.unidad);
+                            
                             return (
                                 <tr key={item._id} style={styles.row}>
                                     <td style={styles.tdNombre}>
