@@ -4,6 +4,7 @@ const Tripulante = require('../models/Tripulante');
 /**
  * CONTROLADOR EBM - EXIGENCIAS BÁSICAS MÍNIMAS
  * Sincroniza legajos de Tripulantes con Planes Trimestrales del año en curso.
+ * ESTÁNDAR: SINCRO JOKER v3.5
  */
 
 // 1. Obtener planificación completa
@@ -12,7 +13,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
         const { unidad, anio, role, rol } = req.query;
         const currentAnio = Number(anio) || new Date().getFullYear();
 
-        // Normalización de Rol para seguridad (Soporte para ambas variantes)
+        // Normalización de Rol para seguridad (Soporte para ambas variantes de campo)
         const rawRole = role || rol || '';
         const roleBase = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
 
@@ -29,7 +30,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
         
         if (!esSuperUser && unidad) {
             const unidadLimpia = unidad.trim().toUpperCase();
-            // Búsqueda Joker: mira en ambos campos para que el piloto no desaparezca
+            // Búsqueda Joker: mira en ambos campos para que el piloto no desaparezca por diferencias de nombre de campo
             queryOficiales.$or = [
                 { unidad: unidadLimpia },
                 { elemento: unidadLimpia }
@@ -75,7 +76,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
             };
         });
 
-        // Enviamos la lista completa de oficiales procesados
+        // Enviamos la lista completa de oficiales procesados con status 200
         res.status(200).json(respuesta);
 
     } catch (error) {
@@ -89,7 +90,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
 
 /**
  * Guarda o actualiza el plan individual de un oficial.
- * Si el plan no existe (porque era inyectado), se crea (Upsert).
+ * Si el plan no existe (porque era inyectado), se crea mediante Upsert.
  */
 exports.savePlanIndividual = async (req, res) => {
     try {
@@ -102,7 +103,7 @@ exports.savePlanIndividual = async (req, res) => {
         // Normalización de la unidad/elemento para el guardado consistente
         const unidadLimpia = unidad ? unidad.toUpperCase().trim() : "";
 
-        // Buscamos por piloto y año, si existe actualiza, si no lo crea (upsert: true)
+        // Buscamos por piloto y año. Si existe actualiza, si no lo crea (upsert: true)
         const planActualizado = await ExigenciaPlan.findOneAndUpdate(
             { piloto: pilotoId, año: año },
             { 
