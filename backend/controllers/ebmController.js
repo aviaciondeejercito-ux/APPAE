@@ -3,7 +3,7 @@ const Tripulante = require('../models/Tripulante');
 
 /**
  * CONTROLADOR EBM - EXIGENCIAS BÁSICAS MÍNIMAS
- * Sincroniza legajos de Tripulantes con Planes Trimestrales del año en curso.
+ * Sincroniza legajos de Tripulantes con Planes Trimestrales.
  * ESTÁNDAR: SINCRO JOKER v3.5
  */
 
@@ -13,11 +13,11 @@ exports.getPlanificacionCompleta = async (req, res) => {
         const { unidad, anio, role, rol } = req.query;
         const currentAnio = Number(anio) || new Date().getFullYear();
 
-        // Normalización de Rol para seguridad (Soporte para ambas variantes de campo)
+        // Normalización de Rol (Sincro Joker: acepta role o rol)
         const rawRole = role || rol || '';
         const roleBase = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
 
-        // Grados autorizados para figurar en la planificación EBM (Cuadros de mando y ejecución)
+        // Grados autorizados para la planificación EBM
         const gradosOficiales = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
         
         let queryOficiales = { 
@@ -25,17 +25,16 @@ exports.getPlanificacionCompleta = async (req, res) => {
             activo: { $ne: false } 
         };
 
-        // Filtro de unidad: Soporta tanto el campo 'unidad' como 'elemento' detectado en MongoDB
-        const esSuperUser = ['ADMIN', 'DIRECTOR', 'BOSS', 'OTO'].includes(roleBase);
+        // Filtro de unidad: Soporta campo 'unidad' o 'elemento'
+        const esMandoSuperior = ['ADMIN', 'DIRECTOR', 'BOSS', 'OTO'].includes(roleBase);
         
-        if (!esSuperUser && unidad) {
+        if (!esMandoSuperior && unidad) {
             const unidadLimpia = unidad.trim().toUpperCase();
-            // Búsqueda Joker: mira en ambos campos para que el piloto no desaparezca por diferencias de nombre de campo
             queryOficiales.$or = [
                 { unidad: unidadLimpia },
                 { elemento: unidadLimpia }
             ];
-        } else if (esSuperUser && unidad && unidad !== 'all') {
+        } else if (esMandoSuperior && unidad && unidad !== 'all') {
             const unidadLimpia = unidad.trim().toUpperCase();
             queryOficiales.$or = [
                 { unidad: unidadLimpia },
@@ -43,15 +42,14 @@ exports.getPlanificacionCompleta = async (req, res) => {
             ];
         }
 
-        // Búsqueda de datos en paralelo para optimizar la carga del panel
+        // Búsqueda en paralelo
         const [oficiales, planes] = await Promise.all([
             Tripulante.find(queryOficiales).sort({ grado: 1, apellido: 1 }).lean(),
             ExigenciaPlan.find({ año: currentAnio }).lean()
         ]);
 
-        // Merge de datos: Unimos al Oficial con su Plan (si existe) o inyectamos uno vacío
+        // Merge de datos e Inyección de Plan Vacío
         const respuesta = oficiales.map(oficial => {
-            // Buscamos si el piloto ya tiene un plan guardado en la colección ExigenciaPlan
             const planExistente = planes.find(p => p.piloto?.toString() === oficial._id?.toString());
             
             return {
@@ -61,8 +59,6 @@ exports.getPlanificacionCompleta = async (req, res) => {
                 nombre: oficial.nombre,
                 unidad: oficial.elemento || oficial.unidad,
                 habilitaciones: oficial.habilitaciones || [], 
-                // LÓGICA DE INYECCIÓN SEGURA: Si no hay plan en la DB, generamos uno en memoria
-                // Esto permite que el piloto aparezca en la tabla de EBM aunque sea nuevo
                 plan: planExistente || {
                     año: currentAnio,
                     unidad: oficial.elemento || oficial.unidad,
@@ -76,22 +72,19 @@ exports.getPlanificacionCompleta = async (req, res) => {
             };
         });
 
-        // Enviamos la lista completa de oficiales procesados con status 200
-        res.status(200).json(respuesta);
+        return res.status(200).json(respuesta);
 
     } catch (error) {
-        console.error("❌ ERROR EBM_CONTROLLER (GET):", error);
-        res.status(500).json({ 
-            mensaje: "Error al unificar planificación EBM", 
+        console.error("❌ ERROR EBM_CONTROLLER (GET):", error.message);
+        return res.status(500).json({ 
+            success: false,
+            mensaje: "Error al procesar planificación EBM", 
             detalle: error.message 
         });
     }
 };
 
-/**
- * Guarda o actualiza el plan individual de un oficial.
- * Si el plan no existe (porque era inyectado), se crea mediante Upsert.
- */
+// 2. Guardar o actualizar plan
 exports.savePlanIndividual = async (req, res) => {
     try {
         const { pilotoId, año, trimestres, unidad } = req.body;
@@ -100,10 +93,8 @@ exports.savePlanIndividual = async (req, res) => {
             return res.status(400).json({ mensaje: "Faltan datos críticos (ID o Año)" });
         }
 
-        // Normalización de la unidad/elemento para el guardado consistente
         const unidadLimpia = unidad ? unidad.toUpperCase().trim() : "";
 
-        // Buscamos por piloto y año. Si existe actualiza, si no lo crea (upsert: true)
         const planActualizado = await ExigenciaPlan.findOneAndUpdate(
             { piloto: pilotoId, año: año },
             { 
@@ -115,14 +106,14 @@ exports.savePlanIndividual = async (req, res) => {
             { upsert: true, new: true, runValidators: true }
         );
 
-        res.status(200).json({ 
+        return res.status(200).json({ 
             success: true,
             message: "Plan operativo actualizado correctamente", 
             plan: planActualizado 
         });
 
     } catch (error) {
-        console.error("❌ ERROR EBM_CONTROLLER (POST):", error);
-        res.status(500).json({ mensaje: "Error al guardar el plan individual" });
+        console.error("❌ ERROR EBM_CONTROLLER (POST):", error.message);
+        return res.status(500).json({ mensaje: "Error al guardar el plan individual" });
     }
 };
