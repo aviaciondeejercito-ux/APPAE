@@ -72,6 +72,7 @@ io.on('connection', (socket) => {
 });
 
 // --- 5. IMPORTACIÓN DE MÓDULOS OPERATIVOS ---
+// NOTA: Asegurate que los nombres de archivos en la carpeta 'routes' coincidan exactamente (Mayúsculas/Minúsculas)
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
 const adminRoutes = require('./routes/admin'); 
@@ -80,7 +81,8 @@ const weatherRoutes = require('./routes/metar');
 const astronomyRoutes = require('./routes/astronomy');
 const tripulanteRoutes = require('./routes/tripulantesRoutes'); 
 const vueloRoutes = require('./routes/vueloRoutes');
-const ebmRoutes = require('./routes/ebmRoutes');
+const ebmRoutes = require('./routes/ebmRoutes'); 
+
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
 app.get('/api/health', (req, res) => {
