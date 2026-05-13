@@ -5,13 +5,15 @@ const EBM = () => {
     const [datos, setDatos] = useState([]);
     const [loading, setLoading] = useState(true);
     
+    // Configuración Sincro Joker
     const unidadUsuario = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
     const anioActual = 2026;
 
     const [unidadFiltro, setUnidadFiltro] = useState(unidadUsuario);
     const [sdaSeleccionado, setSdaSeleccionado] = useState('');
 
-    const role = (localStorage.getItem('role') || 'user').toUpperCase();
+    const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
+    const role = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const puedeCambiarUnidad = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(role);
 
     const unidadesDisponibles = [
@@ -34,15 +36,17 @@ const EBM = () => {
 
             setDatos(response.data);
             
-            // Auto-selección de SdA (C-208, etc)
+            // Auto-selección inteligente del Sistema de Armas
             if (response.data.length > 0 && !sdaSeleccionado) {
                 const sdas = new Set();
-                response.data.forEach(p => p.habilitaciones?.forEach(h => sdas.add(h.aeronave)));
+                response.data.forEach(p => p.habilitaciones?.forEach(h => {
+                    if (h.aeronave) sdas.add(h.aeronave);
+                }));
                 const lista = Array.from(sdas).sort();
                 if (lista.length > 0) setSdaSeleccionado(lista[0]);
             }
         } catch (error) {
-            console.error("❌ Error EBM:", error);
+            console.error("❌ Error en carga EBM:", error);
         } finally {
             setLoading(false);
         }
@@ -52,7 +56,9 @@ const EBM = () => {
 
     const sdasEnUnidad = useMemo(() => {
         const sistemas = new Set();
-        datos.forEach(p => p.habilitaciones?.forEach(h => sistemas.add(h.aeronave)));
+        datos.forEach(p => p.habilitaciones?.forEach(h => {
+            if (h.aeronave) sistemas.add(h.aeronave);
+        }));
         return Array.from(sistemas).sort();
     }, [datos]);
 
@@ -61,21 +67,31 @@ const EBM = () => {
         return datos.filter(p => p.habilitaciones?.some(h => h.aeronave === sdaSeleccionado));
     }, [datos, sdaSeleccionado]);
 
-    if (loading) return <div style={styles.loading}>Cargando Oficiales y Horas...</div>;
+    if (loading) return <div style={styles.loading}>📊 Sincronizando Horas de Vuelo AE...</div>;
 
     return (
         <div style={styles.container}>
             <header style={styles.header}>
-                <h1 style={styles.titulo}>HORAS DE VUELO POR TRIMESTRE {anioActual}</h1>
+                <div style={styles.headerLeft}>
+                    <h1 style={styles.titulo}>REGISTRO TRIMESTRAL DE HORAS {anioActual}</h1>
+                    <p style={styles.subtitulo}>Unidad: {unidadFiltro}</p>
+                </div>
                 <div style={styles.filtrosBox}>
                     {puedeCambiarUnidad && (
-                        <select value={unidadFiltro} onChange={(e) => setUnidadFiltro(e.target.value)} style={styles.select}>
-                            {unidadesDisponibles.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
+                        <div style={styles.field}>
+                            <label style={styles.label}>CAMBIAR UNIDAD:</label>
+                            <select value={unidadFiltro} onChange={(e) => setUnidadFiltro(e.target.value)} style={styles.select}>
+                                {unidadesDisponibles.map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                        </div>
                     )}
-                    <select value={sdaSeleccionado} onChange={(e) => setSdaSeleccionado(e.target.value)} style={styles.selectSda}>
-                        {sdasEnUnidad.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <div style={styles.field}>
+                        <label style={styles.label}>SISTEMA DE ARMAS:</label>
+                        <select value={sdaSeleccionado} onChange={(e) => setSdaSeleccionado(e.target.value)} style={styles.selectSda}>
+                            {sdasEnUnidad.map(s => <option key={s} value={s}>{s}</option>)}
+                            {sdasEnUnidad.length === 0 && <option>Sin habilitaciones</option>}
+                        </select>
+                    </div>
                 </div>
             </header>
 
@@ -84,29 +100,35 @@ const EBM = () => {
                     <thead>
                         <tr>
                             <th style={styles.th}>GRADO Y APELLIDO</th>
-                            <th style={styles.th}>SdA</th>
+                            <th style={styles.th}>SISTEMA</th>
                             <th style={styles.th}>1er TRIM</th>
                             <th style={styles.th}>2do TRIM</th>
                             <th style={styles.th}>3er TRIM</th>
                             <th style={styles.th}>4to TRIM</th>
-                            <th style={styles.th}>TOTAL ANUAL</th>
+                            <th style={{...styles.th, backgroundColor: '#1a2a3a'}}>TOTAL ANUAL</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {pilotosFiltrados.map(p => {
-                            const totalAnual = p.horasReales.reduce((a, b) => a + b, 0);
+                        {pilotosFiltrados.length > 0 ? pilotosFiltrados.map(p => {
+                            const total = p.horasReales.reduce((a, b) => a + b, 0);
                             return (
                                 <tr key={p._id} style={styles.row}>
-                                    <td style={styles.td}><b>{p.grado}</b> {p.apellido}</td>
-                                    <td style={styles.td}>{sdaSeleccionado}</td>
-                                    <td style={styles.tdHoras}>{p.horasReales[0]} hs</td>
-                                    <td style={styles.tdHoras}>{p.horasReales[1]} hs</td>
-                                    <td style={styles.tdHoras}>{p.horasReales[2]} hs</td>
-                                    <td style={styles.tdHoras}>{p.horasReales[3]} hs</td>
-                                    <td style={{...styles.tdHoras, color: '#00ff00'}}>{totalAnual} hs</td>
+                                    <td style={styles.td}>
+                                        <span style={styles.grado}>{p.grado}</span> {p.apellido}, {p.nombre}
+                                    </td>
+                                    <td style={{...styles.td, color: '#888'}}>{sdaSeleccionado}</td>
+                                    <td style={styles.tdHoras}>{p.horasReales[0].toFixed(1)}</td>
+                                    <td style={styles.tdHoras}>{p.horasReales[1].toFixed(1)}</td>
+                                    <td style={styles.tdHoras}>{p.horasReales[2].toFixed(1)}</td>
+                                    <td style={styles.tdHoras}>{p.horasReales[3].toFixed(1)}</td>
+                                    <td style={styles.tdTotal}>{total.toFixed(1)} hs</td>
                                 </tr>
                             );
-                        })}
+                        }) : (
+                            <tr>
+                                <td colSpan="7" style={styles.noData}>No se encontraron oficiales habilitados en {sdaSeleccionado}</td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -115,19 +137,24 @@ const EBM = () => {
 };
 
 const styles = {
-    container: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh', color: '#e0e0e0' },
-    loading: { color: '#00ff00', textAlign: 'center', marginTop: '50px' },
-    header: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px' },
-    titulo: { fontSize: '18px', color: '#fff' },
-    filtrosBox: { display: 'flex', gap: '10px' },
-    select: { backgroundColor: '#222', color: '#fff', padding: '5px' },
-    selectSda: { backgroundColor: '#1a2a3a', color: '#00ff00', padding: '5px', fontWeight: 'bold' },
-    tableWrapper: { backgroundColor: '#1e1e1e', borderRadius: '5px' },
+    container: { padding: '30px', backgroundColor: '#0f0f0f', minHeight: '100vh', color: '#e0e0e0', fontFamily: 'monospace' },
+    loading: { color: '#00ff00', textAlign: 'center', marginTop: '100px', fontSize: '20px' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '20px' },
+    titulo: { fontSize: '22px', color: '#fff', margin: 0, letterSpacing: '1px' },
+    subtitulo: { fontSize: '14px', color: '#00ff00', margin: '5px 0 0 0' },
+    filtrosBox: { display: 'flex', gap: '20px' },
+    field: { display: 'flex', flexDirection: 'column', gap: '5px' },
+    label: { fontSize: '10px', color: '#888', fontWeight: 'bold' },
+    select: { backgroundColor: '#222', color: '#fff', border: '1px solid #444', padding: '8px', borderRadius: '4px' },
+    selectSda: { backgroundColor: '#1a2a3a', color: '#00ff00', border: '1px solid #00ff00', padding: '8px', borderRadius: '4px', fontWeight: 'bold' },
+    tableWrapper: { backgroundColor: '#161616', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' },
     table: { width: '100%', borderCollapse: 'collapse' },
-    th: { padding: '12px', border: '1px solid #333', backgroundColor: '#252525', fontSize: '12px' },
-    td: { padding: '10px', border: '1px solid #333', fontSize: '13px' },
-    tdHoras: { padding: '10px', border: '1px solid #333', textAlign: 'center', fontWeight: 'bold' },
-    row: { borderBottom: '1px solid #333' }
+    th: { padding: '15px', textAlign: 'left', borderBottom: '2px solid #333', fontSize: '12px', color: '#aaa', textTransform: 'uppercase' },
+    td: { padding: '15px', borderBottom: '1px solid #222', fontSize: '14px' },
+    tdHoras: { padding: '15px', borderBottom: '1px solid #222', textAlign: 'center', fontWeight: 'bold', color: '#ccc' },
+    tdTotal: { padding: '15px', borderBottom: '1px solid #222', textAlign: 'center', fontWeight: 'bold', color: '#00ff00', backgroundColor: 'rgba(0,255,0,0.05)' },
+    grado: { color: '#00ff00', fontWeight: 'bold', marginRight: '5px' },
+    noData: { padding: '40px', textAlign: 'center', color: '#555', fontStyle: 'italic' }
 };
 
 export default EBM;
