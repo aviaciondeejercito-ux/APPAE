@@ -3,46 +3,62 @@ const Tripulante = require('../models/Tripulante');
 
 /**
  * Obtiene la planificación completa cruzando Oficiales con sus Planes.
- * Coincide con: GET /api/ebm/planificacion-completa
+ * ACTUALIZADO: Soporte para campo 'elemento' y normalización de roles.
  */
 exports.getPlanificacionCompleta = async (req, res) => {
     try {
-        const { unidad, anio, role } = req.query;
-        const currentAnio = anio || 2026;
+        const { unidad, anio, role, rol } = req.query;
+        const currentAnio = Number(anio) || 2026;
 
-        // 1. Filtro de Oficiales (Grados de conducción y ejecución)
+        // 1. Normalización de Rol (Sincro Joker)
+        const rawRole = role || rol || '';
+        const roleBase = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
+
+        // 2. Filtro de Oficiales (Grados de conducción y ejecución)
         const gradosOficiales = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
-        let queryOficiales = { grado: { $in: gradosOficiales }, activo: true };
+        
+        // Iniciamos el filtro base
+        let queryOficiales = { 
+            grado: { $in: gradosOficiales }, 
+            activo: { $ne: false } 
+        };
 
-        // 2. Filtro de unidad según rol (Seguridad AE)
-        const esSuperUser = ['ADMIN', 'DIRECTOR', 'BOSS'].includes(role?.toUpperCase());
+        // 3. Filtro de unidad (Seguridad AE) con soporte para 'elemento'
+        const esSuperUser = ['ADMIN', 'DIRECTOR', 'BOSS', 'OTO'].includes(roleBase);
+        
         if (!esSuperUser && unidad) {
-            queryOficiales.unidad = unidad;
+            const unidadLimpia = unidad.trim().toUpperCase();
+            // Buscamos en ambos campos para asegurar que aparezcan
+            queryOficiales.$or = [
+                { unidad: unidadLimpia },
+                { elemento: unidadLimpia }
+            ];
         }
 
-        // 3. Búsqueda paralela para optimizar tiempos de respuesta
+        // 4. Búsqueda paralela
         const [oficiales, planes] = await Promise.all([
-            Tripulante.find(queryOficiales).sort({ grado: 1, apellido: 1 }),
+            Tripulante.find(queryOficiales).sort({ grado: 1, apellido: 1 }).lean(),
             ExigenciaPlan.find({ 
-                año: currentAnio, 
-                unidad: esSuperUser ? { $exists: true } : unidad 
-            })
+                año: currentAnio 
+            }).lean()
         ]);
 
-        // 4. Merge de datos: Oficial + Plan (si existe)
+        // 5. Merge de datos: Oficial + Plan (si existe)
         const respuesta = oficiales.map(oficial => {
-            const planExistente = planes.find(p => p.piloto.toString() === oficial._id.toString());
+            // Buscamos el plan en la colección ExigenciaPlan
+            const planExistente = planes.find(p => p.piloto?.toString() === oficial._id?.toString());
             
+            // Si no existe, devolvemos el piloto con una estructura de plan vacía para el Frontend
             return {
                 _id: oficial._id,
                 grado: oficial.grado,
                 apellido: oficial.apellido,
                 nombre: oficial.nombre,
-                unidad: oficial.unidad,
-                habilitaciones: oficial.habilitaciones || [], // Necesario para filtrar por SdA en el frontend
+                unidad: oficial.elemento || oficial.unidad,
+                habilitaciones: oficial.habilitaciones || [], 
                 plan: planExistente || {
                     año: currentAnio,
-                    unidad: oficial.unidad,
+                    unidad: oficial.elemento || oficial.unidad,
                     trimestres: [
                         { numero: 1, rol: '', tipo: '', causaNoCumplimiento: '' },
                         { numero: 2, rol: '', tipo: '', causaNoCumplimiento: '' },
@@ -56,13 +72,12 @@ exports.getPlanificacionCompleta = async (req, res) => {
         res.json(respuesta);
     } catch (error) {
         console.error("❌ ERROR EBM_CONTROLLER (GET):", error);
-        res.status(500).json({ message: "Error al unificar planificación EBM" });
+        res.status(500).json({ message: "Error al unificar planificación EBM", detalle: error.message });
     }
 };
 
 /**
  * Guarda o actualiza el plan individual de un oficial.
- * Coincide con: POST /api/ebm/save
  */
 exports.savePlanIndividual = async (req, res) => {
     try {
@@ -72,9 +87,17 @@ exports.savePlanIndividual = async (req, res) => {
             return res.status(400).json({ message: "Faltan datos críticos (ID o Año)" });
         }
 
+        // Usamos la unidad normalizada
+        const unidadLimpia = unidad ? unidad.toUpperCase().trim() : "";
+
         const plan = await ExigenciaPlan.findOneAndUpdate(
             { piloto: pilotoId, año: año },
-            { trimestres, unidad, piloto: pilotoId },
+            { 
+                trimestres, 
+                unidad: unidadLimpia, 
+                piloto: pilotoId,
+                año: año 
+            },
             { upsert: true, new: true }
         );
 
