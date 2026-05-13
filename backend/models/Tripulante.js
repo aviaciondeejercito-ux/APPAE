@@ -1,137 +1,246 @@
-const mongoose = require('mongoose');
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import axios from 'axios';
 
-const tripulanteSchema = new mongoose.Schema({
-  // --- IDENTIFICACIÓN BÁSICA ---
-  apellido: { type: String, required: true, trim: true },
-  nombre: { type: String, required: true, trim: true },
-  grado: { type: String, required: true, trim: true },
-  unidad: {
-    type: String,
-    required: true,
-    enum: [
-      "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
-      "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
-      "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"
-    ]
-  },
+const EBM = () => {
+    const [datos, setDatos] = useState([]);
+    const [loading, setLoading] = useState(true);
+    
+    // Sesión
+    const unidadUsuario = localStorage.getItem('unidad') || '';
+    const role = localStorage.getItem('role')?.toUpperCase() || '';
+    const anioActual = new Date().getFullYear();
 
-  // --- HABILITACIONES POR SISTEMA DE ARMAS ---
-  habilitaciones: [{
-    aeronave: {
-      type: String,
-      required: true,
-      enum: [
-        "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
-        "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", 
-        "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"
-      ]
-    },
-    fechaHabilitacion: { type: Date, required: true },
-    rolActual: {
-      type: String,
-      enum: ['Cursante','Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'],
-      required: true
-    },
+    // Filtros
+    const [unidadFiltro, setUnidadFiltro] = useState(unidadUsuario);
+    const [sdaSeleccionado, setSdaSeleccionado] = useState('');
 
-    // --- ACUMULADOS POR SISTEMA (Esto es lo que te faltaba) ---
-    // Estos campos deben estar aquí para que el Label los pueda leer
-    hsVisual: { type: Number, default: 0 },
-    hsInstrumental: { type: Number, default: 0 },
-    hsNocturno: { type: Number, default: 0 },
-    hsNVG: { type: Number, default: 0 },
-    totalHorasSistema: { type: Number, default: 0 }, 
+    // Permisos
+    const esAdmin = role === 'ADMIN';
+    const esMandoSuperior = ['BOSS', 'DIRECTOR'].includes(role);
+    const esOperaciones = role === 'OPERACIONES';
+    const puedeCambiarUnidad = esAdmin || esMandoSuperior;
 
-    historialRoles: [{
-      rol: String,
-      fechaDesde: Date,
-      fechaHasta: Date
-    }],
+    // Unidades Hardcoded (según tu Enum de Mongoose)
+    const unidadesDisponibles = [
+        "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
+        "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
+        "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"
+    ];
 
-    ultimaActividad: {
-      fecha: Date,
-      matricula: String,
-      mision: String
-      // totalHorasSistema se movió un nivel arriba para mayor claridad
-    },
-    fechaBajaHabilitacion: { type: Date },
-    observaciones: String
-  }],
+    const fetchData = useCallback(async () => {
+        try {
+            setLoading(true);
+            const response = await axios.get(`/api/ebm/planificacion-completa`, {
+                params: {
+                    unidad: puedeCambiarUnidad ? unidadFiltro : unidadUsuario,
+                    anio: anioActual,
+                    role: role
+                }
+            });
+            setDatos(response.data);
+            
+            // Si hay datos y no hay SdA seleccionado, elegir el primero disponible
+            if (response.data.length > 0 && !sdaSeleccionado) {
+                const primerosSdas = response.data[0].habilitaciones?.map(h => h.aeronave) || [];
+                if (primerosSdas.length > 0) setSdaSeleccionado(primerosSdas[0]);
+            }
+        } catch (error) {
+            console.error("Error en carga de datos:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [unidadFiltro, unidadUsuario, puedeCambiarUnidad, role, anioActual, sdaSeleccionado]);
 
-  // --- CAPACITACIONES ESPECIALES ---
-  capacitacionesEspeciales: [{
-    tipo: {
-      type: String,
-      enum: [
-        "Transporte de Personal", "Transporte de Carga", "Sanitario", 
-        "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", 
-        "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", 
-        "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"
-      ]
-    },
-    fechaAdquisicion: { type: Date, required: true },
-    observaciones: String
-  }],
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
-  // --- CERTIFICACIONES PERIÓDICAS ---
-  certificaciones: {
-    psicofisico: {
-      ultimaFecha: { type: Date },
-      vencimiento: { type: Date }
-    },
-    crm: {
-      ultimaFecha: { type: Date },
-      vencimiento: { type: Date }
-    }
-  },
+    // Extraer qué Sistemas de Armas existen en los datos actuales para el selector
+    const sdasEnUnidad = useMemo(() => {
+        const sistemas = new Set();
+        datos.forEach(p => {
+            p.habilitaciones?.forEach(h => sistemas.add(h.aeronave));
+        });
+        return Array.from(sistemas).sort();
+    }, [datos]);
 
-  // --- IDENTIKIT: TOTALES ACUMULADOS GENERALES ---
-  totalesHistoricos: {
-    vueloDiurno: { type: Number, default: 0 },
-    vueloNocturno: { type: Number, default: 0 },
-    vueloInstrumental: { type: Number, default: 0 },
-    vueloVisual: { type: Number, default: 0 },
-    aterrizajes: { type: Number, default: 0 }
-  },
+    // Filtrar pilotos que tengan el SdA seleccionado
+    const pilotosFiltrados = useMemo(() => {
+        if (!sdaSeleccionado) return [];
+        return datos.filter(p => 
+            p.habilitaciones?.some(h => h.aeronave === sdaSeleccionado)
+        );
+    }, [datos, sdaSeleccionado]);
 
-  ultimoEditor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  fechaUltimaModificacion: { type: Date, default: Date.now },
-  activo: { type: Boolean, default: true }
+    const puedeEditarFila = (unidadFila) => {
+        if (esAdmin) return true;
+        return esOperaciones && unidadFila === unidadUsuario;
+    };
 
-}, { 
-  timestamps: true, 
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
+    const handlePlanChange = async (pilotoId, trimIndex, campo, valor) => {
+        const oficialActual = datos.find(d => d._id === pilotoId);
+        if (!oficialActual || !puedeEditarFila(oficialActual.unidad)) return;
 
-// --- ÍNDICES ---
-tripulanteSchema.index({ apellido: 1, unidad: 1 });
-tripulanteSchema.index({ "habilitaciones.aeronave": 1 });
+        const nuevosTrimestres = [...oficialActual.plan.trimestres];
+        nuevosTrimestres[trimIndex] = { ...nuevosTrimestres[trimIndex], [campo]: valor };
 
-// VIRTUAL: Antigüedad
-tripulanteSchema.virtual('antiguedadResumen').get(function() {
-  const hoy = new Date();
-  if (!this.habilitaciones) return [];
-  return this.habilitaciones.map(h => {
-    let anios = hoy.getFullYear() - h.fechaHabilitacion.getFullYear();
-    const mes = hoy.getMonth() - h.fechaHabilitacion.getMonth();
-    if (mes < 0 || (mes === 0 && hoy.getDate() < h.fechaHabilitacion.getDate())) anios--;
-    return { aeronave: h.aeronave, rol: h.rolActual, anios: anios < 0 ? 0 : anios };
-  });
-});
+        try {
+            await axios.post('/api/ebm/save', {
+                pilotoId,
+                año: anioActual,
+                unidad: oficialActual.unidad,
+                sistemaArmas: sdaSeleccionado, // Guardamos específicamente para este SdA
+                trimestres: nuevosTrimestres
+            });
+            
+            setDatos(prev => prev.map(d =>
+                d._id === pilotoId ? { ...d, plan: { ...d.plan, trimestres: nuevosTrimestres } } : d
+            ));
+        } catch (error) {
+            console.error("Fallo al guardar:", error);
+        }
+    };
 
-// VIRTUAL: Suma de horas totales (Ajustado a la nueva ubicación del campo)
-tripulanteSchema.virtual('totalVueloGeneral').get(function() {
-  if (!this.habilitaciones) return 0;
-  return this.habilitaciones.reduce((acc, h) => acc + (h.totalHorasSistema || 0), 0);
-});
+    if (loading) return <div style={styles.loading}>Procesando Legajos y Habilitaciones...</div>;
 
-// VIRTUAL: Estado de Vencimientos
-tripulanteSchema.virtual('estadoCertificaciones').get(function() {
-  const hoy = new Date();
-  return {
-    psicofisicoVencido: this.certificaciones.psicofisico?.vencimiento ? this.certificaciones.psicofisico.vencimiento < hoy : true,
-    crmVencido: this.certificaciones.crm?.vencimiento ? this.certificaciones.crm.vencimiento < hoy : true
-  };
-});
+    return (
+        <div style={styles.container}>
+            <header style={styles.header}>
+                <div style={styles.headerTop}>
+                    <h1 style={styles.titulo}>PLANIFICACIÓN EBM {anioActual}</h1>
+                    <div style={styles.filtrosBox}>
+                        {puedeCambiarUnidad && (
+                            <div style={styles.filtroGroup}>
+                                <label style={styles.label}>UNIDAD:</label>
+                                <select value={unidadFiltro} onChange={(e) => setUnidadFiltro(e.target.value)} style={styles.select}>
+                                    {unidadesDisponibles.map(u => <option key={u} value={u}>{u}</option>)}
+                                </select>
+                            </div>
+                        )}
+                        <div style={styles.filtroGroup}>
+                            <label style={styles.label}>SISTEMA DE ARMAS:</label>
+                            <select value={sdaSeleccionado} onChange={(e) => setSdaSeleccionado(e.target.value)} style={styles.selectSda}>
+                                {sdasEnUnidad.length === 0 && <option>No hay pilotos habilitados</option>}
+                                {sdasEnUnidad.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div style={styles.infoBar}>
+                    Viendo: <span style={styles.highlight}>{sdaSeleccionado || 'Seleccione SdA'}</span> | 
+                    Total Pilotos Habilitados: {pilotosFiltrados.length}
+                </div>
+            </header>
 
-module.exports = mongoose.model('Tripulante', tripulanteSchema);
+            <div style={styles.tableWrapper}>
+                <table style={styles.table}>
+                    <thead>
+                        <tr>
+                            <th rowSpan="2" style={styles.thMain}>GRADO Y APELLIDO</th>
+                            <th rowSpan="2" style={styles.thMain}>HS TOTALES ({sdaSeleccionado})</th>
+                            {[1, 2, 3, 4].map(t => (
+                                <th key={t} colSpan="3" style={styles.thTrim}>{t}er TRIMESTRE</th>
+                            ))}
+                        </tr>
+                        <tr>
+                            {[1, 2, 3, 4].map(t => (
+                                <React.Fragment key={t}>
+                                    <th style={styles.thSub}>ROL</th>
+                                    <th style={styles.thSub}>TIPO</th>
+                                    <th style={styles.thSub}>CAUSA</th>
+                                </React.Fragment>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pilotosFiltrados.map(item => {
+                            const habilitacion = item.habilitaciones.find(h => h.aeronave === sdaSeleccionado);
+                            const editable = puedeEditarFila(item.unidad);
+                            return (
+                                <tr key={item._id} style={styles.row}>
+                                    <td style={styles.tdNombre}>
+                                        <span style={styles.grado}>{item.grado}</span> {item.apellido}
+                                    </td>
+                                    <td style={styles.tdHoras}>
+                                        {habilitacion?.totalHorasSistema || 0} hs
+                                    </td>
+                                    {[0, 1, 2, 3].map(idx => (
+                                        <React.Fragment key={idx}>
+                                            <td style={styles.tdCell}>
+                                                <select 
+                                                    disabled={!editable}
+                                                    value={item.plan.trimestres[idx]?.rol || ''}
+                                                    onChange={(e) => handlePlanChange(item._id, idx, 'rol', e.target.value)}
+                                                    style={editable ? styles.selectCell : styles.readOnly}
+                                                >
+                                                    <option value="">-</option>
+                                                    <option value="Copiloto">Copiloto</option>
+                                                    <option value="Piloto">Piloto</option>
+                                                    <option value="Instructor">Instructor</option>
+                                                </select>
+                                            </td>
+                                            <td style={styles.tdCell}>
+                                                <select 
+                                                    disabled={!editable}
+                                                    value={item.plan.trimestres[idx]?.tipo || ''}
+                                                    onChange={(e) => handlePlanChange(item._id, idx, 'tipo', e.target.value)}
+                                                    style={editable ? styles.selectTipo : styles.readOnly}
+                                                >
+                                                    <option value="">-</option>
+                                                    <option value="A">A</option>
+                                                    <option value="B">B</option>
+                                                    <option value="C">C</option>
+                                                    <option value="D">D</option>
+                                                </select>
+                                            </td>
+                                            <td style={styles.tdCell}>
+                                                <input 
+                                                    disabled={!editable}
+                                                    type="text"
+                                                    defaultValue={item.plan.trimestres[idx]?.causaNoCumplimiento || ''}
+                                                    onBlur={(e) => handlePlanChange(item._id, idx, 'causaNoCumplimiento', e.target.value)}
+                                                    style={editable ? styles.inputCausa : styles.readOnlyInput}
+                                                />
+                                            </td>
+                                        </React.Fragment>
+                                    ))}
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const styles = {
+    container: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh', color: '#e0e0e0', fontFamily: 'sans-serif' },
+    loading: { padding: '40px', color: '#00ff00', textAlign: 'center', height: '100vh' },
+    header: { marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '15px' },
+    headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    titulo: { fontSize: '22px', fontWeight: 'bold', color: '#fff', margin: 0 },
+    filtrosBox: { display: 'flex', gap: '20px' },
+    filtroGroup: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    label: { fontSize: '10px', color: '#00ff00', fontWeight: 'bold' },
+    infoBar: { marginTop: '10px', fontSize: '12px', color: '#888' },
+    highlight: { color: '#00ff00', fontWeight: 'bold' },
+    select: { backgroundColor: '#222', color: '#fff', border: '1px solid #444', padding: '4px', borderRadius: '4px' },
+    selectSda: { backgroundColor: '#1a2a3a', color: '#00ff00', border: '1px solid #00ff00', padding: '4px', borderRadius: '4px', fontWeight: 'bold' },
+    tableWrapper: { overflowX: 'auto', backgroundColor: '#1e1e1e', borderRadius: '4px' },
+    table: { width: '100%', borderCollapse: 'collapse', fontSize: '11px' },
+    thMain: { padding: '12px', border: '1px solid #333', backgroundColor: '#252525' },
+    thTrim: { padding: '8px', border: '1px solid #333', backgroundColor: '#1a2a3a', textAlign: 'center' },
+    thSub: { padding: '6px', border: '1px solid #333', backgroundColor: '#252525', color: '#777' },
+    tdNombre: { padding: '10px', border: '1px solid #333', whiteSpace: 'nowrap' },
+    tdHoras: { textAlign: 'center', border: '1px solid #333', color: '#aaa' },
+    grado: { color: '#00ff00', fontWeight: 'bold' },
+    tdCell: { padding: '2px', border: '1px solid #222' },
+    selectCell: { backgroundColor: '#2a2a2a', color: '#fff', border: '1px solid #444', width: '95%' },
+    selectTipo: { backgroundColor: '#1a2a3a', color: '#00ff00', border: '1px solid #444', width: '95%', fontWeight: 'bold' },
+    inputCausa: { backgroundColor: '#000', color: '#ccc', border: '1px solid #333', width: '90%' },
+    readOnly: { backgroundColor: 'transparent', color: '#555', border: 'none', textAlign: 'center', width: '100%', appearance: 'none' },
+    readOnlyInput: { backgroundColor: 'transparent', color: '#444', border: 'none', textAlign: 'center', width: '100%' }
+};
+
+export default EBM;

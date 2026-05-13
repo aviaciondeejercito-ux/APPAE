@@ -1,101 +1,135 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 
 const EBM = () => {
     const [datos, setDatos] = useState([]);
     const [loading, setLoading] = useState(true);
-    // Estado para que los mandos puedan cambiar de unidad en la vista
-    const [unidadFiltro, setUnidadFiltro] = useState(localStorage.getItem('unidad') || '');
-
-    const role = localStorage.getItem('role')?.toUpperCase();
+    
+    // Sesión
+    const unidadUsuario = localStorage.getItem('unidad') || '';
+    const role = localStorage.getItem('role')?.toUpperCase() || '';
     const anioActual = new Date().getFullYear();
 
+    // Filtros
+    const [unidadFiltro, setUnidadFiltro] = useState(unidadUsuario);
+    const [sdaSeleccionado, setSdaSeleccionado] = useState('');
+
     // Permisos
-    const esMando = ['ADMIN', 'DIRECTOR', 'BOSS'].includes(role);
-    const unidadesDisponibles = ['CA AE 601', 'CA AE 602', 'SEC AV EJ', 'ESCUELA']; // Ajustar según corresponda
+    const esAdmin = role === 'ADMIN';
+    const esMandoSuperior = ['BOSS', 'DIRECTOR'].includes(role);
+    const esOperaciones = role === 'OPERACIONES';
+    const puedeCambiarUnidad = esAdmin || esMandoSuperior;
+
+    // Unidades Hardcoded (según tu Enum de Mongoose)
+    const unidadesDisponibles = [
+        "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
+        "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
+        "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"
+    ];
 
     const fetchData = useCallback(async () => {
         try {
             setLoading(true);
-            // Usamos el endpoint optimizado que unifica Oficiales + Planes
             const response = await axios.get(`/api/ebm/planificacion-completa`, {
                 params: {
-                    unidad: unidadFiltro,
+                    unidad: puedeCambiarUnidad ? unidadFiltro : unidadUsuario,
                     anio: anioActual,
                     role: role
                 }
             });
             setDatos(response.data);
+            
+            // Si hay datos y no hay SdA seleccionado, elegir el primero disponible
+            if (response.data.length > 0 && !sdaSeleccionado) {
+                const primerosSdas = response.data[0].habilitaciones?.map(h => h.aeronave) || [];
+                if (primerosSdas.length > 0) setSdaSeleccionado(primerosSdas[0]);
+            }
         } catch (error) {
-            console.error("Error táctico en carga de datos:", error);
+            console.error("Error en carga de datos:", error);
         } finally {
             setLoading(false);
         }
-    }, [unidadFiltro, role, anioActual]);
+    }, [unidadFiltro, unidadUsuario, puedeCambiarUnidad, role, anioActual, sdaSeleccionado]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
+    // Extraer qué Sistemas de Armas existen en los datos actuales para el selector
+    const sdasEnUnidad = useMemo(() => {
+        const sistemas = new Set();
+        datos.forEach(p => {
+            p.habilitaciones?.forEach(h => sistemas.add(h.aeronave));
+        });
+        return Array.from(sistemas).sort();
+    }, [datos]);
+
+    // Filtrar pilotos que tengan el SdA seleccionado
+    const pilotosFiltrados = useMemo(() => {
+        if (!sdaSeleccionado) return [];
+        return datos.filter(p => 
+            p.habilitaciones?.some(h => h.aeronave === sdaSeleccionado)
+        );
+    }, [datos, sdaSeleccionado]);
+
+    const puedeEditarFila = (unidadFila) => {
+        if (esAdmin) return true;
+        return esOperaciones && unidadFila === unidadUsuario;
+    };
+
     const handlePlanChange = async (pilotoId, trimIndex, campo, valor) => {
-        // Si no es mando, no puede editar
-        if (!esMando) return;
-
         const oficialActual = datos.find(d => d._id === pilotoId);
-        if (!oficialActual) return;
+        if (!oficialActual || !puedeEditarFila(oficialActual.unidad)) return;
 
-        // Clonar trimestres y actualizar el campo específico
         const nuevosTrimestres = [...oficialActual.plan.trimestres];
-        nuevosTrimestres[trimIndex] = { 
-            ...nuevosTrimestres[trimIndex], 
-            [campo]: valor 
-        };
+        nuevosTrimestres[trimIndex] = { ...nuevosTrimestres[trimIndex], [campo]: valor };
 
         try {
             await axios.post('/api/ebm/save', {
                 pilotoId,
                 año: anioActual,
                 unidad: oficialActual.unidad,
+                sistemaArmas: sdaSeleccionado, // Guardamos específicamente para este SdA
                 trimestres: nuevosTrimestres
             });
             
-            // Actualización optimista del estado local
-            setDatos(prev => prev.map(d => 
-                d._id === pilotoId 
-                    ? { ...d, plan: { ...d.plan, trimestres: nuevosTrimestres } } 
-                    : d
+            setDatos(prev => prev.map(d =>
+                d._id === pilotoId ? { ...d, plan: { ...d.plan, trimestres: nuevosTrimestres } } : d
             ));
         } catch (error) {
-            console.error("Fallo al sincronizar plan:", error);
-            alert("Error al guardar los cambios.");
+            console.error("Fallo al guardar:", error);
         }
     };
 
-    if (loading) return <div style={styles.loading}>Iniciando Protocolo EBM...</div>;
+    if (loading) return <div style={styles.loading}>Procesando Legajos y Habilitaciones...</div>;
 
     return (
         <div style={styles.container}>
             <header style={styles.header}>
                 <div style={styles.headerTop}>
                     <h1 style={styles.titulo}>PLANIFICACIÓN EBM {anioActual}</h1>
-                    {esMando && (
-                        <div style={styles.filtroContainer}>
-                            <label style={styles.label}>UNIDAD:</label>
-                            <select 
-                                value={unidadFiltro} 
-                                onChange={(e) => setUnidadFiltro(e.target.value)}
-                                style={styles.selectUnidad}
-                            >
-                                {unidadesDisponibles.map(u => (
-                                    <option key={u} value={u}>{u}</option>
-                                ))}
+                    <div style={styles.filtrosBox}>
+                        {puedeCambiarUnidad && (
+                            <div style={styles.filtroGroup}>
+                                <label style={styles.label}>UNIDAD:</label>
+                                <select value={unidadFiltro} onChange={(e) => setUnidadFiltro(e.target.value)} style={styles.select}>
+                                    {unidadesDisponibles.map(u => <option key={u} value={u}>{u}</option>)}
+                                </select>
+                            </div>
+                        )}
+                        <div style={styles.filtroGroup}>
+                            <label style={styles.label}>SISTEMA DE ARMAS:</label>
+                            <select value={sdaSeleccionado} onChange={(e) => setSdaSeleccionado(e.target.value)} style={styles.selectSda}>
+                                {sdasEnUnidad.length === 0 && <option>No hay pilotos habilitados</option>}
+                                {sdasEnUnidad.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
-                    )}
+                    </div>
                 </div>
-                <p style={styles.subtitulo}>
-                    {esMando ? "MODO EDICIÓN COMANDO" : "MODO CONSULTA"} | Jerarquías: CR a ST
-                </p>
+                <div style={styles.infoBar}>
+                    Viendo: <span style={styles.highlight}>{sdaSeleccionado || 'Seleccione SdA'}</span> | 
+                    Total Pilotos Habilitados: {pilotosFiltrados.length}
+                </div>
             </header>
 
             <div style={styles.tableWrapper}>
@@ -103,6 +137,7 @@ const EBM = () => {
                     <thead>
                         <tr>
                             <th rowSpan="2" style={styles.thMain}>GRADO Y APELLIDO</th>
+                            <th rowSpan="2" style={styles.thMain}>HS TOTALES ({sdaSeleccionado})</th>
                             {[1, 2, 3, 4].map(t => (
                                 <th key={t} colSpan="3" style={styles.thTrim}>{t}er TRIMESTRE</th>
                             ))}
@@ -112,59 +147,66 @@ const EBM = () => {
                                 <React.Fragment key={t}>
                                     <th style={styles.thSub}>ROL</th>
                                     <th style={styles.thSub}>TIPO</th>
-                                    <th style={styles.thSub}>OBSERVACIONES</th>
+                                    <th style={styles.thSub}>CAUSA</th>
                                 </React.Fragment>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
-                        {datos.map(item => (
-                            <tr key={item._id} style={styles.row}>
-                                <td style={styles.tdNombre}>
-                                    <span style={styles.grado}>{item.grado}</span> {item.apellido}
-                                </td>
-                                {[0, 1, 2, 3].map(idx => (
-                                    <React.Fragment key={idx}>
-                                        <td style={styles.tdCell}>
-                                            <select 
-                                                disabled={!esMando}
-                                                value={item.plan.trimestres[idx]?.rol || ''}
-                                                onChange={(e) => handlePlanChange(item._id, idx, 'rol', e.target.value)}
-                                                style={esMando ? styles.select : styles.readOnlyText}
-                                            >
-                                                <option value="">-</option>
-                                                <option value="Copiloto">Copiloto</option>
-                                                <option value="Piloto">Piloto</option>
-                                                <option value="Instructor">Instructor</option>
-                                            </select>
-                                        </td>
-                                        <td style={styles.tdCell}>
-                                            <select 
-                                                disabled={!esMando}
-                                                value={item.plan.trimestres[idx]?.tipo || ''}
-                                                onChange={(e) => handlePlanChange(item._id, idx, 'tipo', e.target.value)}
-                                                style={esMando ? styles.selectTipo : styles.readOnlyText}
-                                            >
-                                                <option value="">-</option>
-                                                {['A', 'B', 'C', 'D'].map(l => (
-                                                    <option key={l} value={l}>{l}</option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                        <td style={styles.tdCell}>
-                                            <input 
-                                                disabled={!esMando}
-                                                type="text"
-                                                placeholder="Causa..."
-                                                defaultValue={item.plan.trimestres[idx]?.causaNoCumplimiento || ''}
-                                                onBlur={(e) => handlePlanChange(item._id, idx, 'causaNoCumplimiento', e.target.value)}
-                                                style={esMando ? styles.inputCausa : styles.readOnlyInput}
-                                            />
-                                        </td>
-                                    </React.Fragment>
-                                ))}
-                            </tr>
-                        ))}
+                        {pilotosFiltrados.map(item => {
+                            const habilitacion = item.habilitaciones.find(h => h.aeronave === sdaSeleccionado);
+                            const editable = puedeEditarFila(item.unidad);
+                            return (
+                                <tr key={item._id} style={styles.row}>
+                                    <td style={styles.tdNombre}>
+                                        <span style={styles.grado}>{item.grado}</span> {item.apellido}
+                                    </td>
+                                    <td style={styles.tdHoras}>
+                                        {habilitacion?.totalHorasSistema || 0} hs
+                                    </td>
+                                    {[0, 1, 2, 3].map(idx => (
+                                        <React.Fragment key={idx}>
+                                            <td style={styles.tdCell}>
+                                                <select 
+                                                    disabled={!editable}
+                                                    value={item.plan.trimestres[idx]?.rol || ''}
+                                                    onChange={(e) => handlePlanChange(item._id, idx, 'rol', e.target.value)}
+                                                    style={editable ? styles.selectCell : styles.readOnly}
+                                                >
+                                                    <option value="">-</option>
+                                                    <option value="Copiloto">Copiloto</option>
+                                                    <option value="Piloto">Piloto</option>
+                                                    <option value="Instructor">Instructor</option>
+                                                </select>
+                                            </td>
+                                            <td style={styles.tdCell}>
+                                                <select 
+                                                    disabled={!editable}
+                                                    value={item.plan.trimestres[idx]?.tipo || ''}
+                                                    onChange={(e) => handlePlanChange(item._id, idx, 'tipo', e.target.value)}
+                                                    style={editable ? styles.selectTipo : styles.readOnly}
+                                                >
+                                                    <option value="">-</option>
+                                                    <option value="A">A</option>
+                                                    <option value="B">B</option>
+                                                    <option value="C">C</option>
+                                                    <option value="D">D</option>
+                                                </select>
+                                            </td>
+                                            <td style={styles.tdCell}>
+                                                <input 
+                                                    disabled={!editable}
+                                                    type="text"
+                                                    defaultValue={item.plan.trimestres[idx]?.causaNoCumplimiento || ''}
+                                                    onBlur={(e) => handlePlanChange(item._id, idx, 'causaNoCumplimiento', e.target.value)}
+                                                    style={editable ? styles.inputCausa : styles.readOnlyInput}
+                                                />
+                                            </td>
+                                        </React.Fragment>
+                                    ))}
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -174,28 +216,31 @@ const EBM = () => {
 
 const styles = {
     container: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh', color: '#e0e0e0', fontFamily: 'sans-serif' },
-    loading: { padding: '40px', color: '#00ff00', fontSize: '18px', textAlign: 'center', backgroundColor: '#121212', height: '100vh' },
+    loading: { padding: '40px', color: '#00ff00', textAlign: 'center', height: '100vh' },
     header: { marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '15px' },
-    headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
-    titulo: { fontSize: '24px', fontWeight: 'bold', color: '#fff', margin: 0, letterSpacing: '1px' },
-    subtitulo: { fontSize: '12px', color: '#aaa', margin: 0 },
-    filtroContainer: { display: 'flex', alignItems: 'center', gap: '10px' },
-    label: { fontSize: '12px', fontWeight: 'bold', color: '#00ff00' },
-    selectUnidad: { backgroundColor: '#333', color: '#fff', border: '1px solid #555', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' },
-    tableWrapper: { overflowX: 'auto', backgroundColor: '#1e1e1e', borderRadius: '4px', border: '1px solid #333' },
+    headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    titulo: { fontSize: '22px', fontWeight: 'bold', color: '#fff', margin: 0 },
+    filtrosBox: { display: 'flex', gap: '20px' },
+    filtroGroup: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    label: { fontSize: '10px', color: '#00ff00', fontWeight: 'bold' },
+    infoBar: { marginTop: '10px', fontSize: '12px', color: '#888' },
+    highlight: { color: '#00ff00', fontWeight: 'bold' },
+    select: { backgroundColor: '#222', color: '#fff', border: '1px solid #444', padding: '4px', borderRadius: '4px' },
+    selectSda: { backgroundColor: '#1a2a3a', color: '#00ff00', border: '1px solid #00ff00', padding: '4px', borderRadius: '4px', fontWeight: 'bold' },
+    tableWrapper: { overflowX: 'auto', backgroundColor: '#1e1e1e', borderRadius: '4px' },
     table: { width: '100%', borderCollapse: 'collapse', fontSize: '11px' },
-    thMain: { padding: '15px', border: '1px solid #333', backgroundColor: '#252525', color: '#fff' },
-    thTrim: { padding: '10px', border: '1px solid #333', backgroundColor: '#1a2a3a', textAlign: 'center', color: '#fff', fontWeight: 'bold' },
-    thSub: { padding: '8px', border: '1px solid #333', backgroundColor: '#252525', color: '#888' },
-    row: { borderBottom: '1px solid #222' },
-    tdNombre: { padding: '12px', border: '1px solid #333', color: '#fff', whiteSpace: 'nowrap', backgroundColor: '#1e1e1e' },
-    grado: { color: '#00ff00', fontWeight: 'bold', marginRight: '5px' },
-    tdCell: { padding: '2px', border: '1px solid #222', textAlign: 'center' },
-    select: { backgroundColor: '#2a2a2a', color: '#fff', border: '1px solid #444', padding: '4px', borderRadius: '3px', width: '95%', cursor: 'pointer' },
-    selectTipo: { backgroundColor: '#1a2a3a', color: '#00ff00', border: '1px solid #444', padding: '4px', borderRadius: '3px', fontWeight: 'bold', width: '95%', textAlign: 'center' },
-    inputCausa: { backgroundColor: '#000', color: '#ccc', border: '1px solid #333', borderRadius: '3px', padding: '4px', width: '90%', fontSize: '10px' },
-    readOnlyText: { backgroundColor: 'transparent', color: '#888', border: 'none', appearance: 'none', textAlign: 'center', width: '100%' },
-    readOnlyInput: { backgroundColor: 'transparent', color: '#666', border: 'none', textAlign: 'center', width: '100%' }
+    thMain: { padding: '12px', border: '1px solid #333', backgroundColor: '#252525' },
+    thTrim: { padding: '8px', border: '1px solid #333', backgroundColor: '#1a2a3a', textAlign: 'center' },
+    thSub: { padding: '6px', border: '1px solid #333', backgroundColor: '#252525', color: '#777' },
+    tdNombre: { padding: '10px', border: '1px solid #333', whiteSpace: 'nowrap' },
+    tdHoras: { textAlign: 'center', border: '1px solid #333', color: '#aaa' },
+    grado: { color: '#00ff00', fontWeight: 'bold' },
+    tdCell: { padding: '2px', border: '1px solid #222' },
+    selectCell: { backgroundColor: '#2a2a2a', color: '#fff', border: '1px solid #444', width: '95%' },
+    selectTipo: { backgroundColor: '#1a2a3a', color: '#00ff00', border: '1px solid #444', width: '95%', fontWeight: 'bold' },
+    inputCausa: { backgroundColor: '#000', color: '#ccc', border: '1px solid #333', width: '90%' },
+    readOnly: { backgroundColor: 'transparent', color: '#555', border: 'none', textAlign: 'center', width: '100%', appearance: 'none' },
+    readOnlyInput: { backgroundColor: 'transparent', color: '#444', border: 'none', textAlign: 'center', width: '100%' }
 };
 
 export default EBM;
