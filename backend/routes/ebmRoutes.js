@@ -3,7 +3,6 @@ const router = express.Router();
 const ebmController = require('../controllers/ebmController');
 const { protect } = require('../middleware/authMiddleware');
 
-// Solo necesitamos el GET de totales
-router.get('/totales-vuelo', protect, ebmController.getTotalesVueloTrimestral);
+router.get('/planificacion-completa', protect, ebmController.getPlanificacionCompleta);
 
 module.exports = router;

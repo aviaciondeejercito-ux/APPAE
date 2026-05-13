@@ -2,76 +2,72 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const EBM = () => {
-    const [datos, setDatos] = useState([]);
+    const [pilotos, setPilotos] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [sdaFiltro, setSdaFiltro] = useState('');
+    const [unidadFiltro, setUnidadFiltro] = useState(localStorage.getItem('elemento') || '');
 
-    const unidadUsuario = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
+    const role = (localStorage.getItem('role') || '').toUpperCase();
+    const esAdmin = role === 'ADMIN';
 
-    const fetchTotales = useCallback(async () => {
+    const fetchPilotos = useCallback(async () => {
         try {
             setLoading(true);
             const token = localStorage.getItem('token');
-            const res = await axios.get('/api/ebm/totales-vuelo', {
-                params: { unidad: unidadUsuario },
+            const res = await axios.get('/api/ebm/planificacion-completa', {
+                params: { unidad: unidadFiltro },
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setDatos(res.data);
-            
-            // Auto-seleccionar primer SdA disponible
-            if (res.data.length > 0 && !sdaFiltro) {
-                const primerSda = res.data[0].habilitaciones[0]?.aeronave;
-                if (primerSda) setSdaFiltro(primerSda);
-            }
-        } catch (err) { console.error(err); } 
-        finally { setLoading(false); }
-    }, [unidadUsuario, sdaFiltro]);
+            setPilotos(res.data);
+        } catch (err) {
+            console.error("Error al cargar pilotos:", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [unidadFiltro]);
 
-    useEffect(() => { fetchTotales(); }, [fetchTotales]);
+    useEffect(() => { fetchPilotos(); }, [fetchPilotos]);
 
-    const filtrados = datos.filter(p => 
-        p.habilitaciones.some(h => h.aeronave === sdaFiltro)
-    );
-
-    if (loading) return <div style={{color: '#0f0', padding: '20px'}}>CARGANDO TOTALES REALES...</div>;
+    if (loading) return <div style={styles.info}>Cargando nómina de oficiales...</div>;
 
     return (
-        <div style={{ padding: '20px', backgroundColor: '#121212', minHeight: '100vh', color: '#fff' }}>
-            <h2>TOTALES DE VUELO TRIMESTRALES 2026</h2>
-            <div style={{ marginBottom: '20px' }}>
-                <label>SISTEMA: </label>
-                <select value={sdaFiltro} onChange={e => setSdaFiltro(e.target.value)} style={{padding: '5px'}}>
-                    {Array.from(new Set(datos.flatMap(p => p.habilitaciones.map(h => h.aeronave)))).map(s => (
-                        <option key={s} value={s}>{s}</option>
-                    ))}
-                </select>
-            </div>
+        <div style={styles.container}>
+            <header style={styles.header}>
+                <h2>NÓMINA DE PILOTOS - EBM</h2>
+                {esAdmin && (
+                    <select 
+                        value={unidadFiltro} 
+                        onChange={(e) => setUnidadFiltro(e.target.value)}
+                        style={styles.select}
+                    >
+                        <option value="all">TODAS LAS UNIDADES</option>
+                        <option value="B HELIC ASAL 601">B HELIC ASAL 601</option>
+                        <option value="B AV APY COMB 601">B AV APY COMB 601</option>
+                        {/* Agregar más unidades según necesidad */}
+                    </select>
+                )}
+            </header>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#1e1e1e' }}>
+            <table style={styles.table}>
                 <thead>
-                    <tr style={{ backgroundColor: '#252525' }}>
-                        <th style={styles.th}>OFICIAL</th>
-                        <th style={styles.th}>1er TRIM</th>
-                        <th style={styles.th}>2do TRIM</th>
-                        <th style={styles.th}>3er TRIM</th>
-                        <th style={styles.th}>4to TRIM</th>
-                        <th style={styles.th}>TOTAL ANUAL</th>
+                    <tr>
+                        <th style={styles.th}>GRADO</th>
+                        <th style={styles.th}>APELLIDO</th>
+                        <th style={styles.th}>NOMBRE</th>
+                        <th style={styles.th}>UNIDAD / ELEMENTO</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {filtrados.map(p => {
-                        const anual = p.horasTrimestres.reduce((a, b) => a + b, 0);
-                        return (
-                            <tr key={p._id} style={{ borderBottom: '1px solid #333' }}>
-                                <td style={styles.td}><b>{p.grado}</b> {p.apellido}</td>
-                                <td style={styles.tdCenter}>{p.horasTrimestres[0]} hs</td>
-                                <td style={styles.tdCenter}>{p.horasTrimestres[1]} hs</td>
-                                <td style={styles.tdCenter}>{p.horasTrimestres[2]} hs</td>
-                                <td style={styles.tdCenter}>{p.horasTrimestres[3]} hs</td>
-                                <td style={{...styles.tdCenter, color: '#0f0'}}>{anual} hs</td>
-                            </tr>
-                        );
-                    })}
+                    {pilotos.map(p => (
+                        <tr key={p._id} style={styles.tr}>
+                            <td style={styles.td}><b>{p.grado}</b></td>
+                            <td style={styles.td}>{p.apellido}</td>
+                            <td style={styles.td}>{p.nombre}</td>
+                            <td style={styles.td}>{p.elemento || p.unidad}</td>
+                        </tr>
+                    ))}
+                    {pilotos.length === 0 && (
+                        <tr><td colSpan="4" style={styles.tdEmpty}>No hay pilotos registrados</td></tr>
+                    )}
                 </tbody>
             </table>
         </div>
@@ -79,9 +75,14 @@ const EBM = () => {
 };
 
 const styles = {
-    th: { padding: '12px', border: '1px solid #333', textAlign: 'left' },
-    td: { padding: '12px', border: '1px solid #333' },
-    tdCenter: { padding: '12px', border: '1px solid #333', textAlign: 'center' }
+    container: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh', color: '#fff', fontFamily: 'sans-serif' },
+    header: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '10px' },
+    select: { backgroundColor: '#222', color: '#0f0', border: '1px solid #0f0', padding: '5px' },
+    table: { width: '100%', borderCollapse: 'collapse' },
+    th: { textAlign: 'left', padding: '12px', borderBottom: '2px solid #444', color: '#888', fontSize: '12px' },
+    td: { padding: '12px', borderBottom: '1px solid #222' },
+    tdEmpty: { textAlign: 'center', padding: '20px', color: '#555' },
+    info: { color: '#0f0', padding: '20px' }
 };
 
 export default EBM;
