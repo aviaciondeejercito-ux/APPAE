@@ -2,38 +2,37 @@ const Tripulante = require('../models/Tripulante');
 
 exports.getPlanificacionCompleta = async (req, res) => {
     try {
-        const { unidad } = req.query;
-        const { role } = req.user; // Obtenido del middleware protect
-
-        // 1. Filtro de Grados de Oficiales Pilotos
+        console.log("📡 Petición de nómina EBM recibida para unidad:", req.query.unidad);
+        
+        // 1. Lista de grados solicitada
         const gradosHabilitados = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
+        
+        // 2. Construcción del filtro
         let query = { 
             grado: { $in: gradosHabilitados }, 
-            activo: { $ne: false } 
+            activo: true 
         };
 
-        // 2. Lógica de Jurisdicción (Sincro Joker)
-        // Si no es ADMIN, filtramos obligatoriamente por su unidad/elemento
-        const esAdmin = role.toUpperCase().replace(/[\s_-]/g, '') === 'ADMIN';
-        
-        if (!esAdmin) {
+        // 3. Lógica Admin vs Usuario (Sincro Joker)
+        const role = (req.user.role || '').toUpperCase();
+        if (role !== 'ADMIN') {
             const unidadUser = req.user.unidad || req.user.elemento;
             query.$or = [{ unidad: unidadUser }, { elemento: unidadUser }];
-        } 
-        // Si es Admin y seleccionó una unidad específica en el filtro del frontend
-        else if (unidad && unidad !== 'all') {
-            const uLimpia = unidad.trim().toUpperCase();
-            query.$or = [{ unidad: uLimpia }, { elemento: uLimpia }];
+        } else if (req.query.unidad && req.query.unidad !== 'all' && req.query.unidad !== 'COMANDO') {
+            const uBusqueda = req.query.unidad.trim();
+            query.$or = [{ unidad: uBusqueda }, { elemento: uBusqueda }];
         }
 
+        // 4. Búsqueda y envío
         const pilotos = await Tripulante.find(query)
-            .select('grado apellido nombre unidad elemento habilitaciones')
+            .select('grado apellido nombre unidad elemento')
             .sort({ grado: 1, apellido: 1 })
             .lean();
 
+        console.log(`✅ Pilotos encontrados: ${pilotos.length}`);
         res.status(200).json(pilotos);
     } catch (error) {
-        console.error("❌ Error al obtener pilotos EBM:", error);
-        res.status(500).json({ mensaje: "Error al obtener nómina de pilotos" });
+        console.error("❌ ERROR CRÍTICO EBM:", error);
+        res.status(500).json({ mensaje: "Error interno del servidor" });
     }
 };
