@@ -13,11 +13,11 @@ exports.getPlanificacionCompleta = async (req, res) => {
         const { unidad, anio, role, rol } = req.query;
         const currentAnio = Number(anio) || new Date().getFullYear();
 
-        // Normalización de Rol (Sincro Joker: acepta role o rol)
+        // Normalización Joker: Detecta el rol sin importar el nombre del campo
         const rawRole = role || rol || '';
         const roleBase = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
 
-        // Grados autorizados para la planificación EBM
+        // Grados habilitados para EBM
         const gradosOficiales = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
         
         let queryOficiales = { 
@@ -25,7 +25,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
             activo: { $ne: false } 
         };
 
-        // Filtro de unidad: Soporta campo 'unidad' o 'elemento'
+        // Filtro de unidad: Busca en 'unidad' o 'elemento' para no perder pilotos
         const esMandoSuperior = ['ADMIN', 'DIRECTOR', 'BOSS', 'OTO'].includes(roleBase);
         
         if (!esMandoSuperior && unidad) {
@@ -34,21 +34,15 @@ exports.getPlanificacionCompleta = async (req, res) => {
                 { unidad: unidadLimpia },
                 { elemento: unidadLimpia }
             ];
-        } else if (esMandoSuperior && unidad && unidad !== 'all') {
-            const unidadLimpia = unidad.trim().toUpperCase();
-            queryOficiales.$or = [
-                { unidad: unidadLimpia },
-                { elemento: unidadLimpia }
-            ];
         }
 
-        // Búsqueda en paralelo
+        // Búsqueda en paralelo de pilotos y sus planes
         const [oficiales, planes] = await Promise.all([
             Tripulante.find(queryOficiales).sort({ grado: 1, apellido: 1 }).lean(),
             ExigenciaPlan.find({ año: currentAnio }).lean()
         ]);
 
-        // Merge de datos e Inyección de Plan Vacío
+        // Merge de datos: Si el piloto no tiene plan, inyectamos uno vacío en memoria
         const respuesta = oficiales.map(oficial => {
             const planExistente = planes.find(p => p.piloto?.toString() === oficial._id?.toString());
             
@@ -72,15 +66,11 @@ exports.getPlanificacionCompleta = async (req, res) => {
             };
         });
 
-        return res.status(200).json(respuesta);
+        res.status(200).json(respuesta);
 
     } catch (error) {
-        console.error("❌ ERROR EBM_CONTROLLER (GET):", error.message);
-        return res.status(500).json({ 
-            success: false,
-            mensaje: "Error al procesar planificación EBM", 
-            detalle: error.message 
-        });
+        console.error("❌ ERROR EBM_CONTROLLER:", error.message);
+        res.status(500).json({ mensaje: "Error interno del servidor", detalle: error.message });
     }
 };
 
@@ -90,30 +80,26 @@ exports.savePlanIndividual = async (req, res) => {
         const { pilotoId, año, trimestres, unidad } = req.body;
 
         if (!pilotoId || !año) {
-            return res.status(400).json({ mensaje: "Faltan datos críticos (ID o Año)" });
+            return res.status(400).json({ mensaje: "Faltan IDs o Año" });
         }
 
         const unidadLimpia = unidad ? unidad.toUpperCase().trim() : "";
 
-        const planActualizado = await ExigenciaPlan.findOneAndUpdate(
+        const plan = await ExigenciaPlan.findOneAndUpdate(
             { piloto: pilotoId, año: año },
             { 
                 trimestres, 
                 unidad: unidadLimpia, 
                 piloto: pilotoId,
-                año: año 
+                año: Number(año) 
             },
-            { upsert: true, new: true, runValidators: true }
+            { upsert: true, new: true }
         );
 
-        return res.status(200).json({ 
-            success: true,
-            message: "Plan operativo actualizado correctamente", 
-            plan: planActualizado 
-        });
+        res.status(200).json({ success: true, plan });
 
     } catch (error) {
-        console.error("❌ ERROR EBM_CONTROLLER (POST):", error.message);
-        return res.status(500).json({ mensaje: "Error al guardar el plan individual" });
+        console.error("❌ ERROR AL GUARDAR PLAN:", error.message);
+        res.status(500).json({ mensaje: "Error al guardar" });
     }
 };
