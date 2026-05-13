@@ -1,73 +1,102 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const EBM = () => {
-    const [pilotos, setPilotos] = useState([]);
+const EbmPage = () => {
+    const [personal, setPersonal] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [unidadFiltro, setUnidadFiltro] = useState(localStorage.getItem('elemento') || '');
+    const [sdaFiltro, setSdaFiltro] = useState('');
 
-    const role = (localStorage.getItem('role') || '').toUpperCase();
-    const esAdmin = role === 'ADMIN';
+    // --- DATOS DE SESIÓN ---
+    const userUnidad = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
+    const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'USER';
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_-]/g, '');
 
-    const fetchPilotos = useCallback(async () => {
+    const fetchPersonal = useCallback(async () => {
         try {
             setLoading(true);
             const token = localStorage.getItem('token');
-            const res = await axios.get('/api/ebm/planificacion-completa', {
-                params: { unidad: unidadFiltro },
+            
+            // Usamos la ruta de tripulantes que ya sabemos que FUNCIONA
+            const response = await axios.get('/api/tripulantes', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setPilotos(res.data);
-        } catch (err) {
-            console.error("Error al cargar pilotos:", err);
+
+            const miUnidadLogueada = userUnidad.trim().toUpperCase();
+            const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+
+            // 1. Filtro por Grados de Oficiales Pilotos (CR a ST)
+            const gradosHabilitados = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
+            let dataFiltrada = response.data.filter(p => gradosHabilitados.includes(p.grado));
+
+            // 2. Filtro por Jurisdicción (Unidad)
+            if (!esMandoEstrategico) {
+                dataFiltrada = dataFiltrada.filter(p => {
+                    const unidadDelPiloto = (p.elemento || p.unidad || '').trim().toUpperCase();
+                    return unidadDelPiloto === miUnidadLogueada;
+                });
+            }
+
+            setPersonal(dataFiltrada || []);
+
+            // Auto-selección de SdA para la tabla
+            if (dataFiltrada.length > 0 && !sdaFiltro) {
+                const primerSda = dataFiltrada[0].habilitaciones?.[0]?.aeronave;
+                if (primerSda) setSdaFiltro(primerSda);
+            }
+
+        } catch (error) {
+            console.error("❌ Error de carga de personal EBM:", error);
         } finally {
             setLoading(false);
         }
-    }, [unidadFiltro]);
+    }, [userUnidad, roleNormalizado, sdaFiltro]);
 
-    useEffect(() => { fetchPilotos(); }, [fetchPilotos]);
+    useEffect(() => {
+        fetchPersonal();
+    }, [fetchPersonal]);
 
-    if (loading) return <div style={styles.info}>Cargando nómina de oficiales...</div>;
+    // Filtro secundario por Sistema de Armas
+    const listaFinal = sdaFiltro 
+        ? personal.filter(p => p.habilitaciones?.some(h => h.aeronave === sdaFiltro))
+        : personal;
+
+    if (loading) return <div style={{ color: '#0f0', padding: '20px' }}>CARGANDO PERSONAL EBM...</div>;
 
     return (
         <div style={styles.container}>
             <header style={styles.header}>
-                <h2>NÓMINA DE PILOTOS - EBM</h2>
-                {esAdmin && (
-                    <select 
-                        value={unidadFiltro} 
-                        onChange={(e) => setUnidadFiltro(e.target.value)}
-                        style={styles.select}
-                    >
-                        <option value="all">TODAS LAS UNIDADES</option>
-                        <option value="B HELIC ASAL 601">B HELIC ASAL 601</option>
-                        <option value="B AV APY COMB 601">B AV APY COMB 601</option>
-                        {/* Agregar más unidades según necesidad */}
+                <h2>NÓMINA EBM - {userUnidad}</h2>
+                <div style={styles.filtros}>
+                    <label>SISTEMA: </label>
+                    <select value={sdaFiltro} onChange={(e) => setSdaFiltro(e.target.value)} style={styles.select}>
+                        <option value="">TODOS</option>
+                        {Array.from(new Set(personal.flatMap(p => p.habilitaciones?.map(h => h.aeronave) || []))).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                        ))}
                     </select>
-                )}
+                </div>
             </header>
 
             <table style={styles.table}>
                 <thead>
                     <tr>
                         <th style={styles.th}>GRADO</th>
-                        <th style={styles.th}>APELLIDO</th>
-                        <th style={styles.th}>NOMBRE</th>
-                        <th style={styles.th}>UNIDAD / ELEMENTO</th>
+                        <th style={styles.th}>APELLIDO Y NOMBRE</th>
+                        <th style={styles.th}>UNIDAD</th>
+                        <th style={styles.th}>HABILITACIONES</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {pilotos.map(p => (
+                    {listaFinal.map(p => (
                         <tr key={p._id} style={styles.tr}>
                             <td style={styles.td}><b>{p.grado}</b></td>
-                            <td style={styles.td}>{p.apellido}</td>
-                            <td style={styles.td}>{p.nombre}</td>
+                            <td style={styles.td}>{p.apellido}, {p.nombre}</td>
                             <td style={styles.td}>{p.elemento || p.unidad}</td>
+                            <td style={styles.td}>
+                                {p.habilitaciones?.map(h => h.aeronave).join(' / ') || '---'}
+                            </td>
                         </tr>
                     ))}
-                    {pilotos.length === 0 && (
-                        <tr><td colSpan="4" style={styles.tdEmpty}>No hay pilotos registrados</td></tr>
-                    )}
                 </tbody>
             </table>
         </div>
@@ -75,14 +104,12 @@ const EBM = () => {
 };
 
 const styles = {
-    container: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh', color: '#fff', fontFamily: 'sans-serif' },
-    header: { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '10px' },
+    container: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh', color: '#fff' },
+    header: { display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #333', paddingBottom: '15px', marginBottom: '20px' },
     select: { backgroundColor: '#222', color: '#0f0', border: '1px solid #0f0', padding: '5px' },
     table: { width: '100%', borderCollapse: 'collapse' },
-    th: { textAlign: 'left', padding: '12px', borderBottom: '2px solid #444', color: '#888', fontSize: '12px' },
+    th: { textAlign: 'left', padding: '12px', color: '#888', borderBottom: '2px solid #444' },
     td: { padding: '12px', borderBottom: '1px solid #222' },
-    tdEmpty: { textAlign: 'center', padding: '20px', color: '#555' },
-    info: { color: '#0f0', padding: '20px' }
 };
 
-export default EBM;
+export default EbmPage;
