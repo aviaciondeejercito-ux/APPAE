@@ -201,13 +201,20 @@ exports.agregarCapacitacion = async (req, res) => {
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
-        const roleBase = String(usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        
+        // CORRECCIÓN: Buscamos en 'rol' o en 'role' para evitar el error de undefined
+        const miRol = usuarioLogueado.rol || usuarioLogueado.role || '';
+        const roleBase = String(miRol).toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         let filtro = { activo: { $ne: false } };
 
+        // Si NO es un rol de mando, aplicamos filtro de unidad
         if (!['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase)) {
-            // Filtramos por CUALQUIERA de los dos campos para asegurar que aparezcan
+            if (!miUnidad) {
+                // Si el usuario no tiene unidad asignada, por seguridad no ve nada
+                return res.status(200).json([]);
+            }
             filtro.$or = [
                 { elemento: miUnidad },
                 { unidad: miUnidad }
@@ -224,7 +231,8 @@ exports.obtenerTripulantes = async (req, res) => {
 
         res.status(200).json(tripulantes);
     } catch (error) {
-        res.status(500).json({ mensaje: "Error al obtener tripulantes", error: error.message });
+        console.error("ERROR 500 EN OBTENER_TRIPULANTES:", error);
+        res.status(500).json({ mensaje: "Error al obtener tripulantes", detalle: error.message });
     }
 };
 
