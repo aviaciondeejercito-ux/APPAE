@@ -6,7 +6,7 @@ const EBM = () => {
     const [loading, setLoading] = useState(true);
     
     // --- NORMALIZACIÓN SINCRO JOKER ---
-    // Extraemos la unidad/elemento y el rol detectando todas las posibles variantes de nombre
+    // Usamos 'elemento' como prioridad para que coincida con el nuevo controlador
     const unidadUsuario = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
     const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
     const role = rawRole.toUpperCase().replace(/[\s_]/g, '');
@@ -33,18 +33,17 @@ const EBM = () => {
             setLoading(true);
             const token = localStorage.getItem('token');
             
-            // Llamada al endpoint de planificación
+            // SINCRO JOKER: Llamada limpia al endpoint
             const response = await axios.get(`/api/ebm/planificacion-completa`, {
                 params: {
                     unidad: puedeCambiarUnidad ? unidadFiltro : unidadUsuario,
                     anio: anioActual,
-                    rol: role 
+                    rol: role // Enviamos 'rol' para que el controlador lo reciba correctamente
                 },
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // SINCRO JOKER: Si el piloto no tiene plan, el controlador ya envía uno vacío,
-            // pero reforzamos aquí para evitar errores de renderizado.
+            // Si el piloto no tiene plan, inyectamos estructura vacía para que no rompa el .map
             const datosNormalizados = response.data.map(p => ({
                 ...p,
                 plan: p.plan || { 
@@ -59,7 +58,7 @@ const EBM = () => {
 
             setDatos(datosNormalizados);
             
-            // Selección automática del primer Sistema de Armas disponible si no hay uno
+            // Selección automática del primer Sistema de Armas disponible
             if (datosNormalizados.length > 0 && !sdaSeleccionado) {
                 const todosSdas = new Set();
                 datosNormalizados.forEach(p => p.habilitaciones?.forEach(h => todosSdas.add(h.aeronave)));
@@ -103,7 +102,6 @@ const EBM = () => {
         const oficialActual = datos.find(d => d._id === pilotoId);
         if (!oficialActual || !puedeEditarFila(oficialActual.unidad)) return;
 
-        // Clonamos la estructura para no mutar el estado directamente
         const nuevosTrimestres = [...oficialActual.plan.trimestres];
         nuevosTrimestres[trimIndex] = { ...nuevosTrimestres[trimIndex], [campo]: valor, numero: trimIndex + 1 };
 
@@ -118,7 +116,6 @@ const EBM = () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             
-            // Actualización optimista de la UI
             setDatos(prev => prev.map(d =>
                 d._id === pilotoId ? { ...d, plan: { ...d.plan, trimestres: nuevosTrimestres } } : d
             ));
