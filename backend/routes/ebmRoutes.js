@@ -1,11 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const ebmController = require('../controllers/ebmController');
+const { protect } = require('../middleware/authMiddleware');
 
-// Usamos el nombre correcto de la función definida en el controlador
-router.get('/planificacion-completa', ebmController.getPlanificacionCompleta);
+/**
+ * RUTAS DE EXIGENCIAS BÁSICAS MÍNIMAS (EBM)
+ * Vinculadas al estándar de seguridad Sincro Joker v3.5
+ */
 
-// Ruta para guardar o actualizar el plan de un piloto
-router.post('/save', ebmController.savePlanIndividual);
+// Obtener la planificación completa (Cruza Tripulantes con ExigenciaPlan)
+// El prefijo /api/ebm se define en el server.js central
+router.get(
+    '/planificacion-completa', 
+    protect, 
+    ebmController.getPlanificacionCompleta
+);
+
+// Guardar o actualizar el plan trimestral de un piloto específico
+router.post(
+    '/save', 
+    protect, 
+    ebmController.savePlanIndividual
+);
 
 module.exports = router;

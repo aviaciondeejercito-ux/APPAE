@@ -5,22 +5,23 @@ const EBM = () => {
     const [datos, setDatos] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // Sesión
-    const unidadUsuario = localStorage.getItem('unidad') || '';
-    const role = localStorage.getItem('role')?.toUpperCase() || '';
+    // --- NORMALIZACIÓN SINCRO JOKER ---
+    // Extraemos la unidad/elemento y el rol detectando todas las posibles variantes de nombre
+    const unidadUsuario = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
+    const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
+    const role = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const anioActual = new Date().getFullYear();
 
-    // Filtros
+    // Filtros de visualización
     const [unidadFiltro, setUnidadFiltro] = useState(unidadUsuario);
     const [sdaSeleccionado, setSdaSeleccionado] = useState('');
 
-    // Permisos
+    // Definición de Permisos Operativos
     const esAdmin = role === 'ADMIN';
-    const esMandoSuperior = ['BOSS', 'DIRECTOR'].includes(role);
+    const esMandoSuperior = ['BOSS', 'DIRECTOR', 'OTO'].includes(role);
     const esOperaciones = role === 'OPERACIONES';
     const puedeCambiarUnidad = esAdmin || esMandoSuperior;
 
-    // Unidades Hardcoded (según tu Enum de Mongoose)
     const unidadesDisponibles = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8",
         "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3",
@@ -30,22 +31,43 @@ const EBM = () => {
     const fetchData = useCallback(async () => {
         try {
             setLoading(true);
+            const token = localStorage.getItem('token');
+            
+            // Llamada al endpoint de planificación
             const response = await axios.get(`/api/ebm/planificacion-completa`, {
                 params: {
                     unidad: puedeCambiarUnidad ? unidadFiltro : unidadUsuario,
                     anio: anioActual,
-                    role: role
-                }
+                    rol: role 
+                },
+                headers: { Authorization: `Bearer ${token}` }
             });
-            setDatos(response.data);
+
+            // SINCRO JOKER: Si el piloto no tiene plan, el controlador ya envía uno vacío,
+            // pero reforzamos aquí para evitar errores de renderizado.
+            const datosNormalizados = response.data.map(p => ({
+                ...p,
+                plan: p.plan || { 
+                    trimestres: [
+                        { numero: 1, rol: '', tipo: '', causaNoCumplimiento: '' },
+                        { numero: 2, rol: '', tipo: '', causaNoCumplimiento: '' },
+                        { numero: 3, rol: '', tipo: '', causaNoCumplimiento: '' },
+                        { numero: 4, rol: '', tipo: '', causaNoCumplimiento: '' }
+                    ] 
+                }
+            }));
+
+            setDatos(datosNormalizados);
             
-            // Si hay datos y no hay SdA seleccionado, elegir el primero disponible
-            if (response.data.length > 0 && !sdaSeleccionado) {
-                const primerosSdas = response.data[0].habilitaciones?.map(h => h.aeronave) || [];
-                if (primerosSdas.length > 0) setSdaSeleccionado(primerosSdas[0]);
+            // Selección automática del primer Sistema de Armas disponible si no hay uno
+            if (datosNormalizados.length > 0 && !sdaSeleccionado) {
+                const todosSdas = new Set();
+                datosNormalizados.forEach(p => p.habilitaciones?.forEach(h => todosSdas.add(h.aeronave)));
+                const listaSdas = Array.from(todosSdas).sort();
+                if (listaSdas.length > 0) setSdaSeleccionado(listaSdas[0]);
             }
         } catch (error) {
-            console.error("Error en carga de datos:", error);
+            console.error("❌ Error en carga de datos EBM:", error);
         } finally {
             setLoading(false);
         }
@@ -55,7 +77,6 @@ const EBM = () => {
         fetchData();
     }, [fetchData]);
 
-    // Extraer qué Sistemas de Armas existen en los datos actuales para el selector
     const sdasEnUnidad = useMemo(() => {
         const sistemas = new Set();
         datos.forEach(p => {
@@ -64,7 +85,6 @@ const EBM = () => {
         return Array.from(sistemas).sort();
     }, [datos]);
 
-    // Filtrar pilotos que tengan el SdA seleccionado
     const pilotosFiltrados = useMemo(() => {
         if (!sdaSeleccionado) return [];
         return datos.filter(p => 
@@ -74,34 +94,40 @@ const EBM = () => {
 
     const puedeEditarFila = (unidadFila) => {
         if (esAdmin) return true;
-        return esOperaciones && unidadFila === unidadUsuario;
+        const uFila = String(unidadFila || '').toUpperCase().trim();
+        const uUser = String(unidadUsuario || '').toUpperCase().trim();
+        return esOperaciones && uFila === uUser;
     };
 
     const handlePlanChange = async (pilotoId, trimIndex, campo, valor) => {
         const oficialActual = datos.find(d => d._id === pilotoId);
         if (!oficialActual || !puedeEditarFila(oficialActual.unidad)) return;
 
+        // Clonamos la estructura para no mutar el estado directamente
         const nuevosTrimestres = [...oficialActual.plan.trimestres];
-        nuevosTrimestres[trimIndex] = { ...nuevosTrimestres[trimIndex], [campo]: valor };
+        nuevosTrimestres[trimIndex] = { ...nuevosTrimestres[trimIndex], [campo]: valor, numero: trimIndex + 1 };
 
         try {
+            const token = localStorage.getItem('token');
             await axios.post('/api/ebm/save', {
                 pilotoId,
                 año: anioActual,
                 unidad: oficialActual.unidad,
-                sistemaArmas: sdaSeleccionado, // Guardamos específicamente para este SdA
                 trimestres: nuevosTrimestres
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
             });
             
+            // Actualización optimista de la UI
             setDatos(prev => prev.map(d =>
                 d._id === pilotoId ? { ...d, plan: { ...d.plan, trimestres: nuevosTrimestres } } : d
             ));
         } catch (error) {
-            console.error("Fallo al guardar:", error);
+            console.error("❌ Fallo al guardar planificación:", error);
         }
     };
 
-    if (loading) return <div style={styles.loading}>Procesando Legajos y Habilitaciones...</div>;
+    if (loading) return <div style={styles.loading}>Procesando Legajos y Exigencias EBM...</div>;
 
     return (
         <div style={styles.container}>
@@ -111,7 +137,7 @@ const EBM = () => {
                     <div style={styles.filtrosBox}>
                         {puedeCambiarUnidad && (
                             <div style={styles.filtroGroup}>
-                                <label style={styles.label}>UNIDAD:</label>
+                                <label style={styles.label}>UNIDAD / ELEMENTO:</label>
                                 <select value={unidadFiltro} onChange={(e) => setUnidadFiltro(e.target.value)} style={styles.select}>
                                     {unidadesDisponibles.map(u => <option key={u} value={u}>{u}</option>)}
                                 </select>
@@ -120,15 +146,15 @@ const EBM = () => {
                         <div style={styles.filtroGroup}>
                             <label style={styles.label}>SISTEMA DE ARMAS:</label>
                             <select value={sdaSeleccionado} onChange={(e) => setSdaSeleccionado(e.target.value)} style={styles.selectSda}>
-                                {sdasEnUnidad.length === 0 && <option>No hay pilotos habilitados</option>}
+                                {sdasEnUnidad.length === 0 && <option>No hay personal habilitado</option>}
                                 {sdasEnUnidad.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
                     </div>
                 </div>
                 <div style={styles.infoBar}>
-                    Viendo: <span style={styles.highlight}>{sdaSeleccionado || 'Seleccione SdA'}</span> | 
-                    Total Pilotos Habilitados: {pilotosFiltrados.length}
+                    Sistema Activo: <span style={styles.highlight}>{sdaSeleccionado || '---'}</span> | 
+                    Efectivos en Pantalla: {pilotosFiltrados.length}
                 </div>
             </header>
 
@@ -169,7 +195,7 @@ const EBM = () => {
                                             <td style={styles.tdCell}>
                                                 <select 
                                                     disabled={!editable}
-                                                    value={item.plan.trimestres[idx]?.rol || ''}
+                                                    value={item.plan?.trimestres?.[idx]?.rol || ''}
                                                     onChange={(e) => handlePlanChange(item._id, idx, 'rol', e.target.value)}
                                                     style={editable ? styles.selectCell : styles.readOnly}
                                                 >
@@ -182,7 +208,7 @@ const EBM = () => {
                                             <td style={styles.tdCell}>
                                                 <select 
                                                     disabled={!editable}
-                                                    value={item.plan.trimestres[idx]?.tipo || ''}
+                                                    value={item.plan?.trimestres?.[idx]?.tipo || ''}
                                                     onChange={(e) => handlePlanChange(item._id, idx, 'tipo', e.target.value)}
                                                     style={editable ? styles.selectTipo : styles.readOnly}
                                                 >
@@ -197,9 +223,10 @@ const EBM = () => {
                                                 <input 
                                                     disabled={!editable}
                                                     type="text"
-                                                    defaultValue={item.plan.trimestres[idx]?.causaNoCumplimiento || ''}
+                                                    defaultValue={item.plan?.trimestres?.[idx]?.causaNoCumplimiento || ''}
                                                     onBlur={(e) => handlePlanChange(item._id, idx, 'causaNoCumplimiento', e.target.value)}
                                                     style={editable ? styles.inputCausa : styles.readOnlyInput}
+                                                    placeholder="..."
                                                 />
                                             </td>
                                         </React.Fragment>
@@ -236,9 +263,9 @@ const styles = {
     tdHoras: { textAlign: 'center', border: '1px solid #333', color: '#aaa' },
     grado: { color: '#00ff00', fontWeight: 'bold' },
     tdCell: { padding: '2px', border: '1px solid #222' },
-    selectCell: { backgroundColor: '#2a2a2a', color: '#fff', border: '1px solid #444', width: '95%' },
-    selectTipo: { backgroundColor: '#1a2a3a', color: '#00ff00', border: '1px solid #444', width: '95%', fontWeight: 'bold' },
-    inputCausa: { backgroundColor: '#000', color: '#ccc', border: '1px solid #333', width: '90%' },
+    selectCell: { backgroundColor: '#2a2a2a', color: '#fff', border: '1px solid #444', width: '95%', padding: '2px' },
+    selectTipo: { backgroundColor: '#1a2a3a', color: '#00ff00', border: '1px solid #444', width: '95%', fontWeight: 'bold', padding: '2px' },
+    inputCausa: { backgroundColor: '#000', color: '#ccc', border: '1px solid #333', width: '90%', padding: '2px' },
     readOnly: { backgroundColor: 'transparent', color: '#555', border: 'none', textAlign: 'center', width: '100%', appearance: 'none' },
     readOnlyInput: { backgroundColor: 'transparent', color: '#444', border: 'none', textAlign: 'center', width: '100%' }
 };

@@ -3,7 +3,7 @@ const Auditoria = require('../models/Auditoria');
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
- * ESTÁNDAR: SINCRO JOKER v3.0
+ * ESTÁNDAR: SINCRO JOKER v3.5 (Operativo 100%)
  */
 
 // Función auxiliar para normalizar la unidad/elemento sin romper el código
@@ -17,20 +17,17 @@ const obtenerUnidadLimpia = (userOrBody) => {
 exports.crearTripulante = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
-        // Normalizamos la unidad que viene en el body y la del usuario que crea
         const unidadDestino = obtenerUnidadLimpia(req.body);
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
-        // Normalización Sincro Joker del Rol
-        const roleBase = String(usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
         
-        // Permisos: Admin/Mandos o Gestores de la misma unidad
         const esMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase);
         const esGestorUnidad = ['OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleBase);
 
         if (!esMando && (!esGestorUnidad || miUnidad !== unidadDestino)) {
             return res.status(403).json({ 
-                mensaje: `ACCESO DENEGADO: El rol ${usuarioLogueado.role} no tiene permisos para dar altas en ${unidadDestino}` 
+                mensaje: `ACCESO DENEGADO: El nivel ${roleBase} no tiene permisos en ${unidadDestino}` 
             });
         }
 
@@ -38,8 +35,8 @@ exports.crearTripulante = async (req, res) => {
             ...req.body,
             apellido: req.body.apellido.toUpperCase().trim(),
             nombre: req.body.nombre.toUpperCase().trim(),
-            elemento: unidadDestino, // Sincronizamos con el nombre de campo detectado en MongoDB
-            unidad: unidadDestino,   // Mantenemos unidad por compatibilidad
+            elemento: unidadDestino,
+            unidad: unidadDestino,
             ultimoEditor: usuarioLogueado._id,
             fechaUltimaModificacion: Date.now()
         };
@@ -47,7 +44,6 @@ exports.crearTripulante = async (req, res) => {
         const nuevoTripulante = new Tripulante(datosNuevoTripulante);
         await nuevoTripulante.save();
 
-        // AUDITORÍA
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
@@ -78,8 +74,7 @@ exports.gestionarHabilitacion = async (req, res) => {
         const tripulante = await Tripulante.findById(id);
         if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
 
-        // Seguridad por Unidad y Rol
-        const roleBase = String(usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
         const unidadTripulante = obtenerUnidadLimpia(tripulante);
 
@@ -123,7 +118,6 @@ exports.gestionarHabilitacion = async (req, res) => {
             });
         }
 
-        // Recalcular Totales Históricos
         const recalculo = tripulante.habilitaciones.reduce((acc, hab) => {
             acc.v += Number(hab.hsVisual || 0);
             acc.i += Number(hab.hsInstrumental || 0);
@@ -165,7 +159,7 @@ exports.agregarCapacitacion = async (req, res) => {
         const tripulante = await Tripulante.findById(id);
         if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
 
-        const roleBase = String(usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
         const unidadTripulante = obtenerUnidadLimpia(tripulante);
 
@@ -197,28 +191,19 @@ exports.agregarCapacitacion = async (req, res) => {
     }
 };
 
-// 4. Obtener Tripulantes (Con Fix de Doble Campo unidad/elemento)
+// 4. Obtener Tripulantes (Con Inyección de Plan Vacío para EBM)
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
-        
-        // CORRECCIÓN: Buscamos en 'rol' o en 'role' para evitar el error de undefined
         const miRol = usuarioLogueado.rol || usuarioLogueado.role || '';
         const roleBase = String(miRol).toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         let filtro = { activo: { $ne: false } };
 
-        // Si NO es un rol de mando, aplicamos filtro de unidad
         if (!['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase)) {
-            if (!miUnidad) {
-                // Si el usuario no tiene unidad asignada, por seguridad no ve nada
-                return res.status(200).json([]);
-            }
-            filtro.$or = [
-                { elemento: miUnidad },
-                { unidad: miUnidad }
-            ];
+            if (!miUnidad) return res.status(200).json([]);
+            filtro.$or = [{ elemento: miUnidad }, { unidad: miUnidad }];
         } else if (req.query.unidad && req.query.unidad !== 'all') {
             const unidadQuery = req.query.unidad.toUpperCase();
             filtro.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }];
@@ -241,7 +226,7 @@ exports.actualizarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
         const usuarioLogueado = req.user;
-        const roleBase = String(usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         const tripulantePrevio = await Tripulante.findById(id);
@@ -262,7 +247,6 @@ exports.actualizarTripulante = async (req, res) => {
         req.body.ultimoEditor = usuarioLogueado._id;
         req.body.fechaUltimaModificacion = Date.now();
         
-        // Sincronización de unidad/elemento en el update
         if (req.body.unidad || req.body.elemento) {
             const u = req.body.elemento || req.body.unidad;
             req.body.elemento = u.toUpperCase().trim();
@@ -295,8 +279,7 @@ exports.eliminarTripulante = async (req, res) => {
         const { id } = req.params;
         const usuarioLogueado = req.user;
         
-        // Normalización Sincro Joker
-        const roleBase = String(usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         const tripulante = await Tripulante.findById(id);
@@ -304,23 +287,19 @@ exports.eliminarTripulante = async (req, res) => {
 
         const unidadTripulante = obtenerUnidadLimpia(tripulante);
 
-        // LÓGICA DE PERMISOS PARA ELIMINAR
         const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase);
         const esGestorConPermisoBorrado = ['OPERACIONES', 'JEFE'].includes(roleBase);
 
-        // Un gestor operativo (Operaciones/Jefe) solo puede borrar si el piloto es de su unidad
         const tienePermiso = esMandoEstrategico || (esGestorConPermisoBorrado && miUnidad === unidadTripulante);
 
         if (!tienePermiso) {
             return res.status(403).json({ 
-                mensaje: `ACCESO DENEGADO: El nivel ${usuarioLogueado.role} no tiene permisos para eliminar legajos de esta unidad.` 
+                mensaje: `ACCESO DENEGADO: El nivel ${roleBase} no tiene permisos para eliminar legajos.` 
             });
         }
 
-        // Ejecución de la eliminación
         await Tripulante.findByIdAndDelete(id);
 
-        // Registro en Auditoría
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
@@ -331,7 +310,7 @@ exports.eliminarTripulante = async (req, res) => {
             cambios: { eliminado: tripulante }
         });
 
-        res.status(200).json({ mensaje: "Legajo eliminado correctamente del sistema operativo." });
+        res.status(200).json({ mensaje: "Legajo eliminado correctamente." });
     } catch (error) {
         res.status(500).json({ mensaje: "Error al procesar la baja", error: error.message });
     }
@@ -342,7 +321,7 @@ exports.buscarTripulante = async (req, res) => {
     try {
         const { termino } = req.params;
         const usuario = req.user;
-        const roleBase = String(usuario.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = String(usuario.rol || usuario.role || '').toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuario);
         
         let query = {
@@ -353,9 +332,9 @@ exports.buscarTripulante = async (req, res) => {
         };
 
         if (!['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase)) {
-            query.$or = [
-                { $and: [ { apellido: { $regex: termino, $options: 'i' } }, { elemento: miUnidad } ] },
-                { $and: [ { nombre: { $regex: termino, $options: 'i' } }, { elemento: miUnidad } ] }
+            query.$and = [
+                { $or: [{ apellido: { $regex: termino, $options: 'i' } }, { nombre: { $regex: termino, $options: 'i' } }] },
+                { $or: [{ elemento: miUnidad }, { unidad: miUnidad }] }
             ];
         }
 
