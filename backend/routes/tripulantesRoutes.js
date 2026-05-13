@@ -26,6 +26,7 @@ const authorize = (...rolesPermitidos) => {
 };
 
 // --- GRUPOS DE ACCESO ACTUALIZADOS ---
+// Basado en la estructura de gestión de personal y operaciones militares
 
 // Roles con capacidad de gestión (Alta, Modificación, Carga de Cursos)
 const rolesGestion = ['admin', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE'];
@@ -37,10 +38,12 @@ const rolesConsulta = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'user', 'OFICINA_TECN
 const rolesBaja = ['admin', 'OPERACIONES', 'JEFE'];
 
 // --- PROTECCIÓN GLOBAL ---
+// Todas las rutas requieren token válido
 router.use(protect);
 
 /**
  * 1. RUTAS BASE: /api/tripulantes
+ * Gestión del listado general y creación de nuevos legajos.
  */
 router.route('/')
     .get(authorize(...rolesConsulta), tripulanteController.obtenerTripulantes)
@@ -48,6 +51,7 @@ router.route('/')
 
 /**
  * 2. GESTIÓN DE APTITUDES Y CALIFICACIONES
+ * Carga de horas por sistema (Aeronave) y actualización de habilitaciones.
  */
 router.post('/:id/habilitacion', 
     authorize(...rolesGestion), 
@@ -56,6 +60,7 @@ router.post('/:id/habilitacion',
 
 /**
  * 3. BÚSQUEDA Y GESTIÓN INDIVIDUAL
+ * Acceso por ID o término de búsqueda (Apellido/Grado).
  */
 router.get('/buscar/:termino', 
     authorize(...rolesConsulta), 
@@ -64,11 +69,12 @@ router.get('/buscar/:termino',
 
 router.route('/:id')
     .put(authorize(...rolesGestion), tripulanteController.actualizarTripulante) 
-    // MODIFICADO: Ahora permite que Operaciones y Jefe ejecuten la eliminación (validada por unidad en el controlador)
+    // Ahora permite que Operaciones y Jefe ejecuten la eliminación
     .delete(authorize(...rolesBaja), tripulanteController.eliminarTripulante); 
 
 /**
- * 4. CAPACITACIONES ESPECIALES (Cursos, NVG, etc.)
+ * 4. CAPACITACIONES ESPECIALES
+ * Registro de cursos, NVG y certificaciones adicionales.
  */
 router.post('/:id/capacitacion', 
     authorize(...rolesGestion), 
