@@ -1,47 +1,45 @@
 const Tripulante = require('../models/Tripulante');
 const Vuelo = require('../models/Vuelo');
-const ExigenciaPlan = require('../models/ExigenciaPlan');
 
-/**
- * Obtiene la planificación completa cruzando pilotos con sus horas reales de vuelo.
- */
-exports.getPlanificacionCompleta = async (req, res) => {
+exports.getTotalesVueloTrimestral = async (req, res) => {
     try {
-        const { unidad, anio } = req.query;
-        const currentAnio = Number(anio) || 2026;
+        const { unidad } = req.query;
+        const anioActual = 2026;
 
-        // Filtro de Oficiales (CR hasta ST)
-        const gradosOficiales = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
-        let queryOficiales = { 
-            grado: { $in: gradosOficiales }, 
+        // 1. Filtro estricto de Oficiales Pilotos
+        const gradosHabilitados = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
+        let queryPilotos = { 
+            grado: { $in: gradosHabilitados }, 
             activo: { $ne: false } 
         };
 
-        // Sincro Joker: unidad o elemento
+        // Filtro por unidad (Sincro Joker)
         if (unidad && unidad !== 'all') {
             const uLimpia = unidad.trim().toUpperCase();
-            queryOficiales.$or = [{ unidad: uLimpia }, { elemento: uLimpia }];
+            queryPilotos.$or = [{ unidad: uLimpia }, { elemento: uLimpia }];
         }
 
-        const [oficiales, vuelosAnio] = await Promise.all([
-            Tripulante.find(queryOficiales).sort({ grado: 1, apellido: 1 }).lean(),
+        // 2. Buscamos pilotos y todos los vuelos del año en paralelo
+        const [pilotos, vuelos] = await Promise.all([
+            Tripulante.find(queryPilotos).sort({ grado: 1, apellido: 1 }).lean(),
             Vuelo.find({
                 fecha: {
-                    $gte: new Date(`${currentAnio}-01-01`),
-                    $lte: new Date(`${currentAnio}-12-31T23:59:59Z`)
+                    $gte: new Date(`${anioActual}-01-01`),
+                    $lte: new Date(`${anioActual}-12-31T23:59:59Z`)
                 }
             }).lean()
         ]);
 
-        const respuesta = oficiales.map(piloto => {
-            const horasTrimestrales = [0, 0, 0, 0];
+        // 3. Cruzar datos: Sumar horas reales por trimestre
+        const respuesta = pilotos.map(p => {
+            const horasTrimestrales = [0, 0, 0, 0]; // T1, T2, T3, T4
 
-            vuelosAnio.forEach(v => {
-                // Buscamos al piloto en cualquier rol del vuelo
-                const esParte = [v.piloto, v.copiloto, v.instructor, v.mecanico]
-                    .some(id => id?.toString() === piloto._id.toString());
+            vuelos.forEach(v => {
+                // Verificamos si el oficial participó en el vuelo
+                const participo = [v.piloto, v.copiloto, v.instructor]
+                    .some(id => id?.toString() === p._id.toString());
 
-                if (esParte) {
+                if (participo) {
                     const mes = new Date(v.fecha).getMonth(); // 0-11
                     const trimestre = Math.floor(mes / 3); // 0-3
                     horasTrimestrales[trimestre] += (Number(v.horasVoladas) || 0);
@@ -49,44 +47,18 @@ exports.getPlanificacionCompleta = async (req, res) => {
             });
 
             return {
-                _id: piloto._id,
-                grado: piloto.grado,
-                apellido: piloto.apellido,
-                nombre: piloto.nombre,
-                unidad: piloto.elemento || piloto.unidad,
-                habilitaciones: piloto.habilitaciones || [],
-                horasReales: horasTrimestrales // Array [T1, T2, T3, T4]
+                _id: p._id,
+                grado: p.grado,
+                apellido: p.apellido,
+                nombre: p.nombre,
+                unidad: p.elemento || p.unidad,
+                habilitaciones: p.habilitaciones || [],
+                horasTrimestres: horasTrimestrales
             };
         });
 
         res.status(200).json(respuesta);
     } catch (error) {
-        console.error("❌ ERROR EBM_CONTROLLER:", error.message);
-        res.status(500).json({ mensaje: "Error al procesar datos de pilotos" });
-    }
-};
-
-/**
- * Guarda o actualiza el plan individual (el que se envía por POST /save)
- */
-exports.savePlanIndividual = async (req, res) => {
-    try {
-        const { pilotoId, año, trimestres, unidad } = req.body;
-        
-        const plan = await ExigenciaPlan.findOneAndUpdate(
-            { piloto: pilotoId, año: año },
-            { 
-                piloto: pilotoId, 
-                año: Number(año), 
-                trimestres, 
-                unidad: unidad?.toUpperCase().trim() 
-            },
-            { upsert: true, new: true }
-        );
-        
-        res.status(200).json({ success: true, plan });
-    } catch (error) {
-        console.error("❌ ERROR AL GUARDAR:", error.message);
-        res.status(500).json({ mensaje: "Error al guardar planificación" });
+        res.status(500).json({ mensaje: "Error al procesar totales", error: error.message });
     }
 };
