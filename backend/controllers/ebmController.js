@@ -1,25 +1,21 @@
 const Tripulante = require('../models/Tripulante');
 const Vuelo = require('../models/Vuelo');
+const ExigenciaPlan = require('../models/ExigenciaPlan');
 
+// Función para obtener la planificación
 exports.getPlanificacionCompleta = async (req, res) => {
     try {
         const { unidad, anio } = req.query;
         const currentAnio = Number(anio) || 2026;
 
-        // 1. Filtro de Oficiales (CR hasta ST como pediste)
         const gradosOficiales = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
-        let queryOficiales = { 
-            grado: { $in: gradosOficiales }, 
-            activo: { $ne: false } 
-        };
+        let queryOficiales = { grado: { $in: gradosOficiales }, activo: { $ne: false } };
 
-        // Filtro de Unidad (Sincro Joker: unidad o elemento)
         if (unidad && unidad !== 'all') {
             const uLimpia = unidad.trim().toUpperCase();
             queryOficiales.$or = [{ unidad: uLimpia }, { elemento: uLimpia }];
         }
 
-        // 2. Buscamos pilotos y vuelos del año en paralelo
         const [oficiales, vuelosAnio] = await Promise.all([
             Tripulante.find(queryOficiales).sort({ grado: 1, apellido: 1 }).lean(),
             Vuelo.find({
@@ -30,18 +26,15 @@ exports.getPlanificacionCompleta = async (req, res) => {
             }).lean()
         ]);
 
-        // 3. Procesamos las horas por trimestre para cada piloto
         const respuesta = oficiales.map(piloto => {
-            const horasTrimestrales = [0, 0, 0, 0]; // Horas para T1, T2, T3, T4
-
+            const horasTrimestrales = [0, 0, 0, 0];
             vuelosAnio.forEach(v => {
-                // Verificamos si el piloto participó en el vuelo (Piloto, Copiloto, Instructor o Mecánico)
                 const esParte = [v.piloto, v.copiloto, v.instructor, v.mecanico]
                     .some(id => id?.toString() === piloto._id.toString());
 
                 if (esParte) {
-                    const mes = new Date(v.fecha).getMonth(); // 0-11
-                    const trimestre = Math.floor(mes / 3); // 0-3
+                    const mes = new Date(v.fecha).getMonth();
+                    const trimestre = Math.floor(mes / 3);
                     horasTrimestrales[trimestre] += (Number(v.horasVoladas) || 0);
                 }
             });
@@ -53,13 +46,27 @@ exports.getPlanificacionCompleta = async (req, res) => {
                 nombre: piloto.nombre,
                 unidad: piloto.elemento || piloto.unidad,
                 habilitaciones: piloto.habilitaciones || [],
-                horasReales: horasTrimestrales // Array con las sumas [T1, T2, T3, T4]
+                horasReales: horasTrimestrales
             };
         });
 
         res.status(200).json(respuesta);
     } catch (error) {
-        console.error("❌ ERROR EBM_BASICO:", error.message);
-        res.status(500).json({ mensaje: "Error al obtener pilotos" });
+        res.status(500).json({ mensaje: "Error al obtener pilotos", error: error.message });
+    }
+};
+
+// ESTA ES LA FUNCIÓN QUE FALTABA O ESTABA MAL ESCRITA (Línea 10 del router)
+exports.savePlanIndividual = async (req, res) => {
+    try {
+        const { pilotoId, año, trimestres, unidad } = req.body;
+        const plan = await ExigenciaPlan.findOneAndUpdate(
+            { piloto: pilotoId, año: año },
+            { piloto: pilotoId, año, trimestres, unidad: unidad?.toUpperCase().trim() },
+            { upsert: true, new: true }
+        );
+        res.status(200).json({ success: true, plan });
+    } catch (error) {
+        res.status(500).json({ mensaje: "Error al guardar plan" });
     }
 };

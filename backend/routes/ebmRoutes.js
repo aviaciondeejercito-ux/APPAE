@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const ebmController = require('../controllers/ebmController');
-const authMiddleware = require('../middleware/authMiddleware'); // Asegura que solo usuarios logueados accedan
+const { protect } = require('../middleware/authMiddleware');
 
-// Ruta para obtener la tabla completa (Pilotos + Horas + Plan)
-router.get('/planificacion-completa', authMiddleware, ebmController.getPlanificacionCompleta);
+// GET /api/ebm/planificacion-completa
+router.get('/planificacion-completa', protect, ebmController.getPlanificacionCompleta);
 
-// Ruta para guardar o actualizar un plan individual
-router.post('/save', authMiddleware, ebmController.savePlanIndividual);
+// POST /api/ebm/save -> AQUÍ ESTABA EL ERROR (Línea 10)
+// Verificá que diga ebmController.savePlanIndividual y que esa función esté exportada
+router.post('/save', protect, ebmController.savePlanIndividual);
 
 module.exports = router;
