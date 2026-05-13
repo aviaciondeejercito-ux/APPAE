@@ -72,7 +72,7 @@ io.on('connection', (socket) => {
 });
 
 // --- 5. IMPORTACIÓN DE MÓDULOS OPERATIVOS ---
-// NOTA: Asegurate que los nombres de archivos en la carpeta 'routes' coincidan exactamente (Mayúsculas/Minúsculas)
+// NOTA: Verifica que los nombres de archivos en la carpeta 'routes' sean exactamente estos.
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
 const adminRoutes = require('./routes/admin'); 
@@ -93,6 +93,7 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Registro de Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes); 
 app.use('/api/admin', adminRoutes); 
@@ -101,6 +102,8 @@ app.use('/api/weather', weatherRoutes);
 app.use('/api/astronomy', astronomyRoutes); 
 app.use('/api/tripulantes', tripulanteRoutes); 
 app.use('/api/vuelos', vueloRoutes);
+
+// MONTAJE EBM - Se coloca antes del manejador 404
 app.use('/api/ebm', ebmRoutes);
 
 // --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
@@ -126,6 +129,13 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`🚀 SISTEMA OPERATIVO EN PUERTO: ${PORT}`);
     console.log(`📡 FRECUENCIAS ACTIVAS: /api/tripulantes, /api/vuelos y /api/ebm habilitadas`);
+    
+    // Verificación de carga de rutas EBM en consola
+    if (ebmRoutes && ebmRoutes.stack) {
+        console.log("✅ Módulo EBM cargado correctamente.");
+    } else {
+        console.warn("⚠️ Advertencia: El módulo EBM parece estar vacío o mal exportado.");
+    }
 });
 
 module.exports = app;
