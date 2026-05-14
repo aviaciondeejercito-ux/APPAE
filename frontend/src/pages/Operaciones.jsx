@@ -22,7 +22,7 @@ const Operaciones = () => {
 
     // Definición de Jerarquías
     const esMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
-    const esGestorUnidad = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
+    const esGestorUnidad = ['ADMIN', 'BOSS', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
 
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
@@ -110,10 +110,15 @@ const Operaciones = () => {
 
                 // Lógica para Mandos
                 if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
-                    if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
-                    if (esGlobal && etapa === 'ordenada') return true;
-                    return false;
-                }
+    // 1. Ve lo que crea su unidad (DIR AE / SEC AE)
+    if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
+    // 2. Ve lo que otros publican globalmente (ya ordenado)
+    if (esGlobal && etapa === 'ordenada') return true;
+    // 3. Ve lo que otras unidades le asignan a la DIR AE (como responsable)
+    if (unidadesResponsables.includes(unidadUsuario)) return true; 
+    
+    return false;
+}
 
                 // Lógica para Roles de Unidad (Nuevos + Estándar)
                 const rolesDeUnidad = ['USER', 'OFICINATECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
