@@ -1,9 +1,5 @@
 import React from 'react';
 
-/**
- * COMPONENTE DE ESTADÍSTICAS - AVIACIÓN DE EJÉRCITO
- * Reporte Operativo 2026 - Versión Full Viewport
- */
 const Estadisticas = () => {
   const lookerUrl = "https://lookerstudio.google.com/embed/reporting/c35094df-fd33-49de-945c-0858bea2e2bf/page/p_6t1dnppwzd";
 
@@ -24,18 +20,25 @@ const Estadisticas = () => {
 const styles = {
   container: {
     width: '100%',
-    // Usamos el 100% del contenedor padre que ya controlamos desde App.jsx
-    height: '100%', 
+    /**
+     * EXPLICACIÓN:
+     * 100vh es el alto total de la pantalla.
+     * Al restar la altura de la Navbar (ej: 64px), el contenedor mide EXACTAMENTE
+     * lo que sobra de pantalla hacia abajo. No tapa nada y no sobra nada.
+     */
+    height: 'calc(100vh - 64px)', 
     overflow: 'hidden',
     backgroundColor: '#ffffff',
-    display: 'flex'
+    display: 'flex',
+    flexDirection: 'column'
   },
   iframe: {
     width: '100%',
-    height: '100%',
+    // Con flex: 1, el iframe se estira para ocupar TODO el espacio 
+    // que el contenedor (container) le da, sin salirse de él.
+    flex: 1,
     border: 'none',
-    // Asegura que no haya scrollbars internos innecesarios
-    display: 'block' 
+    display: 'block'
   }
 };
 
