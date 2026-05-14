@@ -20,9 +20,17 @@ const Operaciones = () => {
     const [availableAircraft, setAvailableAircraft] = useState([]);
     const [loadingAircraft, setLoadingAircraft] = useState(false);
 
-    // Definición de Jerarquías
+    // --- LÓGICA DE ROLES ACTUALIZADA ---
+    // Roles con capacidad de gestión total en su unidad (Mismo nivel)
+    const rolesGestionUnidad = [
+        'ADMIN', 'BOSS', 'OPERACIONES', 'JEFE', 
+        'OFICINATECNICA', 'LOGISTICO', 'USER', 'PERSONAL'
+    ];
+    
     const esMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
-    const esGestorUnidad = ['ADMIN', 'BOSS', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
+    const esGestorUnidad = rolesGestionUnidad.includes(roleNormalizado);
+    // El JEFE ahora tiene permiso explícito para marcar como Global
+    const puedePublicarGlobal = esMando || roleNormalizado === 'JEFE';
 
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
@@ -108,22 +116,18 @@ const Operaciones = () => {
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
                 const esGlobal = ev.esGlobal === true;
 
-                // Lógica para Mandos
+                // Lógica para Mandos (DIR AE ve lo global y lo propio)
                 if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
-    // 1. Ve lo que crea su unidad (DIR AE / SEC AE)
-    if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
-    // 2. Ve lo que otros publican globalmente (ya ordenado)
-    if (esGlobal && etapa === 'ordenada') return true;
-    // 3. Ve lo que otras unidades le asignan a la DIR AE (como responsable)
-    if (unidadesResponsables.includes(unidadUsuario)) return true; 
-    
-    return false;
-}
+                    if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
+                    if (esGlobal && etapa === 'ordenada') return true;
+                    if (unidadesResponsables.includes(unidadUsuario)) return true; 
+                    return false;
+                }
 
-                // Lógica para Roles de Unidad (Nuevos + Estándar)
-                const rolesDeUnidad = ['USER', 'OFICINATECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
-                if (rolesDeUnidad.includes(roleNormalizado)) {
+                // Lógica para Roles de Unidad (Mismo Nivel de acceso)
+                if (rolesGestionUnidad.includes(roleNormalizado)) {
                     if (creador === unidadUsuario) return true;
+                    // Ve lo asignado a su unidad si ya está en etapa ordenada
                     if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
                 }
                 return false;
@@ -244,16 +248,19 @@ const Operaciones = () => {
     return (
         <div style={styles.container}>
             <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
-                {/* COLUMNA FORMULARIO: Solo visible para roles con permiso de gestión */}
+                {/* COLUMNA FORMULARIO */}
                 {esGestorUnidad ? (
                     <div style={styles.card}>
                         <h3 style={styles.title}>{isEditing ? "📝 Editar Orden" : "➕ Nueva Orden de Vuelo"}</h3>
                         
-                        <button type="button" 
-                            onClick={() => setPublicarGlobal(!publicarGlobal)}
-                            style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px' }}>
-                            {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL" : "🏠 PUBLICACIÓN LOCAL (Solo Unidad)"}
-                        </button>
+                        {/* Botón Global: Solo para Mandos o rol JEFE */}
+                        {puedePublicarGlobal && (
+                            <button type="button" 
+                                onClick={() => setPublicarGlobal(!publicarGlobal)}
+                                style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px' }}>
+                                {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (VISTO POR DIR AE)" : "🏠 PUBLICACIÓN LOCAL (Solo Unidad)"}
+                            </button>
+                        )}
 
                         <div style={styles.etapaWrapper}>
                             <label style={styles.labelEtapa}>ETAPA OPERATIVA:</label>
@@ -345,7 +352,7 @@ const Operaciones = () => {
                 ) : (
                     <div style={styles.card}>
                         <h3 style={styles.title}>📋 Información</h3>
-                        <p style={{fontSize: '0.9rem', color: '#666'}}>Su nivel de acceso (<strong>{rawRole.toUpperCase()}</strong>) es de solo consulta para el registro de misiones.</p>
+                        <p style={{fontSize: '0.9rem', color: '#666'}}>Su nivel de acceso (<strong>{rawRole.toUpperCase()}</strong>) es de solo consulta.</p>
                     </div>
                 )}
 
