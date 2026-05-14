@@ -17,7 +17,10 @@ const Material = () => {
     // Definición de permisos
     const isAdmin = roleNormalizado === 'ADMIN';
     const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
-    const hasEditPrivileges = isMando || roleNormalizado === 'OFICINATECNICA' || roleNormalizado === 'S4UNIDAD';
+    
+    // NUEVA LÓGICA: OFICINA TECNICA ahora puede cambiar unidades igual que los mandos
+    const canChangeUnit = isMando || roleNormalizado === 'OFICINATECNICA';
+    const hasEditPrivileges = canChangeUnit || roleNormalizado === 'S4UNIDAD';
 
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"];
     const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
@@ -78,7 +81,6 @@ const Material = () => {
         return dateString.split('T')[0];
     };
 
-    // --- MANEJADORES DE MOTORES Y HÉLICES (RESTAURADOS) ---
     const addMotor = () => setNewAir({ ...newAir, motores: [...newAir.motores, { horas: 0, fecha: '' }] });
     const updateMotor = (idx, field, val) => {
         const updated = [...newAir.motores];
@@ -95,7 +97,8 @@ const Material = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const unidadFinal = isAdmin || isMando ? newAir.unidadDestino : userElemento;
+        // Se utiliza canChangeUnit para validar si se toma la unidad del selector o la del usuario
+        const unidadFinal = canChangeUnit ? newAir.unidadDestino : userElemento;
         if (!newAir.matricula || !newAir.sda || !unidadFinal) return alert("Faltan datos obligatorios.");
 
         try {
@@ -144,7 +147,8 @@ const Material = () => {
                     <div style={styles.card}>
                         <h3 style={styles.title}>{isEditing ? "🔄 Actualizar Aeronave" : "➕ Alta de Aeronave"}</h3>
                         <form onSubmit={handleSubmit} style={styles.form}>
-                            {(isMando || isAdmin) && (
+                            {/* Ahora Oficina Técnica también ve este campo */}
+                            {canChangeUnit && (
                                 <div style={styles.field}>
                                     <label style={styles.label}>📍 Unidad Destino</label>
                                     <select value={newAir.unidadDestino} onChange={e => setNewAir({...newAir, unidadDestino: e.target.value})} style={{...styles.input, border: '1px solid #e67e22'}} required>
@@ -164,7 +168,6 @@ const Material = () => {
                                 <div style={{...styles.field, flex: 1}}><label style={styles.label}>Hs Planeador</label><input type="number" value={newAir.horasPlaneador} onChange={e => setNewAir({...newAir, horasPlaneador: e.target.value})} style={styles.input} /></div>
                             </div>
 
-                            {/* SECCIÓN DINÁMICA DE MOTORES */}
                             <div style={styles.field}>
                                 <label style={styles.label}>Motores (Horas / Fecha Vto)</label>
                                 {newAir.motores.map((m, idx) => (
@@ -176,7 +179,6 @@ const Material = () => {
                                 ))}
                             </div>
 
-                            {/* SECCIÓN DINÁMICA DE HÉLICES */}
                             <div style={styles.field}>
                                 <label style={styles.label}>Hélices (Horas / Fecha Vto)</label>
                                 {newAir.helices.map((h, idx) => (
@@ -188,7 +190,6 @@ const Material = () => {
                                 ))}
                             </div>
 
-                            {/* VENCIMIENTOS RAAC (COLOR AMARILLO) */}
                             <div style={styles.field}>
                                 <label style={styles.label}>Vencimientos Técnicos RAAC (Inspección)</label>
                                 <div style={styles.rowForm}>
@@ -218,7 +219,6 @@ const Material = () => {
                     <div style={styles.card}><h3 style={styles.title}>📋 Vista de Unidad</h3><p>Elemento Operativo: <strong>{userElemento}</strong></p></div>
                 )}
 
-                {/* LISTADO DE MATERIAL */}
                 <div style={styles.card}>
                     <h3 style={styles.title}>🛠️ Gestión de Flota</h3>
                     <div style={styles.scrollList}>
@@ -248,7 +248,6 @@ const Material = () => {
                 </div>
             </div>
 
-            {/* MODAL DE NOVEDADES */}
             {selectedNote && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modal}>
