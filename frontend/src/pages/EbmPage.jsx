@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+// Importamos la función declarada y tipada en tu archivo api.js centralizado
+import { getPlanificacionEbm } from '../services/api'; 
 
 const EbmPage = () => {
     const [personal, setPersonal] = useState([]);
@@ -12,35 +13,26 @@ const EbmPage = () => {
     const fetchPersonal = useCallback(async () => {
         try {
             setLoading(true);
-            const token = localStorage.getItem('token');
             
-            // Apuntamos al endpoint nuevo que filtra los pilotos directamente en el servidor
-            const response = await axios.get('/api/ebm/planificacion-completa', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            // Consumimos el endpoint centralizado con la URL correcta de Render y tokens inyectados
+            const response = await getPlanificacionEbm();
 
             // Seteamos directamente la lista atómica enviada por el backend
             const dataBackend = response.data || [];
             setPersonal(dataBackend);
-
-            // Auto-selección de primer SdA disponible en la grilla para inicializar filtro
-            if (dataBackend.length > 0 && !sdaFiltro) {
-                const primerSda = dataBackend[0].habilitaciones?.[0]?.aeronave;
-                if (primerSda) setSdaFiltro(primerSda);
-            }
 
         } catch (error) {
             console.error("❌ Error de carga de personal EBM:", error);
         } finally {
             setLoading(false);
         }
-    }, [sdaFiltro]);
+    }, []);
 
     useEffect(() => {
         fetchPersonal();
     }, [fetchPersonal]);
 
-    // Filtro en cascada por Sistema de Armas sobre el personal de la unidad
+    // Filtro dinámico en cascada por Sistema de Armas sobre el personal recuperado
     const listaFinal = sdaFiltro 
         ? personal.filter(p => p.habilitaciones?.some(h => h.aeronave === sdaFiltro))
         : personal;
@@ -85,7 +77,7 @@ const EbmPage = () => {
                         ))
                     ) : (
                         <tr>
-                            <td colSpan="4" style={{ padding: '20px', textAling: 'center', color: '#666', fontFamily: 'monospace' }}>
+                            <td colSpan="4" style={{ padding: '20px', textAlign: 'center', color: '#666', fontFamily: 'monospace' }}>
                                 NO SE ENCONTRARON PILOTOS REGISTRADOS PARA ESTA JURISDICCIÓN
                             </td>
                         </tr>

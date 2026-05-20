@@ -11,9 +11,10 @@ const getBaseURL = () => {
         return url.endsWith('/api') ? url : `${url}/api`;
     }
     
+    // CORRECCIÓN: Apuntamos al dominio real que se observa en tu entorno de producción
     const isProduction = window.location.hostname !== 'localhost';
     return isProduction 
-        ? 'https://appae.onrender.com/api' 
+        ? 'https://aviaciondeejercito-ux.onrender.com/api' 
         : 'http://localhost:5000/api';
 };
 
@@ -73,8 +74,12 @@ export const updateTripulante = (id, data) => API.put(`/tripulantes/${id}`, data
 export const deleteTripulante = (id) => API.delete(`/tripulantes/${id}`);
 
 /**
+ * NUEVO SERVICIO MÓDULO EBM - PLANIFICACIÓN AUTOMÁTICA
+ */
+export const getPlanificacionEbm = () => API.get('/ebm/planificacion-completa');
+
+/**
  * SERVICIOS DE GESTIÓN DE VUELOS (LIBRETA DE VUELO DIGITAL)
- * Impacto automático en legajos de Tripulantes.
  */
 export const getVuelos = (params = {}) => API.get('/vuelos', { params });
 
@@ -87,7 +92,6 @@ export const registrarVuelo = (vueloData) => {
         tipoMision: vueloData.tipoMision?.trim(),
         elementoApoyado: (vueloData.elementoApoyado || "").toUpperCase().trim(),
         horasVoladas: Number(vueloData.horasVoladas) || 0,
-        // Sanitización de IDs de Tripulación
         instructor: vueloData.instructor || null,
         piloto: vueloData.piloto || null,
         copiloto: vueloData.copiloto || null,
@@ -292,6 +296,7 @@ const EventService = {
     createTripulante,
     updateTripulante,
     deleteTripulante,
+    getPlanificacionEbm, // Vinculado al listado unificado
     getWeatherData,
     getAstronomyData,
     getVuelos,

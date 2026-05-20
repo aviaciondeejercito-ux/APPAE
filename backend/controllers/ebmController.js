@@ -18,25 +18,34 @@ exports.getPlanificacionCompleta = async (req, res) => {
         // 1. Lista de grados oficiales habilitados para pilotos (Escala de Oficiales)
         const gradosHabilitados = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
         
-        // 2. Construcción del filtro atómico (Solo activos, de la escala elegida y que pertenezcan a la unidad)
+        // 2. Construcción del filtro base (Solo pilotos activos de la escala elegida)
         let query = { 
             grado: { $in: gradosHabilitados }, 
-            activo: true,
-            $or: [
-                { unidad: unidadUser }, 
-                { elemento: unidadUser }
-            ]
+            activo: true
         };
 
-        // 3. Búsqueda selectiva en base de datos
+        // 3. EXCEPCIÓN DE JURISDICCIÓN: Si es de COMANDO o ADMIN ve a todos los elementos.
+        // Si pertenece a una unidad de línea, se le inyecta la restricción atómica.
+        const unidadNormalizada = unidadUser.trim().toUpperCase();
+        const esMandoEstrategico = ['COMANDO', 'ADMIN', 'COMANAV'].includes(unidadNormalizada);
+
+        if (!esMandoEstrategico) {
+            query.$or = [
+                { unidad: unidadUser }, 
+                { elemento: unidadUser }
+            ];
+        }
+
+        // 4. Búsqueda selectiva en base de datos 
+        // (Agregamos 'habilitaciones' al select para que el frontend pueda armar el filtro por Sistema de Armas)
         const pilotos = await Tripulante.find(query)
-            .select('grado apellido nombre unidad elemento')
+            .select('grado apellido nombre unidad elemento habilitaciones')
             .sort({ grado: 1, apellido: 1 })
             .lean();
 
-        console.log(`✅ Pilotos de la unidad [${unidadUser}] encontrados: ${pilotos.length}`);
+        console.log(`✅ Pilotos devueltos para el entorno [${unidadUser}]: ${pilotos.length}`);
         
-        // 4. Retorno de la nómina limpia
+        // 5. Retorno de la nómina limpia
         res.status(200).json(pilotos);
 
     } catch (error) {
