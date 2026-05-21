@@ -6,40 +6,36 @@ const EbmPage = () => {
     const [personal, setPersonal] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sdaFiltro, setSdaFiltro] = useState('');
+    
+    // El ID de despliegue ahora es compuesto: "pilotoId_sistema" para evitar abrir duplicados al mismo tiempo
+    const [filasDesplegadas, setFilasDesplegadas] = useState({});
 
     // --- DATOS DE SESIÓN ---
     const userUnidad = localStorage.getItem('elemento') || localStorage.getItem('unidad') || 'MI UNIDAD';
 
+    // --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---
+    const getTrimestreActualCronologico = () => {
+        const mesActual = new Date().getMonth(); // 0 = Ene, 11 = Dic
+        if (mesActual >= 0 && mesActual <= 2) return 1;
+        if (mesActual >= 3 && mesActual <= 5) return 2;
+        if (mesActual >= 6 && mesActual <= 8) return 3;
+        return 4;
+    };
+    const trimestreActualId = getTrimestreActualCronologico();
+
     const fetchPersonal = useCallback(async () => {
         try {
             setLoading(true);
-            
-            // Consumimos el endpoint centralizado con la URL correcta de Render y tokens inyectados
             const response = await getPlanificacionEbm();
             const dataBackend = response.data || [];
 
-            // --- ESQUEMA DE ORDENAMIENTO MILITAR JERÁRQUICO ---
-            const ordenGrados = {
-                'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7
-            };
+            // Inyectamos un estado base de configuraciones si el backend no lo provee estructurado por SdA
+            const datosInicializados = dataBackend.map(p => ({
+                ...p,
+                configTrimestresSda: p.configTrimestresSda || {}
+            }));
 
-            const datosOrdenados = dataBackend.sort((a, b) => {
-                const pesoA = ordenGrados[a.grado] || 99;
-                const pesoB = ordenGrados[b.grado] || 99;
-
-                if (pesoA !== pesoB) return pesoA - pesoB;
-
-                const apellidoA = (a.apellido || '').trim().toUpperCase();
-                const apellidoB = (b.apellido || '').trim().toUpperCase();
-                if (apellidoA !== apellidoB) return apellidoA.localeCompare(apellidoB);
-
-                const nombreA = (a.nombre || '').trim().toUpperCase();
-                const nombreB = (b.nombre || '').trim().toUpperCase();
-                return nombreA.localeCompare(nombreB);
-            });
-
-            setPersonal(datosOrdenados);
-
+            setPersonal(datosInicializados);
         } catch (error) {
             console.error("❌ Error de carga de personal EBM:", error);
         } finally {
@@ -51,40 +47,162 @@ const EbmPage = () => {
         fetchPersonal();
     }, [fetchPersonal]);
 
-    // Filtro dinámico en cascada por Sistema de Armas sobre el personal recuperado
-    const listaFinal = sdaFiltro 
-        ? personal.filter(p => p.habilitaciones?.some(h => h.aeronave === sdaFiltro))
-        : personal;
+    // Alternar visibilidad usando clave compuesta
+    const toggleDespliegueFila = (pilotoId, sda) => {
+        const key = `${pilotoId}_${sda}`;
+        setFilasDesplegadas(prev => ({ ...prev, [key]: !prev[key] }));
+    };
 
-    // Helper reutilizable para renderizar la celda híbrida (Voladas / Faltantes)
-    const renderCeldaTrimestre = (horasVoladas = 0, horasFaltantes = 0) => {
+    // Actualiza la configuración trimestral específica de un piloto PARA un sistema de armas determinado
+    const handleConfigChange = (pilotoId, sda, trimestre, campo, valor) => {
+        setPersonal(prevPersonal => 
+            prevPersonal.map(p => {
+                if (p._id !== pilotoId) return p;
+                const configSdaActual = p.configTrimestresSda?.[sda] || {
+                    t1: { rol: '', tipo: '' }, t2: { rol: '', tipo: '' }, t3: { rol: '', tipo: '' }, t4: { rol: '', tipo: '' }
+                };
+                return {
+                    ...p,
+                    configTrimestresSda: {
+                        ...p.configTrimestresSda,
+                        [sda]: {
+                            ...configSdaActual,
+                            [trimestre]: {
+                                ...configSdaActual[trimestre],
+                                [campo]: valor
+                            }
+                        }
+                    }
+                };
+            })
+        );
+    };
+
+    // --- PROCESAMIENTO Y GENERACIÓN DE LA MATRIZ DE RECORRIDO POR SISTEMA ---
+    const obtenerMatrizPorSistema = () => {
+        const esquemasPorSda = {};
+
+        personal.forEach(piloto => {
+            const habilitaciones = piloto.habilitaciones || [];
+            habilitaciones.forEach(hab => {
+                const sdaName = hab.aeronave;
+                if (!sdaName) return;
+
+                // Si hay filtro activo y no coincide, lo salteamos
+                if (sdaFiltro && sdaFiltro !== sdaName) return;
+
+                if (!esquemasPorSda[sdaName]) {
+                    esquemasPorSda[sdaName] = [];
+                }
+
+                esquemasPorSda[sdaName].push({
+                    ...piloto,
+                    sistemaActivo: sdaName // Atributo contextual para la fila
+                });
+            });
+        });
+
+        // Ordenamiento Jerárquico y Alfabético interno para cada SdA
+        const ordenGrados = { 'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7 };
+        
+        Object.keys(esquemasPorSda).forEach(sda => {
+            esquemasPorSda[sda].sort((a, b) => {
+                const pesoA = ordenGrados[a.grado] || 99;
+                const pesoB = ordenGrados[b.grado] || 99;
+                if (pesoA !== pesoB) return pesoA - pesoB;
+
+                const apellidoA = (a.apellido || '').trim().toUpperCase();
+                const apellidoB = (b.apellido || '').trim().toUpperCase();
+                if (apellidoA !== apellidoB) return apellidoA.localeCompare(apellidoB);
+
+                const nombreA = (a.nombre || '').trim().toUpperCase();
+                const nombreB = (b.nombre || '').trim().toUpperCase();
+                return nombreA.localeCompare(nombreB);
+            });
+        });
+
+        return esquemasPorSda;
+    };
+
+    const matrizSda = obtenerMatrizPorSistema();
+
+    // Helper Dinámico de Renderizado con Semáforo de Alertas Solicitado
+    const renderCeldaTrimestre = (nroTrimestre, horasVoladas = 0, horasFaltantes = 0) => {
+        let colorEstado = '#555';
+
+        if (horasFaltantes <= 0) {
+            colorEstado = '#0f0'; // CUMPLIDO -> Verde
+        } else {
+            if (nroTrimestre < trimestreActualId) {
+                colorEstado = '#ff4d4d'; // EXPIRED/INCUMPLIDO -> Rojo
+            } else {
+                colorEstado = '#ff9800'; // EN CURSO SIN CUMPLIR -> Amarillo
+            }
+        }
+
         return (
             <td style={styles.tdMétrica}>
-                <div>{horasVoladas} hs</div>
-                <div style={{ 
-                    fontSize: '11px', 
-                    color: horasFaltantes > 0 ? '#ff9800' : '#555',
-                    marginTop: '2px' 
-                }}>
-                    {horasFaltantes > 0 ? `Faltan: ${horasFaltantes} hs` : 'Cumplido'}
-                </div>
+                <div style={{ color: colorEstado, fontWeight: 'bold' }}>{horasVoladas} hs</div>
+                {horasFaltantes > 0 && (
+                    <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                        Faltan: <span style={{ color: colorEstado }}>{horasFaltantes} hs</span>
+                    </div>
+                )}
             </td>
         );
     };
 
-    if (loading) return <div style={{ color: '#0f0', padding: '20px', fontFamily: 'monospace' }}>CARGANDO PANEL OPERATIVO EBM...</div>;
+    // Helper de bloques de asignación adaptados a claves SdA
+    const renderBloqueAsignacion = (piloto, sda, tKey, tLabel) => {
+        const conf = piloto.configTrimestresSda?.[sda]?.[tKey] || { rol: '', tipo: '' };
+        return (
+            <div style={styles.bloqueTrimestreConfig}>
+                <h5 style={styles.tituloBloque}>{tLabel}</h5>
+                <div style={styles.grupoInput}>
+                    <label style={styles.labelMini}>ROL:</label>
+                    <select 
+                        value={conf.rol} 
+                        onChange={(e) => handleConfigChange(piloto._id, sda, tKey, 'rol', e.target.value)}
+                        style={styles.selectPanel}
+                    >
+                        <option value="">-- SELECCIONE --</option>
+                        <option value="Copiloto">COPILOTO</option>
+                        <option value="Piloto">PILOTO</option>
+                        <option value="Instructor">INSTRUCTOR</option>
+                    </select>
+                </div>
+                <div style={styles.grupoInput}>
+                    <label style={styles.labelMini}>TIPO:</label>
+                    <select 
+                        value={conf.tipo} 
+                        onChange={(e) => handleConfigChange(piloto._id, sda, tKey, 'tipo', e.target.value)}
+                        style={styles.selectPanel}
+                    >
+                        <option value="">-- SELECCIONE --</option>
+                        <option value="A">TIPO A</option>
+                        <option value="B">TIPO B</option>
+                        <option value="C">TIPO C</option>
+                        <option value="D">TIPO D</option>
+                    </select>
+                </div>
+            </div>
+        );
+    };
+
+    if (loading) return <div style={{ color: '#0f0', padding: '20px', fontFamily: 'monospace' }}>CARGANDO MATRIZ DE OPERACIONES EBM...</div>;
+
+    // Extraemos la lista general de SDAs para el selector del Header
+    const todosLosSdas = Array.from(new Set(personal.flatMap(p => p.habilitaciones?.map(h => h.aeronave) || [])));
 
     return (
         <div style={styles.container}>
             <header style={styles.header}>
-                <h2 style={{ margin: 0, textTransform: 'uppercase' }}>NÓMINA EBM - {userUnidad}</h2>
+                <h2 style={{ margin: 0, textTransform: 'uppercase' }}>NÓMINA EBM POR SISTEMA - {userUnidad}</h2>
                 <div style={styles.filtros}>
-                    <label style={{ fontFamily: 'monospace', fontSize: '14px' }}>SISTEMA: </label>
+                    <label style={{ fontFamily: 'monospace', fontSize: '14px' }}>SISTEMA FILTER: </label>
                     <select value={sdaFiltro} onChange={(e) => setSdaFiltro(e.target.value)} style={styles.select}>
                         <option value="">TODOS</option>
-                        {Array.from(new Set(personal.flatMap(p => p.habilitaciones?.map(h => h.aeronave) || []))).map(s => (
-                            <option key={s} value={s}>{s}</option>
-                        ))}
+                        {todosLosSdas.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
             </header>
@@ -98,32 +216,89 @@ const EbmPage = () => {
                         <th style={styles.thTrimestre}>2° TRIM (VOL/FALT)</th>
                         <th style={styles.thTrimestre}>3° TRIM (VOL/FALT)</th>
                         <th style={styles.thTrimestre}>4° TRIM (VOL/FALT)</th>
-                        <th style={styles.thTotal}>TOTAL ANUAL</th>
+                        <th style={styles.thTotal}>TOTAL SdA</th>
+                        <th style={styles.thAcciones}>CONFIG</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {listaFinal.length > 0 ? (
-                        listaFinal.map(p => (
-                            <tr key={p._id} style={styles.tr}>
-                                <td style={styles.tdGrado}><span style={{ color: '#0f0', fontFamily: 'monospace' }}>{p.grado}</span></td>
-                                <td style={styles.tdNombre}><span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{p.apellido}, {p.nombre}</span></td>
+                    {Object.keys(matrizSda).length > 0 ? (
+                        Object.keys(matrizSda).map(sdaNom => (
+                            <React.Fragment key={sdaNom}>
+                                {/* Línea Divisora de Sistema de Armas */}
+                                <tr>
+                                    <td colSpan="8" style={styles.thSeparadorSda}>
+                                        ✈️ SISTEMA DE ARMAS: {sdaNom.toUpperCase()}
+                                    </td>
+                                </tr>
                                 
-                                {/* Desglose Trimestral usando el Helper estructural */}
-                                {renderCeldaTrimestre(p.horasTrimestrales?.t1, p.horasFaltantes?.t1)}
-                                {renderCeldaTrimestre(p.horasTrimestrales?.t2, p.horasFaltantes?.t2)}
-                                {renderCeldaTrimestre(p.horasTrimestrales?.t3, p.horasFaltantes?.t3)}
-                                {renderCeldaTrimestre(p.horasTrimestrales?.t4, p.horasFaltantes?.t4)}
-                                
-                                {/* Acumulado Total */}
-                                <td style={styles.tdTotal}>
-                                    {p.horasAcumuladas !== undefined ? `${p.horasAcumuladas} HS` : '0 HS'}
-                                </td>
-                            </tr>
+                                {matrizSda[sdaNom].map(p => {
+                                    const filaKey = `${p._id}_${sdaNom}`;
+                                    
+                                    // Lectura segregada de horas por sistema (Backend preparado)
+                                    const hTrim = p.horasTrimestralesSda?.[sdaNom] || {};
+                                    const hFalt = p.horasFaltantesSda?.[sdaNom] || {};
+                                    const totalAnualSda = p.horasAcumuladasSda?.[sdaNom] || 0;
+
+                                    return (
+                                        <React.Fragment key={filaKey}>
+                                            <tr style={styles.tr}>
+                                                <td style={styles.tdGrado}><span style={{ color: '#0f0', fontFamily: 'monospace' }}>{p.grado}</span></td>
+                                                <td style={styles.tdNombre}>
+                                                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{p.apellido}, {p.nombre}</span>
+                                                </td>
+                                                
+                                                {/* Celdas con Semáforos de Horas por Sistema */}
+                                                {renderCeldaTrimestre(1, hTrim.t1, hFalt.t1)}
+                                                {renderCeldaTrimestre(2, hTrim.t2, hFalt.t2)}
+                                                {renderCeldaTrimestre(3, hTrim.t3, hFalt.t3)}
+                                                {renderCeldaTrimestre(4, hTrim.t4, hFalt.t4)}
+                                                
+                                                {/* Acumulado por Sistema */}
+                                                <td style={styles.tdTotal}>{totalAnualSda} HS</td>
+
+                                                {/* Botón de Configuración Contextual */}
+                                                <td style={styles.tdAcciones}>
+                                                    <button 
+                                                        onClick={() => toggleDespliegueFila(p._id, sdaNom)} 
+                                                        style={{
+                                                            ...styles.btnConfig,
+                                                            backgroundColor: filasDesplegadas[filaKey] ? '#ff9800' : '#222'
+                                                        }}
+                                                    >
+                                                        ⚙️
+                                                    </button>
+                                                </td>
+                                            </tr>
+
+                                            {/* Subpanel Expandido de Carga Operativa */}
+                                            {filasDesplegadas[filaKey] && (
+                                                <tr>
+                                                    <td colSpan="8" style={styles.tdExpandido}>
+                                                        <div style={styles.contenedorPanelPlanificacion}>
+                                                            <div style={styles.headerPanelConfig}>
+                                                                <span style={{ color: '#0f0', fontWeight: 'bold' }}>
+                                                                    CONFIGURACIÓN {sdaNom} - {p.grado} {p.apellido}
+                                                                </span>
+                                                            </div>
+                                                            <div style={styles.grillaAsignacion}>
+                                                                {renderBloqueAsignacion(p, sdaNom, 't1', '1er Trimestre')}
+                                                                {renderBloqueAsignacion(p, sdaNom, 't2', '2do Trimestre')}
+                                                                {renderBloqueAsignacion(p, sdaNom, 't3', '3er Trimestre')}
+                                                                {renderBloqueAsignacion(p, sdaNom, 't4', '4to Trimestre')}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </React.Fragment>
                         ))
                     ) : (
                         <tr>
-                            <td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#666', fontFamily: 'monospace' }}>
-                                NO SE ENCONTRARON PILOTOS REGISTRADOS PARA ESTA JURISDICCIÓN
+                            <td colSpan="8" style={{ padding: '20px', textAlign: 'center', color: '#666', fontFamily: 'monospace' }}>
+                                NO SE ENCONTRARON TRIPULANTES DISPONIBLES
                             </td>
                         </tr>
                     )}
@@ -140,18 +315,33 @@ const styles = {
     select: { backgroundColor: '#222', color: '#0f0', border: '1px solid #0f0', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' },
     table: { width: '100%', borderCollapse: 'collapse' },
     
-    // Encabezados
-    th: { textAlign: 'left', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' },
-    thTrimestre: { textAlign: 'right', padding: '12px', color: '#666', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '13%' },
-    thTotal: { textAlign: 'right', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', paddingRight: '20px', width: '12%' },
+    // Separador de Sistemas de Armas
+    thSeparadorSda: { backgroundColor: '#1a241f', color: '#0f0', padding: '10px 15px', fontSize: '13px', fontFamily: 'monospace', fontWeight: 'bold', borderLeft: '4px solid #0f0', letterSpacing: '1px', borderBottom: '1px solid #2a3a30' },
     
-    // Celdas
+    th: { textAlign: 'left', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' },
+    thTrimestre: { textAlign: 'right', padding: '12px', color: '#666', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '12%' },
+    thTotal: { textAlign: 'right', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '10%' },
+    thAcciones: { textAlign: 'center', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', width: '6%' },
+    
     tdGrado: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', width: '8%' },
     tdNombre: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px' },
     tdMétrica: { padding: '10px 12px', borderBottom: '1px solid #222', fontSize: '14px', textAlign: 'right', fontFamily: 'monospace', lineHeight: '1.3' },
-    tdTotal: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', textAlign: 'right', color: '#0f0', fontFamily: 'monospace', fontWeight: 'bold', paddingRight: '20px' },
+    tdTotal: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', textAlign: 'right', color: '#0f0', fontFamily: 'monospace', fontWeight: 'bold' },
+    tdAcciones: { padding: '12px', borderBottom: '1px solid #222', textAlign: 'center' },
     
-    tr: { transition: 'background-color 0.2s', ':hover': { backgroundColor: '#1a1a1a' } }
+    btnConfig: { border: '1px solid #444', color: '#fff', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s' },
+    tdExpandido: { backgroundColor: '#151515', padding: '12px', borderBottom: '1px solid #333' },
+    contenedorPanelPlanificacion: { border: '1px solid #333', borderRadius: '6px', backgroundColor: '#1c1c1c', padding: '15px' },
+    headerPanelConfig: { borderBottom: '1px solid #2a2a2a', paddingBottom: '8px', marginBottom: '12px', fontSize: '11px', fontFamily: 'monospace' },
+    grillaAsignacion: { display: 'flex', gap: '15px', justifyContent: 'space-between' },
+    
+    bloqueTrimestreConfig: { flex: 1, backgroundColor: '#121212', border: '1px solid #2d2d2d', borderRadius: '4px', padding: '10px' },
+    tituloBloque: { margin: '0 0 10px 0', fontSize: '11px', color: '#aaa', textTransform: 'uppercase', fontFamily: 'monospace', textAlign: 'center', borderBottom: '1px solid #252525', paddingBottom: '4px' },
+    grupoInput: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '5px' },
+    labelMini: { fontSize: '11px', color: '#555', fontFamily: 'monospace', fontWeight: 'bold' },
+    selectPanel: { backgroundColor: '#222', color: '#fff', border: '1px solid #444', fontSize: '11px', padding: '3px 5px', borderRadius: '3px', width: '75%', cursor: 'pointer' },
+    
+    tr: { transition: 'background-color 0.1s', ':hover': { backgroundColor: '#161616' } }
 };
 
 export default EbmPage;
