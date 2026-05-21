@@ -56,6 +56,22 @@ const EbmPage = () => {
         ? personal.filter(p => p.habilitaciones?.some(h => h.aeronave === sdaFiltro))
         : personal;
 
+    // Helper reutilizable para renderizar la celda híbrida (Voladas / Faltantes)
+    const renderCeldaTrimestre = (horasVoladas = 0, horasFaltantes = 0) => {
+        return (
+            <td style={styles.tdMétrica}>
+                <div>{horasVoladas} hs</div>
+                <div style={{ 
+                    fontSize: '11px', 
+                    color: horasFaltantes > 0 ? '#ff9800' : '#555',
+                    marginTop: '2px' 
+                }}>
+                    {horasFaltantes > 0 ? `Faltan: ${horasFaltantes} hs` : 'Cumplido'}
+                </div>
+            </td>
+        );
+    };
+
     if (loading) return <div style={{ color: '#0f0', padding: '20px', fontFamily: 'monospace' }}>CARGANDO PANEL OPERATIVO EBM...</div>;
 
     return (
@@ -78,10 +94,10 @@ const EbmPage = () => {
                     <tr>
                         <th style={styles.th}>GRADO</th>
                         <th style={styles.th}>APELLIDO Y NOMBRE</th>
-                        <th style={styles.thTrimestre}>1° TRIM</th>
-                        <th style={styles.thTrimestre}>2° TRIM</th>
-                        <th style={styles.thTrimestre}>3° TRIM</th>
-                        <th style={styles.thTrimestre}>4° TRIM</th>
+                        <th style={styles.thTrimestre}>1° TRIM (VOL/FALT)</th>
+                        <th style={styles.thTrimestre}>2° TRIM (VOL/FALT)</th>
+                        <th style={styles.thTrimestre}>3° TRIM (VOL/FALT)</th>
+                        <th style={styles.thTrimestre}>4° TRIM (VOL/FALT)</th>
                         <th style={styles.thTotal}>TOTAL ANUAL</th>
                     </tr>
                 </thead>
@@ -92,11 +108,11 @@ const EbmPage = () => {
                                 <td style={styles.tdGrado}><span style={{ color: '#0f0', fontFamily: 'monospace' }}>{p.grado}</span></td>
                                 <td style={styles.tdNombre}><span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{p.apellido}, {p.nombre}</span></td>
                                 
-                                {/* Desglose Trimestral */}
-                                <td style={styles.tdMétrica}>{p.horasTrimestrales?.t1 || 0} hs</td>
-                                <td style={styles.tdMétrica}>{p.horasTrimestrales?.t2 || 0} hs</td>
-                                <td style={styles.tdMétrica}>{p.horasTrimestrales?.t3 || 0} hs</td>
-                                <td style={styles.tdMétrica}>{p.horasTrimestrales?.t4 || 0} hs</td>
+                                {/* Desglose Trimestral usando el Helper estructural */}
+                                {renderCeldaTrimestre(p.horasTrimestrales?.t1, p.horasFaltantes?.t1)}
+                                {renderCeldaTrimestre(p.horasTrimestrales?.t2, p.horasFaltantes?.t2)}
+                                {renderCeldaTrimestre(p.horasTrimestrales?.t3, p.horasFaltantes?.t3)}
+                                {renderCeldaTrimestre(p.horasTrimestrales?.t4, p.horasFaltantes?.t4)}
                                 
                                 {/* Acumulado Total */}
                                 <td style={styles.tdTotal}>
@@ -126,13 +142,13 @@ const styles = {
     
     // Encabezados
     th: { textAlign: 'left', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' },
-    thTrimestre: { textAlign: 'right', padding: '12px', color: '#666', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '10%' },
-    thTotal: { textAlign: 'right', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', paddingRight: '20px', width: '15%' },
+    thTrimestre: { textAlign: 'right', padding: '12px', color: '#666', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '13%' },
+    thTotal: { textAlign: 'right', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', paddingRight: '20px', width: '12%' },
     
     // Celdas
     tdGrado: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', width: '8%' },
     tdNombre: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px' },
-    tdMétrica: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', textAlign: 'right', fontFamily: 'monospace', color: '#aaa' },
+    tdMétrica: { padding: '10px 12px', borderBottom: '1px solid #222', fontSize: '14px', textAlign: 'right', fontFamily: 'monospace', lineHeight: '1.3' },
     tdTotal: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', textAlign: 'right', color: '#0f0', fontFamily: 'monospace', fontWeight: 'bold', paddingRight: '20px' },
     
     tr: { transition: 'background-color 0.2s', ':hover': { backgroundColor: '#1a1a1a' } }
