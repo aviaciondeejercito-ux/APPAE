@@ -19,41 +19,25 @@ const EbmPage = () => {
             const dataBackend = response.data || [];
 
             // --- ESQUEMA DE ORDENAMIENTO MILITAR JERÁRQUICO ---
-            // Asignamos un peso numérico donde el menor número es la máxima prioridad (Descendente)
             const ordenGrados = {
-                'CR': 1,
-                'TC': 2,
-                'MY': 3,
-                'CT': 4,
-                'TP': 5,
-                'TT': 6,
-                'ST': 7
+                'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7
             };
 
             const datosOrdenados = dataBackend.sort((a, b) => {
-                const pesoA = ordenGrados[a.grado] || 99; // 99 por si viene un grado no contemplado
+                const pesoA = ordenGrados[a.grado] || 99;
                 const pesoB = ordenGrados[b.grado] || 99;
 
-                // 1. Si los grados son distintos, ordena por la jerarquía militar
-                if (pesoA !== pesoB) {
-                    return pesoA - pesoB;
-                }
+                if (pesoA !== pesoB) return pesoA - pesoB;
 
-                // 2. Si tienen el mismo grado, desempata alfabéticamente por Apellido
                 const apellidoA = (a.apellido || '').trim().toUpperCase();
                 const apellidoB = (b.apellido || '').trim().toUpperCase();
-                
-                if (apellidoA !== apellidoB) {
-                    return apellidoA.localeCompare(apellidoB);
-                }
+                if (apellidoA !== apellidoB) return apellidoA.localeCompare(apellidoB);
 
-                // 3. Si tienen el mismo apellido, desempata por Nombre
                 const nombreA = (a.nombre || '').trim().toUpperCase();
                 const nombreB = (b.nombre || '').trim().toUpperCase();
                 return nombreA.localeCompare(nombreB);
             });
 
-            // Seteamos la lista con la estructura de comando correcta
             setPersonal(datosOrdenados);
 
         } catch (error) {
@@ -72,7 +56,7 @@ const EbmPage = () => {
         ? personal.filter(p => p.habilitaciones?.some(h => h.aeronave === sdaFiltro))
         : personal;
 
-    if (loading) return <div style={{ color: '#0f0', padding: '20px', fontFamily: 'monospace' }}>CARGANDO PERSONAL EBM...</div>;
+    if (loading) return <div style={{ color: '#0f0', padding: '20px', fontFamily: 'monospace' }}>CARGANDO PANEL OPERATIVO EBM...</div>;
 
     return (
         <div style={styles.container}>
@@ -94,25 +78,35 @@ const EbmPage = () => {
                     <tr>
                         <th style={styles.th}>GRADO</th>
                         <th style={styles.th}>APELLIDO Y NOMBRE</th>
-                        <th style={styles.th}>UNIDAD</th>
-                        <th style={styles.thLineal}>HORAS ACUMULADAS ANUALES</th>
+                        <th style={styles.thTrimestre}>1° TRIM</th>
+                        <th style={styles.thTrimestre}>2° TRIM</th>
+                        <th style={styles.thTrimestre}>3° TRIM</th>
+                        <th style={styles.thTrimestre}>4° TRIM</th>
+                        <th style={styles.thTotal}>TOTAL ANUAL</th>
                     </tr>
                 </thead>
                 <tbody>
                     {listaFinal.length > 0 ? (
                         listaFinal.map(p => (
                             <tr key={p._id} style={styles.tr}>
-                                <td style={styles.td}><span style={{ color: '#0f0', fontFamily: 'monospace' }}>{p.grado}</span></td>
-                                <td style={styles.td}><span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{p.apellido}, {p.nombre}</span></td>
-                                <td style={styles.td}>{p.elemento || p.unidad}</td>
-                                <td style={styles.tdHoras}>
+                                <td style={styles.tdGrado}><span style={{ color: '#0f0', fontFamily: 'monospace' }}>{p.grado}</span></td>
+                                <td style={styles.tdNombre}><span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{p.apellido}, {p.nombre}</span></td>
+                                
+                                {/* Desglose Trimestral */}
+                                <td style={styles.tdMétrica}>{p.horasTrimestrales?.t1 || 0} hs</td>
+                                <td style={styles.tdMétrica}>{p.horasTrimestrales?.t2 || 0} hs</td>
+                                <td style={styles.tdMétrica}>{p.horasTrimestrales?.t3 || 0} hs</td>
+                                <td style={styles.tdMétrica}>{p.horasTrimestrales?.t4 || 0} hs</td>
+                                
+                                {/* Acumulado Total */}
+                                <td style={styles.tdTotal}>
                                     {p.horasAcumuladas !== undefined ? `${p.horasAcumuladas} HS` : '0 HS'}
                                 </td>
                             </tr>
                         ))
                     ) : (
                         <tr>
-                            <td colSpan="4" style={{ padding: '20px', textAlign: 'center', color: '#666', fontFamily: 'monospace' }}>
+                            <td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#666', fontFamily: 'monospace' }}>
                                 NO SE ENCONTRARON PILOTOS REGISTRADOS PARA ESTA JURISDICCIÓN
                             </td>
                         </tr>
@@ -129,10 +123,18 @@ const styles = {
     filtros: { display: 'flex', alignItems: 'center', gap: '10px' },
     select: { backgroundColor: '#222', color: '#0f0', border: '1px solid #0f0', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' },
     table: { width: '100%', borderCollapse: 'collapse' },
+    
+    // Encabezados
     th: { textAlign: 'left', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' },
-    thLineal: { textAlign: 'right', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', paddingRight: '30px' },
-    td: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px' },
-    tdHoras: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', textAlign: 'right', color: '#0f0', fontFamily: 'monospace', fontWeight: 'bold', paddingRight: '30px' },
+    thTrimestre: { textAlign: 'right', padding: '12px', color: '#666', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '10%' },
+    thTotal: { textAlign: 'right', padding: '12px', color: '#888', borderBottom: '2px solid #444', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', paddingRight: '20px', width: '15%' },
+    
+    // Celdas
+    tdGrado: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', width: '8%' },
+    tdNombre: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px' },
+    tdMétrica: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', textAlign: 'right', fontFamily: 'monospace', color: '#aaa' },
+    tdTotal: { padding: '12px', borderBottom: '1px solid #222', fontSize: '14px', textAlign: 'right', color: '#0f0', fontFamily: 'monospace', fontWeight: 'bold', paddingRight: '20px' },
+    
     tr: { transition: 'background-color 0.2s', ':hover': { backgroundColor: '#1a1a1a' } }
 };
 

@@ -3,14 +3,14 @@ const Tripulante = require('../models/Tripulante');
 const Vuelo = require('../models/Vuelo'); 
 
 /**
- * OP 1: NÓMINA CONSOLIDADA (Pilotos + Horas Totales Computadas)
- * Trae los pilotos de la jurisdicción y les inyecta sus horas acumuladas en base a los vuelos.
+ * OP 1: NÓMINA CONSOLIDADA (Pilotos + Horas Totales + Desglose Trimestral)
+ * Trae los pilotos de la jurisdicción y les inyecta sus horas acumuladas y trimestrales en base a los vuelos.
  */
 exports.getPlanificacionCompleta = async (req, res) => {
     try {
         const unidadUser = req.user?.unidad || req.user?.elemento;
         
-        console.log(`📡 Petición EBM Consolidada recibida para la unidad: ${unidadUser || 'SIN UNIDAD'}`);
+        console.log(`📡 Petición EBM Consolidada Trimestral recibida para la unidad: ${unidadUser || 'SIN UNIDAD'}`);
 
         if (!unidadUser) {
             return res.status(400).json({ 
@@ -45,44 +45,81 @@ exports.getPlanificacionCompleta = async (req, res) => {
         // 4. Extracción de IDs de los pilotos para buscar sus vuelos indexados
         const listaIdsPilotos = pilotos.map(p => p._id.toString());
 
-        // 5. Consulta atómica de vuelos donde cualquiera de estos pilotos haya participado
-        // (Buscamos si fue Piloto, Copiloto o Instructor en el registro)
+        // 5. Consulta atómica de vuelos (Agregamos 'fecha' para calcular los trimestres)
         const vuelos = await Vuelo.find({
             $or: [
                 { piloto: { $in: listaIdsPilotos } },
                 { copiloto: { $in: listaIdsPilotos } },
                 { instructor: { $in: listaIdsPilotos } }
             ]
-        }).select('horasVoladas piloto copiloto instructor').lean();
+        }).select('horasVoladas fecha piloto copiloto instructor').lean();
 
-        // 6. Mapeo y reducción del historial de horas en memoria
-        const mapaHoras = {};
-        vuelos.forEach(v => {
-            const horas = Number(v.horasVoladas) || 0;
-            
-            if (v.piloto) {
-                const idStr = v.piloto.toString();
-                mapaHoras[idStr] = (mapaHoras[idStr] || 0) + horas;
-            }
-            if (v.copiloto) {
-                const idStr = v.copiloto.toString();
-                mapaHoras[idStr] = (mapaHoras[idStr] || 0) + horas;
-            }
-            if (v.instructor) {
-                const idStr = v.instructor.toString();
-                mapaHoras[idStr] = (mapaHoras[idStr] || 0) + horas;
-            }
-        });
-
-        // 7. Consolidación final: Inyectamos las horas calculadas a cada objeto piloto
-        const pilotosConsolidados = pilotos.map(p => {
-            return {
-                ...p,
-                horasAcumuladas: mapaHoras[p._id.toString()] || 0
+        // 6. Estructura de almacenamiento indexado en memoria para métricas temporales
+        const mapaMetricas = {};
+        
+        // Inicializamos la estructura limpia para cada piloto de la nómina
+        listaIdsPilotos.forEach(id => {
+            mapaMetricas[id] = {
+                total: 0,
+                t1: 0, // Ene, Feb, Mar
+                t2: 0, // Abr, May, Jun
+                t3: 0, // Jul, Ago, Sep
+                t4: 0  // Oct, Nov, Dic
             };
         });
 
-        // 8. Ordenamiento militar jerárquico descendente antes de enviar al cliente
+        // 7. Mapeo, reducción y distribución temporal de horas en memoria
+        vuelos.forEach(v => {
+            const horas = Number(v.horasVoladas) || 0;
+            if (horas <= 0) return;
+
+            // Evaluamos el mes del vuelo (0 = Enero, 11 = Diciembre)
+            const fechaVuelo = v.fecha ? new Date(v.fecha) : new Date();
+            const mes = fechaVuelo.getMonth(); 
+            
+            let claveTrimestre = 't1';
+            if (mes >= 0 && mes <= 2)   claveTrimestre = 't1';
+            else if (mes >= 3 && mes <= 5)  claveTrimestre = 't2';
+            else if (mes >= 6 && mes <= 8)  claveTrimestre = 't3';
+            else if (mes >= 9 && mes <= 11) claveTrimestre = 't4';
+
+            // Helper interno para sumarizar los valores de los tripulantes implicados
+            const acumularMétricas = (idTripulante) => {
+                if (!idTripulante) return;
+                const idStr = idTripulante.toString();
+                
+                // Inicialización de resguardo por si el piloto no figuraba originalmente en la lista
+                if (!mapaMetricas[idStr]) {
+                    mapaMetricas[idStr] = { total: 0, t1: 0, t2: 0, t3: 0, t4: 0 };
+                }
+
+                mapaMetricas[idStr].total += horas;
+                mapaMetricas[idStr][claveTrimestre] += horas;
+            };
+
+            acumularMétricas(v.piloto);
+            acumularMétricas(v.copiloto);
+            acumularMétricas(v.instructor);
+        });
+
+        // 8. Consolidación final inyectando el total y el objeto de trimestres (redondeado a 1 decimal)
+        const pilotosConsolidados = pilotos.map(p => {
+            const idStr = p._id.toString();
+            const metricas = mapaMetricas[idStr];
+
+            return {
+                ...p,
+                horasAcumuladas: metricas ? Number(metricas.total.toFixed(1)) : 0,
+                horasTrimestrales: {
+                    t1: metricas ? Number(metricas.t1.toFixed(1)) : 0,
+                    t2: metricas ? Number(metricas.t2.toFixed(1)) : 0,
+                    t3: metricas ? Number(metricas.t3.toFixed(1)) : 0,
+                    t4: metricas ? Number(metricas.t4.toFixed(1)) : 0
+                }
+            };
+        });
+
+        // 9. Ordenamiento militar jerárquico descendente antes de enviar al cliente
         const ordenGrados = { 'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7 };
         
         pilotosConsolidados.sort((a, b) => {
@@ -92,7 +129,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
             return (a.apellido || '').trim().toUpperCase().localeCompare((b.apellido || '').trim().toUpperCase());
         });
 
-        console.log(`✅ Nómina EBM generada. Pilotos: ${pilotosConsolidados.length}. Vuelos procesados: ${vuelos.length}`);
+        console.log(`✅ Nómina EBM generada con Trimestres. Pilotos: ${pilotosConsolidados.length}. Vuelos: ${vuelos.length}`);
         res.status(200).json(pilotosConsolidados);
 
     } catch (error) {
@@ -118,7 +155,6 @@ exports.getVuelosUnidad = async (req, res) => {
 
         let queryVuelos = {};
         
-        // Si no es comando, filtramos los vuelos que correspondan a su elemento apoyado o unidad operativa
         if (!esMandoEstrategico) {
             queryVuelos.$or = [
                 { unidad: unidadUser },
