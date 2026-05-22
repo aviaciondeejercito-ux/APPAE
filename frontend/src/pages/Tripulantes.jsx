@@ -18,7 +18,6 @@ const Tripulantes = () => {
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
 
-    // Reglas de acceso actualizadas: Se incluye permiso de borrado para Operaciones y Jefe
     const esAdmin = roleNormalizado === 'ADMIN';
     const esGestorOperativo = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
     const puedeEliminarPersonal = ['ADMIN', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
@@ -30,6 +29,31 @@ const Tripulantes = () => {
     const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
 
     useEffect(() => { fetchPersonal(); }, []);
+
+    // --- FUNCIÓN CRÍTICA: CÓMPUTO DINÁMICO DE HORAS EN TIEMPO REAL ---
+    const obtenerTotalesDinamicos = () => {
+        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
+        
+        if (!seleccionado) return totales;
+
+        // 1. Sumamos las horas de todas las habilitaciones de Sistemas de Armas (SdA) actuales
+        if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
+            seleccionado.habilitaciones.forEach(h => {
+                totales.visual += Number(h.hsVisual || 0);
+                totales.instrumental += Number(h.hsInstrumental || 0);
+                totales.nocturno += Number(h.hsNocturno || 0);
+                totales.nvg += Number(h.hsNVG || 0);
+            });
+        }
+
+        // Nota: Si querés que las Aptitudes Tácticas Especiales (capacitacionesEspeciales) sumen 
+        // a algún total general o no, podés agregarlo o discriminarlo acá. Como viste que "quedaban cargadas",
+        // calcularlo exclusivamente en base a los SdA activos solucionará la desincronización por completo.
+        
+        return totales;
+    };
+
+    const horasDinamicas = obtenerTotalesDinamicos();
 
     const fetchPersonal = async () => {
         try {
@@ -59,18 +83,14 @@ const Tripulantes = () => {
         }
     };
 
-    // Función específica para eliminar legajo completo
     const handleEliminarTripulante = async (id) => {
         if (!window.confirm("¿ESTÁ SEGURO? Esta acción eliminará el legajo digital completo y todo su historial de vuelo de forma definitiva.")) return;
-        
         try {
             await deleteTripulante(id);
             alert("Legajo eliminado correctamente.");
             setSeleccionado(null);
             await fetchPersonal();
-        } catch (error) {
-            alert("Error al eliminar legajo. Verifique permisos.");
-        }
+        } catch (error) { alert("Error al eliminar legajo. Verifique permisos."); }
     };
 
     const getEstadoVencimiento = (fecha) => {
@@ -126,6 +146,8 @@ const Tripulantes = () => {
                     await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
                 } else if (modalType === 'habilitacion') {
                     const totalSdA = Number(formData.hsVisual) + Number(formData.hsInstrumental) + Number(formData.hsNocturno) + Number(formData.hsNVG);
+                    
+                    // Mantenemos la actualización por compatibilidad con tu backend, pero la vista usará el cálculo dinámico real
                     const nuevosTotales = {
                         vueloDiurno: (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.hsVisual || 0),
                         vueloNocturno: (seleccionado.totalesHistoricos?.vueloNocturno || 0) + Number(formData.hsNocturno || 0),
@@ -151,9 +173,21 @@ const Tripulantes = () => {
             let updatedData = { ...seleccionado };
             if (type === 'habilitacion') {
                 updatedData.habilitaciones = seleccionado.habilitaciones.filter(h => h._id !== itemId);
+                
+                // --- ARREGLO DE FLUJO: recalculamos totalesHistoricos al remover un SdA para mantener consistente la BD ---
+                const nuevosTotales = { vueloDiurno: 0, vueloNocturno: 0, vueloInstrumental: 0, vueloVisual: 0 };
+                updatedData.habilitaciones.forEach(h => {
+                    nuevosTotales.vueloDiurno += Number(h.hsVisual || 0);
+                    nuevosTotales.vueloNocturno += Number(h.hsNocturno || 0);
+                    nuevosTotales.vueloInstrumental += Number(h.hsInstrumental || 0);
+                    nuevosTotales.vueloVisual += Number(h.hsNVG || 0);
+                });
+                updatedData.totalesHistoricos = nuevosTotales;
+
             } else if (type === 'capacitacion') {
                 updatedData.capacitacionesEspeciales = seleccionado.capacitacionesEspeciales.filter(c => c._id !== itemId);
             }
+            
             await updateTripulante(seleccionado._id, updatedData);
             await fetchPersonal();
         } catch (error) { alert("Error al eliminar registro."); }
@@ -233,16 +267,16 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* TOTALES */}
+                            {/* TOTALES (AHORA SON TOTALMENTE DINÁMICOS Y REACTIVOS) */}
                             <div style={styles.sectionHeader}>
-                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES)</span>
+                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES DINÁMICOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
                             </div>
                             <div style={styles.gridStats}>
-                                <div style={styles.statCard}><span style={styles.statLabel}>VISUAL</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloDiurno || 0} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>NOCTURNO</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloNocturno || 0} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloInstrumental || 0} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{seleccionado.totalesHistoricos?.vueloVisual || 0} hs</span></div>
+                                <div style={styles.statCard}><span style={styles.statLabel}>VISUAL</span><span style={styles.statValue}>{horasDinamicas.visual} hs</span></div>
+                                <div style={styles.statCard}><span style={styles.statLabel}>NOCTURNO</span><span style={styles.statValue}>{horasDinamicas.nocturno} hs</span></div>
+                                <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{horasDinamicas.instrumental} hs</span></div>
+                                <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{horasDinamicas.nvg} hs</span></div>
                             </div>
 
                             {/* EXPERIENCIA SdA */}
@@ -309,7 +343,6 @@ const Tripulantes = () => {
                             <X size={24} style={{cursor:'pointer', color: '#7f8c8d'}} onClick={() => {setShowAltaModal(false); setShowEditModal(false);}} />
                         </div>
                         
-                        {/* El contenedor del formulario ahora gestiona el overflow de forma interna */}
                         <form onSubmit={handleAction} style={styles.formContainerScroll}>
                             <div style={styles.form}>
                                 {showAltaModal && (
@@ -388,7 +421,6 @@ const Tripulantes = () => {
                                 )}
                             </div>
                             
-                            {/* Botón estático en la base inferior del modal */}
                             <div style={styles.modalFooter}>
                                 <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Cambios</button>
                             </div>
@@ -445,7 +477,6 @@ const styles = {
     btnIconDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', opacity: 0.6 },
     emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#7f8c8d', gap: '10px' },
 
-    // --- CORRECCIÓN CRÍTICA DE INTERFAZ DEL MODAL ---
     overlay: { 
         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
         backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', 
@@ -456,7 +487,7 @@ const styles = {
         backgroundColor: 'white', borderRadius: '12px', width: '100%', 
         maxWidth: '500px', display: 'flex', flexDirection: 'column', 
         boxShadow: '0 15px 35px rgba(0,0,0,0.2)', overflow: 'hidden',
-        maxHeight: 'calc(100vh - 40px)' // Previene que salga de los límites de la pantalla
+        maxHeight: 'calc(100vh - 40px)'
     },
     modalHeader: { 
         padding: '20px', borderBottom: '1px solid #eef0f3', 
@@ -468,7 +499,7 @@ const styles = {
     },
     form: { 
         padding: '20px', overflowY: 'auto', flex: 1,
-        maxHeight: '60vh' // Scroll interno exclusivo para los inputs
+        maxHeight: '60vh'
     },
     formCol: { display: 'flex', flexDirection: 'column', gap: '4px' },
     label: { fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '10px', marginBottom: '4px' },
