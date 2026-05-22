@@ -112,7 +112,6 @@ const Tripulantes = () => {
         e.preventDefault();
         try {
             if (showAltaModal) {
-                // Al dar de alta, enviamos elemento para coincidir con la DB
                 await createTripulante({ ...formData, elemento: formData.unidad });
                 alert("Personal incorporado al legajo digital.");
             } else {
@@ -197,8 +196,6 @@ const Tripulantes = () => {
                             <div style={{ flex: 1 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <h2 style={styles.legajoTitle}>{seleccionado.grado} {seleccionado.apellido}, {seleccionado.nombre}</h2>
-                                    
-                                    {/* BOTÓN DE ELIMINACIÓN LEGAJO: Visible para Admin, Operaciones y Jefe */}
                                     {puedeEliminarPersonal && (
                                         <button onClick={() => handleEliminarTripulante(seleccionado._id)} style={styles.btnDelete}>
                                             <Trash2 size={22}/>
@@ -308,73 +305,93 @@ const Tripulantes = () => {
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
                         <div style={styles.modalHeader}>
-                            <h3>{showAltaModal ? 'Incorporación de Personal' : `Gestión de ${modalType.toUpperCase()}`}</h3>
-                            <X size={24} style={{cursor:'pointer'}} onClick={() => {setShowAltaModal(false); setShowEditModal(false);}} />
+                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{showAltaModal ? 'Incorporación de Personal' : `Gestión de ${modalType.toUpperCase()}`}</h3>
+                            <X size={24} style={{cursor:'pointer', color: '#7f8c8d'}} onClick={() => {setShowAltaModal(false); setShowEditModal(false);}} />
                         </div>
-                        <form onSubmit={handleAction} style={styles.form}>
-                            {showAltaModal && (
-                                <div style={styles.formCol}>
-                                    <label style={styles.label}>Grado</label>
-                                    <select style={styles.formInput} value={formData.grado} onChange={e => setFormData({...formData, grado: e.target.value})} required>
-                                        <option value="">Seleccionar...</option>{gradosAE.map(g => <option key={g} value={g}>{g}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Apellido</label>
-                                    <input type="text" placeholder="APELLIDO" style={styles.formInput} value={formData.apellido} onChange={e => setFormData({...formData, apellido: e.target.value.toUpperCase()})} required />
-                                    <label style={styles.label}>Nombre</label>
-                                    <input type="text" placeholder="Nombre" style={styles.formInput} value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
-                                    <label style={styles.label}>Unidad</label>
-                                    <select style={styles.formInput} value={formData.unidad} onChange={e => setFormData({...formData, unidad: e.target.value})} required>
-                                        <option value="">Unidad...</option>{unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
-                                    </select>
-                                </div>
-                            )}
+                        
+                        {/* El contenedor del formulario ahora gestiona el overflow de forma interna */}
+                        <form onSubmit={handleAction} style={styles.formContainerScroll}>
+                            <div style={styles.form}>
+                                {showAltaModal && (
+                                    <div style={styles.formCol}>
+                                        <label style={styles.label}>Grado</label>
+                                        <select style={styles.formInput} value={formData.grado} onChange={e => setFormData({...formData, grado: e.target.value})} required>
+                                            <option value="">Seleccionar...</option>{gradosAE.map(g => <option key={g} value={g}>{g}</option>)}
+                                        </select>
+                                        <label style={styles.label}>Apellido</label>
+                                        <input type="text" placeholder="APELLIDO" style={styles.formInput} value={formData.apellido} onChange={e => setFormData({...formData, apellido: e.target.value.toUpperCase()})} required />
+                                        <label style={styles.label}>Nombre</label>
+                                        <input type="text" placeholder="Nombre" style={styles.formInput} value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
+                                        <label style={styles.label}>Unidad</label>
+                                        <select style={styles.formInput} value={formData.unidad} onChange={e => setFormData({...formData, unidad: e.target.value})} required>
+                                            <option value="">Unidad...</option>{unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
+                                        </select>
+                                    </div>
+                                )}
+                                
+                                {modalType === 'certificaciones' && (
+                                    <div style={styles.formCol}>
+                                        <label style={styles.label}>Vencimiento Psicofísico</label>
+                                        <input type="date" style={styles.formInput} value={formData.psicofisicoVencimiento} onChange={e => setFormData({...formData, psicofisicoVencimiento: e.target.value})} />
+                                        <label style={styles.label}>Vencimiento CRM</label>
+                                        <input type="date" style={styles.formInput} value={formData.crmVencimiento} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
+                                    </div>
+                                )}
+
+                                {modalType === 'horas' && (
+                                    <div style={styles.formCol}>
+                                        <label style={styles.label}>Horas Visual Generales</label>
+                                        <input type="number" style={styles.formInput} value={formData.vueloDiurno} onChange={e => setFormData({...formData, vueloDiurno: e.target.value})} required />
+                                        <label style={styles.label}>Horas Nocturno Generales</label>
+                                        <input type="number" style={styles.formInput} value={formData.vueloNocturno} onChange={e => setFormData({...formData, vueloNocturno: e.target.value})} required />
+                                        <label style={styles.label}>Horas Instrumental Generales</label>
+                                        <input type="number" style={styles.formInput} value={formData.vueloInstrumental} onChange={e => setFormData({...formData, vueloInstrumental: e.target.value})} required />
+                                        <label style={styles.label}>Horas NVG Generales</label>
+                                        <input type="number" style={styles.formInput} value={formData.vueloVisual} onChange={e => setFormData({...formData, vueloVisual: e.target.value})} required />
+                                    </div>
+                                )}
+
+                                {modalType === 'habilitacion' && (
+                                    <div style={styles.formCol}>
+                                        <label style={styles.label}>SdA</label>
+                                        <select style={styles.formInput} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
+                                            <option value="">Seleccionar...</option>{aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
+                                        </select>
+                                        <label style={styles.label}>Función</label>
+                                        <select style={styles.formInput} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
+                                            <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
+                                        </select>
+                                        <label style={styles.label}>Hs Visual SdA</label>
+                                        <input type="number" style={styles.formInput} value={formData.hsVisual} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required />
+                                        <label style={styles.label}>Hs Nocturno SdA</label>
+                                        <input type="number" style={styles.formInput} value={formData.hsNocturno} onChange={e => setFormData({...formData, hsNocturno: e.target.value})} required />
+                                        <label style={styles.label}>Hs Instrumental SdA</label>
+                                        <input type="number" style={styles.formInput} value={formData.hsInstrumental} onChange={e => setFormData({...formData, hsInstrumental: e.target.value})} required />
+                                        <label style={styles.label}>Hs NVG SdA</label>
+                                        <input type="number" style={styles.formInput} value={formData.hsNVG} onChange={e => setFormData({...formData, hsNVG: e.target.value})} required />
+                                        <label style={styles.label}>Fecha Aptitud Inicial</label>
+                                        <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
+                                    </div>
+                                )}
+
+                                {modalType === 'capacitacion' && (
+                                    <div style={styles.formCol}>
+                                        <label style={styles.label}>Capacitación</label>
+                                        <select style={styles.formInput} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
+                                            <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                        <label style={styles.label}>Horas Acreditadas</label>
+                                        <input type="number" style={styles.formInput} value={formData.horasAcreditadas} onChange={e => setFormData({...formData, horasAcreditadas: e.target.value})} required />
+                                        <label style={styles.label}>Fecha Adquisición</label>
+                                        <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
+                                    </div>
+                                )}
+                            </div>
                             
-                            {modalType === 'certificaciones' && (
-                                <div style={styles.formCol}>
-                                    <label style={styles.label}>Vencimiento Psicofísico</label>
-                                    <input type="date" style={styles.formInput} value={formData.psicofisicoVencimiento} onChange={e => setFormData({...formData, psicofisicoVencimiento: e.target.value})} />
-                                    <label style={styles.label}>Vencimiento CRM</label>
-                                    <input type="date" style={styles.formInput} value={formData.crmVencimiento} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
-                                </div>
-                            )}
-
-                            {modalType === 'habilitacion' && (
-                                <div style={styles.formCol}>
-                                    <label style={styles.label}>SdA</label>
-                                    <select style={styles.formInput} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
-                                        <option value="">Seleccionar...</option>{aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Función</label>
-                                    <select style={styles.formInput} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
-                                        <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Hs Visual SdA</label>
-                                    <input type="number" style={styles.formInput} value={formData.hsVisual} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required />
-                                    <label style={styles.label}>Hs Nocturno SdA</label>
-                                    <input type="number" style={styles.formInput} value={formData.hsNocturno} onChange={e => setFormData({...formData, hsNocturno: e.target.value})} required />
-                                    <label style={styles.label}>Hs Instrumental SdA</label>
-                                    <input type="number" style={styles.formInput} value={formData.hsInstrumental} onChange={e => setFormData({...formData, hsInstrumental: e.target.value})} required />
-                                    <label style={styles.label}>Hs NVG SdA</label>
-                                    <input type="number" style={styles.formInput} value={formData.hsNVG} onChange={e => setFormData({...formData, hsNVG: e.target.value})} required />
-                                    <label style={styles.label}>Fecha Aptitud Inicial</label>
-                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
-                                </div>
-                            )}
-
-                            {modalType === 'capacitacion' && (
-                                <div style={styles.formCol}>
-                                    <label style={styles.label}>Capacitación</label>
-                                    <select style={styles.formInput} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
-                                        <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                    <label style={styles.label}>Horas Acreditadas</label>
-                                    <input type="number" style={styles.formInput} value={formData.horasAcreditadas} onChange={e => setFormData({...formData, horasAcreditadas: e.target.value})} required />
-                                    <label style={styles.label}>Fecha Adquisición</label>
-                                    <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
-                                </div>
-                            )}
-
-                            <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Cambios</button>
+                            {/* Botón estático en la base inferior del modal */}
+                            <div style={styles.modalFooter}>
+                                <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Cambios</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -426,16 +443,51 @@ const styles = {
     btnAddSmall: { background: '#27ae60', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', marginLeft: 'auto' },
     btnDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', transition: '0.2s', padding: '5px', borderRadius: '5px' },
     btnIconDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', opacity: 0.6 },
-    btnIconDeleteWhite: { background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8 },
-    overlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000 },
-    modal: { backgroundColor: 'white', width: '400px', borderRadius: '15px', overflow: 'hidden' },
-    modalHeader: { padding: '20px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    form: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' },
-    formCol: { display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '60vh', overflowY: 'auto' },
-    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#666' },
-    formInput: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd' },
-    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' },
-    emptyState: { height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#bdc3c7' }
+    emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#7f8c8d', gap: '10px' },
+
+    // --- CORRECCIÓN CRÍTICA DE INTERFAZ DEL MODAL ---
+    overlay: { 
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+        backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', 
+        alignItems: 'center', justifyContent: 'center', zIndex: 2000,
+        padding: '20px'
+    },
+    modal: { 
+        backgroundColor: 'white', borderRadius: '12px', width: '100%', 
+        maxWidth: '500px', display: 'flex', flexDirection: 'column', 
+        boxShadow: '0 15px 35px rgba(0,0,0,0.2)', overflow: 'hidden',
+        maxHeight: 'calc(100vh - 40px)' // Previene que salga de los límites de la pantalla
+    },
+    modalHeader: { 
+        padding: '20px', borderBottom: '1px solid #eef0f3', 
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        backgroundColor: '#fff'
+    },
+    formContainerScroll: {
+        display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1
+    },
+    form: { 
+        padding: '20px', overflowY: 'auto', flex: 1,
+        maxHeight: '60vh' // Scroll interno exclusivo para los inputs
+    },
+    formCol: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    label: { fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '10px', marginBottom: '4px' },
+    formInput: { 
+        width: '100%', padding: '10px', borderRadius: '6px', 
+        border: '1px solid #dcdde1', outline: 'none', fontSize: '0.9rem',
+        boxSizing: 'border-box'
+    },
+    modalFooter: {
+        padding: '15px 20px', borderTop: '1px solid #eef0f3',
+        backgroundColor: '#f8f9fa', display: 'flex', justifyContent: 'flex-end'
+    },
+    btnSave: { 
+        width: '100%', backgroundColor: '#1b3a57', color: 'white', 
+        border: 'none', padding: '12px', borderRadius: '8px', 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+        gap: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem' 
+    },
+    btnIconDeleteWhite: { background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8 }
 };
 
 export default Tripulantes;
