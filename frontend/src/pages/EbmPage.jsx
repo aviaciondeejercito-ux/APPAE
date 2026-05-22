@@ -85,7 +85,10 @@ const EbmPage = () => {
             prevPersonal.map(p => {
                 if (p._id !== pilotoId) return p;
                 const configSdaActual = p.configTrimestresSda?.[sda] || {
-                    t1: { rol: '', tipo: '' }, t2: { rol: '', tipo: '' }, t3: { rol: '', tipo: '' }, t4: { rol: '', tipo: '' }
+                    t1: { rol: '', tipo: '', novedad: '', novedadOtro: '' }, 
+                    t2: { rol: '', tipo: '', novedad: '', novedadOtro: '' }, 
+                    t3: { rol: '', tipo: '', novedad: '', novedadOtro: '' }, 
+                    t4: { rol: '', tipo: '', novedad: '', novedadOtro: '' }
                 };
                 return {
                     ...p,
@@ -178,11 +181,20 @@ const EbmPage = () => {
         );
     };
 
-    // Helper de bloques de asignación adaptados a claves SdA
-    const renderBloqueAsignacion = (piloto, sda, tKey, tLabel) => {
-        const conf = piloto.configTrimestresSda?.[sda]?.[tKey] || { rol: '', tipo: '' };
+    // Helper de bloques de asignación adaptados a claves SdA con JUSTIFICACIÓN DE INCUMPLIMIENTO
+    const renderBloqueAsignacion = (piloto, sda, tKey, tLabel, nroTrimestre) => {
+        const conf = piloto.configTrimestresSda?.[sda]?.[tKey] || { rol: '', tipo: '', novedad: '', novedadOtro: '' };
+        
+        // Verificamos si para este sistema y trimestre el piloto tiene horas pendientes y el trimestre ya venció
+        const hFaltantes = piloto.horasFaltantesSda?.[sda]?.[tKey] || 0;
+        const pasoDeTrimestre = nroTrimestre < trimestreActualId;
+        const mostrarJustificacion = hFaltantes > 0 && pasoDeTrimestre;
+
         return (
-            <div style={styles.bloqueTrimestreConfig}>
+            <div style={{
+                ...styles.bloqueTrimestreConfig,
+                borderColor: mostrarJustificacion ? '#ff4d4d55' : '#2d2d2d' // Borde sutil rojizo si requiere justificación
+            }}>
                 <h5 style={styles.tituloBloque}>{tLabel}</h5>
                 <div style={styles.grupoInput}>
                     <label style={styles.labelMini}>ROL:</label>
@@ -211,6 +223,38 @@ const EbmPage = () => {
                         <option value="D">TIPO D</option>
                     </select>
                 </div>
+
+                {/* ⚠️ SECCIÓN CONDICIONAL: JUSTIFICACIÓN POR INCUMPLIMIENTO */}
+                {mostrarJustificacion && (
+                    <div style={styles.seccionJustificacion}>
+                        <div style={styles.grupoInput}>
+                            <label style={styles.labelMiniJustificacion}>MOTIVO NO CUMP:</label>
+                            <select 
+                                value={conf.novedad || ''} 
+                                onChange={(e) => handleConfigChange(piloto._id, sda, tKey, 'novedad', e.target.value)}
+                                style={styles.selectJustificacion}
+                            >
+                                <option value="">-- SELECCIONE MOTIVO --</option>
+                                <option value="Sin Aeronaves disponibles">SIN AERONAVES DISPONIBLES</option>
+                                <option value="Sin disponibilidad de horas">SIN DISPONIBILIDAD DE HORAS</option>
+                                <option value="Problemas de Salud">PROBLEMAS DE SALUD</option>
+                                <option value="Otros">OTROS (ESPECIFICAR)</option>
+                            </select>
+                        </div>
+                        
+                        {conf.novedad === 'Otros' && (
+                            <div style={{ marginTop: '5px' }}>
+                                <input 
+                                    type="text"
+                                    placeholder="Escriba el motivo aquí..."
+                                    value={conf.novedadOtro || ''}
+                                    onChange={(e) => handleConfigChange(piloto._id, sda, tKey, 'novedadOtro', e.target.value)}
+                                    style={styles.inputJustificacion}
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         );
     };
@@ -225,7 +269,7 @@ const EbmPage = () => {
             <header style={styles.header}>
                 <h2 style={{ margin: 0, textTransform: 'uppercase' }}>NÓMINA EBM POR SISTEMA - {userUnidad}</h2>
                 
-                {/* 🎛️ NUEVO SELECTOR DINÁMICO TIPO TAGS */}
+                {/* 🎛️ SELECTOR DINÁMICO TIPO TAGS */}
                 <div style={styles.contenedorFiltrosDinamicos}>
                     <span style={{ fontSize: '12px', fontFamily: 'monospace', color: '#888', fontWeight: 'bold' }}>
                         SISTEMAS DE ARMAS VISIBLES:
@@ -319,10 +363,10 @@ const EbmPage = () => {
                                                                 </span>
                                                             </div>
                                                             <div style={styles.grillaAsignacion}>
-                                                                {renderBloqueAsignacion(p, sdaNom, 't1', '1er Trimestre')}
-                                                                {renderBloqueAsignacion(p, sdaNom, 't2', '2do Trimestre')}
-                                                                {renderBloqueAsignacion(p, sdaNom, 't3', '3er Trimestre')}
-                                                                {renderBloqueAsignacion(p, sdaNom, 't4', '4to Trimestre')}
+                                                                {renderBloqueAsignacion(p, sdaNom, 't1', '1er Trimestre', 1)}
+                                                                {renderBloqueAsignacion(p, sdaNom, 't2', '2do Trimestre', 2)}
+                                                                {renderBloqueAsignacion(p, sdaNom, 't3', '3er Trimestre', 3)}
+                                                                {renderBloqueAsignacion(p, sdaNom, 't4', '4to Trimestre', 4)}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -348,8 +392,6 @@ const EbmPage = () => {
 
 const styles = {
     container: { padding: '20px', backgroundColor: '#121212', minHeight: '100vh', color: '#fff', fontFamily: 'sans-serif' },
-    
-    // Header rediseñado en bloque vertical para albergar la botonera
     header: { display: 'flex', flexDirection: 'column', gap: '15px', borderBottom: '1px solid #333', paddingBottom: '15px', marginBottom: '20px' },
     contenedorFiltrosDinamicos: { display: 'flex', flexDirection: 'column', gap: '8px' },
     grupoTags: { display: 'flex', flexWrap: 'wrap', gap: '10px' },
@@ -371,11 +413,18 @@ const styles = {
     contenedorPanelPlanificacion: { border: '1px solid #333', borderRadius: '6px', backgroundColor: '#1c1c1c', padding: '15px' },
     headerPanelConfig: { borderBottom: '1px solid #2a2a2a', paddingBottom: '8px', marginBottom: '12px', fontSize: '11px', fontFamily: 'monospace' },
     grillaAsignacion: { display: 'flex', gap: '15px', justifyContent: 'space-between' },
-    bloqueTrimestreConfig: { flex: 1, backgroundColor: '#121212', border: '1px solid #2d2d2d', borderRadius: '4px', padding: '10px' },
+    bloqueTrimestreConfig: { flex: 1, backgroundColor: '#121212', border: '1px solid', borderRadius: '4px', padding: '10px', display: 'flex', flexDirection: 'column', transition: 'border-color 0.2s' },
     tituloBloque: { margin: '0 0 10px 0', fontSize: '11px', color: '#aaa', textTransform: 'uppercase', fontFamily: 'monospace', textAlign: 'center', borderBottom: '1px solid #252525', paddingBottom: '4px' },
     grupoInput: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '5px' },
     labelMini: { fontSize: '11px', color: '#555', fontFamily: 'monospace', fontWeight: 'bold' },
     selectPanel: { backgroundColor: '#222', color: '#fff', border: '1px solid #444', fontSize: '11px', padding: '3px 5px', borderRadius: '3px', width: '75%', cursor: 'pointer' },
+    
+    // Nuevos estilos añadidos para la sección de novedades
+    seccionJustificacion: { marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #ff4d4d33' },
+    labelMiniJustificacion: { fontSize: '10px', color: '#ff4d4d', fontFamily: 'monospace', fontWeight: 'bold' },
+    selectJustificacion: { backgroundColor: '#222', color: '#ff4d4d', border: '1px solid #ff4d4d44', fontSize: '11px', padding: '3px 5px', borderRadius: '3px', width: '60%', cursor: 'pointer' },
+    inputJustificacion: { backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid #444', fontSize: '11px', padding: '4px 6px', borderRadius: '3px', width: '93%', marginTop: '4px', fontFamily: 'monospace' },
+    
     tr: { transition: 'background-color 0.1s', ':hover': { backgroundColor: '#161616' } }
 };
 
