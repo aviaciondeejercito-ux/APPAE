@@ -72,8 +72,14 @@ exports.registrarVuelo = async (req, res) => {
                 if (!esNocturno && !esIFR) tripulante.habilitaciones[indexHab].hsVisual += hs;
 
                 tripulante.habilitaciones[indexHab].totalHorasSistema += hs;
+                
+                // SANEAMIENTO DE FECHA PARA ÚLTIMA ACTIVIDAD (Evita heredar desvíos horarias en el legajo)
+                const fechaLimpia = nuevoVuelo.fecha instanceof Date 
+                    ? nuevoVuelo.fecha.toISOString().split('T')[0] 
+                    : nuevoVuelo.fecha;
+
                 tripulante.habilitaciones[indexHab].ultimaActividad = {
-                    fecha: nuevoVuelo.fecha,
+                    fecha: fechaLimpia,
                     matricula: nuevoVuelo.matricula,
                     mision: nuevoVuelo.tipoMision
                 };
@@ -102,7 +108,7 @@ exports.registrarVuelo = async (req, res) => {
             usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
             accion: 'CARGA_HS',
             entidadAfectada: `Vuelo ${nuevoVuelo.aeronave} Mat: ${nuevoVuelo.matricula}`,
-            detalles: `Apoyo: ${nuevoVuelo.elementoApoyado} | Pax: ${nuevoVuelo.cantidadPasajeros} | Carga: ${nuevoVuelo.pesoCarga}kg | Modo: ${nuevoVuelo.localTravesia} | Reglas: ${nuevoVuelo.reglasVuelo}`
+            details: `Apoyo: ${nuevoVuelo.elementoApoyado} | Pax: ${nuevoVuelo.cantidadPasajeros} | Carga: ${nuevoVuelo.pesoCarga}kg | Modo: ${nuevoVuelo.localTravesia} | Reglas: ${nuevoVuelo.reglasVuelo}`
         });
 
         res.status(201).json({ mensaje: "Vuelo registrado e impacto total procesado", vuelo: nuevoVuelo });

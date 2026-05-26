@@ -23,7 +23,7 @@ const authorize = (...roles) => {
         
         if (!rolesPermitidos.includes(userRole)) {
             return res.status(403).json({ 
-                mensaje: `ACCESO DENEGADO: El rol ${req.user.role} no tiene permisos para el registro de vuelos.` 
+                mensaje: `ACCESO DENEGADO: El rol ${req.user.role} no tiene permisos para la gestión de vuelos.` 
             });
         }
         next();
@@ -34,7 +34,6 @@ const authorize = (...roles) => {
  * 3. Definición de Endpoints
  */
 // LISTA DE ROLES CON ACCESO OPERATIVO A VUELOS
-// Sumamos a 'OPERACIONES' según la nueva prioridad establecida.
 const rolesConAcceso = ['admin', 'user', 'OPERACIONES'];
 
 router.route('/')
@@ -42,7 +41,7 @@ router.route('/')
     .post(authorize(...rolesConAcceso), vueloController.registrarVuelo); 
 
 router.route('/:id')
-    // El borrado es crítico por el impacto en el cómputo de horas, queda para el Admin.
+    // El borrado es crítico por el impacto inverso en el cómputo de horas de los legajos
     .delete(authorize('admin', 'OPERACIONES', 'JEFE'), vueloController.eliminarVuelo); 
 
 module.exports = router;

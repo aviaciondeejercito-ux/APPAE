@@ -1,7 +1,22 @@
 const mongoose = require('mongoose');
 
 const vueloSchema = new mongoose.Schema({
-  fecha: { type: Date, required: true },
+  fecha: { 
+    type: Date, 
+    required: true,
+    // Forzamos a que la fecha guarde las 00:00:00 exactas de la fecha elegida, evitando desfases horarias
+    set: function(val) {
+      if (!val) return val;
+      if (typeof val === 'string') {
+        // Si viene "2026-05-22", tomamos solo el año, mes y día para crear una fecha limpia
+        const partes = val.split('T')[0].split('-');
+        if (partes.length === 3) {
+          return new Date(Date.UTC(partes[0], partes[1] - 1, partes[2], 0, 0, 0));
+        }
+      }
+      return val;
+    }
+  },
   
   // --- AERONAVE ---
   aeronave: { 

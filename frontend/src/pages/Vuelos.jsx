@@ -81,6 +81,7 @@ const Vuelos = () => {
             ...formData,
             unidadResponsable: userUnidad, // Inyectamos la unidad del operador
             instructor: formData.instructor || null,
+            piloto: formData.piloto || null,
             copiloto: formData.copiloto || null,
             mecanico: formData.mecanico || null,
             segundoMecanico: formData.segundoMecanico || null,
@@ -122,6 +123,15 @@ const Vuelos = () => {
         }
     };
 
+    // FUNCIÓN DE FORMATEO LOCAL PARA EVITAR DESFASE UTC
+    const formatearFechaLocal = (fechaString) => {
+        if (!fechaString) return 'S/D';
+        // Tomamos los componentes YYYY, MM, DD directamente del string sin pasar por UTC
+        const partes = fechaString.split('T')[0].split('-');
+        if (partes.length !== 3) return new Date(fechaString).toLocaleDateString();
+        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    };
+
     return (
         <div style={styles.container}>
             <div style={styles.header}>
@@ -138,7 +148,7 @@ const Vuelos = () => {
                     <form onSubmit={handleSubmit} style={styles.form}>
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Fecha</label>
-                            <input type="date" style={styles.input} onChange={e => setFormData({...formData, fecha: e.target.value})} required/></div>
+                            <input type="date" style={styles.input} value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} required/></div>
                             <div style={styles.group}><label style={styles.label}>Aeronave (SdA)</label>
                             <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
                                 <option value="">Seleccionar...</option>
@@ -229,7 +239,7 @@ const Vuelos = () => {
                                 {vuelos.map(v => (
                                     <tr key={v._id} style={styles.tr}>
                                         <td style={styles.td}>
-                                            <div style={{fontWeight: 'bold'}}>{new Date(v.fecha).toLocaleDateString()}</div>
+                                            <div style={{fontWeight: 'bold'}}>{formatearFechaLocal(v.fecha)}</div>
                                             <div style={{fontSize: '0.7rem', color: '#666'}}>{v.desde} ➔ {v.hasta}</div>
                                             <div style={styles.hsBadge}>{v.horasVoladas} hs</div>
                                         </td>
@@ -257,7 +267,6 @@ const Vuelos = () => {
                                             <div style={{fontSize: '0.7rem', marginTop: '4px', color: '#444'}}>APOYO: {v.elementoApoyado}</div>
                                         </td>
                                         <td style={styles.td}>
-                                            {/* CORREGIDO: Visible para Admin, Operaciones y Jefe */}
                                             {puedeEliminarVuelo && (
                                                 <button onClick={() => eliminarVuelo(v._id)} style={styles.btnDel}>
                                                     <Trash2 size={16}/>
