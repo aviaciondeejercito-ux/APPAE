@@ -3,7 +3,7 @@ const Tripulante = require('../models/Tripulante');
 const Auditoria = require('../models/Auditoria');
 
 /**
- * REGISTRO DE VUELO E IMPACTO EN LEGAJOS (TOTALES, SdA Y TÁCTICAS)
+ * REGISTRO DE VUELO E IMPACTO EN LEGAJOS (TOTALES, SdA POR ROL Y TÁCTICAS)
  */
 exports.registrarVuelo = async (req, res) => {
     try {
@@ -33,28 +33,26 @@ exports.registrarVuelo = async (req, res) => {
 
         await nuevoVuelo.save();
 
-        // 3. Definir tripulantes afectados (filtramos los null)
-        const tripulantesIds = [
-            nuevoVuelo.instructor,
-            nuevoVuelo.piloto,
-            nuevoVuelo.copiloto,
-            nuevoVuelo.mecanico,
-            nuevoVuelo.segundoMecanico
-        ].filter(id => id !== null);
+        // 3. Mapeo estructurado con el ROL exacto que cumplió cada tripulante en este vuelo específico
+        const tripulantesAfectados = [];
+        if (nuevoVuelo.instructor) tripulantesAfectados.push({ id: nuevoVuelo.instructor, rolVuelo: 'Instructor' });
+        if (nuevoVuelo.piloto) tripulantesAfectados.push({ id: nuevoVuelo.piloto, rolVuelo: 'Piloto' });
+        if (nuevoVuelo.copiloto) tripulantesAfectados.push({ id: nuevoVuelo.copiloto, rolVuelo: 'Copiloto' });
+        if (nuevoVuelo.mecanico) tripulantesAfectados.push({ id: nuevoVuelo.mecanico, rolVuelo: 'Mecánico' });
+        if (nuevoVuelo.segundoMecanico) tripulantesAfectados.push({ id: nuevoVuelo.segundoMecanico, rolVuelo: 'Mecánico' });
 
         const hs = Number(datosVuelo.horasVoladas);
         const esNocturno = datosVuelo.condicion === 'Nocturno';
         const esIFR = datosVuelo.reglasVuelo === 'IFR';
         const esNVG = datosVuelo.usoNVG === true;
 
-        // 4. Impactar cada legajo
-        for (const tId of tripulantesIds) {
-            const tripulante = await Tripulante.findById(tId);
+        // 4. Impactar cada legajo de manera cruzada (Aeronave + Función de Vuelo)
+        for (const t of tripulantesAfectados) {
+            const tripulante = await Tripulante.findById(t.id);
             if (!tripulante) continue;
 
-            // A. Totales Históricos
+            // A. Totales Históricos Generales
             if (esIFR) tripulante.totalesHistoricos.vueloInstrumental += hs;
-            
             if (esNVG) {
                 tripulante.totalesHistoricos.vueloVisual += hs; 
             } else if (esNocturno) {
@@ -63,29 +61,46 @@ exports.registrarVuelo = async (req, res) => {
                 tripulante.totalesHistoricos.vueloDiurno += hs;
             }
 
-            // B. Habilitación Específica (SdA)
-            const indexHab = tripulante.habilitaciones.findIndex(h => h.aeronave === nuevoVuelo.aeronave);
-            if (indexHab !== -1) {
-                if (esIFR) tripulante.habilitaciones[indexHab].hsInstrumental += hs;
-                if (esNVG) tripulante.habilitaciones[indexHab].hsNVG += hs;
-                if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno += hs;
-                if (!esNocturno && !esIFR) tripulante.habilitaciones[indexHab].hsVisual += hs;
+            // B. Habilitación Específica por SdA (Filtro Cruzado por Aeronave Y ROL)
+            let indexHab = tripulante.habilitaciones.findIndex(h => 
+                h.aeronave === nuevoVuelo.aeronave && h.rolActual === t.rolVuelo
+            );
 
-                tripulante.habilitaciones[indexHab].totalHorasSistema += hs;
-                
-                // SANEAMIENTO DE FECHA PARA ÚLTIMA ACTIVIDAD (Evita heredar desvíos horarias en el legajo)
-                const fechaLimpia = nuevoVuelo.fecha instanceof Date 
-                    ? nuevoVuelo.fecha.toISOString().split('T')[0] 
-                    : nuevoVuelo.fecha;
-
-                tripulante.habilitaciones[indexHab].ultimaActividad = {
-                    fecha: fechaLimpia,
-                    matricula: nuevoVuelo.matricula,
-                    mision: nuevoVuelo.tipoMision
-                };
+            // Si no tiene la habilitación con ese rol inicializada, la creamos dinámicamente para no perder el vuelo
+            if (indexHab === -1) {
+                tripulante.habilitaciones.push({
+                    aeronave: nuevoVuelo.aeronave,
+                    rolActual: t.rolVuelo,
+                    fechaHabilitacion: nuevoVuelo.fecha,
+                    hsVisual: 0,
+                    hsInstrumental: 0,
+                    hsNocturno: 0,
+                    hsNVG: 0,
+                    totalHorasSistema: 0
+                });
+                indexHab = tripulante.habilitaciones.length - 1;
             }
 
-            // C. Impacto en Capacitaciones Tácticas
+            // Distribución de horas según la condición del vuelo cargado
+            if (esIFR) tripulante.habilitaciones[indexHab].hsInstrumental += hs;
+            if (esNVG) tripulante.habilitaciones[indexHab].hsNVG += hs;
+            if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno += hs;
+            if (!esNocturno && !esIFR) tripulante.habilitaciones[indexHab].hsVisual += hs;
+
+            tripulante.habilitaciones[indexHab].totalHorasSistema += hs;
+            
+            // Saneamiento de fecha para última actividad
+            const fechaLimpia = nuevoVuelo.fecha instanceof Date 
+                ? nuevoVuelo.fecha.toISOString().split('T')[0] 
+                : nuevoVuelo.fecha;
+
+            tripulante.habilitaciones[indexHab].ultimaActividad = {
+                fecha: fechaLimpia,
+                matricula: nuevoVuelo.matricula,
+                mision: nuevoVuelo.tipoMision
+            };
+
+            // C. Impacto en Capacitaciones Tácticas Especiales
             const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === nuevoVuelo.tipoMision);
             if (indexTactico !== -1) {
                 tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas += hs;
@@ -126,21 +141,19 @@ exports.obtenerVuelos = async (req, res) => {
     try {
         const { unidad } = req.query;
         let filtro = {};
-        // 1. Normalizamos el rol para que no falle por mayúsculas/minúsculas
         const rolUsuario = req.user.role ? req.user.role.toLowerCase() : 'user';
-        // 2. Lógica de Filtrado:
+        
         if (rolUsuario !== 'admin') {
             filtro.unidadResponsable = req.user.unidad || req.user.elemento;
         } 
-        // Si ES admin y el usuario seleccionó una unidad específica en el frontend
         else if (unidad && unidad !== 'all') {
             filtro.unidadResponsable = unidad;
         }
+        
         const vuelos = await Vuelo.find(filtro)
             .populate('instructor piloto copiloto mecanico segundoMecanico', 'grado apellido nombre')
             .sort({ fecha: -1 });
 
-        // LOG de control para vos en la consola de Render
         console.log(`📡 Solicitud de vuelos por: ${req.user.apellido} (Rol: ${rolUsuario}). Vuelos encontrados: ${vuelos.length}`);
 
         res.json(vuelos);
@@ -151,7 +164,7 @@ exports.obtenerVuelos = async (req, res) => {
 };
 
 /**
- * ELIMINAR VUELO (Lógica Inversa completa)
+ * ELIMINAR VUELO (Lógica Inversa Completa Cruzada)
  */
 exports.eliminarVuelo = async (req, res) => {
     try {
@@ -159,20 +172,21 @@ exports.eliminarVuelo = async (req, res) => {
         if (!vuelo) return res.status(404).json({ mensaje: "Vuelo no encontrado" });
 
         const hs = Number(vuelo.horasVoladas);
-        const tripulantesIds = [
-            vuelo.instructor, 
-            vuelo.piloto, 
-            vuelo.copiloto, 
-            vuelo.mecanico, 
-            vuelo.segundoMecanico
-        ].filter(id => id);
+        
+        // Mapeo inverso de roles para restar las horas exactamente de donde se sumaron
+        const tripulantesAfectados = [];
+        if (vuelo.instructor) tripulantesAfectados.push({ id: vuelo.instructor, rolVuelo: 'Instructor' });
+        if (vuelo.piloto) tripulantesAfectados.push({ id: vuelo.piloto, rolVuelo: 'Piloto' });
+        if (vuelo.copiloto) tripulantesAfectados.push({ id: vuelo.copiloto, rolVuelo: 'Copiloto' });
+        if (vuelo.mecanico) tripulantesAfectados.push({ id: vuelo.mecanico, rolVuelo: 'Mecánico' });
+        if (vuelo.segundoMecanico) tripulantesAfectados.push({ id: vuelo.segundoMecanico, rolVuelo: 'Mecánico' });
 
         const esNocturno = vuelo.condicion === 'Nocturno';
         const esIFR = vuelo.reglasVuelo === 'IFR';
         const esNVG = vuelo.usoNVG === true;
 
-        for (const tId of tripulantesIds) {
-            const tripulante = await Tripulante.findById(tId);
+        for (const t of tripulantesAfectados) {
+            const tripulante = await Tripulante.findById(t.id);
             if (!tripulante) continue;
 
             // 1. Restar de Totales Históricos
@@ -185,13 +199,17 @@ exports.eliminarVuelo = async (req, res) => {
                 tripulante.totalesHistoricos.vueloDiurno -= hs;
             }
 
-            // 2. Restar de SdA
-            const indexHab = tripulante.habilitaciones.findIndex(h => h.aeronave === vuelo.aeronave);
+            // 2. Restar de SdA (Filtro Cruzado Exacto por Aeronave Y ROL)
+            const indexHab = tripulante.habilitaciones.findIndex(h => 
+                h.aeronave === vuelo.aeronave && h.rolActual === t.rolVuelo
+            );
+            
             if (indexHab !== -1) {
                 if (esIFR) tripulante.habilitaciones[indexHab].hsInstrumental -= hs;
                 if (esNVG) tripulante.habilitaciones[indexHab].hsNVG -= hs;
                 if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno -= hs;
                 if (!esNocturno && !esIFR) tripulante.habilitaciones[indexHab].hsVisual -= hs;
+                
                 tripulante.habilitaciones[indexHab].totalHorasSistema -= hs;
             }
 

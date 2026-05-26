@@ -12,18 +12,19 @@ const { protect } = require('../middleware/authMiddleware');
 // 1. Protección Global: Requiere Token
 router.use(protect);
 
-// 2. Middleware de Autorización por Rol (Blindado)
+// 2. Middleware de Autorización por Rol (Blindado SINCRO JOKER)
 const authorize = (...roles) => {
     return (req, res, next) => {
-        // Normalizamos el rol del usuario (Ej: "Oficina_Tecnica" -> "OFICINATECNICA")
-        const userRole = req.user.role?.toUpperCase().replace(/[\s_]/g, '') || '';
+        // Buscamos dinámicamente en 'rol' o 'role' y normalizamos (Ej: "Oficina_Tecnica" o "OFICINA-TECNICA" -> "OFICINATECNICA")
+        const rawRole = req.user?.rol || req.user?.role || '';
+        const userRole = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
         
         // Normalizamos los roles permitidos en la ruta
-        const rolesPermitidos = roles.map(r => r.toUpperCase().replace(/[\s_]/g, ''));
+        const rolesPermitidos = roles.map(r => r.toUpperCase().replace(/[\s_-]/g, ''));
         
         if (!rolesPermitidos.includes(userRole)) {
             return res.status(403).json({ 
-                mensaje: `ACCESO DENEGADO: El rol ${req.user.role} no tiene permisos para la gestión de vuelos.` 
+                mensaje: `ACCESO DENEGADO: El rol [${rawRole || 'SIN ROL'}] no tiene permisos para la gestión de vuelos.` 
             });
         }
         next();
@@ -33,8 +34,8 @@ const authorize = (...roles) => {
 /**
  * 3. Definición de Endpoints
  */
-// LISTA DE ROLES CON ACCESO OPERATIVO A VUELOS
-const rolesConAcceso = ['admin', 'user', 'OPERACIONES'];
+// LISTA DE ROLES CON ACCESO OPERATIVO A VUELOS (Se integra JEFE para visualización y carga básica de unidad)
+const rolesConAcceso = ['admin', 'user', 'OPERACIONES', 'JEFE'];
 
 router.route('/')
     .get(authorize(...rolesConAcceso), vueloController.obtenerVuelos) 

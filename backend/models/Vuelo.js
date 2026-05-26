@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const Tripulante = require('./Tripulante'); // Requerimos el modelo para impactar las horas
 
 const vueloSchema = new mongoose.Schema({
   fecha: { 
@@ -65,11 +66,106 @@ const vueloSchema = new mongoose.Schema({
 
   // --- AUDITORÍA ---
   unidadResponsable: { type: String, required: true, uppercase: true }, 
+  observations: { type: String, uppercase: true }, // Mantenido alias por compatibilidad
   observaciones: { type: String, uppercase: true },
   creadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 
 }, { timestamps: true });
 
 vueloSchema.index({ fecha: -1, aeronave: 1 });
+
+/**
+ * HOOK PRE-SAVE: Procesa y acumula las horas de vuelo en los legajos digitales de forma inteligente.
+ * Discrimina la habilitación exacta cruzando la Aeronave con la Función de vuelo real ejercida.
+ */
+vueloSchema.pre('save', async function(next) {
+  // Solo sumamos horas si es un registro de vuelo nuevo
+  if (!this.isNew) return next();
+
+  try {
+    const hs = Number(this.horasVoladas || 0);
+    const SdA = this.aeronave;
+
+    // Desglose de condiciones de vuelo según los campos del formulario
+    const esNocturno = this.condicion === 'Nocturno';
+    const esInstrumental = this.reglasVuelo === 'IFR';
+    const esNVG = this.usoNVG === true;
+    const esVisual = !esNocturno && !esInstrumental && !esNVG;
+
+    // Mapeo de la tripulación con su rol exacto en este vuelo
+    const tripulantesAfectados = [];
+    if (this.instructor) tripulantesAfectados.push({ id: this.instructor, rolVuelo: 'Instructor' });
+    if (this.piloto) tripulantesAfectados.push({ id: this.piloto, rolVuelo: 'Piloto' });
+    if (this.copiloto) tripulantesAfectados.push({ id: this.copiloto, rolVuelo: 'Copiloto' });
+    if (this.mecanico) tripulantesAfectados.push({ id: this.mecanico, rolVuelo: 'Mecánico' });
+    if (this.segundoMecanico) tripulantesAfectados.push({ id: this.segundoMecanico, rolVuelo: 'Mecánico' });
+
+    for (const t of tripulantesAfectados) {
+      const tripulante = await Tripulante.findById(t.id);
+      if (!tripulante) continue;
+
+      // BÚSQUEDA CRUZADA INTELIGENTE: Buscamos la fila que coincida con el Sistema de Armas Y el rol de este vuelo
+      let indexHab = tripulante.habilitaciones.findIndex(h => 
+        h.aeronave === SdA && h.rolActual === t.rolVuelo
+      );
+
+      // Si no tiene esa combinación creada (ej: es su primer vuelo con ese rol en el SdA), la inicializamos
+      if (indexHab === -1) {
+        tripulante.habilitaciones.push({
+          aeronave: SdA,
+          rolActual: t.rolVuelo,
+          fechaHabilitacion: this.fecha,
+          hsVisual: 0,
+          hsInstrumental: 0,
+          hsNocturno: 0,
+          hsNVG: 0,
+          totalHorasSistema: 0
+        });
+        indexHab = tripulante.habilitaciones.length - 1;
+      }
+
+      // 1. Sumamos las horas en la habilitación específica del rol ejecutado
+      if (esVisual) tripulante.habilitaciones[indexHab].hsVisual += hs;
+      if (esInstrumental) tripulante.habilitaciones[indexHab].hsInstrumental += hs;
+      if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno += hs;
+      if (esNVG) tripulante.habilitaciones[indexHab].hsNVG += hs;
+
+      // Recalculamos el total del SdA para ese rol específico
+      tripulante.habilitaciones[indexHab].totalHorasSistema = 
+        Number(tripulante.habilitaciones[indexHab].hsVisual || 0) +
+        Number(tripulante.habilitaciones[indexHab].hsInstrumental || 0) +
+        Number(tripulante.habilitaciones[indexHab].hsNocturno || 0) +
+        Number(tripulante.habilitaciones[indexHab].hsNVG || 0);
+
+      // Actualizamos los datos de la última actividad en esa habilitación
+      tripulante.habilitaciones[indexHab].ultimaActividad = {
+        fecha: this.fecha,
+        matricula: this.matricula,
+        mision: this.tipoMision
+      };
+
+      // 2. RECALCULO GENERAL DE TOTALES HISTÓRICOS: Suma limpia sin duplicar
+      const recalculoHistorico = tripulante.habilitaciones.reduce((acc, hab) => {
+        acc.v += Number(hab.hsVisual || 0);
+        acc.i += Number(hab.hsInstrumental || 0);
+        acc.n += Number(hab.hsNocturno || 0);
+        acc.nvg += Number(hab.hsNVG || 0);
+        return acc;
+      }, { v: 0, i: 0, n: 0, nvg: 0 });
+
+      tripulante.totalesHistoricos.vueloDiurno = recalculoHistorico.v;
+      tripulante.totalesHistoricos.vueloInstrumental = recalculoHistorico.i;
+      tripulante.totalesHistoricos.vueloNocturno = recalculoHistorico.n;
+      tripulante.totalesHistoricos.vueloVisual = recalculoHistorico.nvg;
+
+      // Guardamos los cambios en el legajo del tripulante de forma atómica
+      await tripulante.save();
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = mongoose.model('Vuelo', vueloSchema);

@@ -51,7 +51,7 @@ const Vuelos = () => {
                 // Si es ADMIN, BOSS, DIRECTOR u OTO, no filtramos nada.
                 setVuelos(res.data);
             } else {
-                // Para OPERACIONES o USER, filtramos por su unidad
+                // Para OPERACIONES, JEFE o USER, filtramos por su unidad
                 const dataFiltrada = res.data.filter(v => {
                     const unidadVuelo = (v.unidadResponsable || "").toUpperCase();
                     const matriculaVuelo = (v.matricula || "").toUpperCase();
@@ -94,10 +94,12 @@ const Vuelos = () => {
             await API.post('/vuelos', payload);
             alert("✅ Vuelo registrado y horas computadas correctamente.");
             setFormData({ 
-                ...formData, 
-                horasVoladas: 0, desde: '', hasta: '', matricula: '',
+                fecha: '', aeronave: '', matricula: '',
                 instructor: '', piloto: '', copiloto: '', mecanico: '', segundoMecanico: '',
-                cantidadPasajeros: 0, pesoCarga: 0, elementoApoyado: ''
+                desde: '', hasta: '', horasVoladas: 0,
+                condicion: 'Diurno', reglasVuelo: 'VFR', usoNVG: false,
+                tipoMision: '', localTravesia: 'Local', 
+                elementoApoyado: '', cantidadPasajeros: 0, pesoCarga: 0
             });
             fetchVuelos();
         } catch (error) {
@@ -123,10 +125,8 @@ const Vuelos = () => {
         }
     };
 
-    // FUNCIÓN DE FORMATEO LOCAL PARA EVITAR DESFASE UTC
     const formatearFechaLocal = (fechaString) => {
         if (!fechaString) return 'S/D';
-        // Tomamos los componentes YYYY, MM, DD directamente del string sin pasar por UTC
         const partes = fechaString.split('T')[0].split('-');
         if (partes.length !== 3) return new Date(fechaString).toLocaleDateString();
         return `${partes[2]}/${partes[1]}/${partes[0]}`;
@@ -164,21 +164,34 @@ const Vuelos = () => {
                         </div>
 
                         <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Instructor (Opt)</label>
+                            <select style={styles.input} value={formData.instructor} onChange={e => setFormData({...formData, instructor: e.target.value})}>
+                                <option value="">Ninguno</option>
+                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                            </select></div>
                             <div style={styles.group}><label style={styles.label}>Piloto</label>
                             <select style={styles.input} value={formData.piloto} onChange={e => setFormData({...formData, piloto: e.target.value})} required>
                                 <option value="">Seleccionar...</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
                             </select></div>
+                        </div>
+
+                        <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Copiloto (Opt)</label>
                             <select style={styles.input} value={formData.copiloto} onChange={e => setFormData({...formData, copiloto: e.target.value})}>
+                                <option value="">Ninguno</option>
+                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                            </select></div>
+                            <div style={styles.group}><label style={styles.label}>Mecánico 1 (Opt)</label>
+                            <select style={styles.input} value={formData.mecanico} onChange={e => setFormData({...formData, mecanico: e.target.value})}>
                                 <option value="">Ninguno</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
                             </select></div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Mecánico 1</label>
-                            <select style={styles.input} value={formData.mecanico} onChange={e => setFormData({...formData, mecanico: e.target.value})}>
+                            <div style={styles.group}><label style={styles.label}>Mecánico 2 (Opt)</label>
+                            <select style={styles.input} value={formData.segundoMecanico} onChange={e => setFormData({...formData, segundoMecanico: e.target.value})}>
                                 <option value="">Ninguno</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
                             </select></div>
@@ -199,11 +212,36 @@ const Vuelos = () => {
                                 <option value="">Seleccionar...</option>
                                 {misiones.map(m => <option key={m} value={m}>{m}</option>)}
                             </select></div>
+                            <div style={styles.group}><label style={styles.label}>Navegación</label>
+                            <select style={styles.input} value={formData.localTravesia} onChange={e => setFormData({...formData, localTravesia: e.target.value})}>
+                                <option value="Local">Local</option>
+                                <option value="Travesia">Travesía</option>
+                            </select></div>
+                        </div>
+
+                        <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Condición</label>
                             <select style={styles.input} value={formData.condicion} onChange={e => setFormData({...formData, condicion: e.target.value})}>
                                 <option value="Diurno">Diurno</option>
                                 <option value="Nocturno">Nocturno</option>
                             </select></div>
+                            <div style={styles.group}><label style={styles.label}>Reglas de Vuelo</label>
+                            <select style={styles.input} value={formData.reglasVuelo} onChange={e => setFormData({...formData, reglasVuelo: e.target.value})}>
+                                <option value="VFR">VFR (Visual)</option>
+                                <option value="IFR">IFR (Instrumental)</option>
+                            </select></div>
+                        </div>
+
+                        <div style={styles.row}>
+                            <div style={styles.group}><label style={styles.label}>Pasajeros</label>
+                            <input type="number" style={styles.input} value={formData.cantidadPasajeros} onChange={e => setFormData({...formData, cantidadPasajeros: e.target.value})}/></div>
+                            <div style={styles.group}><label style={styles.label}>Carga (Kg)</label>
+                            <input type="number" style={styles.input} value={formData.pesoCarga} onChange={e => setFormData({...formData, pesoCarga: e.target.value})}/></div>
+                        </div>
+
+                        <div style={{ ...styles.group, flexDirection: 'row', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
+                            <input type="checkbox" id="usoNVG" checked={formData.usoNVG} onChange={e => setFormData({...formData, usoNVG: e.target.checked})}/>
+                            <label htmlFor="usoNVG" style={{...styles.label, cursor: 'pointer', marginTop: '2px'}}>¿Utilizó visores nocturnos (NVG)?</label>
                         </div>
 
                         <button disabled={loading} type="submit" style={styles.btnSave}>
@@ -249,8 +287,11 @@ const Vuelos = () => {
                                         </td>
                                         <td style={styles.td}>
                                             <div style={styles.tripuList}>
+                                                {v.instructor && <span style={{color: '#b45309'}}><Users size={10} /> IN: {v.instructor.apellido}</span>}
                                                 <span><Users size={10} /> P: {v.piloto?.apellido || 'S/D'}</span>
                                                 {v.copiloto && <span><Users size={10} /> C: {v.copiloto.apellido}</span>}
+                                                {v.mecanico && <span style={{color: '#4b5563'}}><Users size={10} /> M1: {v.mecanico.apellido}</span>}
+                                                {v.segundoMecanico && <span style={{color: '#4b5563'}}><Users size={10} /> M2: {v.segundoMecanico.apellido}</span>}
                                             </div>
                                         </td>
                                         <td style={styles.td}>
@@ -261,6 +302,7 @@ const Vuelos = () => {
                                             <div style={styles.miniTag}>{v.reglasVuelo}</div>
                                             <div style={styles.miniTag}>{v.condicion}</div>
                                             {v.usoNVG && <div style={{...styles.miniTag, backgroundColor: '#dcfce7', color: '#166534'}}>NVG</div>}
+                                            <div style={styles.miniTag}>{v.localTravesia}</div>
                                         </td>
                                         <td style={styles.td}>
                                             <span style={styles.misionTag}>{v.tipoMision}</span>
@@ -291,7 +333,7 @@ const styles = {
     title: { margin: 0, fontSize: '1.4rem', color: '#1b3a57', fontWeight: 'bold' },
     subtitle: { color: '#7f8c8d', fontSize: '0.85rem' },
     mainGrid: { display: 'flex', gap: '20px', alignItems: 'flex-start' },
-    card: { backgroundColor: 'white', borderRadius: '8px', padding: '15px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', minWidth: '400px' },
+    card: { backgroundColor: 'white', borderRadius: '8px', padding: '15px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', minWidth: '420px' },
     cardTitle: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: '#1b3a57', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px', fontWeight: 'bold', textTransform: 'uppercase' },
     form: { display: 'flex', flexDirection: 'column', gap: '10px' },
     row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
