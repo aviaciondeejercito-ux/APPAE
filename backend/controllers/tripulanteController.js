@@ -60,7 +60,7 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Gestionar Habilitación SdA
+// 2. Gestionar Habilitación SdA (Modificado: Permite múltiples funciones por Sistema de Armas)
 exports.gestionarHabilitacion = async (req, res) => {
     try {
         const { id } = req.params;
@@ -91,18 +91,13 @@ exports.gestionarHabilitacion = async (req, res) => {
         const nvg = Number(hsNVG || 0);
         const totalSdA = v + i + n + nvg;
 
-        const index = tripulante.habilitaciones.findIndex(h => h.aeronave === aeronave);
+        // BÚSQUEDA INTELIGENTE: Validamos tanto la Aeronave como la Función de vuelo para no solapar datos
+        const index = tripulante.habilitaciones.findIndex(h => 
+            h.aeronave === aeronave && h.rolActual === rolActual
+        );
 
         if (index !== -1) {
-            const anterior = tripulante.habilitaciones[index];
-            if (anterior.rolActual !== rolActual) {
-                tripulante.habilitaciones[index].historialRoles.push({
-                    rol: anterior.rolActual,
-                    fechaDesde: anterior.fechaHabilitacion,
-                    fechaHasta: new Date()
-                });
-            }
-            tripulante.habilitaciones[index].rolActual = rolActual;
+            // Si coincide aeronave y función, se actualiza el desglose de ese registro específico
             tripulante.habilitaciones[index].fechaHabilitacion = fechaHabilitacion;
             tripulante.habilitaciones[index].hsVisual = v;
             tripulante.habilitaciones[index].hsInstrumental = i;
@@ -111,6 +106,7 @@ exports.gestionarHabilitacion = async (req, res) => {
             tripulante.habilitaciones[index].totalHorasSistema = totalSdA;
             tripulante.habilitaciones[index].observaciones = observaciones;
         } else {
+            // Si es una función nueva para el SdA (ej: pasó de Copiloto a Piloto), crea una nueva entrada
             tripulante.habilitaciones.push({
                 aeronave, fechaHabilitacion, rolActual,
                 hsVisual: v, hsInstrumental: i, hsNocturno: n, hsNVG: nvg,
@@ -118,6 +114,7 @@ exports.gestionarHabilitacion = async (req, res) => {
             });
         }
 
+        // RECALCULO GENERAL DINÁMICO: Suma de manera transparente todos los desgloses del array
         const recalculo = tripulante.habilitaciones.reduce((acc, hab) => {
             acc.v += Number(hab.hsVisual || 0);
             acc.i += Number(hab.hsInstrumental || 0);
@@ -140,9 +137,9 @@ exports.gestionarHabilitacion = async (req, res) => {
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
             usuarioUnidad: miUnidad,
             accion: 'MODIFICACION',
-            entidadAfectada: `Habilitación SdA: ${aeronave} - ${tripulante.apellido}`,
+            entidadAfectada: `Habilitación SdA: ${aeronave} (${rolActual}) - ${tripulante.apellido}`,
             entidadId: tripulante._id,
-            detalles: `Actualización de capacidad y horas desglosadas`
+            detalles: `Actualización de capacidad y horas desglosadas por rol`
         });
 
         res.status(200).json({ mensaje: "Habilitación y totales actualizados", tripulante });
@@ -182,7 +179,7 @@ exports.agregarCapacitacion = async (req, res) => {
             usuarioUnidad: miUnidad,
             accion: 'MODIFICACION',
             entidadAfectada: `Capacitación: ${req.body.tipo} para ${tripulante.apellido}`,
-            entidadId: tripulante._id
+            entityId: tripulante._id
         });
 
         res.status(200).json({ mensaje: "Capacitación añadida con éxito", tripulante });
@@ -191,7 +188,7 @@ exports.agregarCapacitacion = async (req, res) => {
     }
 };
 
-// 4. Obtener Tripulantes (Con Inyección de Plan Vacío para EBM)
+// 4. Obtener Tripulantes
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;

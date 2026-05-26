@@ -30,13 +30,12 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- FUNCIÓN CRÍTICA: CÓMPUTO DINÁMICO DE HORAS EN TIEMPO REAL ---
+    // --- CÓMPUTO DINÁMICO DE HORAS EN TIEMPO REAL POR CADA REGISTRO ---
     const obtenerTotalesDinamicos = () => {
         const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
         
         if (!seleccionado) return totales;
 
-        // 1. Sumamos las horas de todas las habilitaciones de Sistemas de Armas (SdA) actuales
         if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
             seleccionado.habilitaciones.forEach(h => {
                 totales.visual += Number(h.hsVisual || 0);
@@ -45,10 +44,6 @@ const Tripulantes = () => {
                 totales.nvg += Number(h.hsNVG || 0);
             });
         }
-
-        // Nota: Si querés que las Aptitudes Tácticas Especiales (capacitacionesEspeciales) sumen 
-        // a algún total general o no, podés agregarlo o discriminarlo acá. Como viste que "quedaban cargadas",
-        // calcularlo exclusivamente en base a los SdA activos solucionará la desincronización por completo.
         
         return totales;
     };
@@ -145,17 +140,17 @@ const Tripulantes = () => {
                 } else if (modalType === 'horas') {
                     await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
                 } else if (modalType === 'habilitacion') {
-                    const totalSdA = Number(formData.hsVisual) + Number(formData.hsInstrumental) + Number(formData.hsNocturno) + Number(formData.hsNVG);
-                    
-                    // Mantenemos la actualización por compatibilidad con tu backend, pero la vista usará el cálculo dinámico real
-                    const nuevosTotales = {
-                        vueloDiurno: (seleccionado.totalesHistoricos?.vueloDiurno || 0) + Number(formData.hsVisual || 0),
-                        vueloNocturno: (seleccionado.totalesHistoricos?.vueloNocturno || 0) + Number(formData.hsNocturno || 0),
-                        vueloInstrumental: (seleccionado.totalesHistoricos?.vueloInstrumental || 0) + Number(formData.hsInstrumental || 0),
-                        vueloVisual: (seleccionado.totalesHistoricos?.vueloVisual || 0) + Number(formData.hsNVG || 0)
-                    };
-                    await updateTripulante(seleccionado._id, { totalesHistoricos: nuevosTotales });
-                    await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, { ...formData, totalHorasSistema: totalSdA });
+                    // Envía la habilitación con la combinación única de aeronave y función de vuelo asignada
+                    await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, { 
+                        aeronave: formData.aeronave,
+                        fechaHabilitacion: formData.fechaHabilitacion,
+                        rolActual: formData.rolActual,
+                        hsVisual: Number(formData.hsVisual || 0),
+                        hsInstrumental: Number(formData.hsInstrumental || 0),
+                        hsNocturno: Number(formData.hsNocturno || 0),
+                        hsNVG: Number(formData.hsNVG || 0),
+                        observaciones: formData.observaciones || ''
+                    });
                 } else if (modalType === 'capacitacion') {
                     await API.post(`/tripulantes/${seleccionado._id}/capacitacion`, formData);
                 }
@@ -163,7 +158,10 @@ const Tripulantes = () => {
             setShowAltaModal(false);
             setShowEditModal(false);
             await fetchPersonal();
-        } catch (error) { alert("Error en la operación del legajo."); }
+        } catch (error) { 
+            console.error(error);
+            alert("Error en la operación del legajo."); 
+        }
     };
 
     const deleteSubItem = async (type, itemId) => {
@@ -174,7 +172,6 @@ const Tripulantes = () => {
             if (type === 'habilitacion') {
                 updatedData.habilitaciones = seleccionado.habilitaciones.filter(h => h._id !== itemId);
                 
-                // --- ARREGLO DE FLUJO: recalculamos totalesHistoricos al remover un SdA para mantener consistente la BD ---
                 const nuevosTotales = { vueloDiurno: 0, vueloNocturno: 0, vueloInstrumental: 0, vueloVisual: 0 };
                 updatedData.habilitaciones.forEach(h => {
                     nuevosTotales.vueloDiurno += Number(h.hsVisual || 0);
@@ -267,7 +264,7 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* TOTALES (AHORA SON TOTALMENTE DINÁMICOS Y REACTIVOS) */}
+                            {/* TOTALES (DINÁMICOS Y REACTIVOS) */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES DINÁMICOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
@@ -387,11 +384,11 @@ const Tripulantes = () => {
                                 {modalType === 'habilitacion' && (
                                     <div style={styles.formCol}>
                                         <label style={styles.label}>SdA</label>
-                                        <select style={styles.formInput} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
+                                        <select style={styles.formInput} value={formData.aeronave} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
                                             <option value="">Seleccionar...</option>{aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
                                         </select>
                                         <label style={styles.label}>Función</label>
-                                        <select style={styles.formInput} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
+                                        <select style={styles.formInput} value={formData.rolActual} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
                                             <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
                                         </select>
                                         <label style={styles.label}>Hs Visual SdA</label>
@@ -403,7 +400,7 @@ const Tripulantes = () => {
                                         <label style={styles.label}>Hs NVG SdA</label>
                                         <input type="number" style={styles.formInput} value={formData.hsNVG} onChange={e => setFormData({...formData, hsNVG: e.target.value})} required />
                                         <label style={styles.label}>Fecha Aptitud Inicial</label>
-                                        <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
+                                        <input type="date" style={styles.formInput} value={formData.fechaHabilitacion} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
                                     </div>
                                 )}
 
