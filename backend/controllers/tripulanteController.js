@@ -3,7 +3,7 @@ const Auditoria = require('../models/Auditoria');
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
- * ESTÁNDAR: SINCRO JOKER v3.5 (Operativo 100%)
+ * ESTÁNDAR: SINCRO JOKER v3.5 (Operativo 100% - Fix Duplicación por Rol)
  */
 
 // Función auxiliar para normalizar la unidad/elemento sin romper el código
@@ -60,7 +60,7 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Gestionar Habilitación SdA (Modificado: Permite múltiples funciones por Sistema de Armas)
+// 2. Gestionar Habilitación SdA (CORREGIDO: Evita duplicación cruzada de horas por rol)
 exports.gestionarHabilitacion = async (req, res) => {
     try {
         const { id } = req.params;
@@ -106,7 +106,7 @@ exports.gestionarHabilitacion = async (req, res) => {
             tripulante.habilitaciones[index].totalHorasSistema = totalSdA;
             tripulante.habilitaciones[index].observaciones = observaciones;
         } else {
-            // Si es una función nueva para el SdA (ej: pasó de Copiloto a Piloto), crea una nueva entrada
+            // Si es una función nueva para el SdA (ej: pasó de Piloto a Instructor), crea una nueva entrada
             tripulante.habilitaciones.push({
                 aeronave, fechaHabilitacion, rolActual,
                 hsVisual: v, hsInstrumental: i, hsNocturno: n, hsNVG: nvg,
@@ -114,19 +114,35 @@ exports.gestionarHabilitacion = async (req, res) => {
             });
         }
 
-        // RECALCULO GENERAL DINÁMICO: Suma de manera transparente todos los desgloses del array
-        const recalculo = tripulante.habilitaciones.reduce((acc, hab) => {
-            acc.v += Number(hab.hsVisual || 0);
-            acc.i += Number(hab.hsInstrumental || 0);
-            acc.n += Number(hab.hsNocturno || 0);
-            acc.nvg += Number(hab.hsNVG || 0);
-            return acc;
-        }, { v: 0, i: 0, n: 0, nvg: 0 });
+        // --- RECALCULO GENERAL DINÁMICO CORREGIDO ---
+        // Agrupamos por Aeronave única para no duplicar horas si comparte roles de Instructor/Piloto
+        const mapaSdA = {};
+        
+        tripulante.habilitaciones.forEach(hab => {
+            const sda = hab.aeronave;
+            if (!mapaSdA[sda]) {
+                mapaSdA[sda] = { v: 0, i: 0, n: 0, nvg: 0 };
+            }
+            // Mantenemos el máximo valor alcanzado por condición en ese sistema de armas
+            mapaSdA[sda].v = Math.max(mapaSdA[sda].v, Number(hab.hsVisual || 0));
+            mapaSdA[sda].i = Math.max(mapaSdA[sda].i, Number(hab.hsInstrumental || 0));
+            mapaSdA[sda].n = Math.max(mapaSdA[sda].n, Number(hab.hsNocturno || 0));
+            mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(hab.hsNVG || 0));
+        });
 
-        tripulante.totalesHistoricos.vueloDiurno = recalculo.v;
-        tripulante.totalesHistoricos.vueloInstrumental = recalculo.i;
-        tripulante.totalesHistoricos.vueloNocturno = recalculo.n;
-        tripulante.totalesHistoricos.vueloVisual = recalculo.nvg;
+        // Consolidamos la suma real definitiva sobre la libreta histórica
+        const realesTotales = { v: 0, i: 0, n: 0, nvg: 0 };
+        Object.values(mapaSdA).forEach(sistema => {
+            realesTotales.v += sistema.v;
+            realesTotales.i += sistema.i;
+            realesTotales.n += sistema.n;
+            realesTotales.nvg += sistema.nvg;
+        });
+
+        tripulante.totalesHistoricos.vueloDiurno = realesTotales.v;
+        tripulante.totalesHistoricos.vueloInstrumental = realesTotales.i;
+        tripulante.totalesHistoricos.vueloNocturno = realesTotales.n;
+        tripulante.totalesHistoricos.vueloVisual = realesTotales.nvg;
 
         tripulante.ultimoEditor = usuarioLogueado._id;
         tripulante.fechaUltimaModificacion = Date.now();
@@ -203,7 +219,7 @@ exports.obtenerTripulantes = async (req, res) => {
             filtro.$or = [{ elemento: miUnidad }, { unidad: miUnidad }];
         } else if (req.query.unidad && req.query.unidad !== 'all') {
             const unidadQuery = req.query.unidad.toUpperCase();
-            filtro.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }];
+            filter.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }];
         }
 
         const tripulantes = await Tripulante.find(filtro)
