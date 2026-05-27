@@ -75,8 +75,8 @@ const vueloSchema = new mongoose.Schema({
 vueloSchema.index({ fecha: -1, aeronave: 1 });
 
 /**
- * HOOK PRE-SAVE: Procesa y acumula las horas de vuelo en los legajos digitales de forma inteligente.
- * Discrimina la habilitación exacta cruzando la Aeronave con la Función de vuelo real ejercida.
+ * HOOK PRE-SAVE: Procesa y acumula las horas de vuelo de manera independiente por rol.
+ * ESTÁNDAR: SINCRO JOKER v3.6 (Roles independientes + Consolidación Inteligente Histórica)
  */
 vueloSchema.pre('save', async function(next) {
   // Solo sumamos horas si es un registro de vuelo nuevo
@@ -92,7 +92,7 @@ vueloSchema.pre('save', async function(next) {
     const esNVG = this.usoNVG === true;
     const esVisual = !esNocturno && !esInstrumental && !esNVG;
 
-    // Mapeo de la tripulación con su rol exacto en este vuelo
+    // Mapeo de la tripulación preservando la TOTAL independencia de información
     const tripulantesAfectados = [];
     if (this.instructor) tripulantesAfectados.push({ id: this.instructor, rolVuelo: 'Instructor' });
     if (this.piloto) tripulantesAfectados.push({ id: this.piloto, rolVuelo: 'Piloto' });
@@ -104,12 +104,12 @@ vueloSchema.pre('save', async function(next) {
       const tripulante = await Tripulante.findById(t.id);
       if (!tripulante) continue;
 
-      // BÚSQUEDA CRUZADA INTELIGENTE: Buscamos la fila que coincida con el Sistema de Armas Y el rol de este vuelo
+      // BÚSQUEDA CRUZADA INDEPENDIENTE: Buscamos la fila específica de la Aeronave Y el Rol de este registro
       let indexHab = tripulante.habilitaciones.findIndex(h => 
         h.aeronave === SdA && h.rolActual === t.rolVuelo
       );
 
-      // Si no tiene esa combinación creada (ej: es su primer vuelo con ese rol en el SdA), la inicializamos
+      // Si no tiene esa combinación creada, se inicializa su registro independiente para este rol
       if (indexHab === -1) {
         tripulante.habilitaciones.push({
           aeronave: SdA,
@@ -124,41 +124,59 @@ vueloSchema.pre('save', async function(next) {
         indexHab = tripulante.habilitaciones.length - 1;
       }
 
-      // 1. Sumamos las horas en la habilitación específica del rol ejecutado
+      // 1. Sumamos las horas de forma aislada en el casillero del rol ejecutado (Piloto, Instructor o Copiloto)
       if (esVisual) tripulante.habilitaciones[indexHab].hsVisual += hs;
       if (esInstrumental) tripulante.habilitaciones[indexHab].hsInstrumental += hs;
       if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno += hs;
       if (esNVG) tripulante.habilitaciones[indexHab].hsNVG += hs;
 
-      // Recalculamos el total del SdA para ese rol específico
+      // Recalculamos el total del SdA para ese rol específico de forma independiente
       tripulante.habilitaciones[indexHab].totalHorasSistema = 
         Number(tripulante.habilitaciones[indexHab].hsVisual || 0) +
         Number(tripulante.habilitaciones[indexHab].hsInstrumental || 0) +
         Number(tripulante.habilitaciones[indexHab].hsNocturno || 0) +
         Number(tripulante.habilitaciones[indexHab].hsNVG || 0);
 
-      // Actualizamos los datos de la última actividad en esa habilitación
+      // Guardamos la última actividad del rol correspondiente
       tripulante.habilitaciones[indexHab].ultimaActividad = {
         fecha: this.fecha,
         matricula: this.matricula,
         mision: this.tipoMision
       };
 
-      // 2. RECALCULO GENERAL DE TOTALES HISTÓRICOS: Suma limpia sin duplicar
-      const recalculoHistorico = tripulante.habilitaciones.reduce((acc, hab) => {
-        acc.v += Number(hab.hsVisual || 0);
-        acc.i += Number(hab.hsInstrumental || 0);
-        acc.n += Number(hab.hsNocturno || 0);
-        acc.nvg += Number(hab.hsNVG || 0);
-        return acc;
-      }, { v: 0, i: 0, n: 0, nvg: 0 });
+      // --- 2. RECALCULO GENERAL DE TOTALES HISTÓRICOS (Consolidación Inteligente por SdA) ---
+      // Agrupamos temporalmente todas las sub-filas del tripulante por Aeronave única usando un mapa de máximos.
+      // Esto evita que si una misma persona sumó 1 hora de Instructor y 1 hora de Piloto en el mismo SdA,
+      // la sumatoria histórica total incremente erróneamente en 2 horas.
+      const mapaSdA = {};
+      
+      tripulante.habilitaciones.forEach(hab => {
+        const sdaId = hab.aeronave;
+        if (!mapaSdA[sdaId]) {
+          mapaSdA[sdaId] = { v: 0, i: 0, n: 0, nvg: 0 };
+        }
+        // Tomamos el valor máximo alcanzado por condición en este sistema de armas
+        mapaSdA[sdaId].v = Math.max(mapaSdA[sdaId].v, Number(hab.hsVisual || 0));
+        mapaSdA[sdaId].i = Math.max(mapaSdA[sdaId].i, Number(hab.hsInstrumental || 0));
+        mapaSdA[sdaId].n = Math.max(mapaSdA[sdaId].n, Number(hab.hsNocturno || 0));
+        mapaSdA[sdaId].nvg = Math.max(mapaSdA[sdaId].nvg, Number(hab.hsNVG || 0));
+      });
 
-      tripulante.totalesHistoricos.vueloDiurno = recalculoHistorico.v;
-      tripulante.totalesHistoricos.vueloInstrumental = recalculoHistorico.i;
-      tripulante.totalesHistoricos.vueloNocturno = recalculoHistorico.n;
-      tripulante.totalesHistoricos.vueloVisual = recalculoHistorico.nvg;
+      // Consolidamos los totales limpios sumando los máximos de cada Sistema de Armas diferente
+      const totalesLimpios = { v: 0, i: 0, n: 0, nvg: 0 };
+      Object.values(mapaSdA).forEach(sistema => {
+        totalesLimpios.v += sistema.v;
+        totalesLimpios.i += sistema.i;
+        totalesLimpios.n += sistema.n;
+        totalesLimpios.nvg += sistema.nvg;
+      });
 
-      // Guardamos los cambios en el legajo del tripulante de forma atómica
+      tripulante.totalesHistoricos.vueloDiurno = totalesLimpios.v;
+      tripulante.totalesHistoricos.vueloInstrumental = totalesLimpios.i;
+      tripulante.totalesHistoricos.vueloNocturno = totalesLimpios.n;
+      tripulante.totalesHistoricos.vueloVisual = totalesLimpios.nvg;
+
+      // Guardamos el legajo del tripulante actualizado y consistente
       await tripulante.save();
     }
 
