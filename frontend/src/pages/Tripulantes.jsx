@@ -30,7 +30,7 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS EN TIEMPO REAL CORREGIDO (Agrupado por Sistema para evitar duplicados por Rol) ---
+    // --- CÓMPUTO DINÁMICO DE HORAS EN TIEMPO REAL (Agrupado por Sistema para evitar duplicados por Rol) ---
     const obtenerTotalesDinamicos = () => {
         const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
         
@@ -38,7 +38,7 @@ const Tripulantes = () => {
             return totales;
         }
 
-        // Agrupamos por aeronave para tomar el registro con más horas y no duplicar si el usuario es Piloto e Instructor del mismo SdA
+        // Agrupamos por aeronave para tomar el valor máximo y no duplicar si comparte roles (Piloto / Instructor)
         const mapaSdA = {};
 
         seleccionado.habilitaciones.forEach(h => {
@@ -46,14 +46,14 @@ const Tripulantes = () => {
             if (!mapaSdA[sda]) {
                 mapaSdA[sda] = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
             }
-            // Mantenemos el máximo valor alcanzado por condición en ese sistema de armas específico
+            // Mantenemos el máximo valor alcanzado por condición en ese SdA específico
             mapaSdA[sda].visual = Math.max(mapaSdA[sda].visual, Number(h.hsVisual || 0));
             mapaSdA[sda].instrumental = Math.max(mapaSdA[sda].instrumental, Number(h.hsInstrumental || 0));
             mapaSdA[sda].nocturno = Math.max(mapaSdA[sda].nocturno, Number(h.hsNocturno || 0));
             mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(h.hsNVG || 0));
         });
 
-        // Sumamos los totales reales consolidados de cada Aeronave diferente sin colisiones de rol
+        // Sumamos los consolidados sin colisiones de rol
         Object.values(mapaSdA).forEach(sistema => {
             totales.visual += sistema.visual;
             totales.instrumental += sistema.instrumental;
@@ -95,7 +95,7 @@ const Tripulantes = () => {
     };
 
     const handleEliminarTripulante = async (id) => {
-        if (!window.confirm("¿ESTÁ SEGURO? Esta acción eliminará el legajo digital completo y todo su historial de vuelo de forma definitiva.")) return;
+        if (!window.confirm("¿ESTÁ SEGURO? Esta acción eliminará el legajo digital completo.")) return;
         try {
             await deleteTripulante(id);
             alert("Legajo eliminado correctamente.");
@@ -187,13 +187,27 @@ const Tripulantes = () => {
             if (type === 'habilitacion') {
                 updatedData.habilitaciones = seleccionado.habilitaciones.filter(h => h._id !== itemId);
                 
-                const nuevosTotales = { vueloDiurno: 0, vueloNocturno: 0, vueloInstrumental: 0, vueloVisual: 0 };
+                // Recalculamos usando un mapa de SdA único para evitar re-introducir duplicados al guardar históricos
+                const mapaSdA = {};
                 updatedData.habilitaciones.forEach(h => {
-                    nuevosTotales.vueloDiurno += Number(h.hsVisual || 0);
-                    nuevosTotales.vueloNocturno += Number(h.hsNocturno || 0);
-                    nuevosTotales.vueloInstrumental += Number(h.hsInstrumental || 0);
-                    nuevosTotales.vueloVisual += Number(h.hsNVG || 0);
+                    const sda = h.aeronave;
+                    if (!mapaSdA[sda]) {
+                        mapaSdA[sda] = { visual: 0, nocturno: 0, instrumental: 0, nvg: 0 };
+                    }
+                    mapaSdA[sda].visual = Math.max(mapaSdA[sda].visual, Number(h.hsVisual || 0));
+                    mapaSdA[sda].nocturno = Math.max(mapaSdA[sda].nocturno, Number(h.hsNocturno || 0));
+                    mapaSdA[sda].instrumental = Math.max(mapaSdA[sda].instrumental, Number(h.hsInstrumental || 0));
+                    mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(h.hsNVG || 0));
                 });
+
+                const nuevosTotales = { vueloDiurno: 0, vueloNocturno: 0, vueloInstrumental: 0, vueloVisual: 0 };
+                Object.values(mapaSdA).forEach(sistema => {
+                    nuevosTotales.vueloDiurno += sistema.visual;
+                    nuevosTotales.vueloNocturno += sistema.nocturno;
+                    nuevosTotales.vueloInstrumental += sistema.instrumental;
+                    nuevosTotales.vueloVisual += sistema.nvg;
+                });
+                
                 updatedData.totalesHistoricos = nuevosTotales;
 
             } else if (type === 'capacitacion') {
@@ -279,7 +293,7 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* TOTALES (DINÁMICOS Y REACTIVOS CORREGIDOS) */}
+                            {/* TOTALES DINÁMICOS CORREGIDOS */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES DINÁMICOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
