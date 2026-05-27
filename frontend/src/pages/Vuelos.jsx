@@ -75,6 +75,13 @@ const Vuelos = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // VALIDACIÓN OPERATIVA PRE-FLIGHT: Al menos debe registrarse un piloto responsable de la aeronave
+        if (!formData.instructor && !formData.piloto && !formData.copiloto) {
+            alert("❌ Error de despacho: Debe asignar al menos un Tripulante calificado (Instructor, Piloto o Copiloto) para registrar la misión.");
+            return;
+        }
+
         setLoading(true);
 
         const payload = {
@@ -113,7 +120,7 @@ const Vuelos = () => {
             return;
         }
 
-        if (window.confirm("¿Seguro desea eliminar este registro? Esta acción es irreversible, afectará el cómputo de horas de la aeronave y el legajo de los pilotos.")) {
+        if (window.confirm("¿Seguro desea eliminar este registro? This action is irreversible, afectará el cómputo de horas de la aeronave y el legajo de los pilotos.")) {
             try {
                 await API.delete(`/vuelos/${id}`);
                 alert("✅ Registro eliminado correctamente.");
@@ -164,20 +171,20 @@ const Vuelos = () => {
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Instructor (Opt)</label>
+                            <div style={styles.group}><label style={styles.label}>Instructor</label>
                             <select style={styles.input} value={formData.instructor} onChange={e => setFormData({...formData, instructor: e.target.value})}>
                                 <option value="">Ninguno</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
                             </select></div>
                             <div style={styles.group}><label style={styles.label}>Piloto</label>
-                            <select style={styles.input} value={formData.piloto} onChange={e => setFormData({...formData, piloto: e.target.value})} required>
-                                <option value="">Seleccionar...</option>
+                            <select style={styles.input} value={formData.piloto} onChange={e => setFormData({...formData, piloto: e.target.value})}>
+                                <option value="">Ninguno</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
                             </select></div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Copiloto (Opt)</label>
+                            <div style={styles.group}><label style={styles.label}>Copiloto</label>
                             <select style={styles.input} value={formData.copiloto} onChange={e => setFormData({...formData, copiloto: e.target.value})}>
                                 <option value="">Ninguno</option>
                                 {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
@@ -226,7 +233,7 @@ const Vuelos = () => {
                                 <option value="Nocturno">Nocturno</option>
                             </select></div>
                             <div style={styles.group}><label style={styles.label}>Reglas de Vuelo</label>
-                            <select style={styles.input} value={formData.reglasVuelo} onChange={e => setFormData({...formData, reglasVuelo: e.target.value})}>
+                            <select style={styles.input} value={formData.rulesVuelo} onChange={e => setFormData({...formData, reglasVuelo: e.target.value})}>
                                 <option value="VFR">VFR (Visual)</option>
                                 <option value="IFR">IFR (Instrumental)</option>
                             </select></div>
@@ -288,7 +295,7 @@ const Vuelos = () => {
                                         <td style={styles.td}>
                                             <div style={styles.tripuList}>
                                                 {v.instructor && <span style={{color: '#b45309'}}><Users size={10} /> IN: {v.instructor.apellido}</span>}
-                                                <span><Users size={10} /> P: {v.piloto?.apellido || 'S/D'}</span>
+                                                {v.piloto && <span><Users size={10} /> P: {v.piloto.apellido}</span>}
                                                 {v.copiloto && <span><Users size={10} /> C: {v.copiloto.apellido}</span>}
                                                 {v.mecanico && <span style={{color: '#4b5563'}}><Users size={10} /> M1: {v.mecanico.apellido}</span>}
                                                 {v.segundoMecanico && <span style={{color: '#4b5563'}}><Users size={10} /> M2: {v.segundoMecanico.apellido}</span>}
@@ -327,6 +334,7 @@ const Vuelos = () => {
     );
 };
 
+// Los estilos se mantienen exactamente igual
 const styles = {
     container: { padding: '20px', backgroundColor: '#f4f7f6', minHeight: 'calc(100vh - 65px)' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },

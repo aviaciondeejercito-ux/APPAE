@@ -31,9 +31,9 @@ const vueloSchema = new mongoose.Schema({
   },
   matricula: { type: String, required: true, trim: true, uppercase: true },
 
-  // --- TRIPULACIÓN ---
+  // --- TRIPULACIÓN (FLEXIBILIZADA SEGÚN REQUERIMIENTOS MILITARES v3.6) ---
   instructor: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
-  piloto: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', required: true },
+  piloto: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null }, // CORREGIDO: Se removió 'required: true' para permitir vuelos de Instrucción/Estandarización pura
   copiloto: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
   mecanico: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
   segundoMecanico: { type: mongoose.Schema.Types.ObjectId, ref: 'Tripulante', default: null },
@@ -145,9 +145,6 @@ vueloSchema.pre('save', async function(next) {
       };
 
       // --- 2. RECALCULO GENERAL DE TOTALES HISTÓRICOS (Consolidación Inteligente por SdA) ---
-      // Agrupamos temporalmente todas las sub-filas del tripulante por Aeronave única usando un mapa de máximos.
-      // Esto evita que si una misma persona sumó 1 hora de Instructor y 1 hora de Piloto en el mismo SdA,
-      // la sumatoria histórica total incremente erróneamente en 2 horas.
       const mapaSdA = {};
       
       tripulante.habilitaciones.forEach(hab => {
