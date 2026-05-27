@@ -30,20 +30,36 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS EN TIEMPO REAL POR CADA REGISTRO ---
+    // --- CÓMPUTO DINÁMICO DE HORAS EN TIEMPO REAL CORREGIDO (Agrupado por Sistema para evitar duplicados por Rol) ---
     const obtenerTotalesDinamicos = () => {
         const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
         
-        if (!seleccionado) return totales;
-
-        if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
-            seleccionado.habilitaciones.forEach(h => {
-                totales.visual += Number(h.hsVisual || 0);
-                totales.instrumental += Number(h.hsInstrumental || 0);
-                totales.nocturno += Number(h.hsNocturno || 0);
-                totales.nvg += Number(h.hsNVG || 0);
-            });
+        if (!seleccionado || !seleccionado.habilitaciones || seleccionado.habilitaciones.length === 0) {
+            return totales;
         }
+
+        // Agrupamos por aeronave para tomar el registro con más horas y no duplicar si el usuario es Piloto e Instructor del mismo SdA
+        const mapaSdA = {};
+
+        seleccionado.habilitaciones.forEach(h => {
+            const sda = h.aeronave;
+            if (!mapaSdA[sda]) {
+                mapaSdA[sda] = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
+            }
+            // Mantenemos el máximo valor alcanzado por condición en ese sistema de armas específico
+            mapaSdA[sda].visual = Math.max(mapaSdA[sda].visual, Number(h.hsVisual || 0));
+            mapaSdA[sda].instrumental = Math.max(mapaSdA[sda].instrumental, Number(h.hsInstrumental || 0));
+            mapaSdA[sda].nocturno = Math.max(mapaSdA[sda].nocturno, Number(h.hsNocturno || 0));
+            mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(h.hsNVG || 0));
+        });
+
+        // Sumamos los totales reales consolidados de cada Aeronave diferente sin colisiones de rol
+        Object.values(mapaSdA).forEach(sistema => {
+            totales.visual += sistema.visual;
+            totales.instrumental += sistema.instrumental;
+            totales.nocturno += sistema.nocturno;
+            totales.nvg += sistema.nvg;
+        });
         
         return totales;
     };
@@ -140,7 +156,6 @@ const Tripulantes = () => {
                 } else if (modalType === 'horas') {
                     await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
                 } else if (modalType === 'habilitacion') {
-                    // Envía la habilitación con la combinación única de aeronave y función de vuelo asignada
                     await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, { 
                         aeronave: formData.aeronave,
                         fechaHabilitacion: formData.fechaHabilitacion,
@@ -264,7 +279,7 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* TOTALES (DINÁMICOS Y REACTIVOS) */}
+                            {/* TOTALES (DINÁMICOS Y REACTIVOS CORREGIDOS) */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES DINÁMICOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
