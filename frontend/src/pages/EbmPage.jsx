@@ -1,6 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Importamos la función declarada y tipada en tu archivo api.js centralizado
 import { getPlanificacionEbm } from '../services/api'; 
+
+// --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---
+// Extraído fuera del componente para evitar re-declaración en cada render
+const getTrimestreActualCronologico = () => {
+    const mesActual = new Date().getMonth(); // 0 = Ene, 11 = Dic
+    if (mesActual >= 0 && mesActual <= 2) return 1;
+    if (mesActual >= 3 && mesActual <= 5) return 2;
+    if (mesActual >= 6 && mesActual <= 8) return 3;
+    return 4;
+};
+
+// Ordenamiento Jerárquico institucional de grados
+const ORDEN_GRADOS = { 'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7 };
 
 const EbmPage = () => {
     const [personal, setPersonal] = useState([]);
@@ -16,15 +29,6 @@ const EbmPage = () => {
 
     // --- DATOS DE SESIÓN ---
     const userUnidad = localStorage.getItem('elemento') || localStorage.getItem('unidad') || 'MI UNIDAD';
-
-    // --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---
-    const getTrimestreActualCronologico = () => {
-        const mesActual = new Date().getMonth(); // 0 = Ene, 11 = Dic
-        if (mesActual >= 0 && mesActual <= 2) return 1;
-        if (mesActual >= 3 && mesActual <= 5) return 2;
-        if (mesActual >= 6 && mesActual <= 8) return 3;
-        return 4;
-    };
     const trimestreActualId = getTrimestreActualCronologico();
 
     const fetchPersonal = useCallback(async () => {
@@ -108,7 +112,8 @@ const EbmPage = () => {
     };
 
     // --- PROCESAMIENTO Y GENERACIÓN DE LA MATRIZ DE RECORRIDO POR SISTEMA ---
-    const obtenerMatrizPorSistema = () => {
+    // Memorizado con useMemo para evitar re-ordenar todo el array con cada tecla pulsada o toggle visual
+    const matrizSda = useMemo(() => {
         const esquemasPorSda = {};
 
         personal.forEach(piloto => {
@@ -132,12 +137,10 @@ const EbmPage = () => {
         });
 
         // Ordenamiento Jerárquico y Alfabético interno para cada SdA
-        const ordenGrados = { 'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7 };
-        
         Object.keys(esquemasPorSda).forEach(sda => {
             esquemasPorSda[sda].sort((a, b) => {
-                const pesoA = ordenGrados[a.grado] || 99;
-                const pesoB = ordenGrados[b.grado] || 99;
+                const pesoA = ORDEN_GRADOS[a.grado] || 99;
+                const pesoB = ORDEN_GRADOS[b.grado] || 99;
                 if (pesoA !== pesoB) return pesoA - pesoB;
 
                 const apellidoA = (a.apellido || '').trim().toUpperCase();
@@ -151,9 +154,7 @@ const EbmPage = () => {
         });
 
         return esquemasPorSda;
-    };
-
-    const matrizSda = obtenerMatrizPorSistema();
+    }, [personal, sdasVisibles]);
 
     // Helper Dinámico de Renderizado con Semáforo de Alertas
     const renderCeldaTrimestre = (nroTrimestre, horasVoladas = 0, horasFaltantes = 0) => {
@@ -170,7 +171,7 @@ const EbmPage = () => {
         }
 
         return (
-            <td style={styles.tdMétrica}>
+            <td style={styles.tdMetrica}>
                 <div style={{ color: colorEstado, fontWeight: 'bold' }}>{horasVoladas} hs</div>
                 {horasFaltantes > 0 && (
                     <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
@@ -287,8 +288,8 @@ const EbmPage = () => {
                                         color: estaActivo ? '#0369a1' : '#64748b',
                                         borderColor: estaActivo ? '#0284c7' : '#cbd5e1'
                                     }}
-                                // Modificado levemente para no romper lógica, solo visual
                                 >
+                                    {/* Comentario reubicado correctamente fuera de las etiquetas JSX */}
                                     {estaActivo ? '👁️ ' : '🙈 '} {sda.toUpperCase()}
                                 </button>
                             );
@@ -399,20 +400,20 @@ const styles = {
     tagSda: { border: '1px solid', padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.15s ease' },
     
     table: { width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderRadius: '4px' },
-    thSeparadorSda: { backgroundColor: '#0b2545', color: '#fff', padding: '12px 15px', fontSize: '13px', fontWeight: 'bold', borderLeft: '5px solid #ca8a04', letterSpacing: '1px' }, // Detalle dorado en borde izquierdo
+    thSeparadorSda: { backgroundColor: '#0b2545', color: '#fff', padding: '12px 15px', fontSize: '13px', fontWeight: 'bold', borderLeft: '5px solid #ca8a04', letterSpacing: '1px' }, 
     th: { textAlign: 'left', padding: '12px', color: '#1e293b', borderBottom: '2px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' },
     thTrimestre: { textAlign: 'right', padding: '12px', color: '#1e293b', borderBottom: '2px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '12%' },
     thTotal: { textAlign: 'right', padding: '12px', color: '#1e293b', borderBottom: '2px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '10%' },
     thAcciones: { textAlign: 'center', padding: '12px', color: '#1e293b', borderBottom: '2px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', width: '6%' },
     tdGrado: { padding: '12px', borderBottom: '1px solid #e2e8f0', fontSize: '14px', width: '8%' },
     tdNombre: { padding: '12px', borderBottom: '1px solid #e2e8f0', fontSize: '14px' },
-    tdMétrica: { padding: '10px 12px', borderBottom: '1px solid #e2e8f0', fontSize: '14px', textAlign: 'right', lineHeight: '1.3' },
+    tdMetrica: { padding: '10px 12px', borderBottom: '1px solid #e2e8f0', fontSize: '14px', textAlign: 'right', lineHeight: '1.3' },
     tdTotal: { padding: '12px', borderBottom: '1px solid #e2e8f0', fontSize: '14px', textAlign: 'right', color: '#0b2545', fontWeight: 'bold' },
     tdAcciones: { padding: '12px', borderBottom: '1px solid #e2e8f0', textAlign: 'center' },
     btnConfig: { border: 'none', color: '#fff', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s' },
     tdExpandido: { backgroundColor: '#f8fafc', padding: '15px', borderBottom: '1px solid #e2e8f0' },
     contenedorPanelPlanificacion: { border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', padding: '15px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' },
-    headerPanelConfig: { borderBottom: '2px solid #38bdf8', paddingBottom: '8px', marginBottom: '12px', fontSize: '12px' }, // Celeste institucional en línea divisoria
+    headerPanelConfig: { borderBottom: '2px solid #38bdf8', paddingBottom: '8px', marginBottom: '12px', fontSize: '12px' }, 
     grillaAsignacion: { display: 'flex', gap: '15px', justifyContent: 'space-between' },
     bloqueTrimestreConfig: { flex: 1, backgroundColor: '#f8fafc', border: '1px solid', borderRadius: '4px', padding: '10px', display: 'flex', flexDirection: 'column', transition: 'border-color 0.2s' },
     tituloBloque: { margin: '0 0 10px 0', fontSize: '11px', color: '#475569', textTransform: 'uppercase', fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' },
@@ -420,7 +421,6 @@ const styles = {
     labelMini: { fontSize: '11px', color: '#475569', fontWeight: 'bold' },
     selectPanel: { backgroundColor: '#fff', color: '#334155', border: '1px solid #cbd5e1', fontSize: '11px', padding: '4px 5px', borderRadius: '3px', width: '75%', cursor: 'pointer' },
     
-    // Secciones de novedades adaptadas a la paleta institucional clara
     seccionJustificacion: { marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #fca5a5' },
     labelMiniJustificacion: { fontSize: '10px', color: '#dc2626', fontWeight: 'bold' },
     selectJustificacion: { backgroundColor: '#fff', color: '#dc2626', border: '1px solid #fca5a5', fontSize: '11px', padding: '4px 5px', borderRadius: '3px', width: '60%', cursor: 'pointer' },
