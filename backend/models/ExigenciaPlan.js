@@ -1,14 +1,15 @@
 const Tripulante = require('../models/Tripulante');
 const Vuelo = require('../models/Vuelo'); 
-const ExigenciaPlan = require('../models/ExigenciaPlan'); // <-- IMPORTAMOS TU MODELO
+const ExigenciaPlan = require('../models/ExigenciaPlan'); // Model de persistencia EBM
 
 /**
- * OP 1: NÓMINA CONSOLIDADA (Pilotos únicos + Horas por SDA + Planificación ExigenciaPlan)
+ * OP 1: NÓMINA CONSOLIDADA POR SISTEMA DE ARMAS CON EXIGENCIAPLAN
+ * Acopla las horas de vuelo reales calculadas para 2026 y las configuraciones/justificaciones mapeadas
  */
 exports.getPlanificacionCompleta = async (req, res) => {
     try {
         const unidadUser = req.user?.unidad || req.user?.elemento;
-        const AÑO_ACTUAL = 2026; // Definido según el contexto de tu app
+        const AÑO_ACTUAL = 2026; 
         
         console.log(`📡 Petición EBM con ExigenciaPlan recibida para la unidad: ${unidadUser || 'SIN UNIDAD'}`);
 
@@ -37,7 +38,6 @@ exports.getPlanificacionCompleta = async (req, res) => {
             .select('grado apellido nombre unidad elemento habilitaciones')
             .lean();
 
-        // Si no hay pilotos, cortamos acá para evitar errores
         if (!pilotos.length) {
             return res.status(200).json([]);
         }
@@ -50,13 +50,13 @@ exports.getPlanificacionCompleta = async (req, res) => {
             año: AÑO_ACTUAL
         }).lean();
 
-        // Indexamos los planes en memoria para buscarlos instantáneamente por ID de piloto [O(1)]
+        // Indexamos los planes en memoria por ID de piloto para búsquedas O(1)
         const mapaPlanes = {};
         planesCargados.forEach(plan => {
             mapaPlanes[plan.piloto.toString()] = plan;
         });
 
-        // 3. Consulta atómica de vuelos cruzando el campo 'sistemaArmas'
+        // 3. Consulta atómica de vuelos
         const vuelos = await Vuelo.find({
             $or: [
                 { piloto: { $in: listaIdsPilotos } },
@@ -74,13 +74,16 @@ exports.getPlanificacionCompleta = async (req, res) => {
             };
         });
 
-        // 5. Reducción y distribución temporal de horas de vuelo por SDA
+        // 5. Reducción y distribución temporal de horas de vuelo por SDA (Exclusivo Año 2026)
         vuelos.forEach(v => {
             const horas = Number(v.horasVoladas) || 0;
             if (horas <= 0) return;
 
-            const sdaNom = v.sistemaArmas ? v.sistemaArmas.trim().toUpperCase() : 'SDA-N/D';
             const fechaVuelo = v.fecha ? new Date(v.fecha) : new Date();
+            // Evitamos contaminación de horas de años anteriores en los trimestres de planificación
+            if (fechaVuelo.getFullYear() !== AÑO_ACTUAL) return; 
+
+            const sdaNom = v.sistemaArmas ? v.sistemaArmas.trim().toUpperCase() : 'SDA-N/D';
             const mes = fechaVuelo.getMonth(); 
             
             let claveTrimestre = 't1';
@@ -93,9 +96,8 @@ exports.getPlanificacionCompleta = async (req, res) => {
                 if (!idTripulante) return;
                 const idStr = idTripulante.toString();
                 
-                if (!mapaMetricas[idStr]) {
-                    mapaMetricas[idStr] = { horasAcumuladasSda: {}, horasTrimestralesSda: {} };
-                }
+                if (!mapaMetricas[idStr]) return; // Resguardo por si no pertenece a la unidad filtrada
+
                 if (!mapaMetricas[idStr].horasAcumuladasSda[sdaNom]) {
                     mapaMetricas[idStr].horasAcumuladasSda[sdaNom] = 0;
                 }
@@ -112,11 +114,11 @@ exports.getPlanificacionCompleta = async (req, res) => {
             acumularMetricas(v.instructor);
         });
 
-        // 6. CONSOLIDACIÓN FINAL SIN DUPLICADOS (1 Fila estricta por Piloto)
+        // 6. CONSOLIDACIÓN FINAL E INYECTADO ADAPTADO AL FRONTEND
         const pilotosConsolidados = pilotos.map(p => {
             const idStr = p._id.toString();
             const metricas = mapaMetricas[idStr];
-            const planPiloto = mapaPlanes[idStr]; // Buscamos si tiene un plan asignado en la BD
+            const planPiloto = mapaPlanes[idStr]; 
 
             const horasAcumSdaRedondeadas = {};
             const horasTrimSdaRedondeadas = {};
@@ -136,38 +138,70 @@ exports.getPlanificacionCompleta = async (req, res) => {
                 });
             }
 
-            // Mapeamos los trimestres guardados en el ExigenciaPlan para que coincidan con lo que el frontend espera
-            // El frontend espera objetos del tipo: novedadesSda[sdaNom][`t${num}`] = 'Causa'
-            const novedadesSda = {};
-            const condicionesSda = {}; // Por si querés mapear el Rol (Piloto/Copiloto) o Tipo (A/B/C/D)
+            // Inicializamos los contenedores estructurados exactamente como los busca tu Frontend
+            const configTrimestresSda = {};
+            const horasFaltantesSda = {};
 
-            if (planPiloto && planPiloto.trimestres) {
-                planPiloto.trimestres.forEach(t => {
-                    // Como tu modelo ExigenciaPlan no discrimina por SDA originalmente, asumimos el SDA principal
-                    // o lo aplicamos de forma global. Para que tu interfaz lo procese por SDA, lo estructuramos:
-                    // NOTA: Si en tu interfaz manejás un avión por defecto, usá su nombre, sino lo mapeamos dinámicamente.
-                    const sdaAsignado = p.habilitaciones?.[0] || 'SDA-GENERAL'; 
+            // Mapeamos por cada habilitación válida del piloto para asegurar consistencia multimisión/SDA
+            const habilitacionesSdas = p.habilitaciones?.map(h => h.aeronave?.trim().toUpperCase()).filter(Boolean) || [];
 
-                    if (!novedadesSda[sdaAsignado]) novedadesSda[sdaAsignado] = {};
-                    if (!condicionesSda[sdaAsignado]) condicionesSda[sdaAsignado] = {};
+            habilitacionesSdas.forEach(sdaNom => {
+                // 1. Inicializamos con estructuras vacías por defecto para que los selects no tiren error de nulos
+                configTrimestresSda[sdaNom] = {
+                    t1: { rol: '', tipo: '', novedad: '', novedadOtro: '' },
+                    t2: { rol: '', tipo: '', novedad: '', novedadOtro: '' },
+                    t3: { rol: '', tipo: '', novedad: '', novedadOtro: '' },
+                    t4: { rol: '', tipo: '', novedad: '', novedadOtro: '' }
+                };
 
-                    novedadesSda[sdaAsignado][`t${t.numero}`] = t.causaNoCumplimiento || '';
-                    condicionesSda[sdaAsignado][`t${t.numero}`] = t.rol || ''; // Guarda si es Instructor/Piloto/Copiloto
-                });
-            }
+                // Obtenemos horas voladas en este sda (si existen)
+                const hVoladasSda = horasTrimSdaRedondeadas[sdaNom] || { t1: 0, t2: 0, t3: 0, t4: 0 };
+
+                // Recuperamos las exigencias del plan si existen en la BD
+                let exiT1 = 0, exiT2 = 0, exiT3 = 0, exiT4 = 0;
+
+                if (planPiloto && planPiloto.trimestres) {
+                    planPiloto.trimestres.forEach(t => {
+                        const tKey = `t${t.numero}`;
+                        
+                        // Si el plan guarda la discriminación por aeronave/Sda la comparamos, sino acoplamos global
+                        if (!t.sistemaArmas || t.sistemaArmas.trim().toUpperCase() === sdaNom) {
+                            configTrimestresSda[sdaNom][tKey] = {
+                                rol: t.rol || '',
+                                tipo: t.tipo || '',
+                                novedad: t.causaNoCumplimiento || '',
+                                novedadOtro: t.novedadOtro || ''
+                            };
+                            
+                            // Extraemos la exigencia de horas planificada para calcular los faltantes
+                            if (t.numero === 1) exiT1 = Number(t.exigenciaHoras) || 0;
+                            if (t.numero === 2) exiT2 = Number(t.exigenciaHoras) || 0;
+                            if (t.numero === 3) exiT3 = Number(t.exigenciaHoras) || 0;
+                            if (t.numero === 4) exiT4 = Number(t.exigenciaHoras) || 0;
+                        }
+                    });
+                }
+
+                // 2. Calculamos las horas faltantes reales del trimestre que el Front renderiza en su semáforo
+                horasFaltantesSda[sdaNom] = {
+                    t1: Math.max(0, Number((exiT1 - hVoladasSda.t1).toFixed(1))),
+                    t2: Math.max(0, Number((exiT2 - hVoladasSda.t2).toFixed(1))),
+                    t3: Math.max(0, Number((exiT3 - hVoladasSda.t3).toFixed(1))),
+                    t4: Math.max(0, Number((exiT4 - hVoladasSda.t4).toFixed(1)))
+                };
+            });
 
             return {
                 ...p,
                 horasAcumuladasSda: horasAcumSdaRedondeadas,
                 horasTrimestralesSda: horasTrimSdaRedondeadas,
-                horasFaltantesSda: {}, // Se calcula dinámicamente en el Front
-                novedadesSda: novedadesSda,
-                condicionesSda: condicionesSda, // Nueva propiedad limpia para leer los roles guardados
-                exigenciaPlanId: planPiloto ? planPiloto._id : null // Guardamos la referencia del plan para actualizaciones directas
+                configTrimestresSda: configTrimestresSda, // Inyectado clave para sincronización de selects
+                horasFaltantesSda: horasFaltantesSda,     // Inyectado clave para Semáforos e Incumplimientos
+                exigenciaPlanId: planPiloto ? planPiloto._id : null
             };
         });
 
-        // 7. Ordenamiento Militar Jerárquico
+        // 7. Ordenamiento Militar Jerárquico Deseado (Grado -> Apellido)
         const ordenGrados = { 'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7 };
         pilotosConsolidados.sort((a, b) => {
             const pesoA = ordenGrados[a.grado] || 99;
@@ -176,7 +210,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
             return (a.apellido || '').trim().toUpperCase().localeCompare((b.apellido || '').trim().toUpperCase());
         });
 
-        console.log(`✅ Nómina blindada generada. Pilotos únicos enviados: ${pilotosConsolidados.length}`);
+        console.log(`✅ Nómina EBM con ExigenciaPlan consolidada con éxito. Registros: ${pilotosConsolidados.length}`);
         res.status(200).json(pilotosConsolidados);
 
     } catch (error) {

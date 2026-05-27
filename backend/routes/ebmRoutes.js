@@ -9,13 +9,11 @@ const { protect } = require('../middleware/authMiddleware');
  */
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
-        // DETECCIÓN DINÁMICA: Buscamos en rol (ES) o role (EN)
         const rawRole = req.user?.rol || req.user?.role || '';
         const userRole = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
         
         const permitidosLimpios = rolesPermitidos.map(r => r.toUpperCase().replace(/[\s_-]/g, ''));
         
-        // Si no hay rol o no está en la lista, denegamos
         if (!userRole || !permitidosLimpios.includes(userRole)) {
             return res.status(403).json({ 
                 success: false, 
@@ -26,10 +24,8 @@ const authorize = (...rolesPermitidos) => {
     };
 };
 
-// GRUPOS DE ACCESO (Mantenemos tu lógica unificada de gestión militar)
+// GRUPOS DE ACCESO 
 const rolesConsulta = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'user', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
-
-// Roles autorizados para modificar justificaciones, novedades o exigencias en la nómina EBM
 const rolesEscritura = ['admin', 'OPERACIONES', 'JEFE', 'PERSONAL', 'OFICINA_TECNICA', 'OTO'];
 
 // PROTECCIÓN GLOBAL: Todas las rutas de este módulo requieren token JWT válido
@@ -37,13 +33,13 @@ router.use(protect);
 
 /**
  * =========================================================================
- * GESTIÓN DE PLANIFICACIÓN EBM
+ * GESTIÓN DE PLANIFICACIÓN EBM (AÑO 2026)
  * =========================================================================
  */
 
 /**
  * @route   GET /api/ebm/planificacion-completa
- * @desc    Obtiene la nómina de pilotos activa filtrada por la jurisdicción/unidad del usuario (con horas desglosadas por SDA)
+ * @desc    Obtiene la nómina de pilotos activa con horas y exigencias calculadas por SDA
  */
 router.get('/planificacion-completa', 
     authorize(...rolesConsulta), 
@@ -52,7 +48,7 @@ router.get('/planificacion-completa',
 
 /**
  * @route   GET /api/ebm/vuelos-unidad
- * @desc    Obtiene el historial de vuelos del elemento operativo del usuario para el cálculo de horas acumuladas
+ * @desc    Obtiene el historial de vuelos del elemento operativo del usuario
  */
 router.get('/vuelos-unidad',
     authorize(...rolesConsulta),
@@ -61,49 +57,12 @@ router.get('/vuelos-unidad',
 
 /**
  * @route   PUT /api/ebm/actualizar-configuracion/:id
- * @desc    Guarda o actualiza las novedades, justificaciones y exigencias EBM de un tripulante específico
- * @nota    ¡NUEVA RUTA ESENCIAL! Evita que los cambios del frontend se pierdan al recargar la página.
+ * @desc    Guarda de manera persistente las asignaciones y justificaciones en ExigenciaPlan
+ * @nota    Modificado para acoplarse al controlador y al esquema de persistencia unificado por SDA.
  */
 router.put('/actualizar-configuracion/:id',
     authorize(...rolesEscritura),
-    async (req, res) => {
-        try {
-            const { id } = req.params;
-            const { horasFaltantesSda, novedadesSda } = req.body;
-
-            // Buscamos el tripulante y actualizamos el sub-objeto configuracionEbm
-            const tripulanteActualizado = await Tripulante.findByIdAndUpdate(
-                id,
-                {
-                    $set: {
-                        'configuracionEbm.horasFaltantesSda': horasFaltantesSda || {},
-                        'configuracionEbm.novedadesSda': novedadesSda || {}
-                    }
-                },
-                { new: true, runValidators: true }
-            );
-
-            if (!tripulanteActualizado) {
-                return res.status(404).json({ 
-                    success: false, 
-                    mensaje: "No se encontró el tripulante especificado." 
-                });
-            }
-
-            res.status(200).json({
-                success: true,
-                mensaje: "Configuración EBM guardada correctamente de forma persistente.",
-                data: tripulanteActualizado
-            });
-
-        } catch (error) {
-            console.error("❌ ERROR AL GUARDAR PERSISTENCIA EBM:", error);
-            res.status(500).json({ 
-                success: false, 
-                mensaje: "Error interno del servidor al procesar el guardado de la configuración." 
-            });
-        }
-    }
+    ebmController.actualizarConfiguracionEbm // <-- Pasado al controlador para mantener la arquitectura MVC limpia
 );
 
 module.exports = router;
