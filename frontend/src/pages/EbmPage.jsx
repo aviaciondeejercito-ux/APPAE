@@ -118,10 +118,14 @@ const EbmPage = () => {
 
         personal.forEach(piloto => {
             const habilitaciones = piloto.habilitaciones || [];
-            habilitaciones.forEach(hab => {
-                const sdaName = hab.aeronave;
-                if (!sdaName) return;
+            
+            // 🛑 SOLUCIÓN CRÍTICA: Extraemos solo las aeronaves ÚNICAS que tiene este piloto
+            // Esto evita que si tiene más de una habilitación del mismo avión, se duplique en la tabla.
+            const sdasUnicosDelPiloto = Array.from(
+                new Set(habilitaciones.map(h => h.aeronave).filter(Boolean))
+            );
 
+            sdasUnicosDelPiloto.forEach(sdaName => {
                 // 🛑 FILTRO DINÁMICO SELECTIVO: Si el SdA fue desactivado en la botonera superior, no se procesa
                 if (sdasVisibles[sdaName] === false) return;
 
@@ -129,6 +133,7 @@ const EbmPage = () => {
                     esquemasPorSda[sdaName] = [];
                 }
 
+                // Insertamos al piloto asegurando una única fila por sistema
                 esquemasPorSda[sdaName].push({
                     ...piloto,
                     sistemaActivo: sdaName 
