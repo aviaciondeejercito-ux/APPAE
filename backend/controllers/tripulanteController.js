@@ -1,9 +1,10 @@
 const Tripulante = require('../models/Tripulante');
 const Auditoria = require('../models/Auditoria');
+const Vuelo = require('../models/Vuelo'); // Agregado para validaciones si hicieran falta
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
- * ESTÁNDAR: SINCRO JOKER v3.5 (Operativo 100% - Fix Duplicación por Rol)
+ * ESTÁNDAR: SINCRO JOKER v3.6 (Alineado con Consolidación por Máximos y Borrado Seguro)
  */
 
 // Función auxiliar para normalizar la unidad/elemento sin romper el código
@@ -27,16 +28,17 @@ exports.crearTripulante = async (req, res) => {
 
         if (!esMando && (!esGestorUnidad || miUnidad !== unidadDestino)) {
             return res.status(403).json({ 
-                mensaje: `ACCESO DENEGADO: El nivel ${roleBase} no tiene permisos en ${unidadDestino}` 
+                mensaje: `ACCESO DENEGADO: El nivel ${roleBase} no tiene permisos para dar de alta personal en la unidad [${unidadDestino}]` 
             });
         }
 
         const datosNuevoTripulante = {
             ...req.body,
-            apellido: req.body.apellido.toUpperCase().trim(),
-            nombre: req.body.nombre.toUpperCase().trim(),
+            apellido: req.body.apellido ? req.body.apellido.toUpperCase().trim() : "",
+            nombre: req.body.nombre ? req.body.nombre.toUpperCase().trim() : "",
             elemento: unidadDestino,
             unidad: unidadDestino,
+            activo: true, // Forzamos la bandera explícita de activación para el borrado lógico v3.6
             ultimoEditor: usuarioLogueado._id,
             fechaUltimaModificacion: Date.now()
         };
@@ -60,7 +62,7 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Gestionar Habilitación SdA (CORREGIDO: Evita duplicación cruzada de horas por rol)
+// 2. Gestionar Habilitación SdA (Algoritmo de Consolación por Máximos preservado)
 exports.gestionarHabilitacion = async (req, res) => {
     try {
         const { id } = req.params;
@@ -72,7 +74,9 @@ exports.gestionarHabilitacion = async (req, res) => {
         } = req.body;
 
         const tripulante = await Tripulante.findById(id);
-        if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+        if (!tripulante || tripulante.activo === false) {
+            return res.status(404).json({ mensaje: "Tripulante no disponible o inactivo" });
+        }
 
         const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
@@ -91,13 +95,11 @@ exports.gestionarHabilitacion = async (req, res) => {
         const nvg = Number(hsNVG || 0);
         const totalSdA = v + i + n + nvg;
 
-        // BÚSQUEDA INTELIGENTE: Validamos tanto la Aeronave como la Función de vuelo para no solapar datos
         const index = tripulante.habilitaciones.findIndex(h => 
             h.aeronave === aeronave && h.rolActual === rolActual
         );
 
         if (index !== -1) {
-            // Si coincide aeronave y función, se actualiza el desglose de ese registro específico
             tripulante.habilitaciones[index].fechaHabilitacion = fechaHabilitacion;
             tripulante.habilitaciones[index].hsVisual = v;
             tripulante.habilitaciones[index].hsInstrumental = i;
@@ -106,7 +108,6 @@ exports.gestionarHabilitacion = async (req, res) => {
             tripulante.habilitaciones[index].totalHorasSistema = totalSdA;
             tripulante.habilitaciones[index].observaciones = observaciones;
         } else {
-            // Si es una función nueva para el SdA (ej: pasó de Piloto a Instructor), crea una nueva entrada
             tripulante.habilitaciones.push({
                 aeronave, fechaHabilitacion, rolActual,
                 hsVisual: v, hsInstrumental: i, hsNocturno: n, hsNVG: nvg,
@@ -114,23 +115,17 @@ exports.gestionarHabilitacion = async (req, res) => {
             });
         }
 
-        // --- RECALCULO GENERAL DINÁMICO CORREGIDO ---
-        // Agrupamos por Aeronave única para no duplicar horas si comparte roles de Instructor/Piloto
+        // --- RECALCULO GENERAL DINÁMICO v3.6 ---
         const mapaSdA = {};
-        
         tripulante.habilitaciones.forEach(hab => {
             const sda = hab.aeronave;
-            if (!mapaSdA[sda]) {
-                mapaSdA[sda] = { v: 0, i: 0, n: 0, nvg: 0 };
-            }
-            // Mantenemos el máximo valor alcanzado por condición en ese sistema de armas
+            if (!mapaSdA[sda]) mapaSdA[sda] = { v: 0, i: 0, n: 0, nvg: 0 };
             mapaSdA[sda].v = Math.max(mapaSdA[sda].v, Number(hab.hsVisual || 0));
             mapaSdA[sda].i = Math.max(mapaSdA[sda].i, Number(hab.hsInstrumental || 0));
             mapaSdA[sda].n = Math.max(mapaSdA[sda].n, Number(hab.hsNocturno || 0));
             mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(hab.hsNVG || 0));
         });
 
-        // Consolidamos la suma real definitiva sobre la libreta histórica
         const realesTotales = { v: 0, i: 0, n: 0, nvg: 0 };
         Object.values(mapaSdA).forEach(sistema => {
             realesTotales.v += sistema.v;
@@ -155,10 +150,10 @@ exports.gestionarHabilitacion = async (req, res) => {
             accion: 'MODIFICACION',
             entidadAfectada: `Habilitación SdA: ${aeronave} (${rolActual}) - ${tripulante.apellido}`,
             entidadId: tripulante._id,
-            detalles: `Actualización de capacidad y horas desglosadas por rol`
+            detalles: `Actualización manual de capacidades bajo estándar consolidado v3.6`
         });
 
-        res.status(200).json({ mensaje: "Habilitación y totales actualizados", tripulante });
+        res.status(200).json({ mensaje: "Habilitación y totales actualizados con éxito", tripulante });
     } catch (error) {
         res.status(400).json({ mensaje: "Error al gestionar habilitación", error: error.message });
     }
@@ -170,7 +165,9 @@ exports.agregarCapacitacion = async (req, res) => {
         const { id } = req.params;
         const usuarioLogueado = req.user;
         const tripulante = await Tripulante.findById(id);
-        if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+        if (!tripulante || tripulante.activo === false) {
+            return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+        }
 
         const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
@@ -180,10 +177,11 @@ exports.agregarCapacitacion = async (req, res) => {
             return res.status(403).json({ mensaje: "No autorizado para agregar capacitaciones" });
         }
 
+        // Metemos la capacitación especial al subdocumento
         tripulante.capacitacionesEspeciales.push(req.body);
-        if (req.body.horasAcreditadas) {
-            tripulante.totalesHistoricos.vueloDiurno += Number(req.body.horasAcreditadas);
-        }
+
+        // NOTA v3.6: Ya no incrementamos directamente totalesHistoricos de vuelos generales aquí 
+        // para evitar inflar artificialmente las horas base desvinculadas de un SdA certificado.
 
         tripulante.ultimoEditor = usuarioLogueado._id;
         tripulante.fechaUltimaModificacion = Date.now();
@@ -194,8 +192,8 @@ exports.agregarCapacitacion = async (req, res) => {
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
             usuarioUnidad: miUnidad,
             accion: 'MODIFICACION',
-            entidadAfectada: `Capacitación: ${req.body.tipo} para ${tripulante.apellido}`,
-            entityId: tripulante._id
+            entidadAfectada: `Capacitación Táctica: ${req.body.tipo} para ${tripulante.apellido}`,
+            entidadId: tripulante._id
         });
 
         res.status(200).json({ mensaje: "Capacitación añadida con éxito", tripulante });
@@ -204,7 +202,7 @@ exports.agregarCapacitacion = async (req, res) => {
     }
 };
 
-// 4. Obtener Tripulantes
+// 4. Obtener Tripulantes (FIX FIX: Corrección de Typo de 'filter' a 'filtro')
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -212,14 +210,15 @@ exports.obtenerTripulantes = async (req, res) => {
         const roleBase = String(miRol).toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
+        // Solo mostramos aquellos que sigan de alta (evita documentos rotos)
         let filtro = { activo: { $ne: false } };
 
         if (!['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase)) {
             if (!miUnidad) return res.status(200).json([]);
             filtro.$or = [{ elemento: miUnidad }, { unidad: miUnidad }];
         } else if (req.query.unidad && req.query.unidad !== 'all') {
-            const unidadQuery = req.query.unidad.toUpperCase();
-            filter.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }];
+            const unidadQuery = req.query.unidad.toUpperCase().trim();
+            filtro.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }]; // Corregido el bug de 'filter' a 'filtro'
         }
 
         const tripulantes = await Tripulante.find(filtro)
@@ -229,7 +228,7 @@ exports.obtenerTripulantes = async (req, res) => {
 
         res.status(200).json(tripulantes);
     } catch (error) {
-        console.error("ERROR 500 EN OBTENER_TRIPULANTES:", error);
+        console.error("❌ ERROR 500 EN OBTENER_TRIPULANTES:", error);
         res.status(500).json({ mensaje: "Error al obtener tripulantes", detalle: error.message });
     }
 };
@@ -243,11 +242,13 @@ exports.actualizarTripulante = async (req, res) => {
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         const tripulantePrevio = await Tripulante.findById(id);
-        if (!tripulantePrevio) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+        if (!tripulantePrevio || tripulantePrevio.activo === false) {
+            return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+        }
 
         const unidadTrip = obtenerUnidadLimpia(tripulantePrevio);
         if (!['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase) && miUnidad !== unidadTrip) {
-            return res.status(403).json({ mensaje: "Acceso denegado" });
+            return res.status(403).json({ mensaje: "Acceso denegado: Jurisdicción cruzada no permitida" });
         }
 
         const cambiosRealizados = {};
@@ -282,11 +283,11 @@ exports.actualizarTripulante = async (req, res) => {
 
         res.status(200).json(actualizado);
     } catch (error) {
-        res.status(400).json({ mensaje: "Error al actualizar", error: error.message });
+        res.status(400).json({ mensaje: "Error al actualizar legajo", error: error.message });
     }
 };
 
-// 6. Eliminar Tripulante
+// 6. Eliminar Tripulante (BLINDADO CON BORRADO LÓGICO ESTÁNDAR v3.6)
 exports.eliminarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
@@ -296,7 +297,9 @@ exports.eliminarTripulante = async (req, res) => {
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         const tripulante = await Tripulante.findById(id);
-        if (!tripulante) return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+        if (!tripulante || tripulante.activo === false) {
+            return res.status(404).json({ mensaje: "El legajo que intentás eliminar no existe" });
+        }
 
         const unidadTripulante = obtenerUnidadLimpia(tripulante);
 
@@ -307,25 +310,31 @@ exports.eliminarTripulante = async (req, res) => {
 
         if (!tienePermiso) {
             return res.status(403).json({ 
-                mensaje: `ACCESO DENEGADO: El nivel ${roleBase} no tiene permisos para eliminar legajos.` 
+                mensaje: `ACCESO DENEGADO: El nivel ${roleBase} no tiene permisos para eliminar legajos de esta sección.` 
             });
         }
 
-        await Tripulante.findByIdAndDelete(id);
+        // --- SOLUCIÓN DE INTEGRIDAD CRÍTICA v3.6 ---
+        // Aplicamos borrado lógico mudando la bandera a inactivo. 
+        // Esto previene que se rompa el populate() en los vuelos históricos donde participó este tripulante.
+        tripulante.activo = false;
+        tripulante.ultimoEditor = usuarioLogueado._id;
+        tripulante.fechaUltimaModificacion = Date.now();
+        await tripulante.save();
 
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
             usuarioUnidad: miUnidad,
             accion: 'ELIMINACION',
-            entidadAfectada: `Tripulante: ${tripulante.grado} ${tripulante.apellido} (Unidad: ${unidadTripulante})`,
+            entidadAfectada: `Tripulante (Baja Lógica): ${tripulante.grado} ${tripulante.apellido} (Unidad: ${unidadTripulante})`,
             entidadId: tripulante._id,
-            cambios: { eliminado: tripulante }
+            cambios: { estado: "INACTIVO_BAJA" }
         });
 
-        res.status(200).json({ mensaje: "Legajo eliminado correctamente." });
+        res.status(200).json({ mensaje: "Legajo dado de baja del panel operativo correctamente." });
     } catch (error) {
-        res.status(500).json({ mensaje: "Error al procesar la baja", error: error.message });
+        res.status(500).json({ mensaje: "Error al procesar la baja del tripulante", error: error.message });
     }
 };
 
@@ -337,7 +346,9 @@ exports.buscarTripulante = async (req, res) => {
         const roleBase = String(usuario.rol || usuario.role || '').toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuario);
         
+        // Excluimos de la búsqueda a aquellos dados de baja lógica
         let query = {
+            activo: { $ne: false },
             $or: [
                 { apellido: { $regex: termino, $options: 'i' } },
                 { nombre: { $regex: termino, $options: 'i' } }
@@ -345,10 +356,13 @@ exports.buscarTripulante = async (req, res) => {
         };
 
         if (!['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase)) {
-            query.$and = [
-                { $or: [{ apellido: { $regex: termino, $options: 'i' } }, { nombre: { $regex: termino, $options: 'i' } }] },
-                { $or: [{ elemento: miUnidad }, { unidad: miUnidad }] }
-            ];
+            query = {
+                activo: { $ne: false },
+                $and: [
+                    { $or: [{ apellido: { $regex: termino, $options: 'i' } }, { nombre: { $regex: termino, $options: 'i' } }] },
+                    { $or: [{ elemento: miUnidad }, { unidad: miUnidad }] }
+                ]
+            };
         }
 
         const resultados = await Tripulante.find(query)
@@ -358,6 +372,6 @@ exports.buscarTripulante = async (req, res) => {
 
         res.status(200).json(resultados);
     } catch (error) {
-        res.status(500).json({ mensaje: "Error", error: error.message });
+        res.status(500).json({ mensaje: "Error al ejecutar la búsqueda de tripulantes", error: error.message });
     }
 };

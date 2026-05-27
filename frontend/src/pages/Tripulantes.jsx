@@ -13,7 +13,7 @@ const Tripulantes = () => {
     const [modalType, setModalType] = useState(''); 
     const [formData, setFormData] = useState({});
 
-    // --- NORMALIZACIÓN SINCRO JOKER ---
+    // --- NORMALIZACIÓN SINCRO JOKER v3.6 ---
     const rawRole = localStorage.getItem('role') || 'user';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
@@ -30,30 +30,39 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS EN TIEMPO REAL (Agrupado por Sistema para evitar duplicados por Rol) ---
+    // --- CÓMPUTO DINÁMICO DE HORAS (Sincronizado con el Algoritmo de Máximos del Backend v3.6) ---
     const obtenerTotalesDinamicos = () => {
         const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
         
-        if (!seleccionado || !seleccionado.habilitaciones || seleccionado.habilitaciones.length === 0) {
+        if (!seleccionado) return totales;
+
+        // Si el backend ya consolidó totalesHistoricos, los tomamos como base confiable
+        if (seleccionado.totalesHistoricos) {
+            return {
+                visual: Number(seleccionado.totalesHistoricos.vueloDiurno || 0),
+                instrumental: Number(seleccionado.totalesHistoricos.vueloInstrumental || 0),
+                nocturno: Number(seleccionado.totalesHistoricos.vueloNocturno || 0),
+                nvg: Number(seleccionado.totalesHistoricos.vueloVisual || 0) // Recuerda que en tu BD vueloVisual aloja las horas NVG desglosadas
+            };
+        }
+
+        // Fallback dinámico por si el documento no está migrado en BD
+        if (!seleccionado.habilitaciones || seleccionado.habilitaciones.length === 0) {
             return totales;
         }
 
-        // Agrupamos por aeronave para tomar el valor máximo y no duplicar si comparte roles (Piloto / Instructor)
         const mapaSdA = {};
-
         seleccionado.habilitaciones.forEach(h => {
             const sda = h.aeronave;
             if (!mapaSdA[sda]) {
                 mapaSdA[sda] = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
             }
-            // Mantenemos el máximo valor alcanzado por condición en ese SdA específico
             mapaSdA[sda].visual = Math.max(mapaSdA[sda].visual, Number(h.hsVisual || 0));
             mapaSdA[sda].instrumental = Math.max(mapaSdA[sda].instrumental, Number(h.hsInstrumental || 0));
             mapaSdA[sda].nocturno = Math.max(mapaSdA[sda].nocturno, Number(h.hsNocturno || 0));
             mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(h.hsNVG || 0));
         });
 
-        // Sumamos los consolidados sin colisiones de rol
         Object.values(mapaSdA).forEach(sistema => {
             totales.visual += sistema.visual;
             totales.instrumental += sistema.instrumental;
@@ -82,6 +91,8 @@ const Tripulantes = () => {
                 });
             
             setPersonal(dataFinal || []);
+            
+            // Forzar actualización del tripulante en pantalla con sus nuevos cálculos consolidados
             if (seleccionado) {
                 const actualizado = dataFinal.find(p => p._id === seleccionado._id);
                 if (actualizado) setSeleccionado(actualizado);
@@ -95,13 +106,13 @@ const Tripulantes = () => {
     };
 
     const handleEliminarTripulante = async (id) => {
-        if (!window.confirm("¿ESTÁ SEGURO? Esta acción eliminará el legajo digital completo.")) return;
+        if (!window.confirm("¿ESTÁ SEGURO? Esta acción dará de baja el legajo operativo de la unidad.")) return;
         try {
             await deleteTripulante(id);
-            alert("Legajo eliminado correctamente.");
+            alert("Legajo dado de baja correctamente (Historial de vuelos preservado).");
             setSeleccionado(null);
             await fetchPersonal();
-        } catch (error) { alert("Error al eliminar legajo. Verifique permisos."); }
+        } catch (error) { alert("Error al procesar la baja. Verifique permisos o jurisdicción."); }
     };
 
     const getEstadoVencimiento = (fecha) => {
@@ -131,7 +142,7 @@ const Tripulantes = () => {
         } else if (type === 'habilitacion') {
             setFormData({ 
                 aeronave: '', rolActual: '', fechaHabilitacion: '', 
-                hsVisual: 0, hsInstrumental: 0, hsNocturno: 0, hsNVG: 0 
+                hsVisual: 0, hsInstrumental: 0, hsNocturno: 0, hsNVG: 0, observaciones: '' 
             });
         } else if (type === 'capacitacion') {
             setFormData({ tipo: '', fechaAdquisicion: '', horasAcreditadas: 0 });
@@ -156,6 +167,7 @@ const Tripulantes = () => {
                 } else if (modalType === 'horas') {
                     await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
                 } else if (modalType === 'habilitacion') {
+                    // LLAMADA EXCLUSIVA AL ENDPOINT DEL ALGORITMO v3.6
                     await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, { 
                         aeronave: formData.aeronave,
                         fechaHabilitacion: formData.fechaHabilitacion,
@@ -175,7 +187,7 @@ const Tripulantes = () => {
             await fetchPersonal();
         } catch (error) { 
             console.error(error);
-            alert("Error en la operación del legajo."); 
+            alert("Error en la operación del legajo. Verifique jurisdicción de unidad."); 
         }
     };
 
@@ -184,16 +196,17 @@ const Tripulantes = () => {
         if (!window.confirm("¿Desea eliminar este registro de historial?")) return;
         try {
             let updatedData = { ...seleccionado };
+            
             if (type === 'habilitacion') {
+                // Filtramos la habilitación borrada
                 updatedData.habilitaciones = seleccionado.habilitaciones.filter(h => h._id !== itemId);
                 
-                // Recalculamos usando un mapa de SdA único para evitar re-introducir duplicados al guardar históricos
+                // --- ALGORITMO INTEGRADO FRONT-END v3.6 ---
+                // Recalculamos el histórico inmediatamente antes de enviar para mantener consistencia absoluta
                 const mapaSdA = {};
                 updatedData.habilitaciones.forEach(h => {
                     const sda = h.aeronave;
-                    if (!mapaSdA[sda]) {
-                        mapaSdA[sda] = { visual: 0, nocturno: 0, instrumental: 0, nvg: 0 };
-                    }
+                    if (!mapaSdA[sda]) mapaSdA[sda] = { visual: 0, nocturno: 0, instrumental: 0, nvg: 0 };
                     mapaSdA[sda].visual = Math.max(mapaSdA[sda].visual, Number(h.hsVisual || 0));
                     mapaSdA[sda].nocturno = Math.max(mapaSdA[sda].nocturno, Number(h.hsNocturno || 0));
                     mapaSdA[sda].instrumental = Math.max(mapaSdA[sda].instrumental, Number(h.hsInstrumental || 0));
@@ -214,9 +227,12 @@ const Tripulantes = () => {
                 updatedData.capacitacionesEspeciales = seleccionado.capacitacionesEspeciales.filter(c => c._id !== itemId);
             }
             
+            // Guardamos de forma segura pasando el objeto consolidado v3.6
             await updateTripulante(seleccionado._id, updatedData);
             await fetchPersonal();
-        } catch (error) { alert("Error al eliminar registro."); }
+        } catch (error) { 
+            alert("Error al eliminar registro histórico."); 
+        }
     };
 
     return (
@@ -293,9 +309,9 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* TOTALES DINÁMICOS CORREGIDOS */}
+                            {/* TOTALES DINÁMICOS CONSOLIDADOS */}
                             <div style={styles.sectionHeader}>
-                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES DINÁMICOS)</span>
+                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES CONSOLIDADOS v3.6)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
                             </div>
                             <div style={styles.gridStats}>
@@ -374,15 +390,15 @@ const Tripulantes = () => {
                                 {showAltaModal && (
                                     <div style={styles.formCol}>
                                         <label style={styles.label}>Grado</label>
-                                        <select style={styles.formInput} value={formData.grado} onChange={e => setFormData({...formData, grado: e.target.value})} required>
+                                        <select style={styles.formInput} value={formData.grado || ''} onChange={e => setFormData({...formData, grado: e.target.value})} required>
                                             <option value="">Seleccionar...</option>{gradosAE.map(g => <option key={g} value={g}>{g}</option>)}
                                         </select>
                                         <label style={styles.label}>Apellido</label>
-                                        <input type="text" placeholder="APELLIDO" style={styles.formInput} value={formData.apellido} onChange={e => setFormData({...formData, apellido: e.target.value.toUpperCase()})} required />
+                                        <input type="text" placeholder="APELLIDO" style={styles.formInput} value={formData.apellido || ''} onChange={e => setFormData({...formData, apellido: e.target.value.toUpperCase()})} required />
                                         <label style={styles.label}>Nombre</label>
-                                        <input type="text" placeholder="Nombre" style={styles.formInput} value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
+                                        <input type="text" placeholder="Nombre" style={styles.formInput} value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
                                         <label style={styles.label}>Unidad</label>
-                                        <select style={styles.formInput} value={formData.unidad} onChange={e => setFormData({...formData, unidad: e.target.value})} required>
+                                        <select style={styles.formInput} value={formData.unidad || ''} onChange={e => setFormData({...formData, unidad: e.target.value})} required>
                                             <option value="">Unidad...</option>{unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
                                         </select>
                                     </div>
@@ -391,58 +407,60 @@ const Tripulantes = () => {
                                 {modalType === 'certificaciones' && (
                                     <div style={styles.formCol}>
                                         <label style={styles.label}>Vencimiento Psicofísico</label>
-                                        <input type="date" style={styles.formInput} value={formData.psicofisicoVencimiento} onChange={e => setFormData({...formData, psicofisicoVencimiento: e.target.value})} />
+                                        <input type="date" style={styles.formInput} value={formData.psicofisicoVencimiento || ''} onChange={e => setFormData({...formData, psicofisicoVencimiento: e.target.value})} />
                                         <label style={styles.label}>Vencimiento CRM</label>
-                                        <input type="date" style={styles.formInput} value={formData.crmVencimiento} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
+                                        <input type="date" style={styles.formInput} value={formData.crmVencimiento || ''} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
                                     </div>
                                 )}
 
                                 {modalType === 'horas' && (
                                     <div style={styles.formCol}>
                                         <label style={styles.label}>Horas Visual Generales</label>
-                                        <input type="number" style={styles.formInput} value={formData.vueloDiurno} onChange={e => setFormData({...formData, vueloDiurno: e.target.value})} required />
+                                        <input type="number" style={styles.formInput} value={formData.vueloDiurno || 0} onChange={e => setFormData({...formData, vueloDiurno: Number(e.target.value)})} required />
                                         <label style={styles.label}>Horas Nocturno Generales</label>
-                                        <input type="number" style={styles.formInput} value={formData.vueloNocturno} onChange={e => setFormData({...formData, vueloNocturno: e.target.value})} required />
+                                        <input type="number" style={styles.formInput} value={formData.vueloNocturno || 0} onChange={e => setFormData({...formData, vueloNocturno: Number(e.target.value)})} required />
                                         <label style={styles.label}>Horas Instrumental Generales</label>
-                                        <input type="number" style={styles.formInput} value={formData.vueloInstrumental} onChange={e => setFormData({...formData, vueloInstrumental: e.target.value})} required />
+                                        <input type="number" style={styles.formInput} value={formData.vueloInstrumental || 0} onChange={e => setFormData({...formData, vueloInstrumental: Number(e.target.value)})} required />
                                         <label style={styles.label}>Horas NVG Generales</label>
-                                        <input type="number" style={styles.formInput} value={formData.vueloVisual} onChange={e => setFormData({...formData, vueloVisual: e.target.value})} required />
+                                        <input type="number" style={styles.formInput} value={formData.vueloVisual || 0} onChange={e => setFormData({...formData, vueloVisual: Number(e.target.value)})} required />
                                     </div>
                                 )}
 
                                 {modalType === 'habilitacion' && (
                                     <div style={styles.formCol}>
                                         <label style={styles.label}>SdA</label>
-                                        <select style={styles.formInput} value={formData.aeronave} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
+                                        <select style={styles.formInput} value={formData.aeronave || ''} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
                                             <option value="">Seleccionar...</option>{aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
                                         </select>
                                         <label style={styles.label}>Función</label>
-                                        <select style={styles.formInput} value={formData.rolActual} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
+                                        <select style={styles.formInput} value={formData.rolActual || ''} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
                                             <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
                                         </select>
                                         <label style={styles.label}>Hs Visual SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsVisual} onChange={e => setFormData({...formData, hsVisual: e.target.value})} required />
+                                        <input type="number" style={styles.formInput} value={formData.hsVisual || 0} onChange={e => setFormData({...formData, hsVisual: Number(e.target.value)})} required />
                                         <label style={styles.label}>Hs Nocturno SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsNocturno} onChange={e => setFormData({...formData, hsNocturno: e.target.value})} required />
+                                        <input type="number" style={styles.formInput} value={formData.hsNocturno || 0} onChange={e => setFormData({...formData, hsNocturno: Number(e.target.value)})} required />
                                         <label style={styles.label}>Hs Instrumental SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsInstrumental} onChange={e => setFormData({...formData, hsInstrumental: e.target.value})} required />
+                                        <input type="number" style={styles.formInput} value={formData.hsInstrumental || 0} onChange={e => setFormData({...formData, hsInstrumental: Number(e.target.value)})} required />
                                         <label style={styles.label}>Hs NVG SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsNVG} onChange={e => setFormData({...formData, hsNVG: e.target.value})} required />
+                                        <input type="number" style={styles.formInput} value={formData.hsNVG || 0} onChange={e => setFormData({...formData, hsNVG: Number(e.target.value)})} required />
                                         <label style={styles.label}>Fecha Aptitud Inicial</label>
-                                        <input type="date" style={styles.formInput} value={formData.fechaHabilitacion} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
+                                        <input type="date" style={styles.formInput} value={formData.fechaHabilitacion || ''} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
+                                        <label style={styles.label}>Observaciones / Notas</label>
+                                        <input type="text" placeholder="Opcional..." style={styles.formInput} value={formData.observaciones || ''} onChange={e => setFormData({...formData, observaciones: e.target.value})} />
                                     </div>
                                 )}
 
                                 {modalType === 'capacitacion' && (
                                     <div style={styles.formCol}>
                                         <label style={styles.label}>Capacitación</label>
-                                        <select style={styles.formInput} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
+                                        <select style={styles.formInput} value={formData.tipo || ''} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
                                             <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                         <label style={styles.label}>Horas Acreditadas</label>
-                                        <input type="number" style={styles.formInput} value={formData.horasAcreditadas} onChange={e => setFormData({...formData, horasAcreditadas: e.target.value})} required />
+                                        <input type="number" style={styles.formInput} value={formData.horasAcreditadas || 0} onChange={e => setFormData({...formData, horasAcreditadas: Number(e.target.value)})} required />
                                         <label style={styles.label}>Fecha Adquisición</label>
-                                        <input type="date" style={styles.formInput} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
+                                        <input type="date" style={styles.formInput} value={formData.fechaAdquisicion || ''} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
                                     </div>
                                 )}
                             </div>
