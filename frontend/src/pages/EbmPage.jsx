@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Importamos la función declarada y tipada en tu archivo api.js centralizado
-import { getPlanificacionEbm } from '../services/api'; 
+import API, { getPlanificacionEbm } from '../services/api'; 
 
 // --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---
 // Extraído fuera del componente para evitar re-declaración en cada render
@@ -18,6 +18,7 @@ const ORDEN_GRADOS = { 'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST
 const EbmPage = () => {
     const [personal, setPersonal] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [guardandoId, setGuardandoId] = useState(null); // Estado visual para feedback de guardado
     
     // Lista total de SDAs detectados dinámicamente en la unidad
     const [todosLosSdas, setTodosLosSdas] = useState([]);
@@ -37,11 +38,52 @@ const EbmPage = () => {
             const response = await getPlanificacionEbm();
             const dataBackend = response.data || [];
 
-            // Inyectamos un estado base de configuraciones si el backend no lo provee estructurado por SdA
-            const datosInicializados = dataBackend.map(p => ({
-                ...p,
-                configTrimestresSda: p.configTrimestresSda || {}
-            }));
+            // 🔄 ADAPTACIÓN DE ESQUEMA: Unificamos lo que envía el backend (condicionesSda y novedadesSda)
+            // en un único mapa de configuración trimestral para el consumo simplificado del frontend.
+            const datosInicializados = dataBackend.map(p => {
+                const configTrimestresSda = {};
+
+                // Consolidamos todos los sistemas de armas asociados a este piloto
+                const sdasDelPiloto = new Set([
+                    ...Object.keys(p.condicionesSda || {}),
+                    ...Object.keys(p.novedadesSda || {}),
+                    ...(p.habilitaciones?.map(h => h.aeronave).filter(Boolean) || [])
+                ]);
+
+                sdasDelPiloto.forEach(sda => {
+                    configTrimestresSda[sda] = {
+                        t1: { 
+                            rol: p.condicionesSda?.[sda]?.t1 || '', 
+                            tipo: '', 
+                            novedad: p.novedadesSda?.[sda]?.t1 && !['SIN AERONAVES DISPONIBLES', 'SIN DISPONIBILIDAD DE HORAS', 'PROBLEMAS DE SALUD'].includes(p.novedadesSda[sda].t1.toUpperCase()) ? 'Otros' : (p.novedadesSda?.[sda]?.t1 || ''), 
+                            novedadOtro: p.novedadesSda?.[sda]?.t1 || '' 
+                        },
+                        t2: { 
+                            rol: p.condicionesSda?.[sda]?.t2 || '', 
+                            tipo: '', 
+                            novedad: p.novedadesSda?.[sda]?.t2 && !['SIN AERONAVES DISPONIBLES', 'SIN DISPONIBILIDAD DE HORAS', 'PROBLEMAS DE SALUD'].includes(p.novedadesSda[sda].t2.toUpperCase()) ? 'Otros' : (p.novedadesSda?.[sda]?.t2 || ''), 
+                            novedadOtro: p.novedadesSda?.[sda]?.t2 || '' 
+                        },
+                        t3: { 
+                            rol: p.condicionesSda?.[sda]?.t3 || '', 
+                            tipo: '', 
+                            novedad: p.novedadesSda?.[sda]?.t3 && !['SIN AERONAVES DISPONIBLES', 'SIN DISPONIBILIDAD DE HORAS', 'PROBLEMAS DE SALUD'].includes(p.novedadesSda[sda].t3.toUpperCase()) ? 'Otros' : (p.novedadesSda?.[sda]?.t3 || ''), 
+                            novedadOtro: p.novedadesSda?.[sda]?.t3 || '' 
+                        },
+                        t4: { 
+                            rol: p.condicionesSda?.[sda]?.t4 || '', 
+                            tipo: '', 
+                            novedad: p.novedadesSda?.[sda]?.t4 && !['SIN AERONAVES DISPONIBLES', 'SIN DISPONIBILIDAD DE HORAS', 'PROBLEMAS DE SALUD'].includes(p.novedadesSda[sda].t4.toUpperCase()) ? 'Otros' : (p.novedadesSda?.[sda]?.t4 || ''), 
+                            novedadOtro: p.novedadesSda?.[sda]?.t4 || '' 
+                        }
+                    };
+                });
+
+                return {
+                    ...p,
+                    configTrimestresSda
+                };
+            });
 
             setPersonal(datosInicializados);
 
@@ -111,8 +153,65 @@ const EbmPage = () => {
         );
     };
 
+    // 💾 ENVIAR Y PERSISTIR LOS DATOS UNIFICADOS EN LA BASE DE DATOS CENTRAL
+    const handleGuardarConfiguracion = async (pilotoId, sda) => {
+        const keyGuardado = `${pilotoId}_${sda}`;
+        try {
+            setGuardandoId(keyGuardado);
+            const piloto = personal.find(p => p._id === pilotoId);
+            if (!piloto) return;
+
+            const configSda = piloto.configTrimestresSda?.[sda];
+            if (!configSda) return;
+
+            // Formateamos los 4 trimestres alineados al esquema esperado por la API/Base de datos
+            const trimestresPayload = [
+                {
+                    numero: 1,
+                    rol: configSda.t1.rol,
+                    tipo: configSda.t1.tipo,
+                    causaNoCumplimiento: configSda.t1.novedad === 'Otros' ? configSda.t1.novedadOtro : configSda.t1.novedad
+                },
+                {
+                    numero: 2,
+                    rol: configSda.t2.rol,
+                    tipo: configSda.t2.tipo,
+                    causaNoCumplimiento: configSda.t2.novedad === 'Otros' ? configSda.t2.novedadOtro : configSda.t2.novedad
+                },
+                {
+                    numero: 3,
+                    rol: configSda.t3.rol,
+                    tipo: configSda.t3.tipo,
+                    causaNoCumplimiento: configSda.t3.novedad === 'Otros' ? configSda.t3.novedadOtro : configSda.t3.novedad
+                },
+                {
+                    numero: 4,
+                    rol: configSda.t4.rol,
+                    tipo: configSda.t4.tipo,
+                    causaNoCumplimiento: configSda.t4.novedad === 'Otros' ? configSda.t4.novedadOtro : configSda.t4.novedad
+                }
+            ];
+
+            // Petición PUT centralizada al backend para guardar/actualizar (utiliza findOneAndUpdate)
+            const response = await API.put(`/api/ebm/actualizar-configuracion/${pilotoId}`, {
+                sistemaArmas: sda,
+                trimestres: trimestresPayload
+            });
+
+            if (response.data?.success || response.status === 200) {
+                alert(`✅ Plan EBM de ${piloto.apellido} para el sistema ${sda} actualizado correctamente en el servidor.`);
+            } else {
+                alert(`⚠️ Ocurrió un inconveniente al registrar la información en la base de datos.`);
+            }
+        } catch (error) {
+            console.error("❌ Error al guardar configuración EBM:", error);
+            alert("❌ Error de comunicación con la base de datos central.");
+        } finally {
+            setGuardandoId(null);
+        }
+    };
+
     // --- PROCESAMIENTO Y GENERACIÓN DE LA MATRIZ DE RECORRIDO POR SISTEMA ---
-    // Memorizado con useMemo para evitar re-ordenar todo el array con cada tecla pulsada o toggle visual
     const matrizSda = useMemo(() => {
         const esquemasPorSda = {};
 
@@ -120,13 +219,12 @@ const EbmPage = () => {
             const habilitaciones = piloto.habilitaciones || [];
             
             // 🛑 SOLUCIÓN CRÍTICA: Extraemos solo las aeronaves ÚNICAS que tiene este piloto
-            // Esto evita que si tiene más de una habilitación del mismo avión, se duplique en la tabla.
             const sdasUnicosDelPiloto = Array.from(
                 new Set(habilitaciones.map(h => h.aeronave).filter(Boolean))
             );
 
             sdasUnicosDelPiloto.forEach(sdaName => {
-                // 🛑 FILTRO DINÁMICO SELECTIVO: Si el SdA fue desactivado en la botonera superior, no se procesa
+                // FILTRO DINÁMICO SELECTIVO: Si el SdA fue desactivado en la botonera superior, no se procesa
                 if (sdasVisibles[sdaName] === false) return;
 
                 if (!esquemasPorSda[sdaName]) {
@@ -248,7 +346,7 @@ const EbmPage = () => {
                             </select>
                         </div>
                         
-                        {conf.novedad === 'Otros' && (
+                        {(conf.novedad === 'Otros' || (!['', 'Sin Aeronaves disponibles', 'Sin disponibilidad de horas', 'Problemas de Salud'].includes(conf.novedad))) && (
                             <div style={{ marginTop: '5px' }}>
                                 <input 
                                     type="text"
@@ -294,7 +392,6 @@ const EbmPage = () => {
                                         borderColor: estaActivo ? '#0284c7' : '#cbd5e1'
                                     }}
                                 >
-                                    {/* Comentario reubicado correctamente fuera de las etiquetas JSX */}
                                     {estaActivo ? '👁️ ' : '🙈 '} {sda.toUpperCase()}
                                 </button>
                             );
@@ -331,6 +428,7 @@ const EbmPage = () => {
                                     const hTrim = p.horasTrimestralesSda?.[sdaNom] || {};
                                     const hFalt = p.horasFaltantesSda?.[sdaNom] || {};
                                     const totalAnualSda = p.horasAcumuladasSda?.[sdaNom] || 0;
+                                    const estaGuardando = guardandoId === filaKey;
 
                                     return (
                                         <React.Fragment key={filaKey}>
@@ -374,6 +472,31 @@ const EbmPage = () => {
                                                                 {renderBloqueAsignacion(p, sdaNom, 't2', '2do Trimestre', 2)}
                                                                 {renderBloqueAsignacion(p, sdaNom, 't3', '3er Trimestre', 3)}
                                                                 {renderBloqueAsignacion(p, sdaNom, 't4', '4to Trimestre', 4)}
+                                                            </div>
+
+                                                            {/* 💾 CONTENEDOR Y BOTÓN DE GUARDADO PERSISTENTE */}
+                                                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '15px' }}>
+                                                                <button
+                                                                    onClick={() => handleGuardarConfiguracion(p._id, sdaNom)}
+                                                                    disabled={estaGuardando}
+                                                                    style={{
+                                                                        backgroundColor: estaGuardando ? '#a1a1aa' : '#1e3a8a',
+                                                                        color: '#fff',
+                                                                        border: 'none',
+                                                                        padding: '8px 18px',
+                                                                        borderRadius: '4px',
+                                                                        fontSize: '11px',
+                                                                        fontWeight: 'bold',
+                                                                        cursor: estaGuardando ? 'not-allowed' : 'pointer',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '6px',
+                                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                                                        transition: 'background-color 0.2s'
+                                                                    }}
+                                                                >
+                                                                    {estaGuardando ? '⏳ GUARDANDO...' : '💾 GUARDAR CONFIGURACIÓN CENTRAL'}
+                                                                </button>
                                                             </div>
                                                         </div>
                                                     </td>
