@@ -19,7 +19,7 @@ const authorize = (...rolesPermitidos) => {
         if (!userRole || !permitidosLimpios.includes(userRole)) {
             return res.status(403).json({ 
                 success: false, 
-                message: `Acceso denegado: El nivel [${rawRole || 'SIN ROL'}] no tiene permisos para esta gestión.` 
+                mensaje: `Acceso denegado: El nivel [${rawRole || 'SIN ROL'}] no tiene permisos para esta gestión.` 
             });
         }
         next();
@@ -28,6 +28,9 @@ const authorize = (...rolesPermitidos) => {
 
 // GRUPOS DE ACCESO (Mantenemos tu lógica unificada de gestión militar)
 const rolesConsulta = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'user', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
+
+// Roles autorizados para modificar justificaciones, novedades o exigencias en la nómina EBM
+const rolesEscritura = ['admin', 'OPERACIONES', 'JEFE', 'PERSONAL', 'OFICINA_TECNICA', 'OTO'];
 
 // PROTECCIÓN GLOBAL: Todas las rutas de este módulo requieren token JWT válido
 router.use(protect);
@@ -40,7 +43,7 @@ router.use(protect);
 
 /**
  * @route   GET /api/ebm/planificacion-completa
- * @desc    Obtiene la nómina de pilotos activa filtrada por la jurisdicción/unidad del usuario
+ * @desc    Obtiene la nómina de pilotos activa filtrada por la jurisdicción/unidad del usuario (con horas desglosadas por SDA)
  */
 router.get('/planificacion-completa', 
     authorize(...rolesConsulta), 
@@ -53,7 +56,54 @@ router.get('/planificacion-completa',
  */
 router.get('/vuelos-unidad',
     authorize(...rolesConsulta),
-    ebmController.getVuelosUnidad // Apunta a la nueva lógica que desarrollaremos en el controlador
+    ebmController.getVuelosUnidad
+);
+
+/**
+ * @route   PUT /api/ebm/actualizar-configuracion/:id
+ * @desc    Guarda o actualiza las novedades, justificaciones y exigencias EBM de un tripulante específico
+ * @nota    ¡NUEVA RUTA ESENCIAL! Evita que los cambios del frontend se pierdan al recargar la página.
+ */
+router.put('/actualizar-configuracion/:id',
+    authorize(...rolesEscritura),
+    async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { horasFaltantesSda, novedadesSda } = req.body;
+
+            // Buscamos el tripulante y actualizamos el sub-objeto configuracionEbm
+            const tripulanteActualizado = await Tripulante.findByIdAndUpdate(
+                id,
+                {
+                    $set: {
+                        'configuracionEbm.horasFaltantesSda': horasFaltantesSda || {},
+                        'configuracionEbm.novedadesSda': novedadesSda || {}
+                    }
+                },
+                { new: true, runValidators: true }
+            );
+
+            if (!tripulanteActualizado) {
+                return res.status(404).json({ 
+                    success: false, 
+                    mensaje: "No se encontró el tripulante especificado." 
+                });
+            }
+
+            res.status(200).json({
+                success: true,
+                mensaje: "Configuración EBM guardada correctamente de forma persistente.",
+                data: tripulanteActualizado
+            });
+
+        } catch (error) {
+            console.error("❌ ERROR AL GUARDAR PERSISTENCIA EBM:", error);
+            res.status(500).json({ 
+                success: false, 
+                mensaje: "Error interno del servidor al procesar el guardado de la configuración." 
+            });
+        }
+    }
 );
 
 module.exports = router;
