@@ -33,22 +33,24 @@ exports.registrarVuelo = async (req, res) => {
 
         await nuevoVuelo.save();
 
-        // 3. Mapeo estructurado con el ROL exacto que cumplió cada tripulante en este vuelo específico
-        const tripulantesAfectados = [];
-        if (nuevoVuelo.instructor) tripulantesAfectados.push({ id: nuevoVuelo.instructor, rolVuelo: 'Instructor' });
-        if (nuevoVuelo.piloto) tripulantesAfectados.push({ id: nuevoVuelo.piloto, rolVuelo: 'Piloto' });
-        if (nuevoVuelo.copiloto) tripulantesAfectados.push({ id: nuevoVuelo.copiloto, rolVuelo: 'Copiloto' });
-        if (nuevoVuelo.mecanico) tripulantesAfectados.push({ id: nuevoVuelo.mecanico, rolVuelo: 'Mecánico' });
-        if (nuevoVuelo.segundoMecanico) tripulantesAfectados.push({ id: nuevoVuelo.segundoMecanico, rolVuelo: 'Mecánico' });
+        // 3. FILTRO DE PARTICIPANTES ÚNICOS (Evita duplicidad si el Instructor es también el Piloto)
+        const mapaTripulantes = new Map();
+
+        // Prioridad jerárquica de asignación de rol en caso de duplicidad de ID
+        if (nuevoVuelo.segundoMecanico) mapaTripulantes.set(nuevoVuelo.segundoMecanico.toString(), 'Mecánico');
+        if (nuevoVuelo.mecanico)        mapaTripulantes.set(nuevoVuelo.mecanico.toString(), 'Mecánico');
+        if (nuevoVuelo.copiloto)        mapaTripulantes.set(nuevoVuelo.copiloto.toString(), 'Copiloto');
+        if (nuevoVuelo.piloto)          mapaTripulantes.set(nuevoVuelo.piloto.toString(), 'Piloto');
+        if (nuevoVuelo.instructor)      mapaTripulantes.set(nuevoVuelo.instructor.toString(), 'Instructor'); // Instructor pisa a piloto si es el mismo ID
 
         const hs = Number(datosVuelo.horasVoladas);
         const esNocturno = datosVuelo.condicion === 'Nocturno';
         const esIFR = datosVuelo.reglasVuelo === 'IFR';
         const esNVG = datosVuelo.usoNVG === true;
 
-        // 4. Impactar cada legajo de manera cruzada (Aeronave + Función de Vuelo)
-        for (const t of tripulantesAfectados) {
-            const tripulante = await Tripulante.findById(t.id);
+        // 4. Impactar cada legajo de manera cruzada SIN DUPLICADOS
+        for (const [idTripulante, rolVuelo] of mapaTripulantes.entries()) {
+            const tripulante = await Tripulante.findById(idTripulante);
             if (!tripulante) continue;
 
             // A. Totales Históricos Generales
@@ -63,14 +65,14 @@ exports.registrarVuelo = async (req, res) => {
 
             // B. Habilitación Específica por SdA (Filtro Cruzado por Aeronave Y ROL)
             let indexHab = tripulante.habilitaciones.findIndex(h => 
-                h.aeronave === nuevoVuelo.aeronave && h.rolActual === t.rolVuelo
+                h.aeronave === nuevoVuelo.aeronave && h.rolActual === rolVuelo
             );
 
             // Si no tiene la habilitación con ese rol inicializada, la creamos dinámicamente para no perder el vuelo
             if (indexHab === -1) {
                 tripulante.habilitaciones.push({
                     aeronave: nuevoVuelo.aeronave,
-                    rolActual: t.rolVuelo,
+                    rolActual: rolVuelo,
                     fechaHabilitacion: nuevoVuelo.fecha,
                     hsVisual: 0,
                     hsInstrumental: 0,
@@ -139,7 +141,8 @@ exports.registrarVuelo = async (req, res) => {
  */
 exports.obtenerVuelos = async (req, res) => {
     try {
-        const { unidad } = req.query;
+        const { unit } = req.query; // Sincro para query params
+        const unidad = unit || req.query.unidad;
         let filtro = {};
         const rolUsuario = req.user.role ? req.user.role.toLowerCase() : 'user';
         
@@ -154,8 +157,6 @@ exports.obtenerVuelos = async (req, res) => {
             .populate('instructor piloto copiloto mecanico segundoMecanico', 'grado apellido nombre')
             .sort({ fecha: -1 });
 
-        console.log(`📡 Solicitud de vuelos por: ${req.user.apellido} (Rol: ${rolUsuario}). Vuelos encontrados: ${vuelos.length}`);
-
         res.json(vuelos);
     } catch (error) {
         console.error("❌ Error al obtener vuelos:", error);
@@ -164,7 +165,7 @@ exports.obtenerVuelos = async (req, res) => {
 };
 
 /**
- * ELIMINAR VUELO (Lógica Inversa Completa Cruzada)
+ * ELIMINAR VUELO (Lógica Inversa Completa Cruzada Corregida)
  */
 exports.eliminarVuelo = async (req, res) => {
     try {
@@ -173,20 +174,20 @@ exports.eliminarVuelo = async (req, res) => {
 
         const hs = Number(vuelo.horasVoladas);
         
-        // Mapeo inverso de roles para restar las horas exactamente de donde se sumaron
-        const tripulantesAfectados = [];
-        if (vuelo.instructor) tripulantesAfectados.push({ id: vuelo.instructor, rolVuelo: 'Instructor' });
-        if (vuelo.piloto) tripulantesAfectados.push({ id: vuelo.piloto, rolVuelo: 'Piloto' });
-        if (vuelo.copiloto) tripulantesAfectados.push({ id: vuelo.copiloto, rolVuelo: 'Copiloto' });
-        if (vuelo.mecanico) tripulantesAfectados.push({ id: vuelo.mecanico, rolVuelo: 'Mecánico' });
-        if (vuelo.segundoMecanico) tripulantesAfectados.push({ id: vuelo.segundoMecanico, rolVuelo: 'Mecánico' });
+        // FILTRO DE PARTICIPANTES ÚNICOS PARA RESTAR EXACTAMENTE LO QUE SE SUMÓ
+        const mapaTripulantes = new Map();
+        if (vuelo.segundoMecanico) mapaTripulantes.set(vuelo.segundoMecanico.toString(), 'Mecánico');
+        if (vuelo.mecanico)        mapaTripulantes.set(vuelo.mecanico.toString(), 'Mecánico');
+        if (vuelo.copiloto)        mapaTripulantes.set(vuelo.copiloto.toString(), 'Copiloto');
+        if (vuelo.piloto)          mapaTripulantes.set(vuelo.piloto.toString(), 'Piloto');
+        if (vuelo.instructor)      mapaTripulantes.set(vuelo.instructor.toString(), 'Instructor');
 
         const esNocturno = vuelo.condicion === 'Nocturno';
         const esIFR = vuelo.reglasVuelo === 'IFR';
         const esNVG = vuelo.usoNVG === true;
 
-        for (const t of tripulantesAfectados) {
-            const tripulante = await Tripulante.findById(t.id);
+        for (const [idTripulante, rolVuelo] of mapaTripulantes.entries()) {
+            const tripulante = await Tripulante.findById(idTripulante);
             if (!tripulante) continue;
 
             // 1. Restar de Totales Históricos
@@ -201,7 +202,7 @@ exports.eliminarVuelo = async (req, res) => {
 
             // 2. Restar de SdA (Filtro Cruzado Exacto por Aeronave Y ROL)
             const indexHab = tripulante.habilitaciones.findIndex(h => 
-                h.aeronave === vuelo.aeronave && h.rolActual === t.rolVuelo
+                h.aeronave === vuelo.aeronave && h.rolActual === rolVuelo
             );
             
             if (indexHab !== -1) {
