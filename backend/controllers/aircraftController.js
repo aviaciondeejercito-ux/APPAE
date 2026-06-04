@@ -8,9 +8,19 @@ const Aircraft = require('../models/Aircraft');
 
 // Función auxiliar interna para estandarizar los chequeos de rol (Case-Insensitive)
 const verificarRol = (req) => {
+    // Tomamos el rol del token (o lo dejamos vacío si no existe)
     const rawRole = req.user && req.user.role ? String(req.user.role).trim().toUpperCase() : '';
-    // CORRECCIÓN: Si el rol incluye ADMIN (ej: ADMINISTRADOR, SUPER_ADMIN, ADMIN), es mando superior global.
-    const esMando = ['admin', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole) || rawRole.includes('admin');
+    
+    // También extraemos el elemento de manera segura
+    const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : '';
+    
+    // CORRECCIÓN CRÍTICA:
+    // 1. El array original buscaba 'admin' en minúscula, pero rawRole está en MAYÚSCULAS. Cambiado a 'ADMIN'.
+    // 2. Si el rol es 'ADMIN' o contiene 'ADMIN', es mando superior.
+    // 3. Regla institucional: Si el elemento del usuario es 'COMANDO', es mando estratégico global (ve todo).
+    const esMando = ['ADMIN', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole) || 
+                    rawRole.includes('ADMIN') || 
+                    userElemento === 'COMANDO';
     
     return {
         role: rawRole,
@@ -177,7 +187,7 @@ exports.deleteAircraft = async (req, res) => {
         const aircraft = await Aircraft.findById(req.params.id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
 
-        const esMandoConPermiso = ['admin', 'OTO'].includes(control.role) || control.role.includes('admin');
+        const esMandoConPermiso = ['ADMIN', 'OTO'].includes(control.role) || control.role.includes('ADMIN');
         const esPersonalAutorizadoUnidad = (control.esTecnicoAutorizado && userElemento === String(aircraft.unidad).trim().toUpperCase());
 
         if (!esMandoConPermiso && !esPersonalAutorizadoUnidad) {
