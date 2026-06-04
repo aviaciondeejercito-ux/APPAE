@@ -27,22 +27,26 @@ const verificarRol = (req) => {
 // 1. Obtener aeronaves (Con filtrado jerárquico estricto por Unidad)
 exports.getAircrafts = async (req, res) => {
     try {
-        let query = {};
         const control = verificarRol(req);
-        const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
+        let query = {};
 
-        // Si es Oficina Técnica o S4 de unidad, es un usuario restringido para la VISTA general
-        if (control.esUsuarioRestringido) {
+        // SOLUCIÓN: Si es Mando Superior (ADMIN, BOSS, OTO, DIRECTOR), 
+        // no aplicamos ningún filtro de unidad, por lo tanto, verá TODA la flota.
+        if (!control.esMandoSuperior) {
+            const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
+            
             if (!userElemento) {
                 return res.status(403).json({ 
                     success: false, 
                     message: "Error de Seguridad: Usuario sin unidad asignada en credenciales." 
                 });
             }
-            query.unidad = userElemento; // Filtro mandatorio: Solo ve su elemento
+            // Filtro restrictivo solo para usuarios que NO son mando superior
+            query.unidad = userElemento;
         }
 
-        // Permitir a Mandos Superiores filtrar por unidad específica vía query si la solicitan
+        // Si el Mando Superior envió un filtro específico por query (ej: ?unidad=SEC AE M 6), lo aplicamos.
+        // Si no envió nada, la query vacía {} traerá todo.
         if (req.query.unidad && control.esMandoSuperior) {
             query.unidad = String(req.query.unidad).trim().toUpperCase();
         }
