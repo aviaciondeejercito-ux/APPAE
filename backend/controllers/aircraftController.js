@@ -9,13 +9,14 @@ const Aircraft = require('../models/Aircraft');
 // Función auxiliar interna para estandarizar los chequeos de rol (Case-Insensitive)
 const verificarRol = (req) => {
     const rawRole = req.user && req.user.role ? String(req.user.role).trim().toUpperCase() : '';
-    const esMando = ['ADMIN', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole);
+    // CORRECCIÓN: Si el rol incluye ADMIN (ej: ADMINISTRADOR, SUPER_ADMIN, ADMIN), es mando superior global.
+    const esMando = ['ADMIN', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole) || rawRole.includes('ADMIN');
+    
     return {
         role: rawRole,
         esMandoSuperior: esMando,
         esTecnicoAutorizado: ['S4', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA'].includes(rawRole),
-        // Si es mando superior, nunca debe auto-restringirse a la unidad del perfil
-        esUsuarioRestringido: !esMando && ['USER', 'S4', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA'].includes(rawRole)
+        esUsuarioRestringido: !esMando
     };
 };
 
@@ -26,7 +27,7 @@ exports.getAircrafts = async (req, res) => {
         const control = verificarRol(req);
         const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
-        // Filtro estricto SOLO para usuarios de unidad y niveles técnicos (Excluye Admin/Mandos)
+        // Filtro estricto SOLO si no es mando superior / administrador
         if (control.esUsuarioRestringido) {
             if (!userElemento) {
                 return res.status(403).json({ 
@@ -80,7 +81,7 @@ exports.createAircraft = async (req, res) => {
         const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
         if (control.esMandoSuperior) {
-            if (!unidad) return res.status(400).json({ message: "El nivel de mando debe especificar una unidad de destino." });
+            if (!unidad) return res.status(400).json({ message: "El level de mando debe especificar una unidad de destino." });
         } else if (control.esTecnicoAutorizado) {
             if (!userElemento) return res.status(403).json({ message: "Falta asignación de unidad en su perfil para dar el alta." });
             unidad = userElemento;
@@ -118,7 +119,6 @@ exports.updateAircraftStatus = async (req, res) => {
         const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
         
         // VALIDACIÓN DE AUTORIDAD DE ORIGEN:
-        // Si no es mando superior, el usuario debe pertenecer a la misma unidad que tiene actualmente el avión para poder editarlo o transferirlo
         if (!control.esMandoSuperior && userElemento !== String(aircraft.unidad).trim().toUpperCase()) {
             return res.status(403).json({ 
                 success: false,
@@ -151,7 +151,6 @@ exports.updateAircraftStatus = async (req, res) => {
             if (updates.sda) aircraft.sda = updates.sda.toUpperCase().trim();
             if (updates.tipoIcono) aircraft.tipoIcono = updates.tipoIcono.toLowerCase().trim();
             
-            // Habilitado para Mandos y para la Oficina Técnica de la unidad de origen
             if (updates.unidad) {
                 aircraft.unidad = updates.unidad.toUpperCase().trim();
             }
@@ -178,7 +177,7 @@ exports.deleteAircraft = async (req, res) => {
         const aircraft = await Aircraft.findById(req.params.id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
 
-        const esMandoConPermiso = ['ADMIN', 'OTO'].includes(control.role);
+        const esMandoConPermiso = ['ADMIN', 'OTO'].includes(control.role) || control.role.includes('ADMIN');
         const esPersonalAutorizadoUnidad = (control.esTecnicoAutorizado && userElemento === String(aircraft.unidad).trim().toUpperCase());
 
         if (!esMandoConPermiso && !esPersonalAutorizadoUnidad) {
