@@ -6,9 +6,13 @@ const EstadoAeronaves = () => {
     const [loading, setLoading] = useState(true);
     const [selectedNote, setSelectedNote] = useState(null); 
     
-    // NORMALIZACIÓN SINCRO JOKER
+    // NORMALIZACIÓN SINCRO JOKER - REDUNDANCIA ABSOLUTA
     const rawRole = localStorage.getItem('role') || 'user';
-    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
+    
+    // Limpiamos espacios, guiones y pasamos a Mayúsculas y Minúsculas para doble chequeo
+    const roleUpper = String(rawRole).trim().toUpperCase().replace(/[\s_]/g, '');
+    const roleLower = String(rawRole).trim().toLowerCase().replace(/[\s_]/g, '');
+    
     const userElemento = localStorage.getItem('elemento')?.trim().toUpperCase() || "";
 
     useEffect(() => {
@@ -21,13 +25,18 @@ const EstadoAeronaves = () => {
         try {
             const { data } = await getAircrafts();
             
-            // NORMALIZACIÓN DE ROLES
-            const isMandoPorRol = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado) || roleNormalizado.includes('ADMIN');
+            // VERIFICACIÓN MULTI-CAPA (Redundancia estricta para ADMIN/admin/Admin/ADMINISTRADOR)
+            const esAdminPorContenido = roleUpper.includes('ADMIN') || roleLower.includes('admin');
+            const esMandoPorLista = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper) || 
+                                    ['admin', 'boss', 'director', 'oto'].includes(roleLower);
             
-            // REGRESIÓN DE SEGURIDAD / LIBERACIÓN: 
+            const isMandoPorRol = esAdminPorContenido || esMandoPorLista;
+            
+            // REGRESIÓN DE SEGURIDAD / LIBERACIÓN INSTITUCIONAL: 
             // Si el elemento es "COMANDO", por definición institucional es Mando Estratégico y ve TODO.
             const isMandoEstrategico = isMandoPorRol || userElemento === 'COMANDO';
 
+            // Si es mando estratégico, desactiva el filtro y consume TODO el array (data)
             const filtrados = isMandoEstrategico 
                 ? data 
                 : data.filter(a => 
@@ -158,7 +167,7 @@ const EstadoAeronaves = () => {
                         <div style={styles.modalBody}>
                             
                             <div style={styles.infoSection}>
-                                <h5 style={styles.sectionTitle}>⏳ Seguimiento de Horas</h5>
+                                <h5 style={styles.sectionTitle}>⏳ Tracking de Horas</h5>
                                 <div style={styles.infoGrid}>
                                     <div><strong>Planeador:</strong> {selectedNote.horasPlaneador || 0} hs</div>
                                     <div><strong>Remanentes:</strong> {selectedNote.horasRemanentes || 0} hs</div>
@@ -205,6 +214,7 @@ const EstadoAeronaves = () => {
     );
 };
 
+// Mantenemos los mismos estilos intactos debajo...
 const styles = {
     container: { padding: '30px', maxWidth: '1600px', margin: '0 auto', fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
     header: { marginBottom: '40px', textAlign: 'center' },
