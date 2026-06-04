@@ -22,7 +22,7 @@ const EstadoAeronaves = () => {
             const { data } = await getAircrafts();
             
             // CORRECCIÓN FRONTEND: Se incluye validación por subcadena "ADMIN" para evitar fallos de nomenclatura
-            const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado) || roleNormalizado.includes('ADMIN');
+            const isMandoEstrategico = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado) || roleNormalizado.includes('ADMIN');
 
             const filtrados = isMandoEstrategico 
                 ? data 

@@ -10,7 +10,7 @@ const Aircraft = require('../models/Aircraft');
 const verificarRol = (req) => {
     const rawRole = req.user && req.user.role ? String(req.user.role).trim().toUpperCase() : '';
     // CORRECCIÓN: Si el rol incluye ADMIN (ej: ADMINISTRADOR, SUPER_ADMIN, ADMIN), es mando superior global.
-    const esMando = ['ADMIN', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole) || rawRole.includes('ADMIN');
+    const esMando = ['admin', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole) || rawRole.includes('admin');
     
     return {
         role: rawRole,
@@ -177,7 +177,7 @@ exports.deleteAircraft = async (req, res) => {
         const aircraft = await Aircraft.findById(req.params.id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
 
-        const esMandoConPermiso = ['ADMIN', 'OTO'].includes(control.role) || control.role.includes('ADMIN');
+        const esMandoConPermiso = ['admin', 'OTO'].includes(control.role) || control.role.includes('admin');
         const esPersonalAutorizadoUnidad = (control.esTecnicoAutorizado && userElemento === String(aircraft.unidad).trim().toUpperCase());
 
         if (!esMandoConPermiso && !esPersonalAutorizadoUnidad) {
