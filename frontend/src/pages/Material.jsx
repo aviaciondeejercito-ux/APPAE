@@ -7,20 +7,30 @@ const Material = () => {
     const [selectedNote, setSelectedNote] = useState(null); 
     const [isEditing, setIsEditing] = useState(false); 
     
-    // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER)
+    // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER - REDUNDANCIA TOTAL)
     const rawRole = localStorage.getItem('role') || "";
-    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, ''); 
+    
+    // Sanitización doble contra fallos de strings (ADMIN / admin / Admin)
+    const roleUpper = String(rawRole).trim().toUpperCase().replace(/[\s_]/g, '');
+    const roleLower = String(rawRole).trim().toLowerCase().replace(/[\s_]/g, '');
     
     const userElemento = localStorage.getItem('elemento')?.toUpperCase().trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // Definición de permisos
-    const isAdmin = roleNormalizado === 'ADMIN';
-    const isMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+    // VERIFICACIÓN MULTI-CAPA DE ROLES (Garantiza lectura sin importar el casing)
+    const esAdminPorContenido = roleUpper.includes('ADMIN') || roleLower.includes('admin');
+    const esMandoPorLista = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper) || 
+                            ['admin', 'boss', 'director', 'oto'].includes(roleLower);
     
-    // NUEVA LÓGICA: OFICINA TECNICA ahora puede cambiar unidades igual que los mandos
-    const canChangeUnit = isMando || roleNormalizado === 'OFICINATECNICA';
-    const hasEditPrivileges = canChangeUnit || roleNormalizado === 'S4UNIDAD';
+    const isAdmin = esAdminPorContenido;
+    const isMandoPorRol = esAdminPorContenido || esMandoPorLista;
+    
+    // REGRESIÓN INSTITUCIONAL: Si es comando por elemento o jerarquía de rol es MANDO SUPERIOR
+    const isMandoEstrategico = isMandoPorRol || userElemento === 'COMANDO';
+    
+    // NUEVA LÓGICA EXTENDIDA: CONTROL DE ACCESO A ACCIONES
+    const canChangeUnit = isMandoEstrategico || roleUpper === 'OFICINATECNICA' || roleLower === 'oficinatecnica';
+    const hasEditPrivileges = canChangeUnit || roleUpper === 'S4UNIDAD' || roleLower === 's4unidad';
 
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"];
     const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
@@ -44,14 +54,19 @@ const Material = () => {
     const [newAir, setNewAir] = useState(initialFormState);
 
     useEffect(() => {
-        if (roleNormalizado) fetchMaterial();
-    }, [roleNormalizado, userElemento]);
+        fetchMaterial();
+    }, [roleUpper, userElemento]);
 
     const fetchMaterial = async () => {
         try {
             setLoading(true);
             const { data } = await getAircrafts();
-            const filtrados = isMando ? data : data.filter(a => a.unidad?.toUpperCase().trim() === userElemento);
+            
+            // Si es mando estratégico (Admin, Comando o Roles Directivos) ve TODO, sino filtra por su unidad
+            const filtrados = isMandoEstrategico 
+                ? data 
+                : data.filter(a => a.unidad?.toUpperCase().trim() === userElemento);
+                
             setAircrafts(filtrados);
             setLoading(false);
         } catch (error) {
@@ -97,7 +112,6 @@ const Material = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        // Se utiliza canChangeUnit para validar si se toma la unidad del selector o la del usuario
         const unidadFinal = canChangeUnit ? newAir.unidadDestino : userElemento;
         if (!newAir.matricula || !newAir.sda || !unidadFinal) return alert("Faltan datos obligatorios.");
 
@@ -147,7 +161,6 @@ const Material = () => {
                     <div style={styles.card}>
                         <h3 style={styles.title}>{isEditing ? "🔄 Actualizar Aeronave" : "➕ Alta de Aeronave"}</h3>
                         <form onSubmit={handleSubmit} style={styles.form}>
-                            {/* Ahora Oficina Técnica también ve este campo */}
                             {canChangeUnit && (
                                 <div style={styles.field}>
                                     <label style={styles.label}>📍 Unidad Destino</label>
@@ -261,6 +274,7 @@ const Material = () => {
     );
 };
 
+// Mantenemos los mismos estilos de tu componente original...
 const styles = {
     container: { padding: '25px', maxWidth: '1300px', margin: '0 auto' },
     grid: { display: 'grid', gridTemplateColumns: window.innerWidth < 1000 ? '1fr' : '1fr 1.5fr', gap: '25px' },
