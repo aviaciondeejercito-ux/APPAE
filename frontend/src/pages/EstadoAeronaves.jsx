@@ -21,8 +21,8 @@ const EstadoAeronaves = () => {
         try {
             const { data } = await getAircrafts();
             
-            // Definición de Mando Estratégico (Visión Global)
-            const isMandoEstrategico = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+            // Definición de Mando Estratégico (Visión Global) - Agregado DIRECTOR a los filtros
+            const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
 
             const filtrados = isMandoEstrategico 
                 ? data 
@@ -40,7 +40,7 @@ const EstadoAeronaves = () => {
         }
     };
 
-    const unidades = [...new Set(aircrafts.filter(a => a.unidad).map(a => a.unidad))].sort();
+    const unidades = [...new Set(aircrafts.filter(a => a.unidad).map(a => String(a.unidad).trim().toUpperCase()))].sort();
 
     const formatDate = (date) => {
         if (!date) return "N/D";
@@ -83,7 +83,7 @@ const EstadoAeronaves = () => {
                                     <div style={{fontSize: '0.7rem', opacity: 0.8, letterSpacing: '1px'}}>ELEMENTO OPERATIVO</div>
                                 </div>
                                 <div style={styles.badgeCount}>
-                                    {aircrafts.filter(a => a.unidad === unidad && a.estado === 'E/S').length} DISPONIBLES
+                                    {aircrafts.filter(a => String(a.unidad).trim().toUpperCase() === unidad && a.estado === 'E/S').length} DISPONIBLES
                                 </div>
                             </div>
                             
@@ -99,7 +99,7 @@ const EstadoAeronaves = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {aircrafts.filter(a => a.unidad === unidad).map(air => (
+                                        {aircrafts.filter(a => String(a.unidad).trim().toUpperCase() === unidad).map(air => (
                                             <tr key={air._id} style={{
                                                 ...styles.tr,
                                                 backgroundColor: air.estado === 'F/S' ? '#fff5f5' : 'transparent',

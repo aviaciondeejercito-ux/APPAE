@@ -9,11 +9,13 @@ const Aircraft = require('../models/Aircraft');
 // Función auxiliar interna para estandarizar los chequeos de rol (Case-Insensitive)
 const verificarRol = (req) => {
     const rawRole = req.user && req.user.role ? String(req.user.role).trim().toUpperCase() : '';
+    const esMando = ['ADMIN', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole);
     return {
         role: rawRole,
-        esMandoSuperior: ['ADMIN', 'BOSS', 'OTO'].includes(rawRole),
+        esMandoSuperior: esMando,
         esTecnicoAutorizado: ['S4', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA'].includes(rawRole),
-        esUsuarioRestringido: ['USER', 'S4', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA'].includes(rawRole)
+        // Si es mando superior, nunca debe auto-restringirse a la unidad del perfil
+        esUsuarioRestringido: !esMando && ['USER', 'S4', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA'].includes(rawRole)
     };
 };
 
@@ -24,7 +26,7 @@ exports.getAircrafts = async (req, res) => {
         const control = verificarRol(req);
         const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
-        // Filtro estricto para usuarios de unidad y niveles técnicos
+        // Filtro estricto SOLO para usuarios de unidad y niveles técnicos (Excluye Admin/Mandos)
         if (control.esUsuarioRestringido) {
             if (!userElemento) {
                 return res.status(403).json({ 
@@ -35,7 +37,7 @@ exports.getAircrafts = async (req, res) => {
             query.unidad = userElemento;
         }
 
-        // Permitir a Mandos Superiores filtrar por unidad específica vía query
+        // Permitir a Mandos Superiores filtrar por unidad específica vía query si la solicitan
         if (req.query.unidad && control.esMandoSuperior) {
             query.unidad = String(req.query.unidad).trim().toUpperCase();
         }
@@ -68,7 +70,7 @@ exports.getAircraftsByElemento = async (req, res) => {
     }
 };
 
-// 3. Crear una nueva aeronave (Incorporación al Inventario) - SOLUCIONADO ERROR 403 ADMIN
+// 3. Crear una nueva aeronave (Incorporación al Inventario)
 exports.createAircraft = async (req, res) => {
     try {
         const { matricula, sda } = req.body;

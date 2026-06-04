@@ -14,49 +14,45 @@ const protect = authMiddleware.protect || authMiddleware.verifyToken || authMidd
 router.use(protect);
 
 /**
- * 2. RUTAS ESTÁTICAS (Deben ir primero)
+ * 2. RUTAS ESTÁTICAS Y ESPECÍFICAS (Deben ir primero)
  */
 router.get('/', aircraftController.getAircrafts);
 
 router.post(
     '/', 
-    authorize('admin', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'S4_UNIDAD'), 
+    authorize('admin', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'S4_UNIDAD', 'S4', 'OFICINA_CE_TECNICA'), 
     aircraftController.createAircraft
 );
 
-/**
- * 3. RUTAS CON PREFIJO ESPECÍFICO
- * Esto evita confusiones con los IDs de MongoDB.
- */
 router.get(
     '/elemento/:elemento', 
-    authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
+    authorize('user', 'USER', 'S4_UNIDAD', 'S4', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin', 'ADMIN'), 
     aircraftController.getAircraftsByElemento
 );
 
 /**
- * 4. RUTAS POR ID (Operaciones sobre una aeronave específica)
- * Se colocan al final para que no capturen las rutas anteriores.
+ * 3. RUTAS POR ID (Operaciones sobre una aeronave específica)
+ * Colocadas estratégicamente antes de la ruta de compatibilidad genérica.
  */
 router.put(
     '/:id', 
-    authorize('admin', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'S4_UNIDAD'), 
-    aircraftController.updateAircraftStatus // Aquí es donde se guarda el RAAC 91.207
+    authorize('admin', 'ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA', 'S4_UNIDAD', 'S4'), 
+    aircraftController.updateAircraftStatus
 );
 
 router.delete(
     '/:id', 
-    authorize('admin', 'BOSS', 'OFICINA_TECNICA', 'S4_UNIDAD'), 
+    authorize('admin', 'ADMIN', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA', 'S4_UNIDAD', 'S4'), 
     aircraftController.deleteAircraft
 );
 
 /**
- * 5. RUTA DE COMPATIBILIDAD (Opcional)
- * Solo si el frontend hace llamadas directas como /api/aircraft/CUEAE
+ * 4. RUTA DE COMPATIBILIDAD (Comodín genérico al final)
+ * Captura strings de unidad (ej: /CUEAE) sin interferir con los IDs de MongoDB.
  */
 router.get(
     '/:elemento', 
-    authorize('user', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin'), 
+    authorize('user', 'USER', 'S4_UNIDAD', 'S4', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA', 'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin', 'ADMIN'), 
     aircraftController.getAircraftsByElemento
 );
 
