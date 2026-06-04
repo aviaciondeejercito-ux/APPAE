@@ -7,29 +7,30 @@ const Material = () => {
     const [selectedNote, setSelectedNote] = useState(null); 
     const [isEditing, setIsEditing] = useState(false); 
     
-    // NORMALIZACIÓN DE SESIÓN (SINCRO JOKER - REDUNDANCIA TOTAL)
+    // NORMALIZACIÓN DE SESIÓN
     const rawRole = localStorage.getItem('role') || "";
-    
-    // Sanitización doble contra fallos de strings (ADMIN / admin / Admin)
     const roleUpper = String(rawRole).trim().toUpperCase().replace(/[\s_]/g, '');
     const roleLower = String(rawRole).trim().toLowerCase().replace(/[\s_]/g, '');
     
     const userElemento = localStorage.getItem('elemento')?.toUpperCase().trim() || "";
     const userName = localStorage.getItem('username') || 'Usuario';
 
-    // VERIFICACIÓN MULTI-CAPA DE ROLES (Garantiza lectura sin importar el casing)
+    // VERIFICACIÓN MULTI-CAPA DE ROLES
     const esAdminPorContenido = roleUpper.includes('ADMIN') || roleLower.includes('admin');
     const esMandoPorLista = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper) || 
                             ['admin', 'boss', 'director', 'oto'].includes(roleLower);
     
-    const isAdmin = esAdminPorContenido;
-    const isMandoPorRol = esAdminPorContenido || esMandoPorLista;
+    const isMandoEstrategico = esAdminPorContenido || esMandoPorLista || userElemento === 'COMANDO';
     
-    // REGRESIÓN INSTITUCIONAL: Si es comando por elemento o jerarquía de rol es MANDO SUPERIOR
-    const isMandoEstrategico = isMandoPorRol || userElemento === 'COMANDO';
+    // CORRECCIÓN DE REGLA DE NEGOCIO:
+    // 1. Ver todo la flota: FALSO para Oficina Técnica. Solo permitido para Mandos Estratégicos globales.
+    const canViewAll = isMandoEstrategico;
+
+    // 2. Capacidad de transferir / enviar a otra unidad de destino
+    const esOficinaTecnica = roleUpper === 'OFICINATECNICA' || roleLower === 'oficinatecnica';
+    const canChangeUnit = isMandoEstrategico || esOficinaTecnica;
     
-    // NUEVA LÓGICA EXTENDIDA: CONTROL DE ACCESO A ACCIONES
-    const canChangeUnit = isMandoEstrategico || roleUpper === 'OFICINATECNICA' || roleLower === 'oficinatecnica';
+    // 3. Privilegios generales de edición en el formulario
     const hasEditPrivileges = canChangeUnit || roleUpper === 'S4UNIDAD' || roleLower === 's4unidad';
 
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"];
@@ -62,8 +63,8 @@ const Material = () => {
             setLoading(true);
             const { data } = await getAircrafts();
             
-            // Si es mando estratégico (Admin, Comando o Roles Directivos) ve TODO, sino filtra por su unidad
-            const filtrados = isMandoEstrategico 
+            // CONTROL RESTRICTIVO LOCAL: Si no puede ver todo, se autofiltran por la unidad del usuario de Oficina Técnica
+            const filtrados = canViewAll 
                 ? data 
                 : data.filter(a => a.unidad?.toUpperCase().trim() === userElemento);
                 
@@ -112,7 +113,8 @@ const Material = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const unidadFinal = canChangeUnit ? newAir.unidadDestino : userElemento;
+        // Si el usuario tiene permisos de traspaso, toma el valor seleccionado del combobox, sino autoasigna su propio elemento
+        const unidadFinal = canChangeUnit ? (newAir.unidadDestino || userElemento) : userElemento;
         if (!newAir.matricula || !newAir.sda || !unidadFinal) return alert("Faltan datos obligatorios.");
 
         try {
@@ -125,14 +127,14 @@ const Material = () => {
 
             if (isEditing) {
                 await updateAircraftStatus(newAir._id, payload);
-                alert("Aeronave actualizada correctamente.");
+                alert("Aeronave procesada / transferida correctamente.");
             } else {
                 payload.creadoPor = `${userName} (${rawRole})`;
                 await createAircraft(payload);
                 alert("Alta de aeronave exitosa.");
             }
             cancelEdit();
-            fetchMaterial();
+            fetchMaterial(); // Al recargar, si Oficina Técnica la mandó a otra unidad, ya no figurará en su feed
         } catch (error) { alert("Error en la operación."); }
     };
 
@@ -159,13 +161,15 @@ const Material = () => {
             <div style={styles.grid}>
                 {hasEditPrivileges ? (
                     <div style={styles.card}>
-                        <h3 style={styles.title}>{isEditing ? "🔄 Actualizar Aeronave" : "➕ Alta de Aeronave"}</h3>
+                        <h3 style={styles.title}>{isEditing ? "🔄 Editar / Transferir Aeronave" : "➕ Alta de Aeronave"}</h3>
                         <form onSubmit={handleSubmit} style={styles.form}>
+                            
+                            {/* EL SELECTOR DE DESTINO APARECE PORQUE TIENE PRIVILEGIO canChangeUnit */}
                             {canChangeUnit && (
                                 <div style={styles.field}>
-                                    <label style={styles.label}>📍 Unidad Destino</label>
+                                    <label style={styles.label}>🚀 Enviar / Asignar a Unidad Destino</label>
                                     <select value={newAir.unidadDestino} onChange={e => setNewAir({...newAir, unidadDestino: e.target.value})} style={{...styles.input, border: '1px solid #e67e22'}} required>
-                                        <option value="">Seleccione Unidad...</option>
+                                        <option value="">Seleccione Unidad Destino...</option>
                                         {unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
                                     </select>
                                 </div>
@@ -223,7 +227,7 @@ const Material = () => {
                             </div>
 
                             <div style={{display: 'flex', gap: '10px'}}>
-                                <button type="submit" style={{...styles.btnPrimary, flex: 2}}>{isEditing ? "Confirmar Actualización" : "Registrar Aeronave"}</button>
+                                <button type="submit" style={{...styles.btnPrimary, flex: 2}}>{isEditing ? "Guardar y Transferir" : "Registrar Aeronave"}</button>
                                 {isEditing && <button type="button" onClick={cancelEdit} style={styles.btnCancel}>Anular</button>}
                             </div>
                         </form>
@@ -233,7 +237,7 @@ const Material = () => {
                 )}
 
                 <div style={styles.card}>
-                    <h3 style={styles.title}>🛠️ Gestión de Flota</h3>
+                    <h3 style={styles.title}>🛠️ Gestión de Flota ({canViewAll ? "Flota Global" : `Unidad: ${userElemento}`})</h3>
                     <div style={styles.scrollList}>
                         {aircrafts.map(air => (
                             <div key={air._id} style={{...styles.item, borderLeft: air.estado === 'E/S' ? '6px solid #28a745' : '6px solid #e74c3c'}}>
@@ -242,7 +246,7 @@ const Material = () => {
                                     <div style={styles.itemSub}>{air.sda} | {air.unidad}</div>
                                     <div style={{display:'flex', gap: '5px'}}>
                                         <button onClick={() => setSelectedNote(air)} style={styles.btnNoteTrigger}>📋 Notas</button>
-                                        {hasEditPrivileges && <button onClick={() => handleEditClick(air)} style={{...styles.btnNoteTrigger, background: '#e3f2fd', color: '#0d47a1'}}>📝 Editar</button>}
+                                        {hasEditPrivileges && <button onClick={() => handleEditClick(air)} style={{...styles.btnNoteTrigger, background: '#e3f2fd', color: '#0d47a1'}}>📝 Editar / Transferir</button>}
                                     </div>
                                 </div>
                                 <div style={styles.actions}>
@@ -257,6 +261,7 @@ const Material = () => {
                                 </div>
                             </div>
                         ))}
+                        {aircrafts.length === 0 && <p style={{color: '#999', fontSize: '0.85rem', textAlign: 'center', marginTop: '20px'}}>No se registran aeronaves asignadas a este elemento operativo.</p>}
                     </div>
                 </div>
             </div>
@@ -274,7 +279,6 @@ const Material = () => {
     );
 };
 
-// Mantenemos los mismos estilos de tu componente original...
 const styles = {
     container: { padding: '25px', maxWidth: '1300px', margin: '0 auto' },
     grid: { display: 'grid', gridTemplateColumns: window.innerWidth < 1000 ? '1fr' : '1fr 1.5fr', gap: '25px' },

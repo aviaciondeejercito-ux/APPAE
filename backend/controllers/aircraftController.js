@@ -8,18 +8,12 @@ const Aircraft = require('../models/Aircraft');
 
 // Función auxiliar interna para estandarizar los chequeos de rol (Case-Insensitive)
 const verificarRol = (req) => {
-    // Tomamos el rol del token (o lo dejamos vacío si no existe)
     const rawRole = req.user && req.user.role ? String(req.user.role).trim().toUpperCase() : '';
-    
-    // También extraemos el elemento de manera segura
     const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : '';
     
-    // CORRECCIÓN CRÍTICA:
-    // 1. El array original buscaba 'admin' en minúscula, pero rawRole está en MAYÚSCULAS. Cambiado a 'ADMIN'.
-    // 2. Si el rol es 'ADMIN' o contiene 'ADMIN', es mando superior.
-    // 3. Regla institucional: Si el elemento del usuario es 'COMANDO', es mando estratégico global (ve todo).
-    const esMando = ['admin', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole) || 
-                    rawRole.includes('admin') || 
+    // CORRECCIÓN: Filtros en MAYÚSCULAS para coincidir con rawRole.toUpperCase()
+    const esMando = ['ADMIN', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole) || 
+                    rawRole.includes('ADMIN') || 
                     userElemento === 'COMANDO';
     
     return {
@@ -30,14 +24,14 @@ const verificarRol = (req) => {
     };
 };
 
-// 1. Obtener aeronaves (Con filtrado jerárquico por Unidad)
+// 1. Obtener aeronaves (Con filtrado jerárquico estricto por Unidad)
 exports.getAircrafts = async (req, res) => {
     try {
         let query = {};
         const control = verificarRol(req);
         const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
 
-        // Filtro estricto SOLO si no es mando superior / administrador
+        // Si es Oficina Técnica o S4 de unidad, es un usuario restringido para la VISTA general
         if (control.esUsuarioRestringido) {
             if (!userElemento) {
                 return res.status(403).json({ 
@@ -45,7 +39,7 @@ exports.getAircrafts = async (req, res) => {
                     message: "Error de Seguridad: Usuario sin unidad asignada en credenciales." 
                 });
             }
-            query.unidad = userElemento;
+            query.unidad = userElemento; // Filtro mandatorio: Solo ve su elemento
         }
 
         // Permitir a Mandos Superiores filtrar por unidad específica vía query si la solicitan
@@ -61,15 +55,19 @@ exports.getAircrafts = async (req, res) => {
     }
 };
 
-/**
- * 2. Obtener aeronaves por Elemento (Ruta por Params)
- */
+// 2. Obtener aeronaves por Elemento (Blindado contra accesos cruzados)
 exports.getAircraftsByElemento = async (req, res) => {
     try {
         const { elemento } = req.params;
+        const control = verificarRol(req);
+        const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
+        
         let query = {};
 
-        if (elemento && elemento !== 'all') {
+        // CORRECCIÓN DE SEGURIDAD: Si no es mando, no puede consultar un elemento ajeno usando parámetros
+        if (control.esUsuarioRestringido) {
+            query.unidad = userElemento;
+        } else if (elemento && elemento !== 'all') {
             query.unidad = decodeURIComponent(elemento).trim().toUpperCase();
         }
 
@@ -94,7 +92,7 @@ exports.createAircraft = async (req, res) => {
             if (!unidad) return res.status(400).json({ message: "El level de mando debe especificar una unidad de destino." });
         } else if (control.esTecnicoAutorizado) {
             if (!userElemento) return res.status(403).json({ message: "Falta asignación de unidad en su perfil para dar el alta." });
-            unidad = userElemento;
+            unidad = userElemento; // Se autoasigna su propia unidad de origen de forma segura
         } else {
             return res.status(403).json({ message: `Acceso denegado: Su rol (${req.user.role}) no posee permisos de alta de material.` });
         }
@@ -128,7 +126,7 @@ exports.updateAircraftStatus = async (req, res) => {
         const control = verificarRol(req);
         const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : null;
         
-        // VALIDACIÓN DE AUTORIDAD DE ORIGEN:
+        // VALIDACIÓN DE AUTORIDAD DE ORIGEN: Oficina Técnica sólo edita si la aeronave pertenece HOY a su unidad
         if (!control.esMandoSuperior && userElemento !== String(aircraft.unidad).trim().toUpperCase()) {
             return res.status(403).json({ 
                 success: false,
@@ -155,12 +153,13 @@ exports.updateAircraftStatus = async (req, res) => {
             aircraft.novedades = String(updates.novedades).toUpperCase().trim(); 
         }
 
-        // --- EDICIÓN ESTRUCTURAL Y LOGICA DE TRANSFERENCIAS ---
+        // --- EDICIÓN ESTRUCTURAL Y LOGICA DE TRANSFERENCIAS (ENVIAR) ---
         if (control.esMandoSuperior || control.esTecnicoAutorizado) {
             if (updates.matricula) aircraft.matricula = updates.matricula.toUpperCase().trim();
             if (updates.sda) aircraft.sda = updates.sda.toUpperCase().trim();
             if (updates.tipoIcono) aircraft.tipoIcono = updates.tipoIcono.toLowerCase().trim();
             
+            // Aquí se procesa el traspaso de unidad
             if (updates.unidad) {
                 aircraft.unidad = updates.unidad.toUpperCase().trim();
             }
@@ -187,7 +186,8 @@ exports.deleteAircraft = async (req, res) => {
         const aircraft = await Aircraft.findById(req.params.id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
 
-        const esMandoConPermiso = ['admin', 'OTO'].includes(control.role) || control.role.includes('admin');
+        // CORRECCIÓN: Match en MAYÚSCULAS
+        const esMandoConPermiso = ['ADMIN', 'OTO'].includes(control.role) || control.role.includes('ADMIN');
         const esPersonalAutorizadoUnidad = (control.esTecnicoAutorizado && userElemento === String(aircraft.unidad).trim().toUpperCase());
 
         if (!esMandoConPermiso && !esPersonalAutorizadoUnidad) {
