@@ -4,7 +4,7 @@ const ExigenciaPlan = require('../models/ExigenciaPlan');
 
 /**
  * OP 1: NÓMINA CONSOLIDADA POR SISTEMA DE ARMAS
- * Procesa la lógica de negocio para cruzar horas reales, exigencias planificadas y configuraciones.
+ * Cruza horas reales, exigencias planificadas y configuraciones.
  */
 exports.getPlanificacionCompleta = async (req, res) => {
     try {
@@ -15,7 +15,6 @@ exports.getPlanificacionCompleta = async (req, res) => {
             return res.status(400).json({ success: false, mensaje: "Unidad operativa no identificada." });
         }
         
-        // 1. Filtrado jerárquico
         const gradosHabilitados = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
         let queryPilotos = { grado: { $in: gradosHabilitados }, activo: true };
         
@@ -29,7 +28,6 @@ exports.getPlanificacionCompleta = async (req, res) => {
 
         const listaIdsPilotos = pilotos.map(p => p._id);
 
-        // 2. Carga paralela para mayor eficiencia
         const [planesCargados, vuelos] = await Promise.all([
             ExigenciaPlan.find({ piloto: { $in: listaIdsPilotos }, año: AÑO_ACTUAL }).lean(),
             Vuelo.find({
@@ -46,7 +44,6 @@ exports.getPlanificacionCompleta = async (req, res) => {
             return acc;
         }, {});
 
-        // 3. Procesamiento de métricas (cálculo O(n))
         const mapaMetricas = {};
         listaIdsPilotos.forEach(id => mapaMetricas[id.toString()] = { acum: {}, trim: {} });
 
@@ -73,7 +70,6 @@ exports.getPlanificacionCompleta = async (req, res) => {
             });
         });
 
-        // 4. Formateo final para el Front
         const respuesta = pilotos.map(p => {
             const id = p._id.toString();
             const m = mapaMetricas[id];
@@ -117,7 +113,29 @@ exports.getPlanificacionCompleta = async (req, res) => {
 };
 
 /**
- * OP 2: PERSISTENCIA DE CONFIGURACIONES
+ * OP 2: LISTADO DE VUELOS PURO
+ */
+exports.getVuelosUnidad = async (req, res) => {
+    try {
+        const unidadUser = req.user?.unidad || req.user?.elemento;
+        if (!unidadUser) return res.status(400).json({ mensaje: "Unidad no determinada." });
+
+        const queryVuelos = !['COMANDO', 'ADMIN', 'COMANAV'].includes(unidadUser.trim().toUpperCase()) 
+            ? { $or: [{ unidad: unidadUser }, { elementoApoyado: unidadUser.trim().toUpperCase() }] }
+            : {};
+
+        const vuelos = await Vuelo.find(queryVuelos)
+            .populate('piloto copiloto instructor mecanico', 'grado apellido nombre')
+            .sort({ fecha: -1 })
+            .lean();
+        res.status(200).json(vuelos);
+    } catch (error) {
+        res.status(500).json({ mensaje: "Error al recuperar vuelos." });
+    }
+};
+
+/**
+ * OP 3: PERSISTENCIA DE CONFIGURACIONES
  */
 exports.actualizarConfiguracionEbm = async (req, res) => {
     try {
@@ -125,7 +143,6 @@ exports.actualizarConfiguracionEbm = async (req, res) => {
         const { configTrimestresSda } = req.body;
         const trimestres = [];
 
-        // Transformación de datos de entrada
         Object.entries(configTrimestresSda).forEach(([sda, data]) => {
             [1, 2, 3, 4].forEach(n => {
                 if (data[`t${n}`]) {
