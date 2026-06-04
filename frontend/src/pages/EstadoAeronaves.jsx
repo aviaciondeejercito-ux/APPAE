@@ -22,7 +22,7 @@ const EstadoAeronaves = () => {
             const { data } = await getAircrafts();
             
             // Definición de Mando Estratégico (Visión Global)
-            const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+            const isMandoEstrategico = ['admin', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
 
             const filtrados = isMandoEstrategico 
                 ? data 
