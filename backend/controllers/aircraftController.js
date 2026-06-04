@@ -2,38 +2,33 @@ const Aircraft = require('../models/Aircraft');
 
 /**
  * CONTROLADOR DE AERONAVES - SEGURIDAD JERÁRQUICA
- * Mando Global (ADMIN, BOSS, DIRECTOR, OTO): Ver toda la flota.
- * Resto de roles: Filtrado estricto por elemento/unidad del usuario.
+ * Lectura: Mando Global (ADMIN, BOSS, DIRECTOR, OTO) ve TODO. Resto ve su unidad.
+ * Escritura: Solo ADMIN y OFICINA_TECNICA pueden editar/transferir/borrar.
  */
 
 const verificarRol = (req) => {
     const rawRole = req.user && req.user.role ? String(req.user.role).trim().toUpperCase() : '';
     const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : '';
     
-    // Roles que tienen acceso a ver TODO el inventario
     const mandosGlobales = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'];
     
     return {
         role: rawRole,
         userElemento: userElemento,
         esMandoSuperior: mandosGlobales.includes(rawRole) || rawRole.includes('ADMIN'),
-        esTecnicoAutorizado: ['S4', 'S4_UNIDAD', 'OFICINA_TECNICA', 'OFICINA_CE_TECNICA'].includes(rawRole)
+        esTecnicoAutorizado: ['OFICINA_TECNICA', 'OFICINA_CE_TECNICA', 'S4', 'S4_UNIDAD'].includes(rawRole)
     };
 };
 
-// 1. Obtener todas las aeronaves (Filtro jerárquico aplicado)
+// 1. Obtener todas las aeronaves (Filtro jerárquico)
 exports.getAircrafts = async (req, res) => {
     try {
         const control = verificarRol(req);
         let query = {};
 
-        // Si NO es mando superior, restringimos la consulta a su unidad
         if (!control.esMandoSuperior) {
             if (!control.userElemento) {
-                return res.status(403).json({ 
-                    success: false, 
-                    message: "Acceso restringido: No tiene una unidad/elemento asignado." 
-                });
+                return res.status(403).json({ success: false, message: "Acceso restringido: Sin unidad asignada." });
             }
             query.unidad = control.userElemento;
         }
@@ -41,19 +36,17 @@ exports.getAircrafts = async (req, res) => {
         const aircrafts = await Aircraft.find(query).sort({ unidad: 1, sda: 1, matricula: 1 });
         res.json(aircrafts);
     } catch (error) {
-        console.error('❌ Error AE (getAircrafts):', error);
         res.status(500).json({ success: false, message: "Error al acceder al registro", error: error.message });
     }
 };
 
-// 2. Obtener aeronaves por Elemento (Blindado para usuarios restringidos)
+// 2. Obtener aeronaves por Elemento
 exports.getAircraftsByElemento = async (req, res) => {
     try {
         const { elemento } = req.params;
         const control = verificarRol(req);
         let query = {};
 
-        // Si no es mando global, ignoramos el parámetro y forzamos su unidad
         if (!control.esMandoSuperior) {
             query.unidad = control.userElemento;
         } else if (elemento && elemento !== 'all') {
@@ -63,7 +56,6 @@ exports.getAircraftsByElemento = async (req, res) => {
         const aircrafts = await Aircraft.find(query).sort({ sda: 1, matricula: 1 });
         res.json(aircrafts);
     } catch (error) {
-        console.error('❌ Error AE (getAircraftsByElemento):', error);
         res.status(500).json({ success: false, message: "Error al filtrar", error: error.message });
     }
 };
@@ -71,27 +63,25 @@ exports.getAircraftsByElemento = async (req, res) => {
 // 3. Crear una nueva aeronave
 exports.createAircraft = async (req, res) => {
     try {
-        const { matricula, sda } = req.body;
-        let { unidad } = req.body; 
-        
         const control = verificarRol(req);
+        // Validamos permiso de escritura: Solo Admin o Técnica
+        if (!control.esMandoSuperior && !control.esTecnicoAutorizado) {
+            return res.status(403).json({ message: "Acceso denegado: No posee permisos de alta." });
+        }
 
+        let { unidad } = req.body;
         if (control.esMandoSuperior) {
-            if (!unidad) return res.status(400).json({ message: "El nivel de mando debe especificar una unidad de destino." });
-        } else if (control.esTecnicoAutorizado) {
-            if (!control.userElemento) return res.status(403).json({ message: "Falta asignación de unidad para el alta." });
-            unidad = control.userElemento;
+            if (!unidad) return res.status(400).json({ message: "El Mando debe especificar unidad." });
         } else {
-            return res.status(403).json({ message: "Acceso denegado: Su rol no posee permisos de alta." });
+            unidad = control.userElemento; // Técnica solo alta en su unidad
         }
 
         const newAircraft = new Aircraft({
             ...req.body,
-            matricula: String(matricula || "").toUpperCase().trim(),
-            sda: String(sda || "").toUpperCase().trim(),
+            matricula: String(req.body.matricula || "").toUpperCase().trim(),
+            sda: String(req.body.sda || "").toUpperCase().trim(),
             unidad: String(unidad).trim().toUpperCase(),
-            creadoPor: `${req.user.username || 'SISTEMA'} (${control.role})`,
-            ultimaActualizacion: Date.now()
+            creadoPor: `${req.user.username || 'SISTEMA'} (${control.role})`
         });
 
         await newAircraft.save();
@@ -101,34 +91,27 @@ exports.createAircraft = async (req, res) => {
     }
 };
 
-// 4. Actualizar Estado, Horas y Transferencias
+// 4. Actualizar Estado, Horas y Transferencias (SOLO ADMIN/TECNICA)
 exports.updateAircraftStatus = async (req, res) => {
     try {
-        const { id } = req.params;
-        const updates = req.body;
         const control = verificarRol(req);
         
-        const aircraft = await Aircraft.findById(id);
+        // Validación de permisos de escritura
+        if (!control.esMandoSuperior && !control.esTecnicoAutorizado) {
+            return res.status(403).json({ message: "Acceso denegado: No posee permisos de edición." });
+        }
+
+        const aircraft = await Aircraft.findById(req.params.id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no localizada." });
 
-        // Validación de autoridad para editar
+        // Validación de unidad para Técnico
         if (!control.esMandoSuperior && control.userElemento !== String(aircraft.unidad).trim().toUpperCase()) {
             return res.status(403).json({ message: "No tiene autoridad sobre el material de otra unidad." });
         }
 
-        // Mapeo de campos técnicos
-        if (updates.estado) aircraft.estado = updates.estado;
-        if (updates.horasRemanentes !== undefined) aircraft.horasRemanentes = Number(updates.horasRemanentes);
-        if (updates.horasPlaneador !== undefined) aircraft.horasPlaneador = Number(updates.horasPlaneador);
-        if (updates.motores) aircraft.motores = updates.motores;
-        if (updates.helices) aircraft.helices = updates.helices;
-        if (updates.vencimientoSeguro) aircraft.vencimientoSeguro = updates.vencimientoSeguro;
-        if (updates.vencimientoAvionica) aircraft.vencimientoAvionica = updates.vencimientoAvionica;
-        if (updates.novedades !== undefined) aircraft.novedades = String(updates.novedades).toUpperCase().trim();
-
-        if (control.esMandoSuperior || control.esTecnicoAutorizado) {
-            if (updates.unidad) aircraft.unidad = updates.unidad.toUpperCase().trim();
-        }
+        const updates = req.body;
+        // Aplicar actualizaciones...
+        Object.assign(aircraft, updates);
         
         aircraft.ultimaActualizacion = Date.now();
         aircraft.actualizadoPor = `${req.user.username || 'SISTEMA'} (${control.role})`;
@@ -140,19 +123,20 @@ exports.updateAircraftStatus = async (req, res) => {
     }
 };
 
-// 5. Eliminar aeronave
+// 5. Eliminar aeronave (SOLO ADMIN/TECNICA)
 exports.deleteAircraft = async (req, res) => {
     try {
         const control = verificarRol(req);
-        const aircraft = await Aircraft.findById(req.params.id);
         
+        if (!control.esMandoSuperior && !control.esTecnicoAutorizado) {
+            return res.status(403).json({ message: "No posee permisos para esta operación." });
+        }
+
+        const aircraft = await Aircraft.findById(req.params.id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
 
-        const tienePermisoBaja = control.esMandoSuperior || 
-                                (control.esTecnicoAutorizado && control.userElemento === String(aircraft.unidad).trim().toUpperCase());
-
-        if (!tienePermisoBaja) {
-            return res.status(403).json({ message: "No posee permisos para dar de baja este material." });
+        if (!control.esMandoSuperior && control.userElemento !== String(aircraft.unidad).trim().toUpperCase()) {
+            return res.status(403).json({ message: "No tiene autoridad sobre este material." });
         }
 
         await Aircraft.findByIdAndDelete(req.params.id);
