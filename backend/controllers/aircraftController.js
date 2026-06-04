@@ -18,8 +18,8 @@ const verificarRol = (req) => {
     // 1. El array original buscaba 'admin' en minúscula, pero rawRole está en MAYÚSCULAS. Cambiado a 'ADMIN'.
     // 2. Si el rol es 'ADMIN' o contiene 'ADMIN', es mando superior.
     // 3. Regla institucional: Si el elemento del usuario es 'COMANDO', es mando estratégico global (ve todo).
-    const esMando = ['ADMIN', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole) || 
-                    rawRole.includes('ADMIN') || 
+    const esMando = ['admin', 'BOSS', 'OTO', 'DIRECTOR'].includes(rawRole) || 
+                    rawRole.includes('admin') || 
                     userElemento === 'COMANDO';
     
     return {
@@ -187,7 +187,7 @@ exports.deleteAircraft = async (req, res) => {
         const aircraft = await Aircraft.findById(req.params.id);
         if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
 
-        const esMandoConPermiso = ['ADMIN', 'OTO'].includes(control.role) || control.role.includes('ADMIN');
+        const esMandoConPermiso = ['admin', 'OTO'].includes(control.role) || control.role.includes('admin');
         const esPersonalAutorizadoUnidad = (control.esTecnicoAutorizado && userElemento === String(aircraft.unidad).trim().toUpperCase());
 
         if (!esMandoConPermiso && !esPersonalAutorizadoUnidad) {
