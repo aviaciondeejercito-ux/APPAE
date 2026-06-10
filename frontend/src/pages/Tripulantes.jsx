@@ -30,45 +30,27 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS (Sincronizado con el Algoritmo de Máximos del Backend v3.6) ---
+    // --- CÓMPUTO DINÁMICO DE HORAS REPARADO ---
     const obtenerTotalesDinamicos = () => {
-        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
+        // 1. Inicializamos los totales con 0 o con los valores históricos de la BD como base
+        const totales = {
+            visual: seleccionado?.totalesHistoricos?.vueloDiurno ? Number(seleccionado.totalesHistoricos.vueloDiurno) : 0,
+            instrumental: seleccionado?.totalesHistoricos?.vueloInstrumental ? Number(seleccionado.totalesHistoricos.vueloInstrumental) : 0,
+            nocturno: seleccionado?.totalesHistoricos?.vueloNocturno ? Number(seleccionado.totalesHistoricos.vueloNocturno) : 0,
+            nvg: seleccionado?.totalesHistoricos?.vueloVisual ? Number(seleccionado.totalesHistoricos.vueloVisual) : 0
+        };
         
         if (!seleccionado) return totales;
 
-        // Si el backend ya consolidó totalesHistoricos, los tomamos como base confiable
-        if (seleccionado.totalesHistoricos) {
-            return {
-                visual: Number(seleccionado.totalesHistoricos.vueloDiurno || 0),
-                instrumental: Number(seleccionado.totalesHistoricos.vueloInstrumental || 0),
-                nocturno: Number(seleccionado.totalesHistoricos.vueloNocturno || 0),
-                nvg: Number(seleccionado.totalesHistoricos.vueloVisual || 0) // Recuerda que en tu BD vueloVisual aloja las horas NVG desglosadas
-            };
+        // 2. Sumamos de forma acumulativa directa todas las horas de sus habilitaciones vigentes
+        if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
+            seleccionado.habilitaciones.forEach(h => {
+                totales.visual += Number(h.hsVisual || 0);
+                totales.instrumental += Number(h.hsInstrumental || 0);
+                totales.nocturno += Number(h.hsNocturno || 0);
+                totales.nvg += Number(h.hsNVG || 0);
+            });
         }
-
-        // Fallback dinámico por si el documento no está migrado en BD
-        if (!seleccionado.habilitaciones || seleccionado.habilitaciones.length === 0) {
-            return totales;
-        }
-
-        const mapaSdA = {};
-        seleccionado.habilitaciones.forEach(h => {
-            const sda = h.aeronave;
-            if (!mapaSdA[sda]) {
-                mapaSdA[sda] = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
-            }
-            mapaSdA[sda].visual = Math.max(mapaSdA[sda].visual, Number(h.hsVisual || 0));
-            mapaSdA[sda].instrumental = Math.max(mapaSdA[sda].instrumental, Number(h.hsInstrumental || 0));
-            mapaSdA[sda].nocturno = Math.max(mapaSdA[sda].nocturno, Number(h.hsNocturno || 0));
-            mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(h.hsNVG || 0));
-        });
-
-        Object.values(mapaSdA).forEach(sistema => {
-            totales.visual += sistema.visual;
-            totales.instrumental += sistema.instrumental;
-            totales.nocturno += sistema.nocturno;
-            totales.nvg += sistema.nvg;
-        });
         
         return totales;
     };
@@ -198,19 +180,16 @@ const Tripulantes = () => {
             let updatedData = { ...seleccionado };
             
             if (type === 'habilitacion') {
-                // Filtramos la habilitación borrada
                 updatedData.habilitaciones = seleccionado.habilitaciones.filter(h => h._id !== itemId);
                 
-                // --- ALGORITMO INTEGRADO FRONT-END v3.6 ---
-                // Recalculamos el histórico inmediatamente antes de enviar para mantener consistencia absoluta
                 const mapaSdA = {};
                 updatedData.habilitaciones.forEach(h => {
                     const sda = h.aeronave;
                     if (!mapaSdA[sda]) mapaSdA[sda] = { visual: 0, nocturno: 0, instrumental: 0, nvg: 0 };
-                    mapaSdA[sda].visual = Math.max(mapaSdA[sda].visual, Number(h.hsVisual || 0));
-                    mapaSdA[sda].nocturno = Math.max(mapaSdA[sda].nocturno, Number(h.hsNocturno || 0));
-                    mapaSdA[sda].instrumental = Math.max(mapaSdA[sda].instrumental, Number(h.hsInstrumental || 0));
-                    mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(h.hsNVG || 0));
+                    mapaSdA[sda].visual += Number(h.hsVisual || 0);
+                    mapaSdA[sda].nocturno += Number(h.hsNocturno || 0);
+                    mapaSdA[sda].instrumental += Number(h.hsInstrumental || 0);
+                    mapaSdA[sda].nvg += Number(h.hsNVG || 0);
                 });
 
                 const nuevosTotales = { vueloDiurno: 0, vueloNocturno: 0, vueloInstrumental: 0, vueloVisual: 0 };
@@ -227,7 +206,6 @@ const Tripulantes = () => {
                 updatedData.capacitacionesEspeciales = seleccionado.capacitacionesEspeciales.filter(c => c._id !== itemId);
             }
             
-            // Guardamos de forma segura pasando el objeto consolidado v3.6
             await updateTripulante(seleccionado._id, updatedData);
             await fetchPersonal();
         } catch (error) { 
