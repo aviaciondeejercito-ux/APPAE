@@ -31,30 +31,41 @@ const Tripulantes = () => {
     useEffect(() => { fetchPersonal(); }, []);
 
     // --- CÓMPUTO DINÁMICO DE HORAS REPARADO ---
-    const obtenerTotalesDinamicos = () => {
-        // 1. Inicializamos los totales con 0 o con los valores históricos de la BD como base
-        const totales = {
-            visual: seleccionado?.totalesHistoricos?.vueloDiurno ? Number(seleccionado.totalesHistoricos.vueloDiurno) : 0,
-            instrumental: seleccionado?.totalesHistoricos?.vueloInstrumental ? Number(seleccionado.totalesHistoricos.vueloInstrumental) : 0,
-            nocturno: seleccionado?.totalesHistoricos?.vueloNocturno ? Number(seleccionado.totalesHistoricos.vueloNocturno) : 0,
-            nvg: seleccionado?.totalesHistoricos?.vueloVisual ? Number(seleccionado.totalesHistoricos.vueloVisual) : 0
-        };
-        
-        if (!seleccionado) return totales;
-
-        // 2. Sumamos de forma acumulativa directa todas las horas de sus habilitaciones vigentes
-        if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
-            seleccionado.habilitaciones.forEach(h => {
-                totales.visual += Number(h.hsVisual || 0);
-                totales.instrumental += Number(h.hsInstrumental || 0);
-                totales.nocturno += Number(h.hsNocturno || 0);
-                totales.nvg += Number(h.hsNVG || 0);
-            });
-        }
-        
-        return totales;
+   const obtenerTotalesDinamicos = () => {
+    // Inicializamos estrictamente en 0 para evitar arrastrar duplicados del histórico
+    const totales = {
+        visual: 0,
+        instrumental: 0,
+        nocturno: 0,
+        nvg: 0
     };
+    
+    if (!seleccionado) return totales;
 
+    // Sumamos de manera transparente los valores reales de cada Habilitación cargada
+    if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
+        seleccionado.habilitaciones.forEach(h => {
+            totales.visual += Number(h.hsVisual || 0);
+            totales.instrumental += Number(h.hsInstrumental || 0);
+            totales.nocturno += Number(h.hsNocturno || 0);
+            totales.nvg += Number(h.hsNVG || 0);
+        });
+    } else if (seleccionado.totalesHistoricos) {
+        // Fallback: Si NO tiene SdA cargados, usamos las horas fijas de la base de datos
+        totales.visual = Number(seleccionado.totalesHistoricos.vueloDiurno || 0);
+        totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
+        totales.nocturno = Number(seleccionado.totalesHistoricos.vueloNocturno || 0);
+        totales.nvg = Number(seleccionado.totalesHistoricos.vueloVisual || 0);
+    }
+    
+    // Opcional: Si necesitas redondear a un decimal para evitar problemas de flotantes en JS (ej: 417.30000000000004)
+    totales.visual = Math.round(totales.visual * 10) / 10;
+    totales.instrumental = Math.round(totales.instrumental * 10) / 10;
+    totales.nocturno = Math.round(totales.nocturno * 10) / 10;
+    totales.nvg = Math.round(totales.nvg * 10) / 10;
+
+    return totales;
+};
     const horasDinamicas = obtenerTotalesDinamicos();
 
     const fetchPersonal = async () => {
