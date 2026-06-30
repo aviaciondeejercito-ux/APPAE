@@ -4,7 +4,7 @@ const ExigenciaPlan = require('../models/ExigenciaPlan');
 
 /**
  * OP 1: NÓMINA CONSOLIDADA POR SISTEMA DE ARMAS (GET)
- * Cruza la información del tripulante, sus vuelos reales del 2026 y sus metas de EBM.
+ * Duplica virtualmente a los pilotos multi-habilitados para mapear sus horas en cada SdA.
  */
 exports.getPlanificacionCompleta = async (req, res) => {
     try {
@@ -18,19 +18,18 @@ exports.getPlanificacionCompleta = async (req, res) => {
         const gradosHabilitados = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
         let queryPilotos = { grado: { $in: gradosHabilitados }, activo: true };
         
-        // Control de jurisdicción estricto por elemento militar
-        const esMandoEstrategico = ['COMANDO', 'ADMIN', 'COMANAV', 'BOSS'].includes(unidadUser.trim().toUpperCase());
+        const esMandoEstrategico = ['COMANDO', 'ADMIN', 'COMANAV', 'BOSS', 'DIRECTOR', 'OTO'].includes(unidadUser.trim().toUpperCase());
         if (!esMandoEstrategico) {
             queryPilotos.$or = [{ unidad: unidadUser }, { elemento: unidadUser }];
         }
 
-        // 1. Obtener la nómina de pilotos autorizados
+        // 1. Obtener la nómina de pilotos
         const pilotos = await Tripulante.find(queryPilotos).lean();
         if (!pilotos.length) return res.status(200).json([]);
 
         const listaIdsPilotos = pilotos.map(p => p._id);
 
-        // 2. Traer las configuraciones de exigencia anuales guardadas
+        // 2. Traer configuraciones de ExigenciaPlan
         const planes = await ExigenciaPlan.find({
             piloto: { $in: listaIdsPilotos },
             año: AÑO_ACTUAL
@@ -41,8 +40,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
             mapPlanes[pl.piloto.toString()] = pl; 
         });
 
-        // 3. 📊 CÓMPUTO CRONOLÓGICO DE HORAS REALES VOLADAS
-        // Filtramos por rango de fechas ya que tu esquema guarda la fecha nativa de Mongo sin campo "año" directo.
+        // 3. 📊 CÓMPUTO DE HORAS REALES FILTRADAS POR PILOTO Y SISTEMA DE ARMAS (SdA)
         const vuelosAño = await Vuelo.find({
             fecha: {
                 $gte: new Date(`${AÑO_ACTUAL}-01-01T00:00:00.000Z`),
@@ -55,7 +53,6 @@ exports.getPlanificacionCompleta = async (req, res) => {
             ]
         }).lean();
 
-        // Helper para determinar el trimestre exacto (0 = Ene, 11 = Dic)
         const obtenerTrimestreDeFecha = (dateObject) => {
             if (!dateObject) return 1;
             const mes = new Date(dateObject).getMonth();
@@ -65,96 +62,116 @@ exports.getPlanificacionCompleta = async (req, res) => {
             return 4;
         };
 
-        // Mapeo optimizado en memoria: idPiloto_trimestre -> acumuladorHoras
+        // Mapeo optimizado multinivel: idPiloto_SdA_trimestre -> acumuladorHoras
         const mapHorasVoladas = {};
         vuelosAño.forEach(v => {
             const trim = obtenerTrimestreDeFecha(v.fecha);
             const hs = Number(v.horasVoladas || 0);
+            const sda = (v.aeronave || 'SIN SdA').trim().toUpperCase();
 
             if (v.piloto) {
-                const k = `${v.piloto.toString()}_${trim}`;
+                const k = `${v.piloto.toString()}_${sda}_${trim}`;
                 mapHorasVoladas[k] = (mapHorasVoladas[k] || 0) + hs;
             }
             if (v.copiloto) {
-                const k = `${v.copiloto.toString()}_${trim}`;
+                const k = `${v.copiloto.toString()}_${sda}_${trim}`;
                 mapHorasVoladas[k] = (mapHorasVoladas[k] || 0) + hs;
             }
             if (v.instructor) {
-                const k = `${v.instructor.toString()}_${trim}`;
+                const k = `${v.instructor.toString()}_${sda}_${trim}`;
                 mapHorasVoladas[k] = (mapHorasVoladas[k] || 0) + hs;
             }
         });
 
-        // 4. Consolidación de datos con el formato exacto que renderiza EbmPage.jsx
-        const resultadoFinal = pilotos.map(p => {
+        // 4. 🚀 CONSOLIDACIÓN MULTI-SDA VIRTUAL
+        const resultadoFinal = [];
+
+        pilotos.forEach(p => {
             const planPiloto = mapPlanes[p._id.toString()];
             
-            // Lógica adaptativa para el SdA (Si el legajo no tiene habilitaciones, busca el SdA en sus vuelos guardados)
-            let sdaAsignado = 'SIN SdA';
-            if (p.habilitaciones && p.habilitaciones.length > 0 && p.habilitaciones[0].aeronave) {
-                sdaAsignado = p.habilitaciones[0].aeronave;
-            } else {
-                const primerVueloEncontrado = vuelosAño.find(v => 
-                    v.piloto?.toString() === p._id.toString() || 
-                    v.copiloto?.toString() === p._id.toString() ||
-                    v.instructor?.toString() === p._id.toString()
-                );
-                if (primerVueloEncontrado && primerVueloEncontrado.aeronave) {
-                    sdaAsignado = primerVueloEncontrado.aeronave;
+            // Recolectamos TODOS los Sistemas de Armas posibles para este piloto
+            // Combinando sus habilitaciones oficiales con los SdA que ha volado este año
+            const sdasDelPiloto = new Set();
+            
+            if (p.habilitaciones && p.habilitaciones.length > 0) {
+                p.habilitaciones.forEach(h => {
+                    if (h.aeronave) sdasDelPiloto.add(h.aeronave.trim().toUpperCase());
+                });
+            }
+            
+            // Buscar si voló algo que no esté explícito en habilitaciones
+            vuelosAño.forEach(v => {
+                if (
+                    v.aeronave && (
+                        v.piloto?.toString() === p._id.toString() || 
+                        v.copiloto?.toString() === p._id.toString() ||
+                        v.instructor?.toString() === p._id.toString()
+                    )
+                ) {
+                    sdasDelPiloto.add(v.aeronave.trim().toUpperCase());
                 }
-            }
+            });
 
-            const pilotoConEbm = {
-                _id: p._id,
-                grado: p.grado,
-                apellido: p.apellido,
-                nombre: p.nombre,
-                elemento: p.elemento || p.unidad,
-                aeronave: sdaAsignado,
+            // Si está vacío, le ponemos el fallback
+            if (sdasDelPiloto.size === 0) sdasDelPiloto.add('SIN SdA');
+
+            // Multiplicamos al piloto por cada SdA que posee habilitado/volado
+            sdasDelPiloto.forEach(sda => {
                 
-                // Inicialización de los 4 bloques trimestrales que lee la interfaz
-                trimestre1: { condicion: 'Copiloto', tipoEbm: 'A', hsVoladas: mapHorasVoladas[`${p._id}_1`] || 0, hsFaltantes: 15, motivoNoCumplimiento: '' },
-                trimestre2: { condicion: 'Copiloto', tipoEbm: 'A', hsVoladas: mapHorasVoladas[`${p._id}_2`] || 0, hsFaltantes: 15, motivoNoCumplimiento: '' },
-                trimestre3: { condicion: 'Copiloto', tipoEbm: 'A', hsVoladas: mapHorasVoladas[`${p._id}_3`] || 0, hsFaltantes: 15, motivoNoCumplimiento: '' },
-                trimestre4: { condicion: 'Copiloto', tipoEbm: 'A', hsVoladas: mapHorasVoladas[`${p._id}_4`] || 0, hsFaltantes: 15, motivoNoCumplimiento: '' }
-            };
+                // Construimos la estructura de trimestres trayendo SOLO las horas de ESTE SdA específico
+                const bloquePilotoSda = {
+                    _id: `${p._id}_${sda}`, // ID único combinado para evitar colisiones en las keys de React
+                    idOriginal: p._id,
+                    grado: p.grado,
+                    apellido: p.apellido,
+                    nombre: p.nombre,
+                    elemento: p.elemento || p.unidad,
+                    aeronave: sda,
+                    
+                    trimestre1: { condicion: 'Copiloto', tipoEbm: 'A', hsVoladas: mapHorasVoladas[`${p._id}_${sda}_1`] || 0, hsFaltantes: 15, motivoNoCumplimiento: '' },
+                    trimestre2: { condicion: 'Copiloto', tipoEbm: 'A', hsVoladas: mapHorasVoladas[`${p._id}_${sda}_2`] || 0, hsFaltantes: 15, motivoNoCumplimiento: '' },
+                    trimestre3: { condicion: 'Copiloto', tipoEbm: 'A', hsVoladas: mapHorasVoladas[`${p._id}_${sda}_3`] || 0, hsFaltantes: 15, motivoNoCumplimiento: '' },
+                    trimestre4: { condicion: 'Copiloto', tipoEbm: 'A', hsVoladas: mapHorasVoladas[`${p._id}_${sda}_4`] || 0, hsFaltantes: 15, motivoNoCumplimiento: '' }
+                };
 
-            // Si hay un plan personalizado guardado en MongoDB, mapeamos sus propiedades sobre el trimestre
-            if (planPiloto && planPiloto.trimestres) {
-                planPiloto.trimestres.forEach(t => {
-                    const key = `trimestre${t.numero}`;
-                    if (pilotoConEbm[key]) {
-                        pilotoConEbm[key].condicion = t.condicion || t.rol || 'Copiloto';
-                        pilotoConEbm[key].tipoEbm = t.tipoEbm || t.tipo || 'A';
-                        pilotoConEbm[key].motivoNoCumplimiento = t.motivoNoCumplimiento || t.causaNoCumplimiento || '';
-                        
-                        // Escala matemática de exigencias por tipo (A=15hs, B=12hs, C=9hs, D=6hs)
-                        let exigencia = 15;
-                        if (pilotoConEbm[key].tipoEbm === 'B') exigencia = 12;
-                        if (pilotoConEbm[key].tipoEbm === 'C') exigencia = 9;
-                        if (pilotoConEbm[key].tipoEbm === 'D') exigencia = 6;
+                // Injectamos configuraciones guardadas filtrando por el sistema de armas correspondiente
+                if (planPiloto && planPiloto.trimestres) {
+                    planPiloto.trimestres.forEach(t => {
+                        // Si el plan histórico guardó el campo 'sistemaArmas', validamos que coincida
+                        if (!t.sistemaArmas || t.sistemaArmas.trim().toUpperCase() === sda) {
+                            const key = `trimestre${t.numero}`;
+                            if (bloquePilotoSda[key]) {
+                                bloquePilotoSda[key].condicion = t.condicion || t.rol || 'Copiloto';
+                                bloquePilotoSda[key].tipoEbm = t.tipoEbm || t.tipo || 'A';
+                                bloquePilotoSda[key].motivoNoCumplimiento = t.motivoNoCumplimiento || t.causaNoCumplimiento || '';
+                                
+                                let exigencia = 15;
+                                if (bloquePilotoSda[key].tipoEbm === 'B') exigencia = 12;
+                                if (bloquePilotoSda[key].tipoEbm === 'C') exigencia = 9;
+                                if (bloquePilotoSda[key].tipoEbm === 'D') exigencia = 6;
 
-                        const calculoRestante = exigencia - pilotoConEbm[key].hsVoladas;
-                        pilotoConEbm[key].hsFaltantes = calculoRestante > 0 ? Math.round(calculoRestante * 10) / 10 : 0;
-                    }
-                });
-            } else {
-                // Si no hay configuración previa, calculamos el remanente con la exigencia estándar de 15hs
-                [1, 2, 3, 4].forEach(n => {
-                    const key = `trimestre${n}`;
-                    const calculoRestante = 15 - pilotoConEbm[key].hsVoladas;
-                    pilotoConEbm[key].hsFaltantes = calculoRestante > 0 ? Math.round(calculoRestante * 10) / 10 : 0;
-                });
-            }
+                                const calculoRestante = exigencia - bloquePilotoSda[key].hsVoladas;
+                                bloquePilotoSda[key].hsFaltantes = calculoRestante > 0 ? Math.round(calculoRestante * 10) / 10 : 0;
+                            }
+                        }
+                    });
+                } else {
+                    [1, 2, 3, 4].forEach(n => {
+                        const key = `trimestre${n}`;
+                        const calculoRestante = 15 - bloquePilotoSda[key].hsVoladas;
+                        bloquePilotoSda[key].hsFaltantes = calculoRestante > 0 ? Math.round(calculoRestante * 10) / 10 : 0;
+                    });
+                }
 
-            return pilotoConEbm;
+                resultadoFinal.push(bloquePilotoSda);
+            });
         });
 
         res.status(200).json(resultadoFinal);
 
     } catch (error) {
-        console.error("❌ Error en getPlanificacionCompleta:", error);
-        res.status(500).json({ success: false, mensaje: "Error de servidor al compilar matriz EBM." });
+        console.error("❌ Error en getPlanificacionCompleta Multi-SdA:", error);
+        res.status(500).json({ success: false, mensaje: "Error de servidor al compilar la matriz dinámica." });
     }
 };
 
@@ -182,18 +199,19 @@ exports.getVuelosUnidad = async (req, res) => {
             
         res.status(200).json(vuelos);
     } catch (error) {
-        console.error("❌ Error en getVuelosUnidad:", error);
         res.status(500).json({ success: false, mensaje: "Error al recuperar el historial de vuelos." });
     }
 };
 
 /**
  * OP 3: PERSISTENCIA DE CONFIGURACIONES TRIMESTRALES (PUT /:id)
- * Procesa el JSON plano de los trimestres enviados por el Front y actualiza ExigenciaPlan.
  */
 exports.actualizarConfiguracionEbm = async (req, res) => {
     try {
-        const { id } = req.params;
+        const { id } = req.params; // Viene el idOriginal o el compuesto (ej: id_SdA)
+        const realId = id.split('_')[0]; 
+        const sdaTarget = id.split('_')[1] || ''; 
+
         const dataBody = req.body; 
         const AÑO_ACTUAL = 2026;
 
@@ -203,12 +221,12 @@ exports.actualizarConfiguracionEbm = async (req, res) => {
 
         const trimestresMapeadosDB = [];
 
-        // Iteramos sobre el payload desestructurando cada trimestre enviado desde React
         [1, 2, 3, 4].forEach(n => {
             const trimInput = dataBody[`trimestre${n}`];
             if (trimInput) {
                 trimestresMapeadosDB.push({
                     numero: n,
+                    sistemaArmas: sdaTarget.toUpperCase(),
                     condicion: trimInput.condicion || 'Copiloto',
                     tipoEbm: trimInput.tipoEbm || 'A',
                     motivoNoCumplimiento: trimInput.motivoNoCumplimiento || '',
@@ -217,12 +235,23 @@ exports.actualizarConfiguracionEbm = async (req, res) => {
             }
         });
 
-        // Guardar o actualizar la planificación anual de EBM del piloto correspondiente
+        // Si el piloto tiene otros SdA ya configurados en la base de datos, los mantenemos para no pisarlos
+        const planExistente = await ExigenciaPlan.findOne({ piloto: realId, año: AÑO_ACTUAL }).lean();
+        let trimestresFinales = [];
+
+        if (planExistente && planExistente.trimestres) {
+            // Conservamos los trimestres de los OTROS sistemas de armas
+            trimestresFinales = planExistente.trimestres.filter(t => t.sistemaArmas !== sdaTarget.toUpperCase());
+        }
+        
+        // Unimos los preservados con los nuevos que se acaban de guardar
+        trimestresFinales = [...trimestresFinales, ...trimestresMapeadosDB];
+
         const planActualizado = await ExigenciaPlan.findOneAndUpdate(
-            { piloto: id, año: AÑO_ACTUAL },
+            { piloto: realId, año: AÑO_ACTUAL },
             { 
                 $set: { 
-                    trimestres: trimestresMapeadosDB, 
+                    trimestres: trimestresFinales, 
                     ultimaModificacionPor: req.user?._id || null 
                 } 
             },
@@ -231,15 +260,15 @@ exports.actualizarConfiguracionEbm = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            mensaje: "Legajo EBM actualizado y sincronizado correctamente con la Base de Datos.",
+            mensaje: "Legajo EBM actualizado y sincronizado por SdA.",
             data: planActualizado
         });
 
     } catch (error) {
-        console.error("❌ Error en actualizarConfiguracionEbm:", error);
+        console.error("❌ Error en actualizarConfiguracionEbm por SdA:", error);
         res.status(500).json({ 
             success: false, 
-            mensaje: "Error interno del servidor al persistir la configuración EBM." 
+            mensaje: "Error interno del servidor al persistir la configuración." 
         });
     }
 };
