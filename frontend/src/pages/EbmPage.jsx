@@ -99,13 +99,14 @@ const EbmPage = () => {
             const pilotoData = personal.find(p => p._id === pilotoId);
             
             const payload = {
-                trimestre1: pilotoData.trimestre1,
-                trimestre2: pilotoData.trimestre2,
-                trimestre3: pilotoData.trimestre3,
-                trimestre4: pilotoData.trimestre4
-            };
+    trimestre1: pilotoData.trimestre1,
+    trimestre2: pilotoData.trimestre2,
+    trimestre3: pilotoData.trimestre3,
+    trimestre4: pilotoData.trimestre4
+};
 
-            await API.put(`/planificacion-ebm/${pilotoId}`, payload);
+// Importa e invoca la función del service de forma limpia
+await actualizarConfiguracionEbm(pilotoId, payload);
             alert("Configuración de EBM actualizada correctamente.");
             // Cerrar el panel tras guardar exitosamente
             setFilasDesplegadas(prev => ({ ...prev, [pilotoId]: false }));

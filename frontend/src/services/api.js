@@ -76,7 +76,8 @@ export const deleteTripulante = (id) => API.delete(`/tripulantes/${id}`);
 /**
  * NUEVO SERVICIO MÓDULO EBM - PLANIFICACIÓN AUTOMÁTICA
  */
-export const getPlanificacionEbm = () => API.get('/ebm/planificacion-completa');
+export const getPlanificacionEbm = () => API.get('/ebm');
+export const actualizarConfiguracionEbm = (id, payload) => API.put(`/ebm/${id}`, payload);
 
 /**
  * SERVICIOS DE GESTIÓN DE VUELOS (LIBRETA DE VUELO DIGITAL)
