@@ -20,424 +20,381 @@ const EbmPage = () => {
     const [sdasVisibles, setSdasVisibles] = useState({});
     const [filasDesplegadas, setFilasDesplegadas] = useState({});
 
-    const userUnidad = localStorage.getItem('elemento') || localStorage.getItem('unidad') || 'MI UNIDAD';
+    // --- NORMALIZACIÓN SINCRO JOKER v3.6 ---
+    const rawRole = localStorage.getItem('role') || 'user';
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
+    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || localStorage.getItem('unidad')?.trim().toUpperCase() || 'MI UNIDAD';
+
+    const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+    const esGestorOperativo = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
+
     const trimestreActualId = getTrimestreActualCronologico();
 
-    const fetchPersonal = useCallback(async () => {
+    useEffect(() => {
+        fetchPlanificacion();
+    }, []);
+
+    const fetchPlanificacion = async () => {
         try {
             setLoading(true);
             const response = await getPlanificacionEbm();
-            
-            // El backend responde directamente con el array consolidado o dentro de response.data
-            const dataBackend = Array.isArray(response) ? response : (response.data || []);
+            const dataBackend = response.data || [];
 
-            setPersonal(dataBackend);
+            // FILTRADO ESTRICTO POR JURISDICCIÓN DE UNIDAD
+            const dataFiltrada = esMandoEstrategico
+                ? dataBackend
+                : dataBackend.filter(p => {
+                    const unidadPiloto = p.elemento || p.unidad;
+                    return unidadPiloto && unidadPiloto.trim().toUpperCase() === userUnidad;
+                });
 
-            // 🔍 EXTRAER SDAs directamente de las llaves del mapa de configuración que calculó el controlador
-            const sdasDetectados = new Set();
-            dataBackend.forEach(p => {
-                if (p.configTrimestresSda) {
-                    Object.keys(p.configTrimestresSda).forEach(sda => sdasDetectados.add(sda.toUpperCase().trim()));
-                }
-            });
+            setPersonal(dataFiltrada);
 
-            const arraySdas = Array.from(sdasDetectados);
-            setTodosLosSdas(arraySdas);
+            // Extraer Sistemas de Armas únicos presentes en los pilotos cargados
+            const sdas = [...new Set(dataFiltrada.map(p => p.aeronave).filter(Boolean))];
+            setTodosLosSdas(sdas);
 
-            // Inicialmente, todos los sistemas se marcan como activos (visibles)
+            // Inicializar todos los Sdas como visibles por defecto
             const visibilidadInicial = {};
-            arraySdas.forEach(sda => {
-                visibilidadInicial[sda] = true;
-            });
+            sdas.forEach(sda => { visibilidadInicial[sda] = true; });
             setSdasVisibles(visibilidadInicial);
 
         } catch (error) {
-            console.error("❌ Error de carga de personal EBM:", error);
+            console.error("❌ Error al cargar planificación EBM:", error);
         } finally {
             setLoading(false);
         }
-    }, []);
-
-    useEffect(() => {
-        fetchPersonal();
-    }, [fetchPersonal]);
-
-    const toggleDespliegueFila = (pilotoId, sda) => {
-        const key = `${pilotoId}_${sda}`;
-        setFilasDesplegadas(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const toggleVisibilidadSda = (sdaName) => {
-        setSdasVisibles(prev => ({
-            ...prev,
-            [sdaName]: !prev[sdaName]
+    const toggleSdaVisible = (sda) => {
+        setSdasVisibles(prev => ({ ...prev, [sda]: !prev[sda] }));
+    };
+
+    const toggleFilaDesplegada = (id) => {
+        setFilasDesplegadas(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const handleInputChange = (pilotoId, trimestreNum, campo, valor) => {
+        if (!esGestorOperativo) return; // Bloqueo de seguridad en interfaz
+        setPersonal(prev => prev.map(p => {
+            if (p._id !== pilotoId) return p;
+            const keyTrimestre = `trimestre${trimestreNum}`;
+            return {
+                ...p,
+                [keyTrimestre]: {
+                    ...p[keyTrimestre],
+                    [campo]: valor
+                }
+            };
         }));
     };
 
-    const handleConfigChange = (pilotoId, sda, trimestre, campo, valor) => {
-        setPersonal(prevPersonal => 
-            prevPersonal.map(p => {
-                if (p._id !== pilotoId) return p;
-                const configSdaActual = p.configTrimestresSda?.[sda] || {
-                    t1: { rol: '', tipo: '', novedad: '', novedadOtro: '' }, 
-                    t2: { rol: '', tipo: '', novedad: '', novedadOtro: '' }, 
-                    t3: { rol: '', tipo: '', novedad: '', novedadOtro: '' }, 
-                    t4: { rol: '', tipo: '', novedad: '', novedadOtro: '' }
-                };
-                return {
-                    ...p,
-                    configTrimestresSda: {
-                        ...p.configTrimestresSda,
-                        [sda]: {
-                            ...configSdaActual,
-                            [trimestre]: {
-                                ...configSdaActual[trimestre],
-                                [campo]: valor
-                            }
-                        }
-                    }
-                };
-            })
-        );
-    };
-
-    const handleGuardarConfiguracion = async (pilotoId, sda) => {
-        const keyGuardado = `${pilotoId}_${sda}`;
+    const handleGuardarFila = async (pilotoId) => {
+        if (!esGestorOperativo) {
+            alert("No posee permisos de escritura para modificar el EBM.");
+            return;
+        }
         try {
-            setGuardandoId(keyGuardado);
-            const piloto = personal.find(p => p._id === pilotoId);
-            if (!piloto) return;
+            setGuardandoId(pilotoId);
+            const pilotoData = personal.find(p => p._id === pilotoId);
+            
+            const payload = {
+                trimestre1: pilotoData.trimestre1,
+                trimestre2: pilotoData.trimestre2,
+                trimestre3: pilotoData.trimestre3,
+                trimestre4: pilotoData.trimestre4
+            };
 
-            const configTrimestresSda = piloto.configTrimestresSda;
-
-            // Enviamos la estructura completa requerida por la OP 3 del backend
-            const response = await API.put(`/api/ebm/actualizar-configuracion/${pilotoId}`, {
-                configTrimestresSda
-            });
-
-            if (response.data?.success || response.status === 200) {
-                alert(`✅ Plan EBM de ${piloto.apellido} para el sistema ${sda} guardado exitosamente.`);
-            } else {
-                alert(`⚠️ Ocurrió un inconveniente al registrar la información.`);
-            }
+            await API.put(`/planificacion-ebm/${pilotoId}`, payload);
+            alert("Configuración de EBM actualizada correctamente.");
+            // Cerrar el panel tras guardar exitosamente
+            setFilasDesplegadas(prev => ({ ...prev, [pilotoId]: false }));
         } catch (error) {
-            console.error("❌ Error al guardar configuración EBM:", error);
-            alert("❌ Error de comunicación con la base de datos central.");
+            console.error(error);
+            alert("Error al guardar cambios en el servidor.");
         } finally {
-            setGuardandoId(null);
+            setGuardandoId(false);
         }
     };
 
-    // --- GENERACIÓN DE LA MATRIZ DE RECORRIDO POR SISTEMA ---
+    // Agrupación y ordenamiento militar estricto por SdA
     const matrizSda = useMemo(() => {
-        const esquemasPorSda = {};
+        const agrupa = {};
+        todosLosSdas.forEach(sda => { agrupa[sda] = []; });
 
-        personal.forEach(piloto => {
-            const sdasAsignados = Object.keys(piloto.configTrimestresSda || {});
-
-            sdasAsignados.forEach(sdaName => {
-                const sdaUpper = sdaName.toUpperCase().trim();
-                if (sdasVisibles[sdaUpper] === false) return;
-
-                if (!esquemasPorSda[sdaUpper]) {
-                    esquemasPorSda[sdaUpper] = [];
-                }
-
-                esquemasPorSda[sdaUpper].push({
-                    ...piloto,
-                    sistemaActivo: sdaUpper 
-                });
-            });
-        });
-
-        // Ordenamiento Jerárquico Militar
-        Object.keys(esquemasPorSda).forEach(sda => {
-            esquemasPorSda[sda].sort((a, b) => {
-                const pesoA = ORDEN_GRADOS[a.grado] || 99;
-                const pesoB = ORDEN_GRADOS[b.grado] || 99;
-                if (pesoA !== pesoB) return pesoA - pesoB;
-                return (a.apellido || '').trim().toUpperCase().localeCompare((b.apellido || '').trim().toUpperCase());
-            });
-        });
-
-        return esquemasPorSda;
-    }, [personal, sdasVisibles]);
-
-    const renderCeldaTrimestre = (nroTrimestre, horasVoladas = 0, horasFaltantes = 0) => {
-        let colorEstado = '#555';
-        if (horasFaltantes <= 0) {
-            colorEstado = '#2e7d32'; 
-        } else {
-            if (nroTrimestre < trimestreActualId) {
-                colorEstado = '#d32f2f'; 
-            } else {
-                colorEstado = '#ed6c02'; 
+        personal.forEach(p => {
+            if (p.aeronave && agrupa[p.aeronave]) {
+                agrupa[p.aeronave].push(p);
             }
-        }
+        });
 
-        return (
-            <td style={styles.tdMetrica}>
-                <div style={{ color: colorEstado, fontWeight: 'bold' }}>{horasVoladas} hs</div>
-                {horasFaltantes > 0 && (
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                        Faltan: <span style={{ color: colorEstado, fontWeight: '500' }}>{horasFaltantes} hs</span>
-                    </div>
-                )}
-            </td>
-        );
+        // Ordenar internamente cada grupo
+        Object.keys(agrupa).forEach(sda => {
+            agrupa[sda].sort((a, b) => {
+                const ordenA = ORDEN_GRADOS[a.grado] || 99;
+                const ordenB = ORDEN_GRADOS[b.grado] || 99;
+                if (ordenA !== ordenB) return ordenA - ordenB;
+                return (a.apellido || '').localeCompare(b.apellido || '');
+            });
+        });
+
+        return agrupa;
+    }, [personal, todosLosSdas]);
+
+    const getEstiloFaltantes = (hFalt, numTrimestre) => {
+        if (Number(hFalt) <= 0) return { color: '#2e7d32', fontWeight: 'bold' }; // Cumplido (Verde)
+        if (numTrimestre < trimestreActualId) return { color: '#d32f2f', fontWeight: 'bold' }; // Expiró sin cumplir (Rojo)
+        return { color: '#ed6c02', fontWeight: 'bold' }; // En progreso / Futuro (Naranja)
     };
 
-    const renderBloqueAsignacion = (piloto, sda, tKey, tLabel, nroTrimestre) => {
-        const conf = piloto.configTrimestresSda?.[sda]?.[tKey] || { rol: '', tipo: '', novedad: '', novedadOtro: '' };
-        const hFaltantes = piloto.horasFaltantesSda?.[sda]?.[tKey] || 0;
-        const pasoDeTrimestre = nroTrimestre < trimestreActualId;
-        const mostrarJustificacion = hFaltantes > 0 && pasoDeTrimestre;
-
-        return (
-            <div style={{
-                ...styles.bloqueTrimestreConfig,
-                borderColor: mostrarJustificacion ? '#d32f2f' : '#cbd5e1'
-            }}>
-                <h5 style={styles.tituloBloque}>{tLabel}</h5>
-                <div style={styles.grupoInput}>
-                    <label style={styles.labelMini}>ROL:</label>
-                    <select 
-                        value={conf.role || conf.rol || ''} 
-                        onChange={(e) => handleConfigChange(piloto._id, sda, tKey, 'rol', e.target.value)}
-                        style={styles.selectPanel}
-                    >
-                        <option value="">-- SELECCIONE --</option>
-                        <option value="COPILOTO">COPILOTO</option>
-                        <option value="PILOTO">PILOTO</option>
-                        <option value="INSTRUCTOR">INSTRUCTOR</option>
-                    </select>
-                </div>
-                <div style={styles.grupoInput}>
-                    <label style={styles.labelMini}>TIPO:</label>
-                    <select 
-                        value={conf.tipo || ''} 
-                        onChange={(e) => handleConfigChange(piloto._id, sda, tKey, 'tipo', e.target.value)}
-                        style={styles.selectPanel}
-                    >
-                        <option value="">-- SELECCIONE --</option>
-                        <option value="A">TIPO A</option>
-                        <option value="B">TIPO B</option>
-                        <option value="C">TIPO C</option>
-                        <option value="D">TIPO D</option>
-                    </select>
-                </div>
-
-                {mostrarJustificacion && (
-                    <div style={styles.seccionJustificacion}>
-                        <div style={styles.grupoInput}>
-                            <label style={styles.labelMiniJustificacion}>MOTIVO NO CUMP:</label>
-                            <select 
-                                value={conf.novedad || ''} 
-                                onChange={(e) => handleConfigChange(piloto._id, sda, tKey, 'novedad', e.target.value)}
-                                style={styles.selectJustificacion}
-                            >
-                                <option value="">-- SELECCIONE MOTIVO --</option>
-                                <option value="SIN AERONAVES DISPONIBLES">SIN AERONAVES DISPONIBLES</option>
-                                <option value="SIN DISPONIBILIDAD DE HORAS">SIN DISPONIBILIDAD DE HORAS</option>
-                                <option value="PROBLEMAS DE SALUD">PROBLEMAS DE SALUD</option>
-                                <option value="OTROS">OTROS (ESPECIFICAR)</option>
-                            </select>
-                        </div>
-                        
-                        {(conf.novedad === 'OTROS' || (!['', 'SIN AERONAVES DISPONIBLES', 'SIN DISPONIBILIDAD DE HORAS', 'PROBLEMAS DE SALUD'].includes(conf.novedad?.toUpperCase()))) && (
-                            <div style={{ marginTop: '5px' }}>
-                                <input 
-                                    type="text"
-                                    placeholder="Escriba el motivo aquí..."
-                                    value={conf.novedadOtro || ''}
-                                    onChange={(e) => handleConfigChange(piloto._id, sda, tKey, 'novedadOtro', e.target.value)}
-                                    style={styles.inputJustificacion}
-                                />
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    if (loading) return <div style={{ color: '#0b2545', padding: '20px', fontFamily: 'sans-serif', fontWeight: 'bold' }}>CARGANDO MATRIZ DE OPERACIONES EBM...</div>;
-
-    const haySdasVisibles = Object.values(sdasVisibles).some(v => v === true);
+    if (loading) {
+        return <div style={styles.centerText}>Cargando Matriz de Eficiencia Bajo Mínimos...</div>;
+    }
 
     return (
-        <div style={styles.container}>
-            <header style={styles.header}>
-                <h2 style={{ margin: 0, textTransform: 'uppercase', color: '#0b2545', fontWeight: '800' }}>NÓMINA EBM POR SISTEMA - {userUnidad}</h2>
-                
-                <div style={styles.contenedorFiltrosDinamicos}>
-                    <span style={{ fontSize: '12px', color: '#555', fontWeight: 'bold' }}>
-                        SISTEMAS DE ARMAS VISIBLES:
-                    </span>
-                    <div style={styles.grupoTags}>
-                        {todosLosSdas.map(sda => {
-                            const estaActivo = sdasVisibles[sda] !== false;
-                            return (
-                                <button
-                                    key={sda}
-                                    onClick={() => toggleVisibilidadSda(sda)}
-                                    style={{
-                                        ...styles.tagSda,
-                                        backgroundColor: estaActivo ? '#e0f2fe' : '#f1f5f9',
-                                        color: estaActivo ? '#0369a1' : '#64748b',
-                                        borderColor: estaActivo ? '#0284c7' : '#cbd5e1'
-                                    }}
-                                >
-                                    {estaActivo ? '👁️ ' : '🙈 '} {sda.toUpperCase()}
-                                </button>
-                            );
-                        })}
-                    </div>
+        <div style={styles.pageContainer}>
+            <div style={styles.headerArea}>
+                <div>
+                    <h2 style={styles.title}>Planificación Anual EBM - Año 2026</h2>
+                    <p style={styles.subtitle}>Unidad Activa: <span style={{fontWeight:'bold'}}>{userUnidad}</span></p>
                 </div>
-            </header>
+                <div style={styles.badgeTrimestre}>
+                    Trimestre Activo: T{trimestreActualId}
+                </div>
+            </div>
 
-            <table style={styles.table}>
-                <thead>
-                    <tr>
-                        <th style={styles.th}>GRADO</th>
-                        <th style={styles.th}>APELLIDO Y NOMBRE</th>
-                        <th style={styles.thTrimestre}>1° TRIM (VOL/FALT)</th>
-                        <th style={styles.thTrimestre}>2° TRIM (VOL/FALT)</th>
-                        <th style={styles.thTrimestre}>3° TRIM (VOL/FALT)</th>
-                        <th style={styles.thTrimestre}>4° TRIM (VOL/FALT)</th>
-                        <th style={styles.thTotal}>TOTAL SdA</th>
-                        <th style={styles.thAcciones}>CONFIG</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {haySdasVisibles && Object.keys(matrizSda).length > 0 ? (
-                        Object.keys(matrizSda).map(sdaNom => (
-                            <React.Fragment key={`grupo_${sdaNom}`}>
-                                <tr>
-                                    <td colSpan="8" style={styles.thSeparadorSda}>
-                                         SISTEMA DE ARMAS: {sdaNom.toUpperCase()}
-                                    </td>
-                                </tr>
-                                
-                                {matrizSda[sdaNom].map(p => {
-                                    const filaKey = `${p._id}_${sdaNom}`;
-                                    const hTrim = p.horasTrimestralesSda?.[sdaNom] || {};
-                                    const hFalt = p.horasFaltantesSda?.[sdaNom] || {};
-                                    const totalAnualSda = p.horasAcumuladasSda?.[sdaNom] || 0;
-                                    const estaGuardando = guardandoId === filaKey;
+            {/* FILTROS RÁPIDOS DE SISTEMAS DE ARMAS */}
+            <div style={styles.filterBar}>
+                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Filtrar SdA:</span>
+                <div style={styles.filterGroup}>
+                    {todosLosSdas.map(sda => (
+                        <button 
+                            key={sda} 
+                            onClick={() => toggleSdaVisible(sda)}
+                            style={{
+                                ...styles.filterButton,
+                                backgroundColor: sdasVisibles[sda] ? '#1b3a57' : '#e2e8f0',
+                                color: sdasVisibles[sda] ? 'white' : '#475569'
+                            }}
+                        >
+                            {sda}
+                        </button>
+                    ))}
+                </div>
+            </div>
 
-                                    return (
-                                        <React.Fragment key={`row_${filaKey}`}>
-                                            <tr style={styles.tr}>
-                                                <td style={styles.tdGrado}><span style={{ color: '#0b2545', fontWeight: 'bold' }}>{p.grado}</span></td>
-                                                <td style={styles.tdNombre}>
-                                                    <span style={{ fontWeight: '600', textTransform: 'uppercase', color: '#1e293b' }}>{p.apellido}, {p.nombre}</span>
-                                                </td>
-                                                
-                                                {renderCeldaTrimestre(1, hTrim.t1, hFalt.t1)}
-                                                {renderCeldaTrimestre(2, hTrim.t2, hFalt.t2)}
-                                                {renderCeldaTrimestre(3, hTrim.t3, hFalt.t3)}
-                                                {renderCeldaTrimestre(4, hTrim.t4, hFalt.t4)}
-                                                
-                                                <td style={styles.tdTotal}>{totalAnualSda} HS</td>
+            {/* TABLA GLOBAL AGRUPADA */}
+            <div style={styles.tableWrapper}>
+                <table style={styles.mainTable}>
+                    <thead>
+                        <tr style={styles.tableHeaderRow}>
+                            <th style={{...styles.th, width: '40px'}}>Acción</th>
+                            <th style={styles.th}>Grado y Nombre</th>
+                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>Trimestre 1</th>
+                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>Trimestre 2</th>
+                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>Trimestre 3</th>
+                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>Trimestre 4</th>
+                        </tr>
+                        <tr style={styles.subHeaderRow}>
+                            <th></th>
+                            <th>Piloto</th>
+                            <th style={styles.thSub}>Voladas</th><th style={styles.thSub}>Faltan</th>
+                            <th style={styles.thSub}>Voladas</th><th style={styles.thSub}>Faltan</th>
+                            <th style={styles.thSub}>Voladas</th><th style={styles.thSub}>Faltan</th>
+                            <th style={styles.thSub}>Voladas</th><th style={styles.thSub}>Faltan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {todosLosSdas.map(sda => {
+                            if (!sdasVisibles[sda] || matrizSda[sda].length === 0) return null;
 
-                                                <td style={styles.tdAcciones}>
-                                                    <button 
-                                                        onClick={() => toggleDespliegueFila(p._id, sdaNom)} 
-                                                        style={{
-                                                            ...styles.btnConfig,
-                                                            backgroundColor: filasDesplegadas[filaKey] ? '#b45309' : '#0f172a'
-                                                        }}
-                                                    >
-                                                        ⚙️
-                                                    </button>
-                                                </td>
-                                            </tr>
+                            return (
+                                <React.Fragment key={sda}>
+                                    {/* CABECERA SECCIÓN SDA */}
+                                    <tr style={styles.sdaGroupRow}>
+                                        <td colSpan={10} style={styles.sdaGroupCell}>
+                                            SISTEMA DE ARMAS: {sda} <span style={styles.countBadge}>({matrizSda[sda].length} pilotos)</span>
+                                        </td>
+                                    </tr>
 
-                                            {filasDesplegadas[filaKey] && (
-                                                <tr key={`expand_${filaKey}`}>
-                                                    <td colSpan="8" style={styles.tdExpandido}>
-                                                        <div style={styles.contenedorPanelPlanificacion}>
-                                                            <div style={styles.headerPanelConfig}>
-                                                                <span style={{ color: '#0b2545', fontWeight: 'bold' }}>
-                                                                    CONFIGURACIÓN {sdaNom} - {p.grado} {p.apellido}
-                                                                </span>
-                                                            </div>
-                                                            <div style={styles.grillaAsignacion}>
-                                                                {renderBloqueAsignacion(p, sdaNom, 't1', '1er Trimestre', 1)}
-                                                                {renderBloqueAsignacion(p, sdaNom, 't2', '2do Trimestre', 2)}
-                                                                {renderBloqueAsignacion(p, sdaNom, 't3', '3er Trimestre', 3)}
-                                                                {renderBloqueAsignacion(p, sdaNom, 't4', '4to Trimestre', 4)}
-                                                            </div>
+                                    {/* LISTADO DE PILOTOS DEL SDA */}
+                                    {matrizSda[sda].map(p => {
+                                        const estaDesplegado = !!filasDesplegadas[p._id];
 
-                                                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '15px' }}>
-                                                                <button
-                                                                    onClick={() => handleGuardarConfiguracion(p._id, sdaNom)}
-                                                                    disabled={estaGuardando}
-                                                                    style={{
-                                                                        backgroundColor: estaGuardando ? '#a1a1aa' : '#1e3a8a',
-                                                                        color: '#fff',
-                                                                        border: 'none',
-                                                                        padding: '8px 18px',
-                                                                        borderRadius: '4px',
-                                                                        fontSize: '11px',
-                                                                        fontWeight: 'bold',
-                                                                        cursor: estaGuardando ? 'not-allowed' : 'pointer',
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        gap: '6px',
-                                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                                                        transition: 'background-color 0.2s'
-                                                                    }}
-                                                                >
-                                                                    {estaGuardando ? '⏳ GUARDANDO...' : '💾 GUARDAR CONFIGURACIÓN CENTRAL'}
-                                                                </button>
-                                                            </div>
+                                        return (
+                                            <React.Fragment key={p._id}>
+                                                <tr style={styles.pilotRow}>
+                                                    <td style={styles.tdCenter}>
+                                                        <button 
+                                                            style={styles.btnConfig} 
+                                                            onClick={() => toggleFilaDesplegada(p._id)}
+                                                            title="Configurar Parámetros Trimestrales"
+                                                        >
+                                                            ⚙️
+                                                        </button>
+                                                    </td>
+                                                    <td style={styles.tdName}>
+                                                        <div>{p.grado} {p.apellido}, {p.nombre}</div>
+                                                        <div style={styles.miniSubtext}>
+                                                            T1: {p.trimestre1?.condicion || 'S/D'} ({p.trimestre1?.tipoEbm || '-'}) | 
+                                                            T2: {p.trimestre2?.condicion || 'S/D'} ({p.trimestre2?.tipoEbm || '-'}) | 
+                                                            T3: {p.trimestre3?.condicion || 'S/D'} ({p.trimestre3?.tipoEbm || '-'}) | 
+                                                            T4: {p.trimestre4?.condicion || 'S/D'} ({p.trimestre4?.tipoEbm || '-'})
                                                         </div>
                                                     </td>
+                                                    
+                                                    {/* Trimestre 1 */}
+                                                    <td style={styles.tdVoladas}>{p.trimestre1?.hsVoladas || 0} hs</td>
+                                                    <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre1?.hsFaltantes || 0, 1)}}>
+                                                        {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${p.trimestre1.hsFaltantes} hs`}
+                                                    </td>
+
+                                                    {/* Trimestre 2 */}
+                                                    <td style={styles.tdVoladas}>{p.trimestre2?.hsVoladas || 0} hs</td>
+                                                    <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre2?.hsFaltantes || 0, 2)}}>
+                                                        {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${p.trimestre2.hsFaltantes} hs`}
+                                                    </td>
+
+                                                    {/* Trimestre 3 */}
+                                                    <td style={styles.tdVoladas}>{p.trimestre3?.hsVoladas || 0} hs</td>
+                                                    <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre3?.hsFaltantes || 0, 3)}}>
+                                                        {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${p.trimestre3.hsFaltantes} hs`}
+                                                    </td>
+
+                                                    {/* Trimestre 4 */}
+                                                    <td style={styles.tdVoladas}>{p.trimestre4?.hsVoladas || 0} hs</td>
+                                                    <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre4?.hsFaltantes || 0, 4)}}>
+                                                        {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${p.trimestre4.hsFaltantes} hs`}
+                                                    </td>
                                                 </tr>
-                                            )}
-                                        </React.Fragment>
-                                    );
-                                })}
-                            </React.Fragment>
-                        ))
-                    ) : (
-                        <tr>
-                            <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-                                ACTIVÁ AL MENOS UN SISTEMA EN LA BARRA SUPERIOR PARA VISUALIZAR LA PLANIFICACIÓN EBM
-                            </td>
-                        </tr>
-                    )}
-                </tbody>
-            </table>
+
+                                                {/* DESPLIEGUE PANEL CONFIGURACIÓN INLINE */}
+                                                {estaDesplegado && (
+                                                    <tr style={styles.configExpandedRow}>
+                                                        <td colSpan={10} style={styles.configExpandedCell}>
+                                                            <div style={styles.panelConfigFlex}>
+                                                                {[1, 2, 3, 4].map(num => {
+                                                                    const trimData = p[`trimestre${num}`] || {};
+                                                                    const mostrarJustificacion = num < trimestreActualId && Number(trimData.hsFaltantes || 0) > 0;
+
+                                                                    return (
+                                                                        <div 
+                                                                            key={num} 
+                                                                            style={{
+                                                                                ...styles.bloqueTrimestreConfig,
+                                                                                borderColor: mostrarJustificacion ? '#f87171' : '#e2e8f0',
+                                                                                backgroundColor: num === trimestreActualId ? '#f0fdf4' : '#f8fafc'
+                                                                            }}
+                                                                        >
+                                                                            <h4 style={styles.tituloBloque}>Trimestre {num} {num === trimestreActualId && '🔹'}</h4>
+                                                                            
+                                                                            <div style={styles.grupoInput}>
+                                                                                <span style={styles.labelMini}>Rol:</span>
+                                                                                <select 
+                                                                                    style={styles.selectPanel}
+                                                                                    value={trimData.condicion || 'Copiloto'}
+                                                                                    disabled={!esGestorOperativo}
+                                                                                    onChange={(e) => handleInputChange(p._id, num, 'condicion', e.target.value)}
+                                                                                >
+                                                                                    <option value="Copiloto">Copiloto</option>
+                                                                                    <option value="Piloto">Piloto</option>
+                                                                                    <option value="Instructor">Instructor</option>
+                                                                                </select>
+                                                                            </div>
+
+                                                                            <div style={styles.grupoInput}>
+                                                                                <span style={styles.labelMini}>Tipo EBM:</span>
+                                                                                <select 
+                                                                                    style={styles.selectPanel}
+                                                                                    value={trimData.tipoEbm || 'A'}
+                                                                                    disabled={!esGestorOperativo}
+                                                                                    onChange={(e) => handleInputChange(p._id, num, 'tipoEbm', e.target.value)}
+                                                                                >
+                                                                                    <option value="A">Tipo A</option>
+                                                                                    <option value="B">Tipo B</option>
+                                                                                    <option value="C">Tipo C</option>
+                                                                                    <option value="D">Tipo D</option>
+                                                                                </select>
+                                                                            </div>
+
+                                                                            {/* JUSTIFICACIÓN OBLIGATORIA POR INCUMPLIMIENTO CRONOLÓGICO */}
+                                                                            {mostrarJustificacion && (
+                                                                                <div style={styles.seccionJustificacion}>
+                                                                                    <span style={styles.labelMiniJustificacion}>Justificación obligatoria:</span>
+                                                                                    <select
+                                                                                        style={styles.selectJustificacion}
+                                                                                        value={trimData.motivoNoCumplimiento || ''}
+                                                                                        disabled={!esGestorOperativo}
+                                                                                        onChange={(e) => handleInputChange(p._id, num, 'motivoNoCumplimiento', e.target.value)}
+                                                                                    >
+                                                                                        <option value="">Seleccione motivo...</option>
+                                                                                        <option value="SIN AERONAVES DISPONIBLES">Sin Aeronaves Disponibles</option>
+                                                                                        <option value="PROBLEMAS DE SALUD">Parte Médico / Salud</option>
+                                                                                        <option value="COMISION DE SERVICIO">Comisión de Servicio fuera</option>
+                                                                                        <option value="METEOROLOGIA ADVERSA">Meteorología Adversa Continua</option>
+                                                                                        <option value="OTROS">Otros motivos operativos</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                            {esGestorOperativo && (
+                                                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+                                                                    <button 
+                                                                        style={styles.btnSaveRow}
+                                                                        onClick={() => handleGuardarFila(p._id)}
+                                                                        disabled={guardandoId === p._id}
+                                                                    >
+                                                                        {guardandoId === p._id ? 'Guardando...' : '💾 Aplicar Cambios Legajo'}
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </React.Fragment>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };
 
-// Se mantienen intactos tus estilos visuales nativos
 const styles = {
-    container: { padding: '20px', backgroundColor: '#f8fafc', minHeight: '100vh', color: '#334155', fontFamily: 'sans-serif' },
-    header: { display: 'flex', flexDirection: 'column', gap: '15px', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px', marginBottom: '20px' },
-    contenedorFiltrosDinamicos: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    grupoTags: { display: 'flex', flexWrap: 'wrap', gap: '10px' },
-    tagSda: { border: '1px solid', padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.15s ease' },
-    table: { width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderRadius: '4px' },
-    thSeparadorSda: { backgroundColor: '#0b2545', color: '#fff', padding: '12px 15px', fontSize: '13px', fontWeight: 'bold', borderLeft: '5px solid #ca8a04', letterSpacing: '1px' }, 
-    th: { textAlign: 'left', padding: '12px', color: '#1e293b', borderBottom: '2px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' },
-    thTrimestre: { textAlign: 'right', padding: '12px', color: '#1e293b', borderBottom: '2px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '12%' },
-    thTotal: { textAlign: 'right', padding: '12px', color: '#1e293b', borderBottom: '2px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', width: '10%' },
-    thAcciones: { textAlign: 'center', padding: '12px', color: '#1e293b', borderBottom: '2px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', width: '6%' },
-    tdGrado: { padding: '12px', borderBottom: '1px solid #e2e8f0', fontSize: '14px', width: '8%' },
-    tdNombre: { padding: '12px', borderBottom: '1px solid #e2e8f0', fontSize: '14px' },
-    tdMetrica: { padding: '10px 12px', borderBottom: '1px solid #e2e8f0', fontSize: '14px', textAlign: 'right', lineHeight: '1.3' },
-    tdTotal: { padding: '12px', borderBottom: '1px solid #e2e8f0', fontSize: '14px', textAlign: 'right', color: '#0b2545', fontWeight: 'bold' },
-    tdAcciones: { padding: '12px', borderBottom: '1px solid #e2e8f0', textAlign: 'center' },
-    btnConfig: { border: 'none', color: '#fff', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s' },
-    tdExpandido: { backgroundColor: '#f8fafc', padding: '15px', borderBottom: '1px solid #e2e8f0' },
-    contenedorPanelPlanificacion: { border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', padding: '15px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' },
-    headerPanelConfig: { borderBottom: '2px solid #38bdf8', paddingBottom: '8px', marginBottom: '12px', fontSize: '12px' }, 
-    grillaAsignacion: { display: 'flex', gap: '15px', justifyContent: 'space-between' },
+    pageContainer: { padding: '25px', backgroundColor: '#f1f5f9', minHeight: 'calc(100vh - 65px)' },
+    headerArea: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
+    title: { margin: 0, fontSize: '20px', color: '#1b3a57', fontWeight: 'bold' },
+    subtitle: { margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' },
+    badgeTrimestre: { backgroundColor: '#1b3a57', color: 'white', padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' },
+    filterBar: { backgroundColor: 'white', padding: '12px 15px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
+    filterGroup: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+    filterButton: { border: 'none', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' },
+    tableWrapper: { backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden' },
+    mainTable: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
+    tableHeaderRow: { backgroundColor: '#1b3a57', color: 'white' },
+    subHeaderRow: { backgroundColor: '#2c4e70', color: 'white' },
+    th: { padding: '12px 15px', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' },
+    thSub: { padding: '6px 10px', fontSize: '11px', textAlign: 'center', fontWeight: 'normal', backgroundColor: '#244260' },
+    sdaGroupRow: { backgroundColor: '#f1f5f9', borderBottom: '2px solid #cbd5e1' },
+    sdaGroupCell: { padding: '10px 15px', fontWeight: 'bold', fontSize: '13px', color: '#1e293b' },
+    countBadge: { fontWeight: 'normal', color: '#64748b', fontSize: '11px', marginLeft: '5px' },
+    pilotRow: { borderBottom: '1px solid #e2e8f0', transition: 'background 0.2s', '&:hover': { backgroundColor: '#f8fafc' } },
+    tdCenter: { padding: '10px', textAlign: 'center' },
+    tdName: { padding: '12px 15px', fontWeight: 'bold', fontSize: '13px', color: '#334155' },
+    miniSubtext: { fontSize: '10px', color: '#64748b', fontWeight: 'normal', marginTop: '3px' },
+    tdVoladas: { padding: '12px 10px', fontSize: '12px', color: '#334155', textAlign: 'center', backgroundColor: '#fafafa' },
+    tdFaltan: { padding: '12px 10px', fontSize: '12px', textAlign: 'center', borderRight: '1px solid #f1f5f9' },
+    btnConfig: { background: 'none', border: 'none', fontSize: '15px', cursor: 'pointer', opacity: 0.7, '&:hover': { opacity: 1 } },
+    configExpandedRow: { backgroundColor: '#f8fafc', borderLeft: '4px solid #1b3a57' },
+    configExpandedCell: { padding: '15px 20px', borderBottom: '1px solid #cbd5e1' },
+    panelConfigFlex: { display: 'flex', gap: '15px', justifyContent: 'space-between' },
     bloqueTrimestreConfig: { flex: 1, backgroundColor: '#f8fafc', border: '1px solid', borderRadius: '4px', padding: '10px', display: 'flex', flexDirection: 'column', transition: 'border-color 0.2s' },
     tituloBloque: { margin: '0 0 10px 0', fontSize: '11px', color: '#475569', textTransform: 'uppercase', fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' },
     grupoInput: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '5px' },
@@ -445,9 +402,9 @@ const styles = {
     selectPanel: { backgroundColor: '#fff', color: '#334155', border: '1px solid #cbd5e1', fontSize: '11px', padding: '4px 5px', borderRadius: '3px', width: '75%', cursor: 'pointer' },
     seccionJustificacion: { marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #fca5a5' },
     labelMiniJustificacion: { fontSize: '10px', color: '#dc2626', fontWeight: 'bold' },
-    selectJustificacion: { backgroundColor: '#fff', color: '#dc2626', border: '1px solid #fca5a5', fontSize: '11px', padding: '4px 5px', borderRadius: '3px', width: '60%', cursor: 'pointer' },
-    inputJustificacion: { backgroundColor: '#fff', color: '#334155', border: '1px solid #cbd5e1', fontSize: '11px', padding: '5px 6px', borderRadius: '3px', width: '93%', marginTop: '4px' },
-    tr: { transition: 'background-color 0.1s' }
+    selectJustificacion: { backgroundColor: '#fff', color: '#dc2626', border: '1px solid #fca5a5', fontSize: '10px', padding: '4px 5px', borderRadius: '3px', width: '100%', cursor: 'pointer', marginTop: '4px' },
+    btnSaveRow: { backgroundColor: '#16a34a', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', '&:hover': { backgroundColor: '#15803d' } },
+    centerText: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', fontSize: '14px', color: '#475569', fontWeight: 'bold' }
 };
 
 export default EbmPage;

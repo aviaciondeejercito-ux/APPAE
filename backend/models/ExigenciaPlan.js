@@ -1,14 +1,45 @@
 const mongoose = require('mongoose');
 
 const TrimestreSchema = new mongoose.Schema({
-    numero: { type: Number, required: true, min: 1, max: 4 },
-    sistemaArmas: { type: String, trim: true, uppercase: true },
-    rol: { type: String, default: '' },
-    tipo: { type: String, default: '' },
-    exigenciaHoras: { type: Number, default: 0 },
-    causaNoCumplimiento: { type: String, default: '' },
-    novedadesOtro: { type: String, default: '' }
-}, { _id: false }); // _id: false porque es un subdocumento
+    numero: { 
+        type: Number, 
+        required: true, 
+        min: 1, 
+        max: 4 
+    },
+    sistemaArmas: { 
+        type: String, 
+        trim: true, 
+        uppercase: true 
+    },
+    // Sincronizado con el Frontend (Copiloto, Piloto, Instructor)
+    condicion: { 
+        type: String, 
+        default: 'Copiloto' 
+    },
+    // Sincronizado con el Frontend (Tipo A, B, C, D)
+    tipoEbm: { 
+        type: String, 
+        default: 'A' 
+    },
+    exigenciaHoras: { 
+        type: Number, 
+        default: 0 
+    },
+    hsVoladas: { 
+        type: Number, 
+        default: 0 
+    },
+    // Sincronizado con el selector de motivos obligatorios del Frontend
+    motivoNoCumplimiento: { 
+        type: String, 
+        default: '' 
+    },
+    novedadesOtro: { 
+        type: String, 
+        default: '' 
+    }
+}, { _id: false }); // _id: false porque es un subdocumento embebido
 
 const ExigenciaPlanSchema = new mongoose.Schema({
     piloto: { 
@@ -34,6 +65,4 @@ const ExigenciaPlanSchema = new mongoose.Schema({
 // Índice compuesto para evitar planes duplicados del mismo piloto en el mismo año
 ExigenciaPlanSchema.index({ piloto: 1, año: 1 }, { unique: true });
 
-// Exportación segura: usa el modelo existente si ya fue compilado, sino lo crea.
-// Esto evita el error "OverwriteModelError"
-module.exports = mongoose.models.ExigenciaPlan || mongoose.model('ExigenciaPlan', ExigenciaPlanSchema);
+module.exports = mongoose.model('ExigenciaPlan', ExigenciaPlanSchema);
