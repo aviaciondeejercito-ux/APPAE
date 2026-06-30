@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import API, { getPlanificacionEbm } from '../services/api'; 
+import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
 // --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---
 const getTrimestreActualCronologico = () => {
@@ -17,6 +17,8 @@ const EbmPage = () => {
     const [loading, setLoading] = useState(true);
     const [guardandoId, setGuardandoId] = useState(null); 
     const [todosLosSdas, setTodosLosSdas] = useState([]);
+    
+    // CAMBIO CLAVE: Inicializamos el estado de visibilidad en FALSO para que todo arranque oculto
     const [sdasVisibles, setSdasVisibles] = useState({});
     const [filasDesplegadas, setFilasDesplegadas] = useState({});
 
@@ -54,9 +56,9 @@ const EbmPage = () => {
             const sdas = [...new Set(dataFiltrada.map(p => p.aeronave).filter(Boolean))];
             setTodosLosSdas(sdas);
 
-            // Inicializar todos los Sdas como visibles por defecto
+            // CAMBIO VISUAL: Inicializamos todos los Sda en FALSE (ocultos al inicio)
             const visibilidadInicial = {};
-            sdas.forEach(sda => { visibilidadInicial[sda] = true; });
+            sdas.forEach(sda => { visibilidadInicial[sda] = false; });
             setSdasVisibles(visibilidadInicial);
 
         } catch (error) {
@@ -75,7 +77,7 @@ const EbmPage = () => {
     };
 
     const handleInputChange = (pilotoId, trimestreNum, campo, valor) => {
-        if (!esGestorOperativo) return; // Bloqueo de seguridad en interfaz
+        if (!esGestorOperativo) return; 
         setPersonal(prev => prev.map(p => {
             if (p._id !== pilotoId) return p;
             const keyTrimestre = `trimestre${trimestreNum}`;
@@ -99,16 +101,14 @@ const EbmPage = () => {
             const pilotoData = personal.find(p => p._id === pilotoId);
             
             const payload = {
-    trimestre1: pilotoData.trimestre1,
-    trimestre2: pilotoData.trimestre2,
-    trimestre3: pilotoData.trimestre3,
-    trimestre4: pilotoData.trimestre4
-};
+                trimestre1: pilotoData.trimestre1,
+                trimestre2: pilotoData.trimestre2,
+                trimestre3: pilotoData.trimestre3,
+                trimestre4: pilotoData.trimestre4
+            };
 
-// Importa e invoca la función del service de forma limpia
-await actualizarConfiguracionEbm(pilotoId, payload);
+            await actualizarConfiguracionEbm(pilotoId, payload);
             alert("Configuración de EBM actualizada correctamente.");
-            // Cerrar el panel tras guardar exitosamente
             setFilasDesplegadas(prev => ({ ...prev, [pilotoId]: false }));
         } catch (error) {
             console.error(error);
@@ -129,7 +129,6 @@ await actualizarConfiguracionEbm(pilotoId, payload);
             }
         });
 
-        // Ordenar internamente cada grupo
         Object.keys(agrupa).forEach(sda => {
             agrupa[sda].sort((a, b) => {
                 const ordenA = ORDEN_GRADOS[a.grado] || 99;
@@ -142,11 +141,20 @@ await actualizarConfiguracionEbm(pilotoId, payload);
         return agrupa;
     }, [personal, todosLosSdas]);
 
-    const getEstiloFaltantes = (hFalt, numTrimestre) => {
-        if (Number(hFalt) <= 0) return { color: '#2e7d32', fontWeight: 'bold' }; // Cumplido (Verde)
-        if (numTrimestre < trimestreActualId) return { color: '#d32f2f', fontWeight: 'bold' }; // Expiró sin cumplir (Rojo)
-        return { color: '#ed6c02', fontWeight: 'bold' }; // En progreso / Futuro (Naranja)
+    // Función auxiliar para formatear horas y evitar comas de muchos decimales
+    const formatearHoras = (valor) => {
+        const num = Number(valor || 0);
+        return Number.isInteger(num) ? num : num.toFixed(1);
     };
+
+    const getEstiloFaltantes = (hFalt, numTrimestre) => {
+        if (Number(hFalt) <= 0) return { color: '#2e7d32', fontWeight: 'bold' }; 
+        if (numTrimestre < trimestreActualId) return { color: '#d32f2f', fontWeight: 'bold' }; 
+        return { color: '#ed6c02', fontWeight: 'bold' }; 
+    };
+
+    // Verificar si hay por lo menos un sistema de armas seleccionado
+    const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
 
     if (loading) {
         return <div style={styles.centerText}>Cargando Matriz de Eficiencia Bajo Mínimos...</div>;
@@ -166,7 +174,7 @@ await actualizarConfiguracionEbm(pilotoId, payload);
 
             {/* FILTROS RÁPIDOS DE SISTEMAS DE ARMAS */}
             <div style={styles.filterBar}>
-                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Filtrar SdA:</span>
+                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Seleccionar SdA para visualizar:</span>
                 <div style={styles.filterGroup}>
                     {todosLosSdas.map(sda => (
                         <button 
@@ -174,11 +182,11 @@ await actualizarConfiguracionEbm(pilotoId, payload);
                             onClick={() => toggleSdaVisible(sda)}
                             style={{
                                 ...styles.filterButton,
-                                backgroundColor: sdasVisibles[sda] ? '#1b3a57' : '#e2e8f0',
+                                backgroundColor: sdasVisibles[sda] ? '#16a34a' : '#e2e8f0', // Cambia a verde al prenderse
                                 color: sdasVisibles[sda] ? 'white' : '#475569'
                             }}
                         >
-                            {sda}
+                            {sda} {sdasVisibles[sda] ? '👁️' : '📁'}
                         </button>
                     ))}
                 </div>
@@ -206,161 +214,168 @@ await actualizarConfiguracionEbm(pilotoId, payload);
                         </tr>
                     </thead>
                     <tbody>
-                        {todosLosSdas.map(sda => {
-                            if (!sdasVisibles[sda] || matrizSda[sda].length === 0) return null;
+                        {!haySdaSeleccionado ? (
+                            <tr>
+                                <td colSpan={10} style={styles.noDataRow}>
+                                    💡 Presione uno o más botones de Sistema de Armas arriba para listar al personal correspondiente.
+                                </td>
+                            </tr>
+                        ) : (
+                            todosLosSdas.map(sda => {
+                                if (!sdasVisibles[sda] || matrizSda[sda].length === 0) return null;
 
-                            return (
-                                <React.Fragment key={sda}>
-                                    {/* CABECERA SECCIÓN SDA */}
-                                    <tr style={styles.sdaGroupRow}>
-                                        <td colSpan={10} style={styles.sdaGroupCell}>
-                                            SISTEMA DE ARMAS: {sda} <span style={styles.countBadge}>({matrizSda[sda].length} pilotos)</span>
-                                        </td>
-                                    </tr>
+                                return (
+                                    <React.Fragment key={sda}>
+                                        {/* CABECERA SECCIÓN SDA */}
+                                        <tr style={styles.sdaGroupRow}>
+                                            <td colSpan={10} style={styles.sdaGroupCell}>
+                                                SISTEMA DE ARMAS: {sda} <span style={styles.countBadge}>({matrizSda[sda].length} pilotos)</span>
+                                            </td>
+                                        </tr>
 
-                                    {/* LISTADO DE PILOTOS DEL SDA */}
-                                    {matrizSda[sda].map(p => {
-                                        const estaDesplegado = !!filasDesplegadas[p._id];
+                                        {/* LISTADO DE PILOTOS DEL SDA */}
+                                        {matrizSda[sda].map(p => {
+                                            const estaDesplegado = !!filasDesplegadas[p._id];
 
-                                        return (
-                                            <React.Fragment key={p._id}>
-                                                <tr style={styles.pilotRow}>
-                                                    <td style={styles.tdCenter}>
-                                                        <button 
-                                                            style={styles.btnConfig} 
-                                                            onClick={() => toggleFilaDesplegada(p._id)}
-                                                            title="Configurar Parámetros Trimestrales"
-                                                        >
-                                                            ⚙️
-                                                        </button>
-                                                    </td>
-                                                    <td style={styles.tdName}>
-                                                        <div>{p.grado} {p.apellido}, {p.nombre}</div>
-                                                        <div style={styles.miniSubtext}>
-                                                            T1: {p.trimestre1?.condicion || 'S/D'} ({p.trimestre1?.tipoEbm || '-'}) | 
-                                                            T2: {p.trimestre2?.condicion || 'S/D'} ({p.trimestre2?.tipoEbm || '-'}) | 
-                                                            T3: {p.trimestre3?.condicion || 'S/D'} ({p.trimestre3?.tipoEbm || '-'}) | 
-                                                            T4: {p.trimestre4?.condicion || 'S/D'} ({p.trimestre4?.tipoEbm || '-'})
-                                                        </div>
-                                                    </td>
-                                                    
-                                                    {/* Trimestre 1 */}
-                                                    <td style={styles.tdVoladas}>{p.trimestre1?.hsVoladas || 0} hs</td>
-                                                    <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre1?.hsFaltantes || 0, 1)}}>
-                                                        {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${p.trimestre1.hsFaltantes} hs`}
-                                                    </td>
-
-                                                    {/* Trimestre 2 */}
-                                                    <td style={styles.tdVoladas}>{p.trimestre2?.hsVoladas || 0} hs</td>
-                                                    <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre2?.hsFaltantes || 0, 2)}}>
-                                                        {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${p.trimestre2.hsFaltantes} hs`}
-                                                    </td>
-
-                                                    {/* Trimestre 3 */}
-                                                    <td style={styles.tdVoladas}>{p.trimestre3?.hsVoladas || 0} hs</td>
-                                                    <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre3?.hsFaltantes || 0, 3)}}>
-                                                        {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${p.trimestre3.hsFaltantes} hs`}
-                                                    </td>
-
-                                                    {/* Trimestre 4 */}
-                                                    <td style={styles.tdVoladas}>{p.trimestre4?.hsVoladas || 0} hs</td>
-                                                    <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre4?.hsFaltantes || 0, 4)}}>
-                                                        {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${p.trimestre4.hsFaltantes} hs`}
-                                                    </td>
-                                                </tr>
-
-                                                {/* DESPLIEGUE PANEL CONFIGURACIÓN INLINE */}
-                                                {estaDesplegado && (
-                                                    <tr style={styles.configExpandedRow}>
-                                                        <td colSpan={10} style={styles.configExpandedCell}>
-                                                            <div style={styles.panelConfigFlex}>
-                                                                {[1, 2, 3, 4].map(num => {
-                                                                    const trimData = p[`trimestre${num}`] || {};
-                                                                    const mostrarJustificacion = num < trimestreActualId && Number(trimData.hsFaltantes || 0) > 0;
-
-                                                                    return (
-                                                                        <div 
-                                                                            key={num} 
-                                                                            style={{
-                                                                                ...styles.bloqueTrimestreConfig,
-                                                                                borderColor: mostrarJustificacion ? '#f87171' : '#e2e8f0',
-                                                                                backgroundColor: num === trimestreActualId ? '#f0fdf4' : '#f8fafc'
-                                                                            }}
-                                                                        >
-                                                                            <h4 style={styles.tituloBloque}>Trimestre {num} {num === trimestreActualId && '🔹'}</h4>
-                                                                            
-                                                                            <div style={styles.grupoInput}>
-                                                                                <span style={styles.labelMini}>Rol:</span>
-                                                                                <select 
-                                                                                    style={styles.selectPanel}
-                                                                                    value={trimData.condicion || 'Copiloto'}
-                                                                                    disabled={!esGestorOperativo}
-                                                                                    onChange={(e) => handleInputChange(p._id, num, 'condicion', e.target.value)}
-                                                                                >
-                                                                                    <option value="Copiloto">Copiloto</option>
-                                                                                    <option value="Piloto">Piloto</option>
-                                                                                    <option value="Instructor">Instructor</option>
-                                                                                </select>
-                                                                            </div>
-
-                                                                            <div style={styles.grupoInput}>
-                                                                                <span style={styles.labelMini}>Tipo EBM:</span>
-                                                                                <select 
-                                                                                    style={styles.selectPanel}
-                                                                                    value={trimData.tipoEbm || 'A'}
-                                                                                    disabled={!esGestorOperativo}
-                                                                                    onChange={(e) => handleInputChange(p._id, num, 'tipoEbm', e.target.value)}
-                                                                                >
-                                                                                    <option value="A">Tipo A</option>
-                                                                                    <option value="B">Tipo B</option>
-                                                                                    <option value="C">Tipo C</option>
-                                                                                    <option value="D">Tipo D</option>
-                                                                                </select>
-                                                                            </div>
-
-                                                                            {/* JUSTIFICACIÓN OBLIGATORIA POR INCUMPLIMIENTO CRONOLÓGICO */}
-                                                                            {mostrarJustificacion && (
-                                                                                <div style={styles.seccionJustificacion}>
-                                                                                    <span style={styles.labelMiniJustificacion}>Justificación obligatoria:</span>
-                                                                                    <select
-                                                                                        style={styles.selectJustificacion}
-                                                                                        value={trimData.motivoNoCumplimiento || ''}
-                                                                                        disabled={!esGestorOperativo}
-                                                                                        onChange={(e) => handleInputChange(p._id, num, 'motivoNoCumplimiento', e.target.value)}
-                                                                                    >
-                                                                                        <option value="">Seleccione motivo...</option>
-                                                                                        <option value="SIN AERONAVES DISPONIBLES">Sin Aeronaves Disponibles</option>
-                                                                                        <option value="PROBLEMAS DE SALUD">Parte Médico / Salud</option>
-                                                                                        <option value="COMISION DE SERVICIO">Comisión de Servicio fuera</option>
-                                                                                        <option value="METEOROLOGIA ADVERSA">Meteorología Adversa Continua</option>
-                                                                                        <option value="OTROS">Otros motivos operativos</option>
-                                                                                    </select>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    );
-                                                                })}
+                                            return (
+                                                <React.Fragment key={p._id}>
+                                                    <tr style={styles.pilotRow}>
+                                                        <td style={styles.tdCenter}>
+                                                            <button 
+                                                                style={styles.btnConfig} 
+                                                                onClick={() => toggleFilaDesplegada(p._id)}
+                                                                title="Configurar Parámetros Trimestrales"
+                                                            >
+                                                                ⚙️
+                                                            </button>
+                                                        </td>
+                                                        <td style={styles.tdName}>
+                                                            <div>{p.grado} {p.apellido}, {p.nombre}</div>
+                                                            <div style={styles.miniSubtext}>
+                                                                T1: {p.trimestre1?.condicion || 'S/D'} ({p.trimestre1?.tipoEbm || '-'}) | 
+                                                                T2: {p.trimestre2?.condicion || 'S/D'} ({p.trimestre2?.tipoEbm || '-'}) | 
+                                                                T3: {p.trimestre3?.condicion || 'S/D'} ({p.trimestre3?.tipoEbm || '-'}) | 
+                                                                T4: {p.trimestre4?.condicion || 'S/D'} ({p.trimestre4?.tipoEbm || '-'})
                                                             </div>
-                                                            {esGestorOperativo && (
-                                                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
-                                                                    <button 
-                                                                        style={styles.btnSaveRow}
-                                                                        onClick={() => handleGuardarFila(p._id)}
-                                                                        disabled={guardandoId === p._id}
-                                                                    >
-                                                                        {guardandoId === p._id ? 'Guardando...' : '💾 Aplicar Cambios Legajo'}
-                                                                    </button>
-                                                                </div>
-                                                            )}
+                                                        </td>
+                                                        
+                                                        {/* Trimestre 1 */}
+                                                        <td style={styles.tdVoladas}>{formatearHoras(p.trimestre1?.hsVoladas)} hs</td>
+                                                        <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre1?.hsFaltantes || 0, 1)}}>
+                                                            {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1.hsFaltantes)} hs`}
+                                                        </td>
+
+                                                        {/* Trimestre 2 */}
+                                                        <td style={styles.tdVoladas}>{formatearHoras(p.trimestre2?.hsVoladas)} hs</td>
+                                                        <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre2?.hsFaltantes || 0, 2)}}>
+                                                            {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2.hsFaltantes)} hs`}
+                                                        </td>
+
+                                                        {/* Trimestre 3 */}
+                                                        <td style={styles.tdVoladas}>{formatearHoras(p.trimestre3?.hsVoladas)} hs</td>
+                                                        <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre3?.hsFaltantes || 0, 3)}}>
+                                                            {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3.hsFaltantes)} hs`}
+                                                        </td>
+
+                                                        {/* Trimestre 4 */}
+                                                        <td style={styles.tdVoladas}>{formatearHoras(p.trimestre4?.hsVoladas)} hs</td>
+                                                        <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre4?.hsFaltantes || 0, 4)}}>
+                                                            {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4.hsFaltantes)} hs`}
                                                         </td>
                                                     </tr>
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </React.Fragment>
-                            );
-                        })}
+
+                                                    {/* DESPLIEGUE PANEL CONFIGURACIÓN INLINE */}
+                                                    {estaDesplegado && (
+                                                        <tr style={styles.configExpandedRow}>
+                                                            <td colSpan={10} style={styles.configExpandedCell}>
+                                                                <div style={styles.panelConfigFlex}>
+                                                                    {[1, 2, 3, 4].map(num => {
+                                                                        const trimData = p[`trimestre${num}`] || {};
+                                                                        const mostrarJustificacion = num < trimestreActualId && Number(trimData.hsFaltantes || 0) > 0;
+
+                                                                        return (
+                                                                            <div 
+                                                                                key={num} 
+                                                                                style={{
+                                                                                    ...styles.bloqueTrimestreConfig,
+                                                                                    borderColor: mostrarJustificacion ? '#f87171' : '#e2e8f0',
+                                                                                    backgroundColor: num === trimestreActualId ? '#f0fdf4' : '#f8fafc'
+                                                                                }}
+                                                                            >
+                                                                                <h4 style={styles.tituloBloque}>Trimestre {num} {num === trimestreActualId && '🔹'}</h4>
+                                                                                
+                                                                                <div style={styles.grupoInput}>
+                                                                                    <span style={styles.labelMini}>Rol:</span>
+                                                                                    <select 
+                                                                                        style={styles.selectPanel}
+                                                                                        value={trimData.condicion || 'Copiloto'}
+                                                                                        disabled={!esGestorOperativo}
+                                                                                        onChange={(e) => handleInputChange(p._id, num, 'condicion', e.target.value)}
+                                                                                    >
+                                                                                        <option value="Copiloto">Copiloto</option>
+                                                                                        <option value="Piloto">Piloto</option>
+                                                                                        <option value="Instructor">Instructor</option>
+                                                                                    </select>
+                                                                                </div>
+
+                                                                                <div style={styles.grupoInput}>
+                                                                                    <span style={styles.labelMini}>Tipo EBM:</span>
+                                                                                    <select 
+                                                                                        style={styles.selectPanel}
+                                                                                        value={trimData.tipoEbm || 'A'}
+                                                                                        disabled={!esGestorOperativo}
+                                                                                        onChange={(e) => handleInputChange(p._id, num, 'tipoEbm', e.target.value)}
+                                                                                    >
+                                                                                        <option value="A">Tipo A</option>
+                                                                                        <option value="B">Tipo B</option>
+                                                                                        <option value="C">Tipo C</option>
+                                                                                        <option value="D">Tipo D</option>
+                                                                                    </select>
+                                                                                </div>
+
+                                                                                {mostrarJustificacion && (
+                                                                                    <div style={styles.seccionJustificacion}>
+                                                                                        <span style={styles.labelMiniJustificacion}>Justificación obligatoria:</span>
+                                                                                        <select
+                                                                                            style={styles.selectJustificacion}
+                                                                                            value={trimData.motivoNoCumplimiento || ''}
+                                                                                            disabled={!esGestorOperativo}
+                                                                                            onChange={(e) => handleInputChange(p._id, num, 'motivoNoCumplimiento', e.target.value)}
+                                                                                        >
+                                                                                            <option value="">Seleccione motivo...</option>
+                                                                                            <option value="SIN AERONAVES DISPONIBLES">Sin Aeronaves Disponibles</option>
+                                                                                            <option value="PROBLEMAS DE SALUD">Parte Médico / Salud</option>
+                                                                                            <option value="COMISION DE SERVICIO">Comisión de Servicio fuera</option>
+                                                                                            <option value="METEOROLOGIA ADVERSA">Meteorología Adversa Continua</option>
+                                                                                            <option value="OTROS">Otros motivos operativos</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                                {esGestorOperativo && (
+                                                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+                                                                        <button 
+                                                                            style={styles.btnSaveRow}
+                                                                            onClick={() => handleGuardarFila(p._id)}
+                                                                            disabled={guardandoId === p._id}
+                                                                        >
+                                                                            {guardandoId === p._id ? 'Guardando...' : '💾 Aplicar Cambios Legajo'}
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </React.Fragment>
+                                );
+                            })
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -376,7 +391,7 @@ const styles = {
     badgeTrimestre: { backgroundColor: '#1b3a57', color: 'white', padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' },
     filterBar: { backgroundColor: 'white', padding: '12px 15px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
     filterGroup: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
-    filterButton: { border: 'none', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' },
+    filterButton: { border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s', display: 'flex', alignItems: 'center', gap: '4px' },
     tableWrapper: { backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden' },
     mainTable: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
     tableHeaderRow: { backgroundColor: '#1b3a57', color: 'white' },
@@ -405,7 +420,8 @@ const styles = {
     labelMiniJustificacion: { fontSize: '10px', color: '#dc2626', fontWeight: 'bold' },
     selectJustificacion: { backgroundColor: '#fff', color: '#dc2626', border: '1px solid #fca5a5', fontSize: '10px', padding: '4px 5px', borderRadius: '3px', width: '100%', cursor: 'pointer', marginTop: '4px' },
     btnSaveRow: { backgroundColor: '#16a34a', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', '&:hover': { backgroundColor: '#15803d' } },
-    centerText: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', fontSize: '14px', color: '#475569', fontWeight: 'bold' }
+    centerText: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', fontSize: '14px', color: '#475569', fontWeight: 'bold' },
+    noDataRow: { padding: '30px', textTransform: 'none', color: '#475569', fontSize: '13px', textAlign: 'center', backgroundColor: '#f8fafc', fontStyle: 'italic' }
 };
 
 export default EbmPage;
