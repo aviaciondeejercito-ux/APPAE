@@ -13,12 +13,14 @@ const getTrimestreActualCronologico = () => {
 const ORDEN_GRADOS = { 'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7 };
 
 const EbmPage = () => {
-    const [personal, setPersonal] = useState([]);
+    const [todoElPersonal, setTodoElPersonal] = useState([]); // Base de datos cruda filtrada por req
+    const [personalFiltrado, setPersonalFiltrado] = useState([]); // Personal filtrado por el select de Unidad
     const [loading, setLoading] = useState(true);
     const [guardandoId, setGuardandoId] = useState(null); 
     const [todosLosSdas, setTodosLosSdas] = useState([]);
+    const [todosLosElementos, setTodosLosElementos] = useState([]); // Lista de Unidades únicas para el Select
+    const [elementoSeleccionado, setElementoSeleccionado] = useState(''); // Estado del selector de unidad
     
-    // CAMBIO CLAVE: Inicializamos el estado de visibilidad en FALSO para que todo arranque oculto
     const [sdasVisibles, setSdasVisibles] = useState({});
     const [filasDesplegadas, setFilasDesplegadas] = useState({});
 
@@ -36,30 +38,54 @@ const EbmPage = () => {
         fetchPlanificacion();
     }, []);
 
+    // Hook para re-filtrar el personal cada vez que cambia el combo de Elemento/Unidad
+    useEffect(() => {
+        let filtrados = todoElPersonal;
+        if (elementoSeleccionado && elementoSeleccionado !== 'TODOS') {
+            filtrados = todoElPersonal.filter(p => {
+                const uni = (p.elemento || p.unidad || '').trim().toUpperCase();
+                return uni === elementoSeleccionado;
+            });
+        }
+        setPersonalFiltrado(filtrados);
+
+        // recalcular SdA disponibles para la unidad seleccionada
+        const sdas = [...new Set(filtrados.map(p => p.aeronave).filter(Boolean))];
+        setTodosLosSdas(sdas);
+
+        // Resetear visibilidad (todo oculto al cambiar de elemento)
+        const visibilidadInicial = {};
+        sdas.forEach(sda => { visibilidadInicial[sda] = false; });
+        setSdasVisibles(visibilidadInicial);
+        setFilasDesplegadas({});
+    }, [elementoSeleccionado, todoElPersonal]);
+
     const fetchPlanificacion = async () => {
         try {
             setLoading(true);
             const response = await getPlanificacionEbm();
             const dataBackend = response.data || [];
 
-            // FILTRADO ESTRICTO POR JURISDICCIÓN DE UNIDAD
-            const dataFiltrada = esMandoEstrategico
+            // FILTRADO INICIAL DE SEGURIDAD POR JURISDICCIÓN
+            const dataJurisdiccion = esMandoEstrategico
                 ? dataBackend
                 : dataBackend.filter(p => {
                     const unidadPiloto = p.elemento || p.unidad;
                     return unidadPiloto && unidadPiloto.trim().toUpperCase() === userUnidad;
                 });
 
-            setPersonal(dataFiltrada);
+            setTodoElPersonal(dataJurisdiccion);
 
-            // Extraer Sistemas de Armas únicos presentes en los pilotos cargados
-            const sdas = [...new Set(dataFiltrada.map(p => p.aeronave).filter(Boolean))];
-            setTodosLosSdas(sdas);
+            // Extraer lista única de Elementos/Unidades para el combobox superior
+            const elementosUnicos = [...new Set(dataJurisdiccion.map(p => (p.elemento || p.unidad || '').trim().toUpperCase()).filter(Boolean))].sort();
+            setTodosLosElementos(elementosUnicos);
 
-            // CAMBIO VISUAL: Inicializamos todos los Sda en FALSE (ocultos al inicio)
-            const visibilidadInicial = {};
-            sdas.forEach(sda => { visibilidadInicial[sda] = false; });
-            setSdasVisibles(visibilidadInicial);
+            // Definir selección inicial del combo
+            if (esMandoEstrategico) {
+                setElementoSeleccionado('TODOS');
+            } else {
+                setElementoSeleccionado(userUnidad);
+            }
 
         } catch (error) {
             console.error("❌ Error al cargar planificación EBM:", error);
@@ -78,16 +104,19 @@ const EbmPage = () => {
 
     const handleInputChange = (pilotoId, trimestreNum, campo, valor) => {
         if (!esGestorOperativo) return; 
-        setPersonal(prev => prev.map(p => {
+        
+        // Modificar en la lista local filtrada
+        setPersonalFiltrado(prev => prev.map(p => {
             if (p._id !== pilotoId) return p;
             const keyTrimestre = `trimestre${trimestreNum}`;
-            return {
-                ...p,
-                [keyTrimestre]: {
-                    ...p[keyTrimestre],
-                    [campo]: valor
-                }
-            };
+            return { ...p, [keyTrimestre]: { ...p[keyTrimestre], [campo]: valor } };
+        }));
+
+        // Sincronizar en la lista maestra global
+        setTodoElPersonal(prev => prev.map(p => {
+            if (p._id !== pilotoId) return p;
+            const keyTrimestre = `trimestre${trimestreNum}`;
+            return { ...p, [keyTrimestre]: { ...p[keyTrimestre], [campo]: valor } };
         }));
     };
 
@@ -98,7 +127,7 @@ const EbmPage = () => {
         }
         try {
             setGuardandoId(pilotoId);
-            const pilotoData = personal.find(p => p._id === pilotoId);
+            const pilotoData = personalFiltrado.find(p => p._id === pilotoId);
             
             const payload = {
                 trimestre1: pilotoData.trimestre1,
@@ -107,8 +136,9 @@ const EbmPage = () => {
                 trimestre4: pilotoData.trimestre4
             };
 
+            // Se envía la key combinada (idOriginal_SdA) para que el backend asocie el SdA correspondiente
             await actualizarConfiguracionEbm(pilotoId, payload);
-            alert("Configuración de EBM actualizada correctamente.");
+            alert("Configuración de EBM actualizada correctamente para este SdA.");
             setFilasDesplegadas(prev => ({ ...prev, [pilotoId]: false }));
         } catch (error) {
             console.error(error);
@@ -118,12 +148,12 @@ const EbmPage = () => {
         }
     };
 
-    // Agrupación y ordenamiento militar estricto por SdA
+    // Agrupación táctica por SdA de la nómina actualmente filtrada
     const matrizSda = useMemo(() => {
         const agrupa = {};
         todosLosSdas.forEach(sda => { agrupa[sda] = []; });
 
-        personal.forEach(p => {
+        personalFiltrado.forEach(p => {
             if (p.aeronave && agrupa[p.aeronave]) {
                 agrupa[p.aeronave].push(p);
             }
@@ -139,9 +169,8 @@ const EbmPage = () => {
         });
 
         return agrupa;
-    }, [personal, todosLosSdas]);
+    }, [personalFiltrado, todosLosSdas]);
 
-    // Función auxiliar para formatear horas y evitar comas de muchos decimales
     const formatearHoras = (valor) => {
         const num = Number(valor || 0);
         return Number.isInteger(num) ? num : num.toFixed(1);
@@ -153,7 +182,6 @@ const EbmPage = () => {
         return { color: '#ed6c02', fontWeight: 'bold' }; 
     };
 
-    // Verificar si hay por lo menos un sistema de armas seleccionado
     const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
 
     if (loading) {
@@ -165,30 +193,53 @@ const EbmPage = () => {
             <div style={styles.headerArea}>
                 <div>
                     <h2 style={styles.title}>Planificación Anual EBM - Año 2026</h2>
-                    <p style={styles.subtitle}>Unidad Activa: <span style={{fontWeight:'bold'}}>{userUnidad}</span></p>
+                    <p style={styles.subtitle}>Jurisdicción de visualización activa</p>
                 </div>
-                <div style={styles.badgeTrimestre}>
-                    Trimestre Activo: T{trimestreActualId}
+                
+                {/* 🎛️ NUEVO PANEL DE FILTRADO SUPERIOR MULTI-UNIDAD */}
+                <div style={styles.headerControlsRight}>
+                    <div style={styles.containerFiltroUnidad}>
+                        <span style={styles.labelFiltroUnidad}>Filtrar Elemento:</span>
+                        <select
+                            style={styles.selectUnidadSuperior}
+                            value={elementoSeleccionado}
+                            disabled={!esMandoEstrategico} // Bloqueado si no es del comando superior
+                            onChange={(e) => setElementoSeleccionado(e.target.value)}
+                        >
+                            {esMandoEstrategico && <option value="TODOS">⚠️ VER TODO EL COMANDO</option>}
+                            {todosLosElementos.map(el => (
+                                <option key={el} value={el}>{el}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div style={styles.badgeTrimestre}>
+                        Trimestre Activo: T{trimestreActualId}
+                    </div>
                 </div>
             </div>
 
-            {/* FILTROS RÁPIDOS DE SISTEMAS DE ARMAS */}
+            {/* FILTROS DE SISTEMAS DE ARMAS */}
             <div style={styles.filterBar}>
                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>Seleccionar SdA para visualizar:</span>
                 <div style={styles.filterGroup}>
-                    {todosLosSdas.map(sda => (
-                        <button 
-                            key={sda} 
-                            onClick={() => toggleSdaVisible(sda)}
-                            style={{
-                                ...styles.filterButton,
-                                backgroundColor: sdasVisibles[sda] ? '#16a34a' : '#e2e8f0', // Cambia a verde al prenderse
-                                color: sdasVisibles[sda] ? 'white' : '#475569'
-                            }}
-                        >
-                            {sda} {sdasVisibles[sda] ? '👁️' : '📁'}
-                        </button>
-                    ))}
+                    {todosLosSdas.length === 0 ? (
+                        <span style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic' }}>Sin aeronaves registradas para este elemento.</span>
+                    ) : (
+                        todosLosSdas.map(sda => (
+                            <button 
+                                key={sda} 
+                                onClick={() => toggleSdaVisible(sda)}
+                                style={{
+                                    ...styles.filterButton,
+                                    backgroundColor: sdasVisibles[sda] ? '#16a34a' : '#e2e8f0', 
+                                    color: sdasVisibles[sda] ? 'white' : '#475569'
+                                }}
+                            >
+                                {sda} {sdasVisibles[sda] ? '👁️' : '📁'}
+                            </button>
+                        ))
+                    )}
                 </div>
             </div>
 
@@ -217,23 +268,21 @@ const EbmPage = () => {
                         {!haySdaSeleccionado ? (
                             <tr>
                                 <td colSpan={10} style={styles.noDataRow}>
-                                    💡 Presione uno o más botones de Sistema de Armas arriba para listar al personal correspondiente.
+                                    💡 Presione uno o más botones de Sistema de Armas arriba para listar al personal correspondiente de {elementoSeleccionado}.
                                 </td>
                             </tr>
                         ) : (
                             todosLosSdas.map(sda => {
-                                if (!sdasVisibles[sda] || matrizSda[sda].length === 0) return null;
+                                if (!sdasVisibles[sda] || !matrizSda[sda] || matrizSda[sda].length === 0) return null;
 
                                 return (
                                     <React.Fragment key={sda}>
-                                        {/* CABECERA SECCIÓN SDA */}
                                         <tr style={styles.sdaGroupRow}>
                                             <td colSpan={10} style={styles.sdaGroupCell}>
-                                                SISTEMA DE ARMAS: {sda} <span style={styles.countBadge}>({matrizSda[sda].length} pilotos)</span>
+                                                SISTEMA DE ARMAS: {sda} <span style={styles.countBadge}>({matrizSda[sda].length} listados)</span>
                                             </td>
                                         </tr>
 
-                                        {/* LISTADO DE PILOTOS DEL SDA */}
                                         {matrizSda[sda].map(p => {
                                             const estaDesplegado = !!filasDesplegadas[p._id];
 
@@ -244,7 +293,6 @@ const EbmPage = () => {
                                                             <button 
                                                                 style={styles.btnConfig} 
                                                                 onClick={() => toggleFilaDesplegada(p._id)}
-                                                                title="Configurar Parámetros Trimestrales"
                                                             >
                                                                 ⚙️
                                                             </button>
@@ -252,39 +300,33 @@ const EbmPage = () => {
                                                         <td style={styles.tdName}>
                                                             <div>{p.grado} {p.apellido}, {p.nombre}</div>
                                                             <div style={styles.miniSubtext}>
-                                                                T1: {p.trimestre1?.condicion || 'S/D'} ({p.trimestre1?.tipoEbm || '-'}) | 
-                                                                T2: {p.trimestre2?.condicion || 'S/D'} ({p.trimestre2?.tipoEbm || '-'}) | 
-                                                                T3: {p.trimestre3?.condicion || 'S/D'} ({p.trimestre3?.tipoEbm || '-'}) | 
-                                                                T4: {p.trimestre4?.condicion || 'S/D'} ({p.trimestre4?.tipoEbm || '-'})
+                                                                Elemento: {p.elemento} | 
+                                                                T1: {p.trimestre1?.condicion || 'S/D'} ({p.trimestre1?.tipoEbm || '-'})
                                                             </div>
                                                         </td>
                                                         
-                                                        {/* Trimestre 1 */}
+                                                        {/* Trimestres */}
                                                         <td style={styles.tdVoladas}>{formatearHoras(p.trimestre1?.hsVoladas)} hs</td>
                                                         <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre1?.hsFaltantes || 0, 1)}}>
                                                             {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1.hsFaltantes)} hs`}
                                                         </td>
 
-                                                        {/* Trimestre 2 */}
                                                         <td style={styles.tdVoladas}>{formatearHoras(p.trimestre2?.hsVoladas)} hs</td>
                                                         <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre2?.hsFaltantes || 0, 2)}}>
                                                             {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2.hsFaltantes)} hs`}
                                                         </td>
 
-                                                        {/* Trimestre 3 */}
                                                         <td style={styles.tdVoladas}>{formatearHoras(p.trimestre3?.hsVoladas)} hs</td>
                                                         <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre3?.hsFaltantes || 0, 3)}}>
                                                             {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3.hsFaltantes)} hs`}
                                                         </td>
 
-                                                        {/* Trimestre 4 */}
                                                         <td style={styles.tdVoladas}>{formatearHoras(p.trimestre4?.hsVoladas)} hs</td>
                                                         <td style={{...styles.tdFaltan, ...getEstiloFaltantes(p.trimestre4?.hsFaltantes || 0, 4)}}>
                                                             {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4.hsFaltantes)} hs`}
                                                         </td>
                                                     </tr>
 
-                                                    {/* DESPLIEGUE PANEL CONFIGURACIÓN INLINE */}
                                                     {estaDesplegado && (
                                                         <tr style={styles.configExpandedRow}>
                                                             <td colSpan={10} style={styles.configExpandedCell}>
@@ -335,7 +377,7 @@ const EbmPage = () => {
 
                                                                                 {mostrarJustificacion && (
                                                                                     <div style={styles.seccionJustificacion}>
-                                                                                        <span style={styles.labelMiniJustificacion}>Justificación obligatoria:</span>
+                                                                                        <span style={styles.labelMiniJustificacion}>Justificación:</span>
                                                                                         <select
                                                                                             style={styles.selectJustificacion}
                                                                                             value={trimData.motivoNoCumplimiento || ''}
@@ -388,7 +430,11 @@ const styles = {
     headerArea: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
     title: { margin: 0, fontSize: '20px', color: '#1b3a57', fontWeight: 'bold' },
     subtitle: { margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' },
-    badgeTrimestre: { backgroundColor: '#1b3a57', color: 'white', padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' },
+    headerControlsRight: { display: 'flex', alignItems: 'center', gap: '20px' },
+    containerFiltroUnidad: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' },
+    labelFiltroUnidad: { fontSize: '12px', fontWeight: 'bold', color: '#334155' },
+    selectUnidadSuperior: { padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', color: '#1b3a57', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer' },
+    badgeTrimestre: { backgroundColor: '#1b3a57', color: 'white', padding: '8px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', textAlign: 'center' },
     filterBar: { backgroundColor: 'white', padding: '12px 15px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
     filterGroup: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
     filterButton: { border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s', display: 'flex', alignItems: 'center', gap: '4px' },
@@ -401,17 +447,17 @@ const styles = {
     sdaGroupRow: { backgroundColor: '#f1f5f9', borderBottom: '2px solid #cbd5e1' },
     sdaGroupCell: { padding: '10px 15px', fontWeight: 'bold', fontSize: '13px', color: '#1e293b' },
     countBadge: { fontWeight: 'normal', color: '#64748b', fontSize: '11px', marginLeft: '5px' },
-    pilotRow: { borderBottom: '1px solid #e2e8f0', transition: 'background 0.2s', '&:hover': { backgroundColor: '#f8fafc' } },
+    pilotRow: { borderBottom: '1px solid #e2e8f0', transition: 'background 0.2s' },
     tdCenter: { padding: '10px', textAlign: 'center' },
     tdName: { padding: '12px 15px', fontWeight: 'bold', fontSize: '13px', color: '#334155' },
     miniSubtext: { fontSize: '10px', color: '#64748b', fontWeight: 'normal', marginTop: '3px' },
     tdVoladas: { padding: '12px 10px', fontSize: '12px', color: '#334155', textAlign: 'center', backgroundColor: '#fafafa' },
     tdFaltan: { padding: '12px 10px', fontSize: '12px', textAlign: 'center', borderRight: '1px solid #f1f5f9' },
-    btnConfig: { background: 'none', border: 'none', fontSize: '15px', cursor: 'pointer', opacity: 0.7, '&:hover': { opacity: 1 } },
+    btnConfig: { background: 'none', border: 'none', fontSize: '15px', cursor: 'pointer', opacity: 0.7 },
     configExpandedRow: { backgroundColor: '#f8fafc', borderLeft: '4px solid #1b3a57' },
     configExpandedCell: { padding: '15px 20px', borderBottom: '1px solid #cbd5e1' },
     panelConfigFlex: { display: 'flex', gap: '15px', justifyContent: 'space-between' },
-    bloqueTrimestreConfig: { flex: 1, backgroundColor: '#f8fafc', border: '1px solid', borderRadius: '4px', padding: '10px', display: 'flex', flexDirection: 'column', transition: 'border-color 0.2s' },
+    bloqueTrimestreConfig: { flex: 1, backgroundColor: '#f8fafc', border: '1px solid', borderRadius: '4px', padding: '10px', display: 'flex', flexDirection: 'column' },
     tituloBloque: { margin: '0 0 10px 0', fontSize: '11px', color: '#475569', textTransform: 'uppercase', fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' },
     grupoInput: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '5px' },
     labelMini: { fontSize: '11px', color: '#475569', fontWeight: 'bold' },
@@ -419,9 +465,9 @@ const styles = {
     seccionJustificacion: { marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #fca5a5' },
     labelMiniJustificacion: { fontSize: '10px', color: '#dc2626', fontWeight: 'bold' },
     selectJustificacion: { backgroundColor: '#fff', color: '#dc2626', border: '1px solid #fca5a5', fontSize: '10px', padding: '4px 5px', borderRadius: '3px', width: '100%', cursor: 'pointer', marginTop: '4px' },
-    btnSaveRow: { backgroundColor: '#16a34a', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', '&:hover': { backgroundColor: '#15803d' } },
+    btnSaveRow: { backgroundColor: '#16a34a', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' },
     centerText: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', fontSize: '14px', color: '#475569', fontWeight: 'bold' },
-    noDataRow: { padding: '30px', textTransform: 'none', color: '#475569', fontSize: '13px', textAlign: 'center', backgroundColor: '#f8fafc', fontStyle: 'italic' }
+    noDataRow: { padding: '30px', color: '#475569', fontSize: '13px', textAlign: 'center', backgroundColor: '#f8fafc', fontStyle: 'italic' }
 };
 
 export default EbmPage;
