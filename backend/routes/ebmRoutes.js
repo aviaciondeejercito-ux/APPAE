@@ -3,7 +3,7 @@ const router = express.Router();
 const ebmController = require('../controllers/ebmController');
 const { protect } = require('../middleware/authMiddleware'); 
 
-// Middleware de autorización - Sincro JOKER v3.6
+// Middleware de autorización - Sincro JOKER v3.6 (Mantenido intacto)
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
         const rawRole = req.user?.rol || req.user?.role || '';
@@ -26,17 +26,15 @@ const rolesEscritura = ['admin', 'OPERACIONES', 'JEFE', 'PERSONAL', 'OFICINA_TEC
 // Protección global de sesión activa para todo el submódulo
 router.use(protect);
 
-// --- RUTAS AJUSTADAS PARA SINCRO FRONT-BACK ---
+// --- RUTAS AJUSTADAS EXCLUSIVAMENTE PARA EL DESPLIEGUE ---
 
-// GET /api/planificacion-ebm (O como esté montado en tu server.js/app.js)
-// Si tu frontend llama a la ruta raíz del módulo, mapeamos ebmController aquí:
+// 1. GET /api/ebm -> Mapea directo a la nómina consolidada por SdA
 router.get('/', authorize(...rolesConsulta), ebmController.getPlanificacionCompleta);
 
-// GET /api/planificacion-ebm/vuelos-unidad
-router.get('/vuelos-unidad', authorize(...rolesConsulta), ebmController.getVuelosUnidad);
+// 2. GET /api/ebm/vuelos/:id -> Historial de vuelos individuales (Sustituye la línea del error sin perder la funcionalidad)
+router.get('/vuelos/:id', authorize(...rolesConsulta), ebmController.getVuelosTripulanteEbm);
 
-// PUT /api/planificacion-ebm/:id 
-// Ajustado para que calce directo con API.put(`/planificacion-ebm/${pilotoId}`)
+// 3. PUT /api/ebm/:id -> Persistencia y guardado anual de los 4 trimestres por SdA
 router.put('/:id', authorize(...rolesEscritura), ebmController.actualizarConfiguracionEbm);
 
 module.exports = router;
