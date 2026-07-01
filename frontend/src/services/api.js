@@ -80,6 +80,11 @@ export const getPlanificacionEbm = () => API.get('/ebm');
 export const actualizarConfiguracionEbm = (id, payload) => API.put(`/ebm/${id}`, payload);
 
 /**
+ * NUEVO SUBMÓDULO: ALERTAS PREVENTIVAS DE UNIDAD
+ */
+export const getAlertasDashboard = () => API.get('/alerts/dashboard');
+
+/**
  * SERVICIOS DE GESTIÓN DE VUELOS (LIBRETA DE VUELO DIGITAL)
  */
 export const getVuelos = (params = {}) => API.get('/vuelos', { params });
@@ -297,7 +302,8 @@ const EventService = {
     createTripulante,
     updateTripulante,
     deleteTripulante,
-    getPlanificacionEbm, // Vinculado al listado unificado
+    getPlanificacionEbm,
+    getAlertasDashboard, // Integrado al objeto unificado preservando lo anterior
     getWeatherData,
     getAstronomyData,
     getVuelos,

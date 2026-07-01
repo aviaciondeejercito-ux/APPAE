@@ -17,6 +17,7 @@ import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
 import Vuelos from './pages/Vuelos';
 import EbmPage from './pages/EbmPage'; 
+import AlertasWidget from './components/AlertasWidget'; // Nuevo Componente de Alertas Preventivas de Unidad
 
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
@@ -75,7 +76,7 @@ function App() {
     const puedeVerUsuarios = esAdmin;
     const puedeVerTripulantes = esAdmin || esOperaciones || esJefe || esPersonal; 
     const puedeVerVuelos = esAdmin || esOperaciones; 
-    const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
+    const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esPersonal;
     const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerEstadoAeronaves = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerCarga = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
@@ -196,6 +197,9 @@ function App() {
 
             {/* CONTENIDO PRINCIPAL DINÁMICO */}
             <main style={esVistaFull ? styles.containerFull : styles.container}>
+                {/* 📌 ALERTAS PREVENTIVAS DE UNIDAD: Inyección en contenedor dinámico */}
+                {auth && <AlertasWidget />}
+
                 {!auth ? (
                     <Login setAuth={setAuth} />
                 ) : (
