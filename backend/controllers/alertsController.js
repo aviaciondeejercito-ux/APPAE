@@ -1,5 +1,5 @@
 const Tripulante = require('../models/Tripulante');
-const Aeronave = require('../models/Aeronave'); // 1. Importamos el modelo
+const Aeronave = require('../models/Aircraft');
 
 exports.getAlertasInternasUnidad = async (req, res) => {
     try {
