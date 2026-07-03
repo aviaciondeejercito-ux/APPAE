@@ -6,9 +6,10 @@ const AlertasWidget = () => {
     const [loading, setLoading] = useState(true);
     const [unidad, setUnidad] = useState('');
     
-    // Estados separados para cada Modal
+    // Estados para 3 Modales
     const [showPersonal, setShowPersonal] = useState(false);
-    const [showAeronaves, setShowAeronaves] = useState(false);
+    const [showAeronaves, setShowAeronaves] = useState(false); // Potencial (Horas)
+    const [showDocumentacion, setShowDocumentacion] = useState(false); // Vencimientos
 
     useEffect(() => {
         cargarAlertasUnidad();
@@ -28,13 +29,12 @@ const AlertasWidget = () => {
         }
     };
 
-    // Función de ordenamiento: ADVERTENCIA (-1) arriba, CRITICO (1) abajo
-    const ordenarAlertas = (lista) => {
-        return [...lista].sort((a, b) => (a.gravedad === 'ADVERTENCIA' ? -1 : 1));
-    };
+    const ordenarAlertas = (lista) => [...lista].sort((a, b) => (a.gravedad === 'ADVERTENCIA' ? -1 : 1));
 
+    // Filtros por lógica de negocio
     const tripulantes = ordenarAlertas(alertas.filter(a => a.categoria === 'TRIPULANTE'));
-    const aeronaves = ordenarAlertas(alertas.filter(a => a.categoria === 'AERONAVE' || a.categoria === 'COMPONENTES'));
+    const aeronavesPotencial = ordenarAlertas(alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'POTENCIAL'));
+    const aeronavesDocs = ordenarAlertas(alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'POTENCIAL'));
 
     if (loading) return null;
     if (alertas.length === 0) return null;
@@ -48,32 +48,21 @@ const AlertasWidget = () => {
                     👥 Personal ({tripulantes.length})
                 </button>
                 <button style={styles.btnAeronaves} onClick={() => setShowAeronaves(true)}>
-                    🚁 Aeronaves ({aeronaves.length})
+                    🚁 Potencial ({aeronavesPotencial.length})
+                </button>
+                <button style={styles.btnDocs} onClick={() => setShowDocumentacion(true)}>
+                    📄 Docs/Venc ({aeronavesDocs.length})
                 </button>
             </div>
 
-            {/* Modal Personal */}
-            {showPersonal && (
-                <ModalGenerico 
-                    titulo="Novedades de Personal" 
-                    datos={tripulantes} 
-                    onClose={() => setShowPersonal(false)} 
-                />
-            )}
-
-            {/* Modal Aeronaves */}
-            {showAeronaves && (
-                <ModalGenerico 
-                    titulo="Novedades de Aeronaves" 
-                    datos={aeronaves} 
-                    onClose={() => setShowAeronaves(false)} 
-                />
-            )}
+            {/* Modales */}
+            {showPersonal && <ModalGenerico titulo="Novedades de Personal" datos={tripulantes} onClose={() => setShowPersonal(false)} />}
+            {showAeronaves && <ModalGenerico titulo="Potencial de Aeronaves" datos={aeronavesPotencial} onClose={() => setShowAeronaves(false)} />}
+            {showDocumentacion && <ModalGenerico titulo="Vencimientos de Documentación" datos={aeronavesDocs} onClose={() => setShowDocumentacion(false)} />}
         </div>
     );
 };
 
-// Componente Modal Auxiliar
 const ModalGenerico = ({ titulo, datos, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
@@ -93,9 +82,10 @@ const ModalGenerico = ({ titulo, datos, onClose }) => (
 const styles = {
     container: { marginBottom: '20px' },
     titleArea: { fontSize: '14px', color: '#64748b', marginBottom: '10px' },
-    buttonGroup: { display: 'flex', gap: '10px' },
-    btnPersonal: { padding: '10px 15px', borderRadius: '6px', border: 'none', backgroundColor: '#3b82f6', color: 'white', cursor: 'pointer', fontWeight: 'bold' },
-    btnAeronaves: { padding: '10px 15px', borderRadius: '6px', border: 'none', backgroundColor: '#0ea5e9', color: 'white', cursor: 'pointer', fontWeight: 'bold' },
+    buttonGroup: { display: 'flex', gap: '8px' },
+    btnPersonal: { padding: '8px 12px', borderRadius: '6px', border: 'none', backgroundColor: '#3b82f6', color: 'white', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' },
+    btnAeronaves: { padding: '8px 12px', borderRadius: '6px', border: 'none', backgroundColor: '#0ea5e9', color: 'white', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' },
+    btnDocs: { padding: '8px 12px', borderRadius: '6px', border: 'none', backgroundColor: '#6366f1', color: 'white', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 },
     modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '90%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' },
     modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },

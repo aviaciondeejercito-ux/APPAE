@@ -19,6 +19,28 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         fechaActual.setHours(0, 0, 0, 0);
         const alertasConcurridas = [];
 
+        // Función auxiliar para fechas
+        const verificarFecha = (fecha, etiqueta, id, mat) => {
+            if (!fecha) return;
+            const fVenc = new Date(fecha);
+            fVenc.setHours(0, 0, 0, 0);
+            const diffDays = Math.ceil((fVenc.getTime() - fechaActual.getTime()) / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 0) {
+                alertasConcurridas.push({
+                    categoria: 'AERONAVE', tipo: etiqueta, gravedad: 'CRITICO',
+                    identificador: `${id}-${etiqueta}-vencido`,
+                    mensaje: `Aeronave ${mat}: ${etiqueta} VENCIDO (hace ${Math.abs(diffDays)} días).`
+                });
+            } else if (diffDays <= 30) {
+                alertasConcurridas.push({
+                    categoria: 'AERONAVE', tipo: etiqueta, gravedad: 'ADVERTENCIA',
+                    identificador: `${id}-${etiqueta}-warn`,
+                    mensaje: `Aeronave ${mat}: ${etiqueta} vence en ${diffDays} días.`
+                });
+            }
+        };
+
         // --- A) Lógica de Psicofísicos (Tripulantes) ---
         tripulantes.forEach(t => {
             const identificacion = `${t.grado || ''} ${t.apellido || ''} ${t.nombre || ''}`.trim();
@@ -30,17 +52,13 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
                 if (diffDays <= 0) {
                     alertasConcurridas.push({
-                        categoria: 'TRIPULANTE',
-                        tipo: 'PSICOFISICO',
-                        gravedad: 'CRITICO',
+                        categoria: 'TRIPULANTE', tipo: 'PSICOFISICO', gravedad: 'CRITICO',
                         identificador: `${t._id}-psico-vencido`,
                         mensaje: `${identificacion}: Psicofísico VENCIDO (hace ${Math.abs(diffDays)} días).`
                     });
                 } else if (diffDays <= 30) {
                     alertasConcurridas.push({
-                        categoria: 'TRIPULANTE',
-                        tipo: 'PSICOFISICO',
-                        gravedad: 'ADVERTENCIA',
+                        categoria: 'TRIPULANTE', tipo: 'PSICOFISICO', gravedad: 'ADVERTENCIA',
                         identificador: `${t._id}-psico-warn`,
                         mensaje: `${identificacion}: Psicofísico próximo a vencer (${diffDays} días).`
                     });
@@ -48,28 +66,31 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             }
         });
 
-        // --- B) Lógica de Horas Disponibles (Aeronaves) ---
+        // --- B) Lógica de Aeronaves (Horas + Documentación) ---
         aeronaves.forEach(a => {
-            const horas = a.horasRemanentes; // Asumiendo este campo en tu modelo
-            if (typeof horas === 'number') {
-                if (horas <= 0) {
+            // 1. Horas Remanentes
+            if (typeof a.horasRemanentes === 'number') {
+                if (a.horasRemanentes <= 0) {
                     alertasConcurridas.push({
-                        categoria: 'AERONAVE',
-                        tipo: 'POTENCIAL',
-                        gravedad: 'CRITICO',
+                        categoria: 'AERONAVE', tipo: 'POTENCIAL', gravedad: 'CRITICO',
                         identificador: `${a._id}-aero-crit`,
-                        mensaje: `Aeronave ${a.matricula}: SIN POTENCIAL (0 hs). Requiere inspección.`
+                        mensaje: `Aeronave ${a.matricula}: SIN POTENCIAL (0 hs).`
                     });
-                } else if (horas <= 25) { // Umbral de advertencia: 25 horas
+                } else if (a.horasRemanentes <= 25) {
                     alertasConcurridas.push({
-                        categoria: 'AERONAVE',
-                        tipo: 'POTENCIAL',
-                        gravedad: 'ADVERTENCIA',
+                        categoria: 'AERONAVE', tipo: 'POTENCIAL', gravedad: 'ADVERTENCIA',
                         identificador: `${a._id}-aero-warn`,
-                        mensaje: `Aeronave ${a.matricula}: Próxima a inspección (${horas.toFixed(1)} hs restantes).`
+                        mensaje: `Aeronave ${a.matricula}: Próxima a inspección (${a.horasRemanentes.toFixed(1)} hs).`
                     });
                 }
             }
+
+            // 2. Vencimientos de Documentación
+            verificarFecha(a.vencimientoAvionica, 'AVIÓNICA', a._id, a.matricula);
+            verificarFecha(a.vencimientoRAAC91217, 'RAAC 91.217', a._id, a.matricula);
+            verificarFecha(a.vencimientoRAAC91411, 'RAAC 91.411', a._id, a.matricula);
+            verificarFecha(a.vencimientoRAAC91413, 'RAAC 91.413', a._id, a.matricula);
+            verificarFecha(a.vencimientoSeguro, 'SEGURO', a._id, a.matricula);
         });
 
         return res.status(200).json({
@@ -81,7 +102,6 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             },
             data: alertasConcurridas
         });
-
     } catch (error) {
         console.error("❌ Error en getAlertasInternasUnidad:", error);
         return res.status(500).json({ success: false, mensaje: "Error al consolidar alertas." });
