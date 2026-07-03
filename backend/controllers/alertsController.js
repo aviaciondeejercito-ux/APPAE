@@ -1,64 +1,77 @@
 const Tripulante = require('../models/Tripulante');
+const Aeronave = require('../models/Aeronave'); // 1. Importamos el modelo
 
 exports.getAlertasInternasUnidad = async (req, res) => {
     try {
-        // 1. Extraer metadatos seguros del operador logueado
         const rawRole = req.user?.rol || req.user?.role || '';
         const userRole = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
         const userUnidad = (req.user?.elemento || req.user?.unidad || '').trim().toUpperCase();
 
-        // Clasificación de jurisdicción global vs local
         const esMandoGlobal = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(userRole);
+        const queryBase = esMandoGlobal ? {} : { unidad: userUnidad };
 
-        // Si es mando global ve todo ({}), si es de unidad filtra por su elemento/unidad
-        const queryTripulantes = esMandoGlobal 
-            ? {} 
-            : { $or: [{ elemento: userUnidad }, { unidad: userUnidad }] };
+        const [tripulantes, aeronaves] = await Promise.all([
+            Tripulante.find(esMandoGlobal ? {} : { $or: [{ elemento: userUnidad }, { unidad: userUnidad }] }).lean(),
+            Aeronave.find(queryBase).lean()
+        ]);
 
-        const tripulantes = await Tripulante.find(queryTripulantes).lean();
-        
-        // Normalizamos la fecha actual a medianoche para un cálculo exacto de días enteros
         const fechaActual = new Date();
         fechaActual.setHours(0, 0, 0, 0);
-
         const alertasConcurridas = [];
 
+        // --- A) Lógica de Psicofísicos (Tripulantes) ---
         tripulantes.forEach(t => {
             const identificacion = `${t.grado || ''} ${t.apellido || ''} ${t.nombre || ''}`.trim();
             const fechaPsico = t.certificaciones?.psicofisico?.vencimiento;
-
             if (fechaPsico) {
                 const fVencPsico = new Date(fechaPsico);
                 fVencPsico.setHours(0, 0, 0, 0);
-
-                // Cálculo exacto de la diferencia en días enteros
-                const diffTime = fVencPsico.getTime() - fechaActual.getTime();
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const diffDays = Math.ceil((fVencPsico.getTime() - fechaActual.getTime()) / (1000 * 60 * 60 * 24));
 
                 if (diffDays <= 0) {
-                    // 🔴 CASO 1: VENCIDO (A partir del día exacto que venció)
-                    const diasPasados = Math.abs(diffDays);
                     alertasConcurridas.push({
                         categoria: 'TRIPULANTE',
                         tipo: 'PSICOFISICO',
                         gravedad: 'CRITICO',
                         identificador: `${t._id}-psico-vencido`,
-                        mensaje: `El examen Psicofísico de ${identificacion} está VENCIDO (hace ${diasPasados} días).`
+                        mensaje: `${identificacion}: Psicofísico VENCIDO (hace ${Math.abs(diffDays)} días).`
                     });
                 } else if (diffDays <= 30) {
-                    // ⚠️ CASO 2: PRÓXIMO A VENCER (Ventana de 30 días)
                     alertasConcurridas.push({
                         categoria: 'TRIPULANTE',
                         tipo: 'PSICOFISICO',
                         gravedad: 'ADVERTENCIA',
                         identificador: `${t._id}-psico-warn`,
-                        mensaje: `El examen Psicofísico de ${identificacion} vence en ${diffDays} días.`
+                        mensaje: `${identificacion}: Psicofísico próximo a vencer (${diffDays} días).`
                     });
                 }
             }
         });
 
-        // 2. Responder de forma unificada para el Widget
+        // --- B) Lógica de Horas Disponibles (Aeronaves) ---
+        aeronaves.forEach(a => {
+            const horas = a.horasRemanentes; // Asumiendo este campo en tu modelo
+            if (typeof horas === 'number') {
+                if (horas <= 0) {
+                    alertasConcurridas.push({
+                        categoria: 'AERONAVE',
+                        tipo: 'POTENCIAL',
+                        gravedad: 'CRITICO',
+                        identificador: `${a._id}-aero-crit`,
+                        mensaje: `Aeronave ${a.matricula}: SIN POTENCIAL (0 hs). Requiere inspección.`
+                    });
+                } else if (horas <= 25) { // Umbral de advertencia: 25 horas
+                    alertasConcurridas.push({
+                        categoria: 'AERONAVE',
+                        tipo: 'POTENCIAL',
+                        gravedad: 'ADVERTENCIA',
+                        identificador: `${a._id}-aero-warn`,
+                        mensaje: `Aeronave ${a.matricula}: Próxima a inspección (${horas.toFixed(1)} hs restantes).`
+                    });
+                }
+            }
+        });
+
         return res.status(200).json({
             success: true,
             jurisdiccion: esMandoGlobal ? "CONSOLIDADO GLOBAL" : userUnidad,
@@ -71,6 +84,6 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
     } catch (error) {
         console.error("❌ Error en getAlertasInternasUnidad:", error);
-        return res.status(500).json({ success: false, mensaje: "Error interno del servidor al procesar psicofísicos." });
+        return res.status(500).json({ success: false, mensaje: "Error al consolidar alertas." });
     }
 };

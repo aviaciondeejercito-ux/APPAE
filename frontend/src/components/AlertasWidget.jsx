@@ -28,19 +28,19 @@ const AlertasWidget = () => {
         }
     };
 
-    if (loading) return null; // O podés dejar un spinner pequeño
-    if (alertas.length === 0) return null; // No muestra nada si todo está en orden
+    if (loading) return null;
+    if (alertas.length === 0) return null;
 
     return (
         <>
             {/* Tarjeta de Resumen Compacta */}
             <div style={styles.cardResumen} onClick={() => setShowModal(true)}>
                 <div style={styles.cardHeader}>
-                    <h4 style={styles.title}>Estado de Personal ({unidad})</h4>
+                    <h4 style={styles.title}>Estado Operativo: {unidad}</h4>
                 </div>
                 <div style={styles.resumenBloques}>
-                    <div style={{...styles.bloque, color: '#dc2626'}}>🔴 {resumen.criticas} Vencidos</div>
-                    <div style={{...styles.bloque, color: '#d97706'}}>⚠️ {resumen.advertencias} Próximos</div>
+                    <div style={{...styles.bloque, color: '#dc2626'}}>🔴 {resumen.criticas} Críticas</div>
+                    <div style={{...styles.bloque, color: '#d97706'}}>⚠️ {resumen.advertencias} Advertencias</div>
                 </div>
             </div>
 
@@ -49,12 +49,17 @@ const AlertasWidget = () => {
                 <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
                     <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
                         <div style={styles.modalHeader}>
-                            <h3>Detalle de Psicofísicos</h3>
+                            <h3>Detalle de Alertas Operativas</h3>
                             <button style={styles.closeBtn} onClick={() => setShowModal(false)}>✕</button>
                         </div>
                         <div style={styles.listaModal}>
                             {alertas.map((a, i) => (
-                                <div key={i} style={{...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706'}}>
+                                <div key={i} style={{
+                                    ...styles.item, 
+                                    borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706',
+                                    backgroundColor: a.categoria === 'AERONAVE' ? '#f0f9ff' : '#f8fafc'
+                                }}>
+                                    <div style={styles.badgeCategoria}>{a.categoria} - {a.tipo}</div>
                                     <strong>{a.mensaje}</strong>
                                 </div>
                             ))}
@@ -69,13 +74,14 @@ const AlertasWidget = () => {
 const styles = {
     cardResumen: { backgroundColor: '#fff', padding: '15px', borderRadius: '8px', cursor: 'pointer', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', marginBottom: '20px', transition: '0.3s' },
     cardHeader: { marginBottom: '10px' },
-    title: { margin: 0, fontSize: '14px', color: '#475569' },
+    title: { margin: 0, fontSize: '14px', color: '#475569', textTransform: 'uppercase' },
     resumenBloques: { display: 'flex', gap: '20px', fontSize: '14px', fontWeight: 'bold' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 },
-    modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '90%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' },
+    modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '90%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' },
     modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', marginBottom: '15px' },
     closeBtn: { border: 'none', background: 'none', fontSize: '18px', cursor: 'pointer' },
-    item: { padding: '10px', borderLeft: '4px solid', marginBottom: '8px', backgroundColor: '#f8fafc', fontSize: '13px' }
+    item: { padding: '12px', borderLeft: '4px solid', marginBottom: '10px', fontSize: '13px', borderRadius: '0 4px 4px 0' },
+    badgeCategoria: { fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }
 };
 
 export default AlertasWidget;
