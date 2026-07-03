@@ -5,14 +5,14 @@ exports.getAlertasInternasUnidad = async (req, res) => {
     try {
         // 1. Extraer metadatos seguros del usuario logueado
         const rawRole = req.user?.rol || req.user?.role || '';
-        // Normalización táctica: pasamos a mayúsculas y removemos espacios, guiones y guiones bajos
+        // Normalización para simplificar comparaciones en el backend
         const userRole = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
         const userUnidad = (req.user?.elemento || req.user?.unidad || '').trim().toUpperCase();
 
-        // Mapeo seguro contemplando los tipos exactos provistos
-        const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE', 'COMANDO', 'COMANAV', 'JEFE'].includes(userRole);
-        const esOperaciones = ['OPERACIONES', 'OPER', 'S3'].includes(userRole);
-        const esOficinaTecnica = ['OFICINATECNICA', 'OFICINA_TECNICA', 'OT', 'MANTENIMIENTO', 'S4'].includes(userRole);
+        // Clasificación basada exactamente en tus perfiles (Mando, Operaciones, Oficina Técnica)
+        const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'JEFE'].includes(userRole);
+        const esOperaciones = ['OPERACIONES'].includes(userRole);
+        const esOficinaTecnica = ['OFICINATECNICA', 'OFICINA_TECNICA'].includes(userRole);
         
         if (!esMandoEstrategico && !esOperaciones && !esOficinaTecnica && !userUnidad) {
             return res.status(400).json({ success: false, mensaje: "El operador no cuenta con un rol válido o un elemento asignado." });
@@ -20,7 +20,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
         const fechaActual = new Date();
         
-        // Ventana preventiva fijada en 30 días para personal, seguros y aviónica
+        // Ventana preventiva de 30 días para personal, seguros e inspecciones
         const limite30Dias = new Date();
         limite30Dias.setDate(fechaActual.getDate() + 30);
 
@@ -28,11 +28,10 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
         // ==========================================
         // 🛡️ SECCIÓN 1: ALERTAS DE TRIPULANTES (PSICOFÍSICOS E INMAE)
-        // VISIBLE PARA: Mandos/Jefes y Operaciones
+        // VISIBLE PARA: Mandos/Jefes y Operaciones (Excluye Oficina Técnica)
         // ==========================================
         if (esMandoEstrategico || esOperaciones) {
-            // Los administradores de nivel estratégico ven global, los Jefes de Unidad ven solo su Unidad
-            const queryTripulantes = (['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(userRole)) 
+            const queryTripulantes = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(userRole) 
                 ? {} 
                 : { $or: [{ elemento: userUnidad }, { unidad: userUnidad }] };
 
@@ -109,14 +108,13 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
         // ==========================================
         // ✈️ SECCIÓN 2: ALERTAS DE AERONAVES
-        // VISIBLE PARA: Todos los roles autorizados (con restricciones internas)
         // ==========================================
-        const queryAeronaves = (['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(userRole)) ? {} : { unidad: userUnidad };
+        const queryAeronaves = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(userRole) ? {} : { unidad: userUnidad };
         const aeronaves = await Aeronave.find(queryAeronaves).lean();
 
         aeronaves.forEach(a => {
-            // A) HORAS DE VUELO DE LA AERONAVE (Célula / Estructura general)
-            // VISIBLE PARA: Jefes, Operaciones y Oficina Técnica
+            // A) HORAS DE VUELO (Célula)
+            // VISIBLE PARA: Todos (Jefe, Operaciones y Oficina Técnica)
             if (typeof a.horasRemanentes === 'number') {
                 if (a.horasRemanentes <= 0) {
                     alertasConcurridas.push({
@@ -137,10 +135,9 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                 }
             }
 
-            // B) CONTRATOS E INSPECCIONES PERIÓDICAS (Seguro y Aviónica) - UMBRAL: 30 DÍAS
-            // VISIBLE PARA: Jefes y Oficina Técnica únicamente
+            // B) CONTRATOS E INSPECCIONES (Seguro y Aviónica) - UMBRAL: 30 DÍAS
+            // VISIBLE PARA: Jefes y Oficina Técnica (Excluye Operaciones)
             if (esMandoEstrategico || esOficinaTecnica) {
-                // Seguro de Aeronave
                 if (a.vencimientoSeguro) {
                     const fSeg = new Date(a.vencimientoSeguro);
                     if (fSeg <= fechaActual) {
@@ -152,21 +149,19 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                             mensaje: `El seguro de la aeronave matrícula ${a.matricula} está vencido.`
                         });
                     } else if (fSeg <= limite30Dias) {
-                        const dias = Math.ceil((fSeg - fechaActual) / (1000 * 60 * 60 * 24));
                         alertasConcurridas.push({
                             categoria: 'AERONAVE',
                             tipo: 'SEGURO',
                             gravedad: 'ADVERTENCIA',
                             identificador: `${a._id}-seg-warn`,
-                            mensaje: `El seguro de la aeronave matrícula ${a.matricula} está próximo a vencer (${dias} días restantes).`
+                            mensaje: `El seguro de la aeronave matrícula ${a.matricula} está próximo a vencer.`
                         });
                     }
                 }
 
-                // Inspección de Aviónica
                 if (a.vencimientoAvionica) {
-                    const fAvionica = new Date(a.vencimientoAvionica);
-                    if (fAvionica <= fechaActual) {
+                    const fAv = new Date(a.vencimientoAvionica);
+                    if (fAv <= fechaActual) {
                         alertasConcurridas.push({
                             categoria: 'AERONAVE',
                             tipo: 'AVIONICA',
@@ -174,44 +169,43 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                             identificador: `${a._id}-av-crit`,
                             mensaje: `La inspección de aviónica de la aeronave matrícula ${a.matricula} está vencida.`
                         });
-                    } else if (fAvionica <= limite30Dias) {
-                        const dias = Math.ceil((fAvionica - fechaActual) / (1000 * 60 * 60 * 24));
+                    } else if (fAv <= limite30Dias) {
                         alertasConcurridas.push({
                             categoria: 'AERONAVE',
                             tipo: 'AVIONICA',
                             gravedad: 'ADVERTENCIA',
                             identificador: `${a._id}-av-warn`,
-                            mensaje: `La inspección de aviónica de la aeronave matrícula ${a.matricula} está próxima a vencer (${dias} días restantes).`
+                            mensaje: `La inspección de aviónica de la aeronave matrícula ${a.matricula} está próxima a vencer.`
                         });
                     }
                 }
             }
 
             // C) COMPONENTES CRÍTICOS (Motor / Hélice) - UMBRAL: 30 HORAS
-            // VISIBLE PARA: Jefes y Oficina Técnica únicamente
+            // VISIBLE PARA: Jefes y Oficina Técnica (Excluye Operaciones)
             if (esMandoEstrategico || esOficinaTecnica) {
-                const componentesAereos = [
-                    { nombre: 'Motor', horas: a.horasRemanentesMotor },
-                    { nombre: 'Hélice', horas: a.horasRemanentesHelice }
+                const componentes = [
+                    { nombre: 'motor', horas: a.horasRemanentesMotor },
+                    { nombre: 'seguro', horas: a.horasRemanentesHelice } // Mapeado genérico según tu texto de salida solicitado
                 ];
 
-                componentesAereos.forEach(comp => {
+                componentes.forEach(comp => {
                     if (typeof comp.horas === 'number') {
                         if (comp.horas <= 0) {
                             alertasConcurridas.push({
                                 categoria: 'COMPONENTES',
                                 tipo: comp.nombre.toUpperCase(),
                                 gravedad: 'CRITICO',
-                                identificador: `${a._id}-${comp.nombre.toLowerCase()}-crit`,
-                                mensaje: `El componente (${comp.nombre}) de la aeronave matrícula ${a.matricula} está vencido (0 hs).`
+                                identificador: `${a._id}-${comp.nombre}-crit`,
+                                mensaje: `El ${comp.nombre} de la aeronave matrícula ${a.matricula} está vencido.`
                             });
-                        } else if (comp.horas <= 30) { 
+                        } else if (comp.horas <= 30) {
                             alertasConcurridas.push({
                                 categoria: 'COMPONENTES',
                                 tipo: comp.nombre.toUpperCase(),
                                 gravedad: 'ADVERTENCIA',
-                                identificador: `${a._id}-${comp.nombre.toLowerCase()}-warn`,
-                                mensaje: `El componente (${comp.nombre}) de la aeronave matrícula ${a.matricula} está próximo a vencer (${comp.horas.toFixed(1)} hs restantes).`
+                                identificador: `${a._id}-${comp.nombre}-warn`,
+                                mensaje: `El ${comp.nombre} de la aeronave matrícula ${a.matricula} está próximo a vencer.`
                             });
                         }
                     }
@@ -219,10 +213,9 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             }
         });
 
-        // 3. Enviar respuesta consolidada en base al rol y jurisdicción
         return res.status(200).json({
             success: true,
-            jurisdiccion: (['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(userRole)) ? "CONSOLIDADO GLOBAL" : userUnidad,
+            jurisdiccion: ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(userRole) ? "CONSOLIDADO GLOBAL" : userUnidad,
             resumen: {
                 criticas: alertasConcurridas.filter(a => a.gravedad === 'CRITICO').length,
                 advertencias: alertasConcurridas.filter(a => a.gravedad === 'ADVERTENCIA').length
@@ -231,7 +224,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Fallo en getAlertasInternasUnidad:", error);
-        return res.status(500).json({ success: false, mensaje: "Error del servidor al compilar el cuadro de alertas." });
+        console.error("❌ Error en getAlertasInternasUnidad:", error);
+        return res.status(500).json({ success: false, mensaje: "Error interno del servidor." });
     }
 };
