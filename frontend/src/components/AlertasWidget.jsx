@@ -28,26 +28,31 @@ const AlertasWidget = () => {
         }
     };
 
-    // Lógica para que ADVERTENCIA (Amarillo) quede arriba y CRÍTICO (Rojo) abajo
-    const ordenarAlertasInverso = (lista) => [...lista].sort((a, b) => (a.gravedad === 'ADVERTENCIA' ? -1 : 1));
+    // --- LÓGICA DE AGRUPACIÓN: PERSONAL ---
+    const personalBase = alertas.filter(a => a.categoria === 'TRIPULANTE');
+    const personalPsico = personalBase.filter(a => a.tipo === 'PSICOFISICO');
+    const personalOtros = personalBase.filter(a => a.tipo !== 'PSICOFISICO');
 
-    const tripulantes = ordenarAlertasInverso(alertas.filter(a => a.categoria === 'TRIPULANTE'));
-    const aeronavesDocs = ordenarAlertasInverso(alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'POTENCIAL'));
+    const personalAgrupado = [...personalOtros.map(a => ({ mensaje: a.mensaje, gravedad: a.gravedad }))];
     
-    // Potencial: Agrupamos críticos abajo y advertencias arriba
+    if (personalPsico.length > 0) {
+        personalAgrupado.push({
+            mensaje: `⚠️ PSICOFÍSICO SIN CARGAR: ${personalPsico.map(p => p.nombre || "Tripulante").join(', ')}`,
+            gravedad: 'CRITICO' // Se mostrará abajo por la lógica de orden
+        });
+    }
+
+    // --- LÓGICA DE AGRUPACIÓN: AERONAVES ---
     const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'POTENCIAL');
     const criticos = potencialBase.filter(a => a.gravedad === 'CRITICO');
     const advertencias = potencialBase.filter(a => a.gravedad === 'ADVERTENCIA');
 
     const aeronavesPotencialAgrupado = [];
-    
-    // Primero agregamos las advertencias (Arriba)
     if (advertencias.length > 0) {
         advertencias.forEach(a => {
             aeronavesPotencialAgrupado.push({ mensaje: `⚠️ ${a.mensaje}`, gravedad: 'ADVERTENCIA' });
         });
     }
-    // Luego los críticos (Abajo)
     if (criticos.length > 0) {
         aeronavesPotencialAgrupado.push({
             mensaje: `🚨 CRÍTICO (0 hs): ${criticos.map(a => a.mensaje.match(/AE-\d+/)?.[0]).join(', ')}`,
@@ -55,8 +60,9 @@ const AlertasWidget = () => {
         });
     }
 
+    const aeronavesDocs = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'POTENCIAL');
+
     if (loading) return null;
-    if (alertas.length === 0) return null;
 
     return (
         <div style={styles.container}>
@@ -64,7 +70,7 @@ const AlertasWidget = () => {
             
             <div style={styles.buttonGroup}>
                 <button style={styles.btnPersonal} onClick={() => setShowPersonal(true)}>
-                    👥 Personal ({tripulantes.length})
+                    👥 Personal ({personalBase.length})
                 </button>
                 <button style={styles.btnAeronaves} onClick={() => setShowAeronaves(true)}>
                     🚁 Aeronaves ({potencialBase.length})
@@ -74,7 +80,7 @@ const AlertasWidget = () => {
                 </button>
             </div>
 
-            {showPersonal && <ModalGenerico titulo="Novedades de Personal" datos={tripulantes} onClose={() => setShowPersonal(false)} />}
+            {showPersonal && <ModalGenerico titulo="Novedades de Personal" datos={personalAgrupado} onClose={() => setShowPersonal(false)} />}
             {showAeronaves && <ModalGenerico titulo="Estado de Potencial" datos={aeronavesPotencialAgrupado} onClose={() => setShowAeronaves(false)} />}
             {showDocumentacion && <ModalGenerico titulo="Vencimientos de Documentación" datos={aeronavesDocs} onClose={() => setShowDocumentacion(false)} />}
         </div>
@@ -88,7 +94,8 @@ const ModalGenerico = ({ titulo, datos, onClose }) => (
                 <h3 style={{fontSize: '16px'}}>{titulo}</h3>
                 <button style={styles.closeBtn} onClick={onClose}>✕</button>
             </div>
-            {datos.map((a, i) => (
+            {/* Se ordena para que CRITICO siempre quede al final */}
+            {datos.sort((a,b) => (a.gravedad === 'CRITICO' ? 1 : -1)).map((a, i) => (
                 <div key={i} style={{...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706'}}>
                     {a.mensaje}
                 </div>
