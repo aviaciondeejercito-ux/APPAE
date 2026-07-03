@@ -28,32 +28,30 @@ const AlertasWidget = () => {
         }
     };
 
-    const ordenarAlertas = (lista) => [...lista].sort((a, b) => (a.gravedad === 'ADVERTENCIA' ? -1 : 1));
+    // Lógica para que ADVERTENCIA (Amarillo) quede arriba y CRÍTICO (Rojo) abajo
+    const ordenarAlertasInverso = (lista) => [...lista].sort((a, b) => (a.gravedad === 'ADVERTENCIA' ? -1 : 1));
 
-    const tripulantes = ordenarAlertas(alertas.filter(a => a.categoria === 'TRIPULANTE'));
-    const aeronavesDocs = ordenarAlertas(alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'POTENCIAL'));
+    const tripulantes = ordenarAlertasInverso(alertas.filter(a => a.categoria === 'TRIPULANTE'));
+    const aeronavesDocs = ordenarAlertasInverso(alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'POTENCIAL'));
     
-    // LÓGICA DE AGRUPACIÓN PARA POTENCIAL
+    // Potencial: Agrupamos críticos abajo y advertencias arriba
     const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'POTENCIAL');
     const criticos = potencialBase.filter(a => a.gravedad === 'CRITICO');
     const advertencias = potencialBase.filter(a => a.gravedad === 'ADVERTENCIA');
 
     const aeronavesPotencialAgrupado = [];
     
+    // Primero agregamos las advertencias (Arriba)
+    if (advertencias.length > 0) {
+        advertencias.forEach(a => {
+            aeronavesPotencialAgrupado.push({ mensaje: `⚠️ ${a.mensaje}`, gravedad: 'ADVERTENCIA' });
+        });
+    }
+    // Luego los críticos (Abajo)
     if (criticos.length > 0) {
         aeronavesPotencialAgrupado.push({
             mensaje: `🚨 CRÍTICO (0 hs): ${criticos.map(a => a.mensaje.match(/AE-\d+/)?.[0]).join(', ')}`,
             gravedad: 'CRITICO'
-        });
-    }
-    
-    // Aquí cambiamos la lógica: conservamos el detalle de horas para las advertencias
-    if (advertencias.length > 0) {
-        advertencias.forEach(a => {
-            aeronavesPotencialAgrupado.push({
-                mensaje: `⚠️ ${a.mensaje}`, // Muestra el mensaje completo con las horas
-                gravedad: 'ADVERTENCIA'
-            });
         });
     }
 
