@@ -33,12 +33,24 @@ const AlertasWidget = () => {
     const tripulantes = ordenarAlertas(alertas.filter(a => a.categoria === 'TRIPULANTE'));
     const aeronavesDocs = ordenarAlertas(alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'POTENCIAL'));
     
-    // LÓGICA DE AGRUPACIÓN PARA POTENCIAL
+    // LÓGICA DE AGRUPACIÓN PARA POTENCIAL (Separando por gravedad)
     const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'POTENCIAL');
-    const aeronavesPotencialAgrupado = potencialBase.length > 0 ? [{
-        mensaje: `Aeronaves sin potencial operativo: ${potencialBase.map(a => a.mensaje.match(/AE-\d+/)?.[0]).join(', ')}`,
-        gravedad: 'CRITICO'
-    }] : [];
+    const criticos = potencialBase.filter(a => a.gravedad === 'CRITICO');
+    const advertencias = potencialBase.filter(a => a.gravedad === 'ADVERTENCIA');
+
+    const aeronavesPotencialAgrupado = [];
+    if (criticos.length > 0) {
+        aeronavesPotencialAgrupado.push({
+            mensaje: `🚨 CRÍTICO (0 hs): ${criticos.map(a => a.mensaje.match(/AE-\d+/)?.[0]).join(', ')}`,
+            gravedad: 'CRITICO'
+        });
+    }
+    if (advertencias.length > 0) {
+        aeronavesPotencialAgrupado.push({
+            mensaje: `⚠️ ADVERTENCIA (Próximas): ${advertencias.map(a => a.mensaje.match(/AE-\d+/)?.[0]).join(', ')}`,
+            gravedad: 'ADVERTENCIA'
+        });
+    }
 
     if (loading) return null;
     if (alertas.length === 0) return null;
