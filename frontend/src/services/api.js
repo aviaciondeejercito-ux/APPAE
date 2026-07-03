@@ -290,6 +290,10 @@ export const getAstronomyData = async (lat, lng) => {
         throw error;
     }
 };
+/**
+ * SERVICIO CENTRAL DE CONTROL DE POTENCIALES Y ALERTAS OPERATIVAS
+ */
+export const getAlertasDashboard = () => API.get('/alerts/unidad');
 
 const EventService = {
     getEvents,
