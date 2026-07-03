@@ -13,7 +13,7 @@ const AlertasWidget = () => {
 
     const cargarAlertasUnidad = async () => {
         try {
-            setLoading(false);
+            setLoading(true); // Corregido a true para disparar correctamente el estado visual de carga
             const response = await getAlertasDashboard();
             if (response.data?.success) {
                 setAlertas(response.data.data || []);
@@ -27,16 +27,16 @@ const AlertasWidget = () => {
         }
     };
 
-    if (loading) return <div style={styles.loader}>Evaluando potenciales y vencimientos de la Unidad...</div>;
+    if (loading) return <div style={styles.loader}>Evaluando vencimientos de psicofísicos de la Unidad...</div>;
 
-    // Si no existen alertas en el hangar ni en el personal de la unidad
+    // Si no existe personal con psicofísicos vencidos o por vencer
     if (alertas.length === 0) {
         return (
             <div style={styles.cardOk}>
                 <span style={{ fontSize: '20px' }}>💚</span>
                 <div>
                     <h4 style={{ margin: 0, color: '#15803d' }}>Jurisdicción Operativa: {unidad}</h4>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#166534' }}>Sin novedades críticas. Aeronaves disponibles y tripulaciones con psicofísicos vigentes.</p>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#166534' }}>Todo el personal asignado cuenta con exámenes psicofísicos vigentes.</p>
                 </div>
             </div>
         );
@@ -46,12 +46,12 @@ const AlertasWidget = () => {
         <div style={styles.container}>
             <div style={styles.headerArea}>
                 <div>
-                    <h3 style={styles.title}>Panel de Alertas Preventivas</h3>
-                    <span style={styles.unidadBadge}>📋 {unidad}</span>
+                    <h3 style={styles.title}>Panel de Control: Psicofísicos</h3>
+                    <span style={styles.unidadBadge}>📋 Personal - {unidad}</span>
                 </div>
                 <div style={styles.resumenContenedor}>
-                    {resumen.criticas > 0 && <span style={styles.badgeCritico}>{resumen.criticas} CRÍTICOS</span>}
-                    {resumen.advertencias > 0 && <span style={styles.badgeAdvertencia}>{resumen.advertencias} ADVERTENCIAS</span>}
+                    {resumen.criticas > 0 && <span style={styles.badgeCritico}>{resumen.criticas} VENCIDOS</span>}
+                    {resumen.advertencias > 0 && <span style={styles.badgeAdvertencia}>{resumen.advertencias} PRÓXIMOS</span>}
                 </div>
             </div>
 
@@ -75,7 +75,7 @@ const AlertasWidget = () => {
                                     {alerta.mensaje}
                                 </div>
                                 <div style={styles.alertaSubtitulo}>
-                                    Categoría: {alerta.categoria} | Factor: {alerta.tipo}
+                                    Control Operativo de Personal | Factor: {alerta.tipo}
                                 </div>
                             </div>
                         </div>

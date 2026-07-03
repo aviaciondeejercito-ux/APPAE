@@ -3,7 +3,7 @@ const router = express.Router();
 const alertsController = require('../controllers/alertsController');
 const { protect } = require('../middleware/authMiddleware');
 
-// Middleware de autorización - Sincro JOKER v3.6
+// Middleware de autorización dinámica - Sincro JOKER v3.6
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
         const rawRole = req.user?.rol || req.user?.role || '';
@@ -20,7 +20,7 @@ const authorize = (...rolesPermitidos) => {
     };
 };
 
-// Listado exacto de los 10 tipos de usuarios del sistema
+// Listado exacto de tus 10 tipos de usuarios del sistema
 const rolesPermitidosAlertas = [
     'admin', 
     'BOSS', 
@@ -34,7 +34,7 @@ const rolesPermitidosAlertas = [
     'PERSONAL'
 ];
 
-// Doble mapeo estratégico para mitigar cualquier desvío de URL de Axios (404)
+// Doble mapeo estratégico para mitigar desvíos de URL (404) desde el frontend
 router.get('/dashboard', protect, authorize(...rolesPermitidosAlertas), alertsController.getAlertasInternasUnidad);
 router.get('/unidad', protect, authorize(...rolesPermitidosAlertas), alertsController.getAlertasInternasUnidad);
 
