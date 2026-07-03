@@ -5,11 +5,11 @@ exports.getAlertasInternasUnidad = async (req, res) => {
     try {
         // 1. Extraer metadatos seguros del usuario logueado
         const rawRole = req.user?.rol || req.user?.role || '';
-        // Normalización para simplificar comparaciones en el backend
+        // Normalización para simplificar comparaciones (remueve espacios, guiones y mayúsculas)
         const userRole = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
         const userUnidad = (req.user?.elemento || req.user?.unidad || '').trim().toUpperCase();
 
-        // Clasificación basada exactamente en tus perfiles (Mando, Operaciones, Oficina Técnica)
+        // Mapeo estratégico considerando los tipos exactos provistos
         const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'JEFE'].includes(userRole);
         const esOperaciones = ['OPERACIONES'].includes(userRole);
         const esOficinaTecnica = ['OFICINATECNICA', 'OFICINA_TECNICA'].includes(userRole);
@@ -20,7 +20,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
         const fechaActual = new Date();
         
-        // Ventana preventiva de 30 días para personal, seguros e inspecciones
+        // Ventana preventiva fijada en 30 días para personal, seguros e inspecciones
         const limite30Dias = new Date();
         limite30Dias.setDate(fechaActual.getDate() + 30);
 
@@ -28,7 +28,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
         // ==========================================
         // 🛡️ SECCIÓN 1: ALERTAS DE TRIPULANTES (PSICOFÍSICOS E INMAE)
-        // VISIBLE PARA: Mandos/Jefes y Operaciones (Excluye Oficina Técnica)
+        // VISIBLE PARA: Mandos/Jefes y OPERACIONES. (Oculto para OFICINA_TECNICA)
         // ==========================================
         if (esMandoEstrategico || esOperaciones) {
             const queryTripulantes = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(userRole) 
@@ -113,8 +113,8 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         const aeronaves = await Aeronave.find(queryAeronaves).lean();
 
         aeronaves.forEach(a => {
-            // A) HORAS DE VUELO (Célula)
-            // VISIBLE PARA: Todos (Jefe, Operaciones y Oficina Técnica)
+            // A) HORAS DE VUELO DE LA AERONAVE (Célula)
+            // VISIBLE PARA: Jefes, OPERACIONES y OFICINA_TECNICA
             if (typeof a.horasRemanentes === 'number') {
                 if (a.horasRemanentes <= 0) {
                     alertasConcurridas.push({
@@ -136,8 +136,9 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             }
 
             // B) CONTRATOS E INSPECCIONES (Seguro y Aviónica) - UMBRAL: 30 DÍAS
-            // VISIBLE PARA: Jefes y Oficina Técnica (Excluye Operaciones)
+            // VISIBLE PARA: Jefes y OFICINA_TECNICA únicamente. (Oculto para OPERACIONES)
             if (esMandoEstrategico || esOficinaTecnica) {
+                // Seguro
                 if (a.vencimientoSeguro) {
                     const fSeg = new Date(a.vencimientoSeguro);
                     if (fSeg <= fechaActual) {
@@ -159,9 +160,10 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                     }
                 }
 
+                // Aviónica
                 if (a.vencimientoAvionica) {
-                    const fAv = new Date(a.vencimientoAvionica);
-                    if (fAv <= fechaActual) {
+                    const fAvionica = new Date(a.vencimientoAvionica);
+                    if (fAvionica <= fechaActual) {
                         alertasConcurridas.push({
                             categoria: 'AERONAVE',
                             tipo: 'AVIONICA',
@@ -169,7 +171,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                             identificador: `${a._id}-av-crit`,
                             mensaje: `La inspección de aviónica de la aeronave matrícula ${a.matricula} está vencida.`
                         });
-                    } else if (fAv <= limite30Dias) {
+                    } else if (fAvionica <= limite30Dias) {
                         alertasConcurridas.push({
                             categoria: 'AERONAVE',
                             tipo: 'AVIONICA',
@@ -182,29 +184,29 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             }
 
             // C) COMPONENTES CRÍTICOS (Motor / Hélice) - UMBRAL: 30 HORAS
-            // VISIBLE PARA: Jefes y Oficina Técnica (Excluye Operaciones)
+            // VISIBLE PARA: Jefes y OFICINA_TECNICA únicamente. (Oculto para OPERACIONES)
             if (esMandoEstrategico || esOficinaTecnica) {
-                const componentes = [
-                    { nombre: 'motor', horas: a.horasRemanentesMotor },
-                    { nombre: 'seguro', horas: a.horasRemanentesHelice } // Mapeado genérico según tu texto de salida solicitado
+                const componentesAereos = [
+                    { nombre: 'componente (Motor)', horas: a.horasRemanentesMotor },
+                    { nombre: 'componente (Hélice)', horas: a.horasRemanentesHelice }
                 ];
 
-                componentes.forEach(comp => {
+                componentesAereos.forEach(comp => {
                     if (typeof comp.horas === 'number') {
                         if (comp.horas <= 0) {
                             alertasConcurridas.push({
                                 categoria: 'COMPONENTES',
-                                tipo: comp.nombre.toUpperCase(),
+                                tipo: comp.nombre.toUpperCase().replace('COMPONENTE (', '').replace(')', ''),
                                 gravedad: 'CRITICO',
-                                identificador: `${a._id}-${comp.nombre}-crit`,
+                                identificador: `${a._id}-${comp.nombre.replace(/[\s()]/g, '')}-crit`,
                                 mensaje: `El ${comp.nombre} de la aeronave matrícula ${a.matricula} está vencido.`
                             });
-                        } else if (comp.horas <= 30) {
+                        } else if (comp.horas <= 30) { 
                             alertasConcurridas.push({
                                 categoria: 'COMPONENTES',
-                                tipo: comp.nombre.toUpperCase(),
+                                tipo: comp.nombre.toUpperCase().replace('COMPONENTE (', '').replace(')', ''),
                                 gravedad: 'ADVERTENCIA',
-                                identificador: `${a._id}-${comp.nombre}-warn`,
+                                identificador: `${a._id}-${comp.nombre.replace(/[\s()]/g, '')}-warn`,
                                 mensaje: `El ${comp.nombre} de la aeronave matrícula ${a.matricula} está próximo a vencer.`
                             });
                         }
@@ -213,6 +215,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             }
         });
 
+        // 3. Responder de forma unificada
         return res.status(200).json({
             success: true,
             jurisdiccion: ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(userRole) ? "CONSOLIDADO GLOBAL" : userUnidad,
@@ -224,7 +227,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error en getAlertasInternasUnidad:", error);
-        return res.status(500).json({ success: false, mensaje: "Error interno del servidor." });
+        console.error("❌ Fallo en getAlertasInternasUnidad:", error);
+        return res.status(500).json({ success: false, mensaje: "Error del servidor al compilar el cuadro de alertas." });
     }
 };

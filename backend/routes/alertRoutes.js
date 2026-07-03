@@ -20,9 +20,22 @@ const authorize = (...rolesPermitidos) => {
     };
 };
 
-const rolesPermitidosAlertas = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'user', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
+// Listado exacto de los 10 tipos de usuarios del sistema
+const rolesPermitidosAlertas = [
+    'admin', 
+    'BOSS', 
+    'DIRECTOR', 
+    'OTO', 
+    'user', 
+    'OFICINA_TECNICA', 
+    'OPERACIONES', 
+    'JEFE', 
+    'LOGISTICO', 
+    'PERSONAL'
+];
 
-// Aplicar protección de sesión obligatoria y mapear endpoint
+// Doble mapeo estratégico para mitigar cualquier desvío de URL de Axios (404)
 router.get('/dashboard', protect, authorize(...rolesPermitidosAlertas), alertsController.getAlertasInternasUnidad);
+router.get('/unidad', protect, authorize(...rolesPermitidosAlertas), alertsController.getAlertasInternasUnidad);
 
 module.exports = router;
