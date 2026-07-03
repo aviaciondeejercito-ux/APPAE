@@ -6,7 +6,10 @@ const AlertasWidget = () => {
     const [resumen, setResumen] = useState({ criticas: 0, advertencias: 0 });
     const [unidad, setUnidad] = useState('');
     const [loading, setLoading] = useState(true);
-    const [showModal, setShowModal] = useState(false);
+    
+    // Estados separados para cada Modal
+    const [showPersonal, setShowPersonal] = useState(false);
+    const [showAeronaves, setShowAeronaves] = useState(false);
 
     useEffect(() => {
         cargarAlertasUnidad();
@@ -14,7 +17,6 @@ const AlertasWidget = () => {
 
     const cargarAlertasUnidad = async () => {
         try {
-            setLoading(true);
             const response = await getAlertasDashboard();
             if (response.data?.success) {
                 setAlertas(response.data.data || []);
@@ -28,77 +30,73 @@ const AlertasWidget = () => {
         }
     };
 
-    // Filtros de categorías para las columnas
-    const alertasTripulantes = alertas.filter(a => a.categoria === 'TRIPULANTE');
-    const alertasAeronaves = alertas.filter(a => a.categoria === 'AERONAVE');
+    const tripulantes = alertas.filter(a => a.categoria === 'TRIPULANTE');
+    const aeronaves = alertas.filter(a => a.categoria === 'AERONAVE' || a.categoria === 'COMPONENTES');
 
     if (loading) return null;
     if (alertas.length === 0) return null;
 
     return (
-        <>
-            {/* Tarjeta de Resumen Compacta */}
-            <div style={styles.cardResumen} onClick={() => setShowModal(true)}>
-                <div style={styles.cardHeader}>
-                    <h4 style={styles.title}>Estado Operativo ({unidad})</h4>
-                </div>
-                <div style={styles.resumenBloques}>
-                    <div style={{...styles.bloque, color: '#dc2626'}}>🔴 {resumen.criticas} Críticos</div>
-                    <div style={{...styles.bloque, color: '#d97706'}}>⚠️ {resumen.advertencias} Advertencias</div>
-                </div>
+        <div style={styles.container}>
+            <h4 style={styles.titleArea}>Novedades Operativas ({unidad})</h4>
+            
+            <div style={styles.buttonGroup}>
+                <button style={styles.btnPersonal} onClick={() => setShowPersonal(true)}>
+                    👥 Personal ({tripulantes.length})
+                </button>
+                <button style={styles.btnAeronaves} onClick={() => setShowAeronaves(true)}>
+                    🚁 Aeronaves ({aeronaves.length})
+                </button>
             </div>
 
-            {/* Modal de Detalle con dos columnas */}
-            {showModal && (
-                <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
-                    <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>
-                            <h3>Detalle de Novedades</h3>
-                            <button style={styles.closeBtn} onClick={() => setShowModal(false)}>✕</button>
-                        </div>
-                        
-                        <div style={styles.gridContainer}>
-                            {/* Columna Tripulantes */}
-                            <div style={styles.columna}>
-                                <h5 style={styles.subtitulo}>👥 Tripulantes</h5>
-                                {alertasTripulantes.map((a, i) => (
-                                    <div key={i} style={{...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706'}}>
-                                        {a.mensaje}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Columna Aeronaves */}
-                            <div style={styles.columna}>
-                                <h5 style={styles.subtitulo}>🚁 Aeronaves</h5>
-                                {alertasAeronaves.map((a, i) => (
-                                    <div key={i} style={{...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706'}}>
-                                        {a.mensaje}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {/* Modal Personal */}
+            {showPersonal && (
+                <ModalGenerico 
+                    titulo="Novedades de Personal" 
+                    datos={tripulantes} 
+                    onClose={() => setShowPersonal(false)} 
+                />
             )}
-        </>
+
+            {/* Modal Aeronaves */}
+            {showAeronaves && (
+                <ModalGenerico 
+                    titulo="Novedades de Aeronaves" 
+                    datos={aeronaves} 
+                    onClose={() => setShowAeronaves(false)} 
+                />
+            )}
+        </div>
     );
 };
 
+// Componente Modal Auxiliar para mantener el código limpio
+const ModalGenerico = ({ titulo, datos, onClose }) => (
+    <div style={styles.modalOverlay} onClick={onClose}>
+        <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+                <h3>{titulo}</h3>
+                <button onClick={onClose}>✕</button>
+            </div>
+            {datos.map((a, i) => (
+                <div key={i} style={{...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706'}}>
+                    {a.mensaje}
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
 const styles = {
-    cardResumen: { backgroundColor: '#fff', padding: '15px', borderRadius: '8px', cursor: 'pointer', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', marginBottom: '20px', transition: '0.3s' },
-    cardHeader: { marginBottom: '10px' },
-    title: { margin: 0, fontSize: '14px', color: '#475569' },
-    resumenBloques: { display: 'flex', gap: '20px', fontSize: '14px', fontWeight: 'bold' },
+    container: { marginBottom: '20px' },
+    titleArea: { fontSize: '14px', color: '#64748b', marginBottom: '10px' },
+    buttonGroup: { display: 'flex', gap: '10px' },
+    btnPersonal: { padding: '10px 15px', borderRadius: '6px', border: 'none', backgroundColor: '#3b82f6', color: 'white', cursor: 'pointer', fontWeight: 'bold' },
+    btnAeronaves: { padding: '10px 15px', borderRadius: '6px', border: 'none', backgroundColor: '#0ea5e9', color: 'white', cursor: 'pointer', fontWeight: 'bold' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 },
-    modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '95%', maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto' },
-    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', marginBottom: '15px' },
-    closeBtn: { border: 'none', background: 'none', fontSize: '18px', cursor: 'pointer' },
-    // Nuevos estilos para columnas
-    gridContainer: { display: 'flex', gap: '15px' },
-    columna: { flex: 1 },
-    subtitulo: { margin: '0 0 10px 0', color: '#64748b', fontSize: '12px', textTransform: 'uppercase' },
-    item: { padding: '8px', borderLeft: '4px solid', marginBottom: '8px', backgroundColor: '#f8fafc', fontSize: '12px' }
+    modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '90%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' },
+    modalHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '15px' },
+    item: { padding: '10px', borderLeft: '4px solid', marginBottom: '8px', backgroundColor: '#f8fafc', fontSize: '12px' }
 };
 
 export default AlertasWidget;
