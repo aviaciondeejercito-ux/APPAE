@@ -6,10 +6,9 @@ const AlertasWidget = () => {
     const [loading, setLoading] = useState(true);
     const [unidad, setUnidad] = useState('');
     
-    // Estados para 3 Modales
     const [showPersonal, setShowPersonal] = useState(false);
-    const [showAeronaves, setShowAeronaves] = useState(false); // Potencial (Horas)
-    const [showDocumentacion, setShowDocumentacion] = useState(false); // Vencimientos
+    const [showAeronaves, setShowAeronaves] = useState(false);
+    const [showDocumentacion, setShowDocumentacion] = useState(false);
 
     useEffect(() => {
         cargarAlertasUnidad();
@@ -31,10 +30,15 @@ const AlertasWidget = () => {
 
     const ordenarAlertas = (lista) => [...lista].sort((a, b) => (a.gravedad === 'ADVERTENCIA' ? -1 : 1));
 
-    // Filtros por lógica de negocio
     const tripulantes = ordenarAlertas(alertas.filter(a => a.categoria === 'TRIPULANTE'));
-    const aeronavesPotencial = ordenarAlertas(alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'POTENCIAL'));
     const aeronavesDocs = ordenarAlertas(alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'POTENCIAL'));
+    
+    // LÓGICA DE AGRUPACIÓN PARA POTENCIAL
+    const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'POTENCIAL');
+    const aeronavesPotencialAgrupado = potencialBase.length > 0 ? [{
+        mensaje: `Aeronaves sin potencial operativo: ${potencialBase.map(a => a.mensaje.match(/AE-\d+/)?.[0]).join(', ')}`,
+        gravedad: 'CRITICO'
+    }] : [];
 
     if (loading) return null;
     if (alertas.length === 0) return null;
@@ -48,16 +52,15 @@ const AlertasWidget = () => {
                     👥 Personal ({tripulantes.length})
                 </button>
                 <button style={styles.btnAeronaves} onClick={() => setShowAeronaves(true)}>
-                    🚁 Potencial ({aeronavesPotencial.length})
+                    🚁 Aeronaves ({potencialBase.length})
                 </button>
                 <button style={styles.btnDocs} onClick={() => setShowDocumentacion(true)}>
                     📄 Docs/Venc ({aeronavesDocs.length})
                 </button>
             </div>
 
-            {/* Modales */}
             {showPersonal && <ModalGenerico titulo="Novedades de Personal" datos={tripulantes} onClose={() => setShowPersonal(false)} />}
-            {showAeronaves && <ModalGenerico titulo="Potencial de Aeronaves" datos={aeronavesPotencial} onClose={() => setShowAeronaves(false)} />}
+            {showAeronaves && <ModalGenerico titulo="Estado de Potencial" datos={aeronavesPotencialAgrupado} onClose={() => setShowAeronaves(false)} />}
             {showDocumentacion && <ModalGenerico titulo="Vencimientos de Documentación" datos={aeronavesDocs} onClose={() => setShowDocumentacion(false)} />}
         </div>
     );
@@ -67,7 +70,7 @@ const ModalGenerico = ({ titulo, datos, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-                <h3>{titulo}</h3>
+                <h3 style={{fontSize: '16px'}}>{titulo}</h3>
                 <button style={styles.closeBtn} onClick={onClose}>✕</button>
             </div>
             {datos.map((a, i) => (
@@ -90,7 +93,7 @@ const styles = {
     modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '90%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' },
     modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
     closeBtn: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px' },
-    item: { padding: '10px', borderLeft: '4px solid', marginBottom: '8px', backgroundColor: '#f8fafc', fontSize: '12px' }
+    item: { padding: '12px', borderLeft: '4px solid', marginBottom: '8px', backgroundColor: '#f8fafc', fontSize: '13px', lineHeight: '1.4' }
 };
 
 export default AlertasWidget;
