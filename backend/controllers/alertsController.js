@@ -19,7 +19,6 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         fechaActual.setHours(0, 0, 0, 0);
         const alertasConcurridas = [];
 
-        // Función auxiliar para fechas
         const verificarFecha = (fecha, etiqueta, id, mat) => {
             if (!fecha) return;
             const fVenc = new Date(fecha);
@@ -45,7 +44,15 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         tripulantes.forEach(t => {
             const identificacion = `${t.grado || ''} ${t.apellido || ''} ${t.nombre || ''}`.trim();
             const fechaPsico = t.certificaciones?.psicofisico?.vencimiento;
-            if (fechaPsico) {
+            
+            // MODIFICACIÓN: Si no hay fecha, enviamos un mensaje que no contiene "días" para que el frontend agrupe
+            if (!fechaPsico) {
+                alertasConcurridas.push({
+                    categoria: 'TRIPULANTE', tipo: 'PSICOFISICO', gravedad: 'CRITICO',
+                    identificador: `${t._id}-psico-null`,
+                    mensaje: `${identificacion}: SIN CARGAR`
+                });
+            } else {
                 const fVencPsico = new Date(fechaPsico);
                 fVencPsico.setHours(0, 0, 0, 0);
                 const diffDays = Math.ceil((fVencPsico.getTime() - fechaActual.getTime()) / (1000 * 60 * 60 * 24));
@@ -66,9 +73,8 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             }
         });
 
-        // --- B) Lógica de Aeronaves (Horas + Documentación) ---
+        // --- B) Lógica de Aeronaves ---
         aeronaves.forEach(a => {
-            // 1. Horas Remanentes
             if (typeof a.horasRemanentes === 'number') {
                 if (a.horasRemanentes <= 0) {
                     alertasConcurridas.push({
@@ -84,8 +90,6 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                     });
                 }
             }
-
-            // 2. Vencimientos de Documentación
             verificarFecha(a.vencimientoAvionica, 'AVIÓNICA', a._id, a.matricula);
             verificarFecha(a.vencimientoRAAC91217, 'RAAC 91.217', a._id, a.matricula);
             verificarFecha(a.vencimientoRAAC91411, 'RAAC 91.411', a._id, a.matricula);
