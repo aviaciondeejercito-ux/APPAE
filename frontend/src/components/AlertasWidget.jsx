@@ -30,15 +30,18 @@ const AlertasWidget = () => {
 
     // --- LÓGICA DE AGRUPACIÓN: PERSONAL ---
     const personalBase = alertas.filter(a => a.categoria === 'TRIPULANTE');
-    const personalPsico = personalBase.filter(a => a.tipo === 'PSICOFISICO');
-    const personalOtros = personalBase.filter(a => a.tipo !== 'PSICOFISICO');
-
-    const personalAgrupado = [...personalOtros.map(a => ({ mensaje: a.mensaje, gravedad: a.gravedad }))];
     
-    if (personalPsico.length > 0) {
+    // Filtramos los que tienen fecha (asumimos que contienen la palabra "días" o similar)
+    const personalConFecha = personalBase.filter(a => a.mensaje.toLowerCase().includes('día'));
+    // Filtramos los que NO tienen fecha para agruparlos
+    const personalSinFecha = personalBase.filter(a => !a.mensaje.toLowerCase().includes('día'));
+
+    const personalAgrupado = [...personalConFecha.map(a => ({ mensaje: a.mensaje, gravedad: a.gravedad }))];
+    
+    if (personalSinFecha.length > 0) {
         personalAgrupado.push({
-            mensaje: `⚠️ PSICOFÍSICO SIN CARGAR: ${personalPsico.map(p => p.nombre || "Tripulante").join(', ')}`,
-            gravedad: 'CRITICO' // Se mostrará abajo por la lógica de orden
+            mensaje: `⚠️ SIN CARGAR: ${personalSinFecha.map(p => p.mensaje.split(':')[0]).join(', ')}`,
+            gravedad: 'CRITICO' // Se mostrará abajo por el sort del modal
         });
     }
 
