@@ -3,9 +3,8 @@ import { getAlertasDashboard } from '../services/api';
 
 const AlertasWidget = () => {
     const [alertas, setAlertas] = useState([]);
-    const [resumen, setResumen] = useState({ criticas: 0, advertencias: 0 });
-    const [unidad, setUnidad] = useState('');
     const [loading, setLoading] = useState(true);
+    const [unidad, setUnidad] = useState('');
     
     // Estados separados para cada Modal
     const [showPersonal, setShowPersonal] = useState(false);
@@ -20,7 +19,6 @@ const AlertasWidget = () => {
             const response = await getAlertasDashboard();
             if (response.data?.success) {
                 setAlertas(response.data.data || []);
-                setResumen(response.data.resumen || { criticas: 0, advertencias: 0 });
                 setUnidad(response.data.jurisdiccion || '');
             }
         } catch (error) {
@@ -30,8 +28,13 @@ const AlertasWidget = () => {
         }
     };
 
-    const tripulantes = alertas.filter(a => a.categoria === 'TRIPULANTE');
-    const aeronaves = alertas.filter(a => a.categoria === 'AERONAVE' || a.categoria === 'COMPONENTES');
+    // Función de ordenamiento: ADVERTENCIA (-1) arriba, CRITICO (1) abajo
+    const ordenarAlertas = (lista) => {
+        return [...lista].sort((a, b) => (a.gravedad === 'ADVERTENCIA' ? -1 : 1));
+    };
+
+    const tripulantes = ordenarAlertas(alertas.filter(a => a.categoria === 'TRIPULANTE'));
+    const aeronaves = ordenarAlertas(alertas.filter(a => a.categoria === 'AERONAVE' || a.categoria === 'COMPONENTES'));
 
     if (loading) return null;
     if (alertas.length === 0) return null;
@@ -70,13 +73,13 @@ const AlertasWidget = () => {
     );
 };
 
-// Componente Modal Auxiliar para mantener el código limpio
+// Componente Modal Auxiliar
 const ModalGenerico = ({ titulo, datos, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
                 <h3>{titulo}</h3>
-                <button onClick={onClose}>✕</button>
+                <button style={styles.closeBtn} onClick={onClose}>✕</button>
             </div>
             {datos.map((a, i) => (
                 <div key={i} style={{...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706'}}>
@@ -95,7 +98,8 @@ const styles = {
     btnAeronaves: { padding: '10px 15px', borderRadius: '6px', border: 'none', backgroundColor: '#0ea5e9', color: 'white', cursor: 'pointer', fontWeight: 'bold' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 },
     modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '90%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' },
-    modalHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '15px' },
+    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
+    closeBtn: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px' },
     item: { padding: '10px', borderLeft: '4px solid', marginBottom: '8px', backgroundColor: '#f8fafc', fontSize: '12px' }
 };
 
