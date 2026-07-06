@@ -26,19 +26,19 @@ const Operaciones = () => {
         'OFICINATECNICA', 'LOGISTICO', 'USER', 'PERSONAL'
     ];
     
-    const esMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+    const esMandoSuperior = ['BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+    const esAdmin = roleNormalizado === 'ADMIN';
+    const esMando = esMandoSuperior || esAdmin;
     const esGestorUnidad = rolesGestionUnidad.includes(roleNormalizado);
     const puedePublicarGlobal = esMando || roleNormalizado === 'JEFE';
+
+    // Determina si es un elemento dependiente (Unidades operativas)
+    const esElementoDependiente = !esMandoSuperior;
 
     const unidadesAE = [
         "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
         "SEC AE 11", "ESC AV EXPL ATQ 602", "EC AE", "SEC AE DR", 
         "SEC AE MTE 12", "B AB MANT AERON 601", "SEC AE MTE 3", "SEC AE 9"
-    ];
-
-    const sdaListadoDirAe = [
-        "UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", 
-        "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3"
     ];
 
     const misionesConfig = {
@@ -78,11 +78,11 @@ const Operaciones = () => {
         setFilteredEvents(results);
     }, [searchTerm, events]);
 
-    // --- REPARACIÓN CRÍTICA: HOOK DE DISPONIBILIDAD DE AERONAVES ---
+    // --- HOOK DE DISPONIBILIDAD DE AERONAVES ---
     useEffect(() => {
         const fetchAeronaves = async () => {
-            // Permitir la ejecución si hay unidad de usuario válida, independientemente de esMando
-            if (!userUnidad || userUnidad === "") return;
+            // Solo ejecutan la búsqueda las unidades dependientes o el admin global
+            if (esMandoSuperior || !userUnidad || userUnidad === "") return;
             
             setLoadingAircraft(true);
             try {
@@ -105,7 +105,7 @@ const Operaciones = () => {
         };
 
         fetchAeronaves();
-    }, [userUnidad, isEditing]); // Monitoreo correcto de dependencias estables
+    }, [userUnidad, isEditing, esMandoSuperior]);
 
     const fetchData = async () => {
         try {
@@ -321,25 +321,30 @@ const Operaciones = () => {
                                 {TIPOS_DE_APOYO.map((apoyo, idx) => <option key={idx} value={apoyo}>{apoyo}</option>)}
                             </select>
 
-                            <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA)</div>
-                            <div style={styles.sdaBox}>
-                                <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                    <option value="">{loadingAircraft ? "Cargando material..." : "Seleccionar Aeronave..."}</option>
-                                    {esMando ? (
-                                        sdaListadoDirAe.map((sda, idx) => <option key={idx} value={sda}>{sda}</option>)
-                                    ) : (
-                                        availableAircraft.map(air => <option key={air._id} value={`${air.modelo} (${air.matricula})`}>{air.modelo} - {air.matricula}</option>)
-                                    )}
-                                </select>
-                                <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
-                                <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
-                            </div>
+                            {/* --- CONDICIONAL DE REQUERIMIENTO TÉCNICO (SdA) SEGÚN TU SOLICITUD --- */}
+                            {(esElementoDependiente || esAdmin) && (
+                                <>
+                                    <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA EN SERVICIO)</div>
+                                    <div style={styles.sdaBox}>
+                                        <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
+                                            <option value="">{loadingAircraft ? "Cargando material en servicio..." : "Seleccionar Aeronave de la Unidad..."}</option>
+                                            {availableAircraft.map(air => (
+                                                <option key={air._id} value={`${air.modelo} (${air.matricula})`}>
+                                                    {air.modelo} - {air.matricula}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
+                                        <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
+                                    </div>
 
-                            <div style={styles.tagWrap}>
-                                {formData.sdaListado.map((s, i) => (
-                                    <span key={i} style={styles.tag}>{s.cantidad}x {s.sda} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
-                                ))}
-                            </div>
+                                    <div style={styles.tagWrap}>
+                                        {formData.sdaListado.map((s, i) => (
+                                            <span key={i} style={styles.tag}>{s.cantidad}x {s.sda} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
 
                             <textarea placeholder="Observaciones de la misión..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
                             

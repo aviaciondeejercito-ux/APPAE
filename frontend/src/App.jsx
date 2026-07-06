@@ -17,7 +17,7 @@ import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
 import Vuelos from './pages/Vuelos';
 import EbmPage from './pages/EbmPage'; 
-import AlertasWidget from './components/AlertasWidget'; // Nuevo Componente de Alertas Preventivas de Unidad
+import AlertasWidget from './components/AlertasWidget'; 
 
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
