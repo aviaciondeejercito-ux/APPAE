@@ -83,7 +83,30 @@ const EbmPage = () => {
             const response = await getPlanificacionEbm();
             const dataBackend = response.data || [];
 
-            const dataJurisdiccion = esMandoEstrategico ? dataBackend : dataBackend.filter(p => {
+            // CORRECCIÓN CRÍTICA: Recalcular hsFaltantes al vuelo basándose en la matriz de Aeronave del Frontend
+            const dataNormalizada = dataBackend.map(p => {
+                const pModificado = { ...p };
+                const tipoAeronave = determinarTipoAeronave(p.aeronave);
+                
+                [1, 2, 3, 4].forEach(num => {
+                    const keyTrimestre = `trimestre${num}`;
+                    if (pModificado[keyTrimestre]) {
+                        const cond = pModificado[keyTrimestre].condicion || 'CP';
+                        const tipo = pModificado[keyTrimestre].tipoEbm || 'A';
+                        
+                        const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
+                        const restantes = reqHs - Number(pModificado[keyTrimestre].hsVoladas || 0);
+                        
+                        pModificado[keyTrimestre] = {
+                            ...pModificado[keyTrimestre],
+                            hsFaltantes: restantes > 0 ? Math.round(restantes * 10) / 10 : 0
+                        };
+                    }
+                });
+                return pModificado;
+            });
+
+            const dataJurisdiccion = esMandoEstrategico ? dataNormalizada : dataNormalizada.filter(p => {
                 const unidadPiloto = p.elemento || p.unidad;
                 return unidadPiloto && unidadPiloto.trim().toUpperCase() === userUnidad;
             });
@@ -117,7 +140,6 @@ const EbmPage = () => {
             const cond = campo === 'condicion' ? valor : p[keyTrimestre].condicion;
             const tipo = campo === 'tipoEbm' ? valor : p[keyTrimestre].tipoEbm;
             
-            // MODIFICACIÓN: Cálculo dinámico basado en tipo de aeronave en el Frontend
             const tipoAeronave = determinarTipoAeronave(p.aeronave);
             const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
 
@@ -324,7 +346,6 @@ const EbmPage = () => {
                                                                                     </select>
                                                                                 </div>
                                                                                 
-                                                                                {/* MODIFICACIÓN: Texto Informativo Dinámico "Exige: X hs" */}
                                                                                 <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '4px', fontWeight: 'bold' }}>
                                                                                     Exige: {(() => {
                                                                                         const tipoAeronave = determinarTipoAeronave(p.aeronave);
