@@ -1,9 +1,32 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
-// --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---\r
+// --- MATRIZ DE REQUISITOS CONFIGURABLE ---
+const CONFIG_HORAS_EBM = {
+    HELICOPTERO: {
+        CP: { A: 6, B: 18, C: 15, D: 15 },
+        PC: { A: 16, B: 24, C: 20, D: 20 },
+        IE: { A: 20, B: 30, C: 25, D: 25 }
+    },
+    AVION: {
+        CP: { A: 12, B: 18, C: 15, D: 15 },
+        PC: { A: 20, B: 30, C: 25, D: 25 },
+        IE: { A: 24, B: 36, C: 30, D: 30 }
+    }
+};
+
+// --- DETECTOR AUXILIAR DE TIPO DE AERONAVE ---
+const determinarTipoAeronave = (sda) => {
+    if (!sda) return 'AVION';
+    const sdaUpper = sda.toUpperCase();
+    const palabrasHelicopteros = ['UH', 'BELL', 'PUMA', 'AB206', 'AB-206', 'HUEY', 'AS332', 'AS350', 'HA-1'];
+    if (palabrasHelicopteros.some(p => sdaUpper.includes(p))) return 'HELICOPTERO';
+    return 'AVION';
+};
+
+// --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---
 const getTrimestreActualCronologico = () => {
-    const mesActual = new Date().getMonth(); // 0 = Ene, 11 = Dic
+    const mesActual = new Date().getMonth(); 
     if (mesActual >= 0 && mesActual <= 2) return 1;
     if (mesActual >= 3 && mesActual <= 5) return 2;
     if (mesActual >= 6 && mesActual <= 8) return 3;
@@ -13,19 +36,17 @@ const getTrimestreActualCronologico = () => {
 const ORDEN_GRADOS = { 'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7 };
 
 const EbmPage = () => {
-    const [todoElPersonal, setTodoElPersonal] = useState([]); // Base de datos cruda filtrada por req
-    const [personalFiltrado, setPersonalFiltrado] = useState([]); // Personal filtrado por el select de Unidad
+    const [todoElPersonal, setTodoElPersonal] = useState([]); 
+    const [personalFiltrado, setPersonalFiltrado] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [guardandoId, setGuardandoId] = useState(null); 
     const [todosLosSdas, setTodosLosSdas] = useState([]);
-    const [todosLosElementos, setTodosLosElementos] = useState([]); // Lista de Unidades únicas para el Select
-    const [elementoSeleccionado, setElementoSeleccionado] = useState(''); // Filtro de unidad principal
+    const [todosLosElementos, setTodosLosElementos] = useState([]); 
+    const [elementoSeleccionado, setElementoSeleccionado] = useState(''); 
     
-    // Estados de visibilidad por acordeón
     const [sdasVisibles, setSdasVisibles] = useState({});
     const [filasDesplegadas, setFilasDesplegadas] = useState({});
 
-    // --- CONFIGURACIÓN DE ROLES Y PERMISOS INTERNOS ---
     const rawRole = localStorage.getItem('role') || 'user';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || localStorage.getItem('unidad')?.trim().toUpperCase() || 'MI UNIDAD';
@@ -39,7 +60,6 @@ const EbmPage = () => {
         fetchPlanificacion();
     }, []);
 
-    // Cada vez que cambia la lista general o el elemento seleccionado, recalculamos agrupaciones
     useEffect(() => {
         let filtrados = todoElPersonal;
         if (elementoSeleccionado && elementoSeleccionado !== 'TODOS') {
@@ -47,11 +67,9 @@ const EbmPage = () => {
         }
         setPersonalFiltrado(filtrados);
 
-        // Extraer Sistemas de Armas únicos presentes en este grupo
         const sdas = [...new Set(filtrados.map(p => p.aeronave).filter(Boolean))];
         setTodosLosSdas(sdas);
 
-        // Inicializar visibilidad de SdA en falso si es la primera carga
         setSdasVisibles(prev => {
             const nuevo = { ...prev };
             sdas.forEach(sda => { if (nuevo[sda] === undefined) nuevo[sda] = false; });
@@ -65,7 +83,6 @@ const EbmPage = () => {
             const response = await getPlanificacionEbm();
             const dataBackend = response.data || [];
 
-            // Si no es mando estratégico, forzar el filtro a su unidad asignada por seguridad de datos
             const dataJurisdiccion = esMandoEstrategico ? dataBackend : dataBackend.filter(p => {
                 const unidadPiloto = p.elemento || p.unidad;
                 return unidadPiloto && unidadPiloto.trim().toUpperCase() === userUnidad;
@@ -73,11 +90,9 @@ const EbmPage = () => {
 
             setTodoElPersonal(dataJurisdiccion);
 
-            // Obtener lista de Elementos/Unidades únicos para el dropdown superior
             const elementosUnicos = [...new Set(dataJurisdiccion.map(p => (p.elemento || p.unidad || '').trim().toUpperCase()).filter(Boolean))].sort();
             setTodosLosElementos(elementosUnicos);
             
-            // Auto-selección por defecto
             setElementoSeleccionado(esMandoEstrategico ? 'TODOS' : userUnidad);
 
         } catch (error) {
@@ -90,7 +105,6 @@ const EbmPage = () => {
     const toggleSdaVisible = (sda) => { setSdasVisibles(prev => ({ ...prev, [sda]: !prev[sda] })); };
     const toggleFilaDesplegada = (id) => { setFilasDesplegadas(prev => ({ ...prev, [id]: !prev[id] })); };
 
-    // Handler para cuando el gestor cambia un selector de Función o Tipo Trimestre en tiempo real
     const handleInputChange = (p_id, trimestreNum, campo, valor) => {
         if (!esGestorOperativo) return; 
 
@@ -100,27 +114,12 @@ const EbmPage = () => {
             const keyTrimestre = `trimestre${trimestreNum}`;
             const trimModificado = { ...p[keyTrimestre], [campo]: valor };
 
-            // Recalcular dinámicamente las horas requeridas en el Frontend para feedback inmediato
             const cond = campo === 'condicion' ? valor : p[keyTrimestre].condicion;
             const tipo = campo === 'tipoEbm' ? valor : p[keyTrimestre].tipoEbm;
             
-            let reqHs = 0;
-            if (cond === 'CP') {
-                if (tipo === 'A') reqHs = 12;
-                if (tipo === 'B') reqHs = 18;
-                if (tipo === 'C') reqHs = 15;
-                if (tipo === 'D') reqHs = 15;
-            } else if (cond === 'PC') {
-                if (tipo === 'A') reqHs = 20;
-                if (tipo === 'B') reqHs = 30;
-                if (tipo === 'C') reqHs = 25;
-                if (tipo === 'D') reqHs = 25;
-            } else if (cond === 'IE') {
-                if (tipo === 'A') reqHs = 24;
-                if (tipo === 'B') reqHs = 36;
-                if (tipo === 'C') reqHs = 30;
-                if (tipo === 'D') reqHs = 30;
-            }
+            // MODIFICACIÓN: Cálculo dinámico basado en tipo de aeronave en el Frontend
+            const tipoAeronave = determinarTipoAeronave(p.aeronave);
+            const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
 
             const restantes = reqHs - Number(p[keyTrimestre].hsVoladas || 0);
             trimModificado.hsFaltantes = restantes > 0 ? Math.round(restantes * 10) / 10 : 0;
@@ -156,7 +155,6 @@ const EbmPage = () => {
         }
     };
 
-    // Agrupación y ordenamiento por Grado Militar de las tripulaciones del SdA seleccionado
     const matrizSda = useMemo(() => {
         const agrupa = {};
         todosLosSdas.forEach(sda => { agrupa[sda] = []; });
@@ -173,7 +171,6 @@ const EbmPage = () => {
         return Number.isInteger(num) ? num : num.toFixed(1);
     };
 
-    // Función auxiliar para verificar si se cumple con la rotación obligatoria (A, B, C, D) al año
     const verificarRotacionCorrecta = (p) => {
         const tipos = [p.trimestre1?.tipoEbm, p.trimestre2?.tipoEbm, p.trimestre3?.tipoEbm, p.trimestre4?.tipoEbm];
         const unicos = new Set(tipos.filter(Boolean));
@@ -186,7 +183,6 @@ const EbmPage = () => {
 
     return (
         <div style={styles.pageContainer}>
-            {/* ENCABEZADO DE CONTROL OPERATIVO */}
             <div style={styles.headerArea}>
                 <div>
                     <h2 style={styles.title}>Planificación Anual EBM - Año 2026</h2>
@@ -209,7 +205,6 @@ const EbmPage = () => {
                 </div>
             </div>
 
-            {/* BARRA DE SELECCIÓN DE SISTEMAS DE ARMAS */}
             <div style={styles.filterBar}>
                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1b3a57' }}>Sistemas de Armas:</span>
                 <div style={styles.filterGroup}>
@@ -229,7 +224,6 @@ const EbmPage = () => {
                 </div>
             </div>
 
-            {/* TABLA PRINCIPAL */}
             <div style={styles.tableWrapper}>
                 <table style={styles.mainTable}>
                     <thead>
@@ -272,7 +266,6 @@ const EbmPage = () => {
                                                                 T4: {p.trimestre4?.condicion}-{p.trimestre4?.tipoEbm}
                                                             </div>
                                                         </td>
-                                                        {/* MAPEO DE TRIMESTRES (VOLADAS VS FALTANTES) */}
                                                         <td style={styles.tdVoladas}>{formatearHoras(p.trimestre1?.hsVoladas)} hs</td>
                                                         <td style={{...styles.tdFaltan, color: Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
                                                             {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1.hsFaltantes)} hs`}
@@ -294,7 +287,6 @@ const EbmPage = () => {
                                                         </td>
                                                     </tr>
 
-                                                    {/* CUADRO DESPLEGABLE DE CONFIGURACIÓN TRIMESTRAL DE EXIGENCIAS */}
                                                     {estaDesplegado && (
                                                         <tr style={styles.configExpandedRow}>
                                                             <td colSpan={10} style={styles.configExpandedCell}>
@@ -331,8 +323,13 @@ const EbmPage = () => {
                                                                                         <option value="D">Tipo D</option>
                                                                                     </select>
                                                                                 </div>
+                                                                                
+                                                                                {/* MODIFICACIÓN: Texto Informativo Dinámico "Exige: X hs" */}
                                                                                 <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '4px', fontWeight: 'bold' }}>
-                                                                                    Exige: {trimData.condicion === 'PC' ? (trimData.tipoEbm === 'A' ? 20 : trimData.tipoEbm === 'B' ? 30 : 25) : trimData.condicion === 'IE' ? (trimData.tipoEbm === 'A' ? 24 : trimData.tipoEbm === 'B' ? 36 : 30) : (trimData.tipoEbm === 'A' ? 12 : trimData.tipoEbm === 'B' ? 18 : 15)} hs
+                                                                                    Exige: {(() => {
+                                                                                        const tipoAeronave = determinarTipoAeronave(p.aeronave);
+                                                                                        return CONFIG_HORAS_EBM[tipoAeronave]?.[trimData.condicion || 'CP']?.[trimData.tipoEbm || 'A'] || 0;
+                                                                                    })()} hs
                                                                                 </div>
                                                                             </div>
                                                                         );
