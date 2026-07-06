@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { getEvents, createEvent, deleteEvent, updateEvent, getAvailableAircraft } from '../services/EventService';
+import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/EventService';
 import { TIPOS_DE_APOYO } from '../constants/TacticalData';
 
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
-    const [filteredEvents, setFilteredEvents] = useState([]); 
-    const [searchTerm, setSearchTerm] = useState(""); 
     
     // NORMALIZACIÓN SINCRO JOKER
     const rawRole = localStorage.getItem('role') || 'user';
@@ -15,10 +13,7 @@ const Operaciones = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [isMobile] = useState(window.innerWidth < 768);
-
     const [publicarGlobal, setPublicarGlobal] = useState(false);
-    const [availableAircraft, setAvailableAircraft] = useState([]);
-    const [loadingAircraft, setLoadingAircraft] = useState(false);
 
     // --- LÓGICA DE ROLES ---
     const rolesGestionUnidad = [
@@ -29,20 +24,21 @@ const Operaciones = () => {
     const esMandoSuperior = ['BOSS', 'ADMIN'].includes(roleNormalizado);
     const puedeCrearYEditar = rolesGestionUnidad.includes(roleNormalizado);
 
-    // Estado de Pestañas de Filtrado Táctico
-    const [activeTab, setActiveTab] = useState("TODAS");
-
-    // Formulario limpio enfocado únicamente en la Actividad / Apoyo
+    // Formulario estructurado para persistencia en Calendario y Vista Operativa
     const [formData, setFormData] = useState({
         title: "",
-        mision: "ENTRENAMIENTO",
+        mision: "Sostenimiento",
+        start: "", 
+        end: "",   
         notes: "",
         notasMarginales: "",
         elemento: userUnidad, 
         status: "programado",
         isRealTime: false,
         unidadApoyada: "",
-        tipoApoyo: "SOSTENIMIENTO"
+        tipoApoyo: "SOSTENIMIENTO",
+        responsableNom: "",
+        pntoContactoNom: ""
     });
 
     // Carga inicial de datos desde la API centralizada
@@ -50,7 +46,6 @@ const Operaciones = () => {
         try {
             const data = await getEvents();
             setEvents(data);
-            setFilteredEvents(data);
         } catch (error) {
             console.error("❌ Falló la sincronización local de eventos:", error);
         }
@@ -60,57 +55,7 @@ const Operaciones = () => {
         fetchData();
     }, []);
 
-    // Consulta de Aeronaves Disponibles (se mantiene de forma segura por el cambio de unidad)
-    useEffect(() => {
-        const loadAircraft = async () => {
-            if (!formData.elemento) {
-                setAvailableAircraft([]);
-                return;
-            }
-            setLoadingAircraft(true);
-            try {
-                const res = await getAvailableAircraft(formData.elemento);
-                setAvailableAircraft(Array.isArray(res) ? res : []);
-            } catch (err) {
-                console.error("⚠️ Error consultando disponibilidad de material aéreo:", err);
-                setAvailableAircraft([]);
-            } finally {
-                setLoadingAircraft(false);
-            }
-        };
-
-        const delayDebounce = setTimeout(() => {
-            loadAircraft();
-        }, 400);
-
-        return () => clearTimeout(delayDebounce);
-    }, [formData.elemento]);
-
-    // Procesamiento y Filtros en Cascada (Buscador + Pestañas)
-    useEffect(() => {
-        let result = [...events];
-
-        if (searchTerm.trim() !== "") {
-            const term = searchTerm.toLowerCase();
-            result = result.filter(e => 
-                e.title?.toLowerCase().includes(term) ||
-                e.elemento?.toLowerCase().includes(term) ||
-                e.mision?.toLowerCase().includes(term)
-            );
-        }
-
-        if (activeTab === "PROGRAMADAS") {
-            result = result.filter(e => e.status === "programado" && !e.isRealTime);
-        } else if (activeTab === "EN VUELO") {
-            result = result.filter(e => e.isRealTime || e.status === "en_curso");
-        } else if (activeTab === "FINALIZADAS") {
-            result = result.filter(e => e.status === "finalizado" || e.status === "completado");
-        }
-
-        setFilteredEvents(result);
-    }, [searchTerm, activeTab, events]);
-
-    // Manejo de cambios simples
+    // Manejo de cambios simples del estado del formulario
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
         const val = type === 'checkbox' ? checked : value;
@@ -136,8 +81,7 @@ const Operaciones = () => {
         const payload = {
             ...formData,
             esGlobal: esMandoSuperior ? publicarGlobal : false,
-            // Asignamos un color por defecto del comando para mantener la estructura del modelo sin input visual
-            color: '#1b3a57' 
+            color: '#1b3a57' // Color por defecto institucional
         };
 
         try {
@@ -160,14 +104,18 @@ const Operaciones = () => {
         setPublicarGlobal(event.esGlobal || false);
         setFormData({
             title: event.title || "",
-            mision: event.mision || "ENTRENAMIENTO",
+            mision: event.mision || "Sostenimiento",
+            start: event.start ? event.start.substring(0, 16) : "", 
+            end: event.end ? event.end.substring(0, 16) : "",     
             notes: event.notes || "",
             notasMarginales: event.notasMarginales || event.notes || "",
             elemento: event.elemento || userUnidad,
             status: event.status || "programado",
             isRealTime: event.isRealTime || false,
             unidadApoyada: event.unidadApoyada || "",
-            tipoApoyo: event.tipoApoyo || "SOSTENIMIENTO"
+            tipoApoyo: event.tipoApoyo || "SOSTENIMIENTO",
+            responsableNom: event.responsableNom || "",
+            pntoContactoNom: event.pntoContactoNom || ""
         });
     };
 
@@ -187,45 +135,23 @@ const Operaciones = () => {
         setPublicarGlobal(false);
         setFormData({
             title: "",
-            mision: "ENTRENAMIENTO",
+            mision: "Sostenimiento",
+            start: "",
+            end: "",
             notes: "",
             notasMarginales: "",
             elemento: userUnidad,
             status: "programado",
             isRealTime: false,
             unidadApoyada: "",
-            tipoApoyo: "SOSTENIMIENTO"
+            tipoApoyo: "SOSTENIMIENTO",
+            responsableNom: "",
+            pntoContactoNom: ""
         });
     };
 
     return (
         <div style={styles.dashboard}>
-            {/* PANEL DE CONTROL SUPERIOR */}
-            <div style={styles.topActions}>
-                <input 
-                    type="text" 
-                    placeholder="🔍 Buscar por Unidad, Misión o Título..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    style={styles.searchBar}
-                />
-                
-                <div style={styles.tabContainer}>
-                    {["TODAS", "PROGRAMADAS", "EN VUELO", "FINALIZADAS"].map(tab => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            style={{
-                                ...styles.tabButton,
-                                ...(activeTab === tab ? styles.tabActive : {})
-                            }}
-                        >
-                            {tab}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
             <div style={{ ...styles.mainGrid, flexDirection: isMobile ? 'column' : 'row' }}>
                 
                 {/* COLUMNA FORMULARIO DE CARGA */}
@@ -238,18 +164,18 @@ const Operaciones = () => {
                             
                             <div style={styles.group}>
                                 <label style={styles.label}>Título de Operación / Evento</label>
-                                <input type="text" name="title" value={formData.title} onChange={handleInputChange} required style={styles.input} placeholder="Ej: VUELO DE TRASLADO SANITARIO" />
+                                <input type="text" name="title" value={formData.title} onChange={handleInputChange} required style={styles.input} placeholder="Ej: TRASLADO SANITARIO" />
                             </div>
 
+                            {/* SELECTOR DE MISIÓN REORGANIZADO */}
                             <div style={styles.row}>
                                 <div style={styles.group}>
                                     <label style={styles.label}>Misión</label>
                                     <select name="mision" value={formData.mision} onChange={handleInputChange} style={styles.select}>
-                                        <option value="ENTRENAMIENTO">ENTRENAMIENTO</option>
-                                        <option value="OPERACIONAL">OPERACIONAL</option>
-                                        <option value="APOYO_COMUNIDAD">APOYO A LA COMUNIDAD</option>
-                                        <option value="MANTENIMIENTO">MANTENIMIENTO / PRUEBA</option>
-                                        <option value="OTROS">OTROS</option>
+                                        <option value="Sostenimiento">Sostenimiento</option>
+                                        <option value="Fuerza operativa">Fuerza operativa</option>
+                                        <option value="Educación">Educación</option>
+                                        <option value="Otros">Otros</option>
                                     </select>
                                 </div>
                                 <div style={styles.group}>
@@ -257,6 +183,18 @@ const Operaciones = () => {
                                     <select name="tipoApoyo" value={formData.tipoApoyo} onChange={handleInputChange} disabled={formData.isRealTime} style={styles.select}>
                                         {TIPOS_DE_APOYO.map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
+                                </div>
+                            </div>
+
+                            {/* MARCO TEMPORAL (DESDE / HASTA PARA EL CALENDARIO) */}
+                            <div style={styles.row}>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Desde (Inicio)</label>
+                                    <input type="datetime-local" name="start" value={formData.start} onChange={handleInputChange} required style={styles.input} />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Hasta (Fin)</label>
+                                    <input type="datetime-local" name="end" value={formData.end} onChange={handleInputChange} required style={styles.input} />
                                 </div>
                             </div>
 
@@ -272,10 +210,22 @@ const Operaciones = () => {
                                         required 
                                         style={styles.input} 
                                     />
-                               </div>
-                               <div style={styles.group}>
+                                </div>
+                                <div style={styles.group}>
                                     <label style={styles.label}>Unidad Apoyada</label>
                                     <input type="text" name="unidadApoyada" value={formData.unidadApoyada} onChange={handleInputChange} style={styles.input} placeholder="Ej: RI MEC 7" />
+                                </div>
+                            </div>
+
+                            {/* RESPONSABLE Y PUNTO DE CONTACTO */}
+                            <div style={styles.row}>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Responsable:</label>
+                                    <input type="text" name="responsableNom" value={formData.responsableNom} onChange={handleInputChange} style={styles.input} placeholder="Nombre del oficial/encargado" />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Punto Contacto:</label>
+                                    <input type="text" name="pntoContactoNom" value={formData.pntoContactoNom} onChange={handleInputChange} style={styles.input} placeholder="Referencia de contacto" />
                                 </div>
                             </div>
 
@@ -316,7 +266,7 @@ const Operaciones = () => {
                                 </div>
                             </div>
 
-                            {/* CHECKBOXES DE TRANSMISIÓN Y DIFUSIÓN */}
+                            {/* CHECKBOXES DE DIFUSIÓN */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '5px 0' }}>
                                 <label style={styles.checkboxLabel}>
                                     <input type="checkbox" name="isRealTime" checked={formData.isRealTime} onChange={handleInputChange} style={styles.checkbox} />
@@ -346,12 +296,12 @@ const Operaciones = () => {
 
                 {/* COLUMNA LOG DE REGISTROS EXISTENTES */}
                 <div style={{ ...styles.card, flex: 1.4 }}>
-                    <h3 style={styles.cardTitle}>📜 REGISTROS FILTRADOS ({filteredEvents.length})</h3>
+                    <h3 style={styles.cardTitle}>📜 LOG DE REGISTROS</h3>
                     <div style={styles.scrollList}>
-                        {filteredEvents.length === 0 ? (
-                            <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '20px' }}>No se localizaron registros para los filtros seleccionados.</p>
+                        {events.length === 0 ? (
+                            <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '20px' }}>No hay registros asentados.</p>
                         ) : (
-                            filteredEvents.map(event => (
+                            events.map(event => (
                                 <div key={event._id} style={{ ...styles.logItem, borderLeft: `5px solid ${event.color || '#1b3a57'}` }}>
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -364,9 +314,14 @@ const Operaciones = () => {
                                             <span><b>Misión:</b> {event.mision}</span> | 
                                             <span><b>Apoyo:</b> {event.tipoApoyo || 'S/D'}</span>
                                         </div>
-                                        {event.unidadApoyada && (
-                                            <div style={{ ...styles.metaData, color: '#16a085' }}>
-                                                🤝 Apoyando a: {event.unidadApoyada}
+                                        {(event.start || event.end) && (
+                                            <div style={styles.metaData}>
+                                                🗓️ {event.start ? new Date(event.start).toLocaleString() : ''} al {event.end ? new Date(event.end).toLocaleString() : ''}
+                                            </div>
+                                        )}
+                                        {event.responsableNom && (
+                                            <div style={styles.metaData}>
+                                                👤 <b>Resp:</b> {event.responsableNom}
                                             </div>
                                         )}
                                     </div>
@@ -388,14 +343,9 @@ const Operaciones = () => {
     );
 };
 
-// --- DISEÑO INTERFAZ LIMPIA ---
+// --- DISEÑO INTERFAZ ESTRICTA ---
 const styles = {
     dashboard: { display: 'flex', flexDirection: 'column', gap: '15px', padding: '5px' },
-    topActions: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', background: '#ffffff', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
-    searchBar: { flex: 1, minWidth: '280px', padding: '10px 15px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.9rem', outline: 'none' },
-    tabContainer: { display: 'flex', gap: '5px', background: '#f1f3f5', padding: '4px', borderRadius: '6px' },
-    tabButton: { border: 'none', background: 'transparent', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', color: '#495057', transition: '0.2s' },
-    tabActive: { background: '#1b3a57', color: '#ffffff' },
     mainGrid: { display: 'flex', gap: '20px' },
     card: { background: '#ffffff', borderRadius: '10px', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', gap: '15px' },
     cardTitle: { margin: 0, fontSize: '1rem', color: '#1b3a57', borderBottom: '2px solid #f0f2f5', paddingBottom: '10px', fontWeight: 'bold' },
@@ -408,7 +358,6 @@ const styles = {
     textarea: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', minHeight: '90px', fontSize: '0.9rem', resize: 'none' },
     btnSave: { color: 'white', border: 'none', padding: '14px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', marginTop: '5px' },
     
-    // Grupo de botones de estado idénticos a los originales
     statusButtonGroup: { display: 'flex', gap: '8px', width: '100%' },
     statusButton: { flex: 1, padding: '10px', border: '1px solid #ccc', borderRadius: '6px', background: '#f8f9fa', color: '#333', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', transition: '0.2s' },
     btnProgramadoActive: { background: '#2980b9', color: '#ffffff', borderColor: '#2980b9' },
