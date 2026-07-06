@@ -21,7 +21,6 @@ const Operaciones = () => {
     const [loadingAircraft, setLoadingAircraft] = useState(false);
 
     // --- LÓGICA DE ROLES ACTUALIZADA ---
-    // Roles con capacidad de gestión total en su unidad (Mismo nivel)
     const rolesGestionUnidad = [
         'ADMIN', 'BOSS', 'OPERACIONES', 'JEFE', 
         'OFICINATECNICA', 'LOGISTICO', 'USER', 'PERSONAL'
@@ -29,7 +28,6 @@ const Operaciones = () => {
     
     const esMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
     const esGestorUnidad = rolesGestionUnidad.includes(roleNormalizado);
-    // El JEFE ahora tiene permiso explícito para marcar como Global
     const puedePublicarGlobal = esMando || roleNormalizado === 'JEFE';
 
     const unidadesAE = [
@@ -80,28 +78,34 @@ const Operaciones = () => {
         setFilteredEvents(results);
     }, [searchTerm, events]);
 
+    // --- REPARACIÓN CRÍTICA: HOOK DE DISPONIBILIDAD DE AERONAVES ---
     useEffect(() => {
         const fetchAeronaves = async () => {
-            if (esMando || !userUnidad) return;
+            // Permitir la ejecución si hay unidad de usuario válida, independientemente de esMando
+            if (!userUnidad || userUnidad === "") return;
+            
             setLoadingAircraft(true);
             try {
                 const data = await getAvailableAircraft(userUnidad);
-                const cleanData = data
-                    .filter(a => a.estado === 'E/S')
-                    .map(a => ({
-                        ...a,
-                        matricula: a.matricula || 'S/M',
-                        modelo: a.modelo || a.sda || 'S/D'
-                    }));
-                setAvailableAircraft(cleanData);
+                if (data && Array.isArray(data)) {
+                    const cleanData = data
+                        .filter(a => a.estado === 'E/S')
+                        .map(a => ({
+                            ...a,
+                            matricula: a.matricula || 'S/M',
+                            modelo: a.modelo || a.sda || 'S/D'
+                        }));
+                    setAvailableAircraft(cleanData);
+                }
             } catch (err) {
-                console.error("Error cargando aeronaves");
+                console.error("❌ Error cargando aeronaves de la unidad:", err);
             } finally {
                 setLoadingAircraft(false);
             }
         };
+
         fetchAeronaves();
-    }, [userUnidad, isEditing, esMando]);
+    }, [userUnidad, isEditing]); // Monitoreo correcto de dependencias estables
 
     const fetchData = async () => {
         try {
@@ -116,7 +120,6 @@ const Operaciones = () => {
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
                 const esGlobal = ev.esGlobal === true;
 
-                // Lógica para Mandos (DIR AE ve lo global y lo propio)
                 if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
                     if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
                     if (esGlobal && etapa === 'ordenada') return true;
@@ -124,10 +127,8 @@ const Operaciones = () => {
                     return false;
                 }
 
-                // Lógica para Roles de Unidad (Mismo Nivel de acceso)
                 if (rolesGestionUnidad.includes(roleNormalizado)) {
                     if (creador === unidadUsuario) return true;
-                    // Ve lo asignado a su unidad si ya está en etapa ordenada
                     if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
                 }
                 return false;
@@ -253,7 +254,6 @@ const Operaciones = () => {
                     <div style={styles.card}>
                         <h3 style={styles.title}>{isEditing ? "📝 Editar Orden" : "➕ Nueva Orden de Vuelo"}</h3>
                         
-                        {/* Botón Global: Solo para Mandos o rol JEFE */}
                         {puedePublicarGlobal && (
                             <button type="button" 
                                 onClick={() => setPublicarGlobal(!publicarGlobal)}
@@ -324,7 +324,7 @@ const Operaciones = () => {
                             <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA)</div>
                             <div style={styles.sdaBox}>
                                 <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                    <option value="">{loadingAircraft ? "Cargando..." : "Seleccionar Aeronave..."}</option>
+                                    <option value="">{loadingAircraft ? "Cargando material..." : "Seleccionar Aeronave..."}</option>
                                     {esMando ? (
                                         sdaListadoDirAe.map((sda, idx) => <option key={idx} value={sda}>{sda}</option>)
                                     ) : (
