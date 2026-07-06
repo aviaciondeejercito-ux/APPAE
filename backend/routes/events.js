@@ -19,9 +19,9 @@ const {
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/rolecheck');
 
-// LISTA OFICIAL DE ROLES SINCRO JOKER
+// LISTA OFICIAL DE ROLES SINCRO JOKER (Normalizados en Mayúsculas para evitar fallas)
 const todosLosRoles = [
-    'admin', 'BOSS', 'OTO', 'DIRECTOR', 'user', 
+    'ADMIN', 'BOSS', 'OTO', 'DIRECTOR', 'USER', 
     'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'
 ];
 
@@ -38,7 +38,7 @@ router.get('/active-map', authorize(...todosLosRoles), getActiveOperations);
 
 /**
  * @route    GET /api/events/aircraft-available/:elemento
- * @desc     Consultar disponibilidad de aeronaves E/S
+ * @desc     Consultar disponibilidad de aeronaves E/S (Filtro por Unidad Operativa)
  */
 router.get('/aircraft-available/:elemento', authorize(...todosLosRoles), getAvailableAircraft);
 
@@ -51,22 +51,19 @@ router.get('/', authorize(...todosLosRoles), getEvents);
 /**
  * @route    POST /api/events
  * @desc     Registrar nuevo VUELO TÁCTICO
- * @note     Restringimos a roles con capacidad de carga operativa
  */
-router.post('/', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'user'), createEvent);
+router.post('/', authorize('ADMIN', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'USER'), createEvent);
 
 /**
  * @route    PUT /api/events/:id
- * @desc     Actualizar misión
- * @note     Se añade restricción ([0-9a-fA-F]{24}) para que solo procese ObjectIds válidos de MongoDB
+ * @desc     Actualizar misión (Restricción ObjectId 24 caracteres)
  */
-router.put('/:id([0-9a-fA-F]{24})', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'user'), updateEvent);
+router.put('/:id([0-9a-fA-F]{24})', authorize('ADMIN', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'USER'), updateEvent);
 
 /**
  * @route    DELETE /api/events/:id
- * @desc     Eliminación de registro
- * @note     Se añade restricción ([0-9a-fA-F]{24}) para evitar colisiones con texto plano
+ * @desc     Eliminación de registro (Restricción ObjectId 24 caracteres)
  */
-router.delete('/:id([0-9a-fA-F]{24})', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE'), deleteEvent);
+router.delete('/:id([0-9a-fA-F]{24})', authorize('ADMIN', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE'), deleteEvent);
 
 module.exports = router;

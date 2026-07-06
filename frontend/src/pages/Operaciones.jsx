@@ -26,404 +26,564 @@ const Operaciones = () => {
         'OFICINATECNICA', 'LOGISTICO', 'USER', 'PERSONAL'
     ];
     
-    const esMandoSuperior = ['BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
-    const esAdmin = roleNormalizado === 'ADMIN';
-    const esMando = esMandoSuperior || esAdmin;
-    const esGestorUnidad = rolesGestionUnidad.includes(roleNormalizado);
-    const puedePublicarGlobal = esMando || roleNormalizado === 'JEFE';
+    const esMandoSuperior = ['BOSS', 'ADMIN'].includes(roleNormalizado);
+    const puedeCrearYEditar = rolesGestionUnidad.includes(roleNormalizado);
 
-    // Determina si es un elemento dependiente (Unidades operativas)
-    const esElementoDependiente = !esMandoSuperior;
+    // Estado de Pestañas de Filtrado Táctico
+    const [activeTab, setActiveTab] = useState("TODAS");
 
-    const unidadesAE = [
-        "B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", 
-        "SEC AE 11", "ESC AV EXPL ATQ 602", "EC AE", "SEC AE DR", 
-        "SEC AE MTE 12", "B AB MANT AERON 601", "SEC AE MTE 3", "SEC AE 9"
-    ];
-
-    const misionesConfig = {
-        'SOSTENIMIENTO': '#3498db',
-        'FUERZA OPERATIVA': '#28a745',
-        'EDUCACION': '#800000',
-        'OTROS': '#95a5a6'
-    };
-
-    const etapaColors = {
-        recepcion: '#f39c12',
-        revision: '#3498db',
-        ordenada: '#27ae60'
-    };
-
+    // Formulario unificado adaptado a la persistencia atómica del backend
     const [formData, setFormData] = useState({
-        title: '', start: '', end: '', color: '#3498db', notes: '',
-        mision: '', 
-        tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
-        etapa: 'recepcion', 
-        unidadesInvolucradas: [],
-        unidadApoyada: '', 
-        pntoContactoNom: '', pntoContactoTel: '',
-        responsableNom: '', responsableTel: ''
+        title: "",
+        mision: "ENTRENAMIENTO",
+        notes: "",
+        notasMarginales: "",
+        color: "#1b3a57",
+        elemento: userUnidad, 
+        status: "programado",
+        isRealTime: false,
+        matricula: "",
+        aeronave: "",
+        tipoIcono: "ala_rotativa",
+        origen: { nombre: "", lat: "", lng: "" },
+        destino: { nombre: "", lat: "", lng: "" },
+        unidadApoyada: "",
+        pntoContactoNom: "",
+        pntoContactoTel: "",
+        responsableNom: "",
+        responsableTel: "",
+        tipoApoyo: "SOSTENIMIENTO",
+        sdaListado: []
     });
 
-    useEffect(() => { 
-        fetchData(); 
-    }, [userUnidad, roleNormalizado]);
+    const [currentSda, setCurrentSda] = useState("");
+
+    // Carga inicial de datos desde la API centralizada
+    const fetchData = async () => {
+        try {
+            const data = await getEvents();
+            setEvents(data);
+            setFilteredEvents(data);
+        } catch (error) {
+            console.error("❌ Falló la sincronización local de eventos:", error);
+        }
+    };
 
     useEffect(() => {
-        const results = events.filter(ev => 
-            ev.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            ev.elemento?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            ev.tipoApoyo?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        setFilteredEvents(results);
-    }, [searchTerm, events]);
+        fetchData();
+    }, []);
 
-    // --- HOOK DE DISPONIBILIDAD DE AERONAVES CORREGIDO ---
+    // ✈️ DISPONIBILIDAD DE AERONAVES EN TIEMPO REAL (CORRECCIÓN SINCRO JOKER PARA EVITAR EL 403)
     useEffect(() => {
-        const fetchAeronaves = async () => {
-            if (esMandoSuperior || !userUnidad || userUnidad === "") return;
-            
+        const loadAircraft = async () => {
+            if (!formData.elemento) {
+                setAvailableAircraft([]);
+                return;
+            }
             setLoadingAircraft(true);
             try {
-                const data = await getAvailableAircraft(userUnidad);
-                
-                // LINEA DE CONTROL: Ver en consola qué responde el servidor
-                console.log("✈️ Datos crudos recibidos del backend:", data);
-
-                if (data && Array.isArray(data)) {
-                    const cleanData = data
-                        .filter(a => a.estado === 'E/S') // Solo entran las aeronaves en servicio
-                        .map(a => ({
-                            ...a,
-                            matricula: a.matricula || 'S/M',
-                            modelo: a.sda || 'S/D' // Corregido: Usamos 'sda' nativo de la BD
-                        }));
-
-                    console.log("✅ Aeronaves filtradas en servicio (E/S):", cleanData);
-                    setAvailableAircraft(cleanData);
-                }
+                // Ahora viaja de forma segura por la ruta unificada de eventos mitigando el error 403
+                const res = await getAvailableAircraft(formData.elemento);
+                setAvailableAircraft(Array.isArray(res) ? res : []);
             } catch (err) {
-                console.error("❌ Error cargando aeronaves de la unidad:", err);
+                console.error("⚠️ Error consultando disponibilidad de material aéreo:", err);
+                setAvailableAircraft([]);
             } finally {
                 setLoadingAircraft(false);
             }
         };
 
-        fetchAeronaves();
-    }, [userUnidad, isEditing, esMandoSuperior]);
+        const delayDebounce = setTimeout(() => {
+            loadAircraft();
+        }, 400);
 
-    const fetchData = async () => {
-        try {
-            const data = await getEvents();
-            const logicFiltered = data.filter(ev => {
-                if (ev.isRealTime) return false;
-                if (roleNormalizado === 'ADMIN') return true;
+        return () => clearTimeout(delayDebounce);
+    }, [formData.elemento]);
 
-                const creador = ev.creadorUnidad?.toUpperCase() || "";
-                const unidadesResponsables = ev.elemento?.toUpperCase() || "";
-                const unidadUsuario = userUnidad?.toUpperCase() || "";
-                const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
-                const esGlobal = ev.esGlobal === true;
+    // Procesamiento y Filtros en Cascada (Buscador + Pestañas)
+    useEffect(() => {
+        let result = [...events];
 
-                if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
-                    if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
-                    if (esGlobal && etapa === 'ordenada') return true;
-                    if (unidadesResponsables.includes(unidadUsuario)) return true; 
-                    return false;
+        if (searchTerm.trim() !== "") {
+            const term = searchTerm.toLowerCase();
+            result = result.filter(e => 
+                e.title?.toLowerCase().includes(term) ||
+                e.elemento?.toLowerCase().includes(term) ||
+                e.matricula?.toLowerCase().includes(term) ||
+                e.aeronave?.toLowerCase().includes(term) ||
+                e.mision?.toLowerCase().includes(term)
+            );
+        }
+
+        if (activeTab === "PROGRAMADAS") {
+            result = result.filter(e => e.status === "programado" && !e.isRealTime);
+        } else if (activeTab === "EN VUELO") {
+            result = result.filter(e => e.isRealTime || e.status === "en_curso");
+        } else if (activeTab === "FINALIZADAS") {
+            result = result.filter(e => e.status === "finalizado" || e.status === "completado");
+        }
+
+        setFilteredEvents(result);
+    }, [searchTerm, activeTab, events]);
+
+    // Manejo de cambios en campos planos y anidados
+    const handleInputChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        const val = type === 'checkbox' ? checked : value;
+
+        if (name === "isRealTime") {
+            setFormData(prev => ({
+                ...prev,
+                isRealTime: val,
+                etapa: val ? 'operativo' : 'recepcion',
+                tipoApoyo: val ? 'VUELO' : prev.tipoApoyo
+            }));
+            return;
+        }
+
+        if (name.startsWith("origen.") || name.startsWith("destino.")) {
+            const [objectKey, fieldKey] = name.split(".");
+            setFormData(prev => ({
+                ...prev,
+                [objectKey]: {
+                    ...prev[objectKey],
+                    [fieldKey]: val
                 }
-
-                if (rolesGestionUnidad.includes(roleNormalizado)) {
-                    if (creador === unidadUsuario) return true;
-                    if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
-                }
-                return false;
-            });
-            setEvents(Array.isArray(logicFiltered) ? logicFiltered : []);
-        } catch (error) { 
-            console.error("❌ Error de Sincronización"); 
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: val }));
         }
     };
 
-    const parseFromBackend = (dateString) => {
-        if (!dateString) return '';
-        return dateString.split('.')[0].slice(0, 16);
-    };
-
-    const toggleUnidad = (unidad) => {
-        const current = formData.unidadesInvolucradas;
-        const updated = current.includes(unidad) 
-             ? current.filter(u => u !== unidad) 
-             : [...current, unidad];
-        setFormData({ ...formData, unidadesInvolucradas: updated });
-    };
-
-    const addSda = () => {
-        if (!formData.sdaSelected || formData.sdaSelected.trim() === "") return;
-        const cantidad = parseInt(formData.sdaCantidad) || 1;
-        const nuevoSdaObj = { sda: formData.sdaSelected.toUpperCase(), cantidad: cantidad };
-        
-        if (!formData.sdaListado.some(item => item.sda === nuevoSdaObj.sda)) {
-            setFormData(prev => ({ 
-                ...prev, 
-                sdaListado: [...prev.sdaListado, nuevoSdaObj], 
-                sdaSelected: '', 
-                sdaCantidad: 1 
+    // Auto-completado al seleccionar una aeronave en servicio de la unidad
+    const handleAircraftSelect = (e) => {
+        const mat = e.target.value;
+        if (!mat) {
+            setFormData(prev => ({ ...prev, matricula: "", aeronave: "" }));
+            return;
+        }
+        const match = availableAircraft.find(a => a.matricula === mat);
+        if (match) {
+            setFormData(prev => ({
+                ...prev,
+                matricula: match.matricula,
+                aeronave: match.sda || match.modelo || ""
             }));
         }
     };
 
-    const removeSda = (index) => {
-        const newList = [...formData.sdaListado];
-        newList.splice(index, 1);
-        setFormData({ ...formData, sdaListado: newList });
+    // Gestión de Listado de Sistemas de Armas involucrados (Tags)
+    const addSdaTag = () => {
+        if (!currentSda.trim()) return;
+        const up = currentSda.trim().toUpperCase();
+        if (!formData.sdaListado.includes(up)) {
+            setFormData(prev => ({ ...prev, sdaListado: [...prev.sdaListado, up] }));
+        }
+        setCurrentSda("");
     };
 
+    const removeSdaTag = (tag) => {
+        setFormData(prev => ({ ...prev, sdaListado: prev.sdaListado.filter(t => t !== tag) }));
+    };
+
+    // Envío y persistsencia atómica del formulario
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.start || !formData.end) return alert("Complete fechas.");
+        if (!puedeCrearYEditar) return alert("No cuenta con jerarquía de edición.");
 
-        const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
-        const finalElemento = (formData.unidadesInvolucradas.length > 0)
-            ? formData.unidadesInvolucradas.join(', ')
-            : userUnidad;
-
-        const finalData = {
+        const payload = {
             ...formData,
-            title: formData.title.toUpperCase(),
-            tipoApoyo: formData.tipoApoyo.toUpperCase(),
-            esGlobal: publicarGlobal,
-            notes: `SdA: ${formData.sdaListado.map(s => `${s.cantidad}x ${s.sda}`).join(', ')} | Apoyado: ${formData.unidadApoyada} | Obs: ${cleanNotes}`,
-            elemento: finalElemento,
-            unidadApoyada: formData.unidadApoyada.toUpperCase(),
-            pntoContactoNom: formData.pntoContactoNom.toUpperCase(),
-            responsableNom: formData.responsableNom.toUpperCase()
+            esGlobal: esMandoSuperior ? publicarGlobal : false
         };
 
         try {
             if (isEditing) {
-                await updateEvent(selectedId, finalData);
+                await updateEvent(selectedId, payload);
             } else {
-                await createEvent({ ...finalData, creadorUnidad: userUnidad });
+                await createEvent(payload);
             }
             resetForm();
             fetchData();
-            alert("✅ Operación procesada correctamente.");
-        } catch (error) { 
-            alert("❌ Error al procesar la orden."); 
+        } catch (error) {
+            alert(error.response?.data?.message || "Error en el procesamiento del registro operativo.");
+        }
+    };
+
+    // Cargar datos en el formulario para modificación
+    const handleEditClick = (event) => {
+        setIsEditing(true);
+        setSelectedId(event._id);
+        setPublicarGlobal(event.esGlobal || false);
+        setFormData({
+            title: event.title || "",
+            mision: event.mision || "ENTRENAMIENTO",
+            notes: event.notes || "",
+            notasMarginales: event.notasMarginales || event.notes || "",
+            color: event.color || "#1b3a57",
+            elemento: event.elemento || userUnidad,
+            status: event.status || "programado",
+            isRealTime: event.isRealTime || false,
+            matricula: event.matricula || "",
+            aeronave: event.aeronave || "",
+            tipoIcono: event.tipoIcono || "ala_rotativa",
+            origen: {
+                nombre: event.origen?.nombre || "",
+                lat: event.origen?.lat || "",
+                lng: event.origen?.lng || ""
+            },
+            destino: {
+                nombre: event.destino?.nombre || "",
+                lat: event.destino?.lat || "",
+                lng: event.destino?.lng || ""
+            },
+            unidadApoyada: event.unidadApoyada || "",
+            pntoContactoNom: event.pntoContactoNom || "",
+            pntoContactoTel: event.pntoContactoTel || "",
+            responsableNom: event.responsableNom || "",
+            responsableTel: event.responsableTel || "",
+            tipoApoyo: event.tipoApoyo || "SOSTENIMIENTO",
+            sdaListado: event.sdaListado || []
+        });
+    };
+
+    const handleDeleteClick = async (id) => {
+        if (!window.confirm("¿Confirma la baja del registro táctico seleccionado?")) return;
+        try {
+            await deleteEvent(id);
+            fetchData();
+        } catch (error) {
+            alert("Error al eliminar el registro.");
         }
     };
 
     const resetForm = () => {
-        setFormData({ 
-            title: '', start: '', end: '', color: '#3498db', notes: '', 
-            mision: '', tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
-            etapa: 'recepcion', unidadesInvolucradas: [], unidadApoyada: '',
-            pntoContactoNom: '', pntoContactoTel: '', responsableNom: '', responsableTel: ''
-        });
-        setPublicarGlobal(false);
         setIsEditing(false);
         setSelectedId(null);
-    };
-
-    const handleEdit = (ev) => {
-        setIsEditing(true);
-        setSelectedId(ev._id);
-        setPublicarGlobal(ev.esGlobal || false);
-        const parts = ev.notes?.split(' | Obs: ');
+        setPublicarGlobal(false);
         setFormData({
-            ...ev,
-            title: ev.title || '',
-            start: parseFromBackend(ev.start),
-            end: parseFromBackend(ev.end),
-            notes: parts && parts.length > 1 ? parts[1] : ev.notes || '',
-            unidadesInvolucradas: ev.elemento ? ev.elemento.split(', ') : []
+            title: "",
+            mision: "ENTRENAMIENTO",
+            notes: "",
+            notasMarginales: "",
+            color: "#1b3a57",
+            elemento: userUnidad,
+            status: "programado",
+            isRealTime: false,
+            matricula: "",
+            aeronave: "",
+            tipoIcono: "ala_rotativa",
+            origen: { nombre: "", lat: "", lng: "" },
+            destino: { nombre: "", lat: "", lng: "" },
+            unidadApoyada: "",
+            pntoContactoNom: "",
+            pntoContactoTel: "",
+            responsableNom: "",
+            responsableTel: "",
+            tipoApoyo: "SOSTENIMIENTO",
+            sdaListado: []
         });
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    const handleDelete = async (ev) => {
-        if (window.confirm("¿Confirmar eliminación definitiva?")) {
-            try {
-                await deleteEvent(ev._id);
-                fetchData();
-                if(isEditing && selectedId === ev._id) resetForm();
-            } catch (error) { alert("Error al eliminar."); }
-        }
     };
 
     return (
-        <div style={styles.container}>
-            <div style={{...styles.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr'}}>
-                {/* COLUMNA FORMULARIO */}
-                {esGestorUnidad ? (
-                    <div style={styles.card}>
-                        <h3 style={styles.title}>{isEditing ? "📝 Editar Orden" : "➕ Nueva Orden de Vuelo"}</h3>
-                        
-                        {puedePublicarGlobal && (
-                            <button type="button" 
-                                onClick={() => setPublicarGlobal(!publicarGlobal)}
-                                style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px' }}>
-                                {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (VISTO POR DIR AE)" : "🏠 PUBLICACIÓN LOCAL (Solo Unidad)"}
-                            </button>
-                        )}
+        <div style={styles.dashboard}>
+            {/* PANEL DE CONTROL SUPERIOR */}
+            <div style={styles.topActions}>
+                <input 
+                    type="text" 
+                    placeholder="🔍 Buscar por Unidad, Matrícula, Misión o Título..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={styles.searchBar}
+                />
+                
+                <div style={styles.tabContainer}>
+                    {["TODAS", "PROGRAMADAS", "EN VUELO", "FINALIZADAS"].map(tab => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            style={{
+                                ...styles.tabButton,
+                                ...(activeTab === tab ? styles.tabActive : {})
+                            }}
+                        >
+                            {tab}
+                        </button>
+                    ))}
+                </div>
+            </div>
 
-                        <div style={styles.etapaWrapper}>
-                            <label style={styles.labelEtapa}>ETAPA OPERATIVA:</label>
-                            <div style={styles.etapaGrid}>
-                                {Object.keys(etapaColors).map(e => (
-                                    <button key={e} type="button" onClick={() => setFormData({...formData, etapa: e})} 
-                                        style={{...styles.btnStep, background: formData.etapa === e ? etapaColors[e] : 'white', color: formData.etapa === e ? 'white' : '#555'}}>
-                                        {e.toUpperCase()}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
+            <div style={{ ...styles.mainGrid, flexDirection: isMobile ? 'column' : 'row' }}>
+                
+                {/* COLUMNA FORMULARIO DE CARGA */}
+                {puedeCrearYEditar && (
+                    <div style={{ ...styles.card, flex: 1.2 }}>
+                        <h3 style={styles.cardTitle}>
+                            {isEditing ? `📝 MODIFICAR REGISTRO TÁCTICO` : `✈️ NUEVO REGISTRO OPERATIVO`}
+                        </h3>
                         <form onSubmit={handleSubmit} style={styles.form}>
-                            <div style={styles.sectionTitle}>CLASIFICACIÓN</div>
-                            <select value={formData.mision} onChange={e => setFormData({...formData, mision: e.target.value, color: misionesConfig[e.target.value] || '#3498db'})} style={styles.input} required>
-                                <option value="">Seleccione Misión...</option>
-                                {Object.keys(misionesConfig).map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
-
-                            <input type="text" required placeholder="Nombre de la Misión / Orden" value={formData.title} 
-                                   onChange={e => setFormData({...formData, title: e.target.value})} style={styles.input} />
                             
                             <div style={styles.row}>
-                                <div style={{flex: 1}}><label style={styles.label}>Inicio</label>
-                                <input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} style={styles.input}/></div>
-                                <div style={{flex: 1}}><label style={styles.label}>Fin</label>
-                                <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Título de Operación / Evento</label>
+                                    <input type="text" name="title" value={formData.title} onChange={handleInputChange} required style={styles.input} placeholder="Ej: VUELO DE TRASLADO SANITARIO" />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Misión</label>
+                                    <select name="mision" value={formData.mision} onChange={handleInputChange} style={styles.select}>
+                                        <option value="ENTRENAMIENTO">ENTRENAMIENTO</option>
+                                        <option value="OPERACIONAL">OPERACIONAL</option>
+                                        <option value="APOYO_COMUNIDAD">APOYO A LA COMUNIDAD</option>
+                                        <option value="MANTENIMIENTO">MANTENIMIENTO / PRUEBA</option>
+                                        <option value="OTROS">OTROS</option>
+                                    </select>
+                                </div>
                             </div>
 
-                            {esMando && (
-                                <div style={styles.unidadSelector}>
-                                    <label style={styles.label}>Asignar Unidad Ejecutora:</label>
-                                    <div style={styles.unidadChips}>
-                                        {unidadesAE.map(u => (
-                                            <button key={u} type="button" onClick={() => toggleUnidad(u)}
-                                                    style={{...styles.chip, backgroundColor: formData.unidadesInvolucradas.includes(u) ? '#1b3a57' : '#eee', color: formData.unidadesInvolucradas.includes(u) ? 'white' : '#555'}}>
-                                                {u}
-                                            </button>
+                            <div style={styles.row}>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Unidad / Elemento Responsable</label>
+                                    <input 
+                                        type="text" 
+                                        name="elemento" 
+                                        value={formData.elemento} 
+                                        onChange={handleInputChange} 
+                                        disabled={!esMandoSuperior} 
+                                        required 
+                                        style={styles.input} 
+                                    />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Tipo de Apoyo / Tarea</label>
+                                    <select name="tipoApoyo" value={formData.tipoApoyo} onChange={handleInputChange} disabled={formData.isRealTime} style={styles.select}>
+                                        {TIPOS_DE_APOYO.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* MATERIAL AÉREO INTEGRADO */}
+                            <div style={styles.row}>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>
+                                        Aeronaves Disponibles en Unidad {loadingAircraft && "⏳"}
+                                    </label>
+                                    <select onChange={handleAircraftSelect} value={formData.matricula} style={styles.select}>
+                                        <option value="">-- SELECCIONAR MATERIAL E/S --</option>
+                                        {availableAircraft.map(a => (
+                                            <option key={a._id} value={a.matricula}>
+                                                {a.matricula} ({a.sda})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Matrícula</label>
+                                    <input type="text" name="matricula" value={formData.matricula} onChange={handleInputChange} style={styles.input} placeholder="Ej: AE-460" />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Sistema de Armas (SdA)</label>
+                                    <input type="text" name="aeronave" value={formData.aeronave} onChange={handleInputChange} style={styles.input} placeholder="Ej: UH-1H" />
+                                </div>
+                            </div>
+
+                            {/* TRAZA DE NAVEGACIÓN (ORIGEN Y DESTINO COORDENADAS) */}
+                            <fieldset style={styles.fieldset}>
+                                <legend style={styles.legend}>Traza de Vuelo / Ejes de Navegación</legend>
+                                <div style={styles.row}>
+                                    <div style={styles.group}>
+                                        <label style={styles.label}>Origen (OACI / Lugar)</label>
+                                        <input type="text" name="origen.nombre" value={formData.origen.nombre} onChange={handleInputChange} style={styles.input} placeholder="Ej: SABE" />
+                                    </div>
+                                    <div style={styles.group}>
+                                        <label style={styles.label}>Latitud</label>
+                                        <input type="number" step="any" name="origen.lat" value={formData.origen.lat} onChange={handleInputChange} style={styles.input} placeholder="-34.613" />
+                                    </div>
+                                    <div style={styles.group}>
+                                        <label style={styles.label}>Longitud</label>
+                                        <input type="number" step="any" name="origen.lng" value={formData.origen.lng} onChange={handleInputChange} style={styles.input} placeholder="-58.377" />
+                                    </div>
+                                </div>
+                                <div style={styles.row}>
+                                    <div style={styles.group}>
+                                        <label style={styles.label}>Destino (OACI / Lugar)</label>
+                                        <input type="text" name="destino.nombre" value={formData.destino.nombre} onChange={handleInputChange} style={styles.input} placeholder="Ej: SACO" />
+                                    </div>
+                                    <div style={styles.group}>
+                                        <label style={styles.label}>Latitud</label>
+                                        <input type="number" step="any" name="destino.lat" value={formData.destino.lat} onChange={handleInputChange} style={styles.input} placeholder="-31.312" />
+                                    </div>
+                                    <div style={styles.group}>
+                                        <label style={styles.label}>Longitud</label>
+                                        <input type="number" step="any" name="destino.lng" value={formData.destino.lng} onChange={handleInputChange} style={styles.input} placeholder="-64.209" />
+                                    </div>
+                                </div>
+                            </fieldset>
+
+                            {/* ENLACES Y CONTACTOS DE LA MISIÓN */}
+                            <div style={styles.row}>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Unidad Apoyada</label>
+                                    <input type="text" name="unidadApoyada" value={formData.unidadApoyada} onChange={handleInputChange} style={styles.input} placeholder="Ej: RI MEC 7" />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Icono Radar</label>
+                                    <select name="tipoIcono" value={formData.tipoIcono} onChange={handleInputChange} style={styles.select}>
+                                        <option value="ala_rotativa">Ala Rotativa (Helicóptero)</option>
+                                        <option value="ala_fija">Ala Fija (Avión)</option>
+                                        <option value="base">Puesto de Comando (Base)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={styles.row}>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Contacto Punto de Control (Nombre)</label>
+                                    <input type="text" name="pntoContactoNom" value={formData.pntoContactoNom} onChange={handleInputChange} style={styles.input} />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Contacto Teléfono</label>
+                                    <input type="text" name="pntoContactoTel" value={formData.pntoContactoTel} onChange={handleInputChange} style={styles.input} />
+                                </div>
+                            </div>
+
+                            <div style={styles.row}>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Responsable de Carga / Operador</label>
+                                    <input type="text" name="responsableNom" value={formData.responsableNom} onChange={handleInputChange} style={styles.input} />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Responsable Teléfono</label>
+                                    <input type="text" name="responsableTel" value={formData.responsableTel} onChange={handleInputChange} style={styles.input} />
+                                </div>
+                            </div>
+
+                            {/* COMPLEMENTOS TÁCTICOS */}
+                            <div style={styles.row}>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Sistemas Complementarios Involucrados</label>
+                                    <div style={styles.sdaBox}>
+                                        <input type="text" value={currentSda} onChange={(e) => setCurrentSda(e.target.value)} placeholder="Ej: AB-206" style={styles.input} />
+                                        <button type="button" onClick={addSdaTag} style={styles.btnAdd}>+</button>
+                                    </div>
+                                    <div style={styles.tagWrap}>
+                                        {formData.sdaListado.map(t => (
+                                            <span key={t} style={styles.tag}>
+                                                {t} <button type="button" onClick={() => removeSdaTag(t)} style={styles.btnTagX}>×</button>
+                                            </span>
                                         ))}
                                     </div>
                                 </div>
-                            )}
-
-                            <div style={styles.sectionTitle}>DATOS DE APOYO</div>
-                            <input type="text" placeholder="Unidad Apoyada" value={formData.unidadApoyada} 
-                                   onChange={e => setFormData({...formData, unidadApoyada: e.target.value})} style={styles.input} />
-
-                            <div style={styles.row}>
-                                <input type="text" placeholder="Punto de Contacto" value={formData.pntoContactoNom} 
-                                       onChange={e => setFormData({...formData, pntoContactoNom: e.target.value})} style={{...styles.input, flex: 2}} />
-                                <input type="text" placeholder="Teléfono" value={formData.pntoContactoTel} 
-                                       onChange={e => setFormData({...formData, pntoContactoTel: e.target.value})} style={{...styles.input, flex: 1}} />
                             </div>
 
-                            <select value={formData.tipoApoyo} onChange={e => setFormData({...formData, tipoApoyo: e.target.value})} style={styles.input} required>
-                                <option value="">Tipo de Apoyo...</option>
-                                {TIPOS_DE_APOYO.map((apoyo, idx) => <option key={idx} value={apoyo}>{apoyo}</option>)}
-                            </select>
+                            <div style={styles.row}>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Estado del Registro</label>
+                                    <select name="status" value={formData.status} onChange={handleInputChange} style={styles.select}>
+                                        <option value="programado">PROGRAMADO / PLANIFICADO</option>
+                                        <option value="en_curso">EN CURSO / EN VUELO</option>
+                                        <option value="finalizado">FINALIZADO / ARCHIVADO</option>
+                                    </select>
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={styles.label}>Color Asignado (Calendario)</label>
+                                    <input type="color" name="color" value={formData.color} onChange={handleInputChange} style={{ ...styles.input, height: '40px', padding: '2px' }} />
+                                </div>
+                            </div>
 
-                            {/* --- SECCIÓN REQUERIMIENTO TÉCNICO CORREGIDA CON DATOS NATIVOS --- */}
-                            {(esElementoDependiente || esAdmin) && (
-                                <>
-                                    <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA EN SERVICIO)</div>
-                                    <div style={styles.sdaBox}>
-                                        <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
-                                            <option value="">{loadingAircraft ? "Cargando material en servicio..." : "Seleccionar Aeronave de la Unidad..."}</option>
-                                            {availableAircraft.map(air => {
-                                                const sistemaArmas = air.sda || air.modelo || 'S/D';
-                                                const mat = air.matricula || 'S/M';
-                                                return (
-                                                    <option key={air._id} value={`${sistemaArmas} (${mat})`}>
-                                                        {sistemaArmas} — {mat}
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
-                                        <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
-                                        <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
-                                    </div>
+                            <div style={{ ...styles.row, alignItems: 'center', gap: '20px', padding: '10px 0' }}>
+                                <label style={{ ...styles.label, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                    <input type="checkbox" name="isRealTime" checked={formData.isRealTime} onChange={handleInputChange} />
+                                    📡 Transmitir en Tiempo Real (Mapa Táctico / Radar)
+                                </label>
 
-                                    <div style={styles.tagWrap}>
-                                        {formData.sdaListado.map((s, i) => (
-                                            <span key={i} style={styles.tag}>{s.cantidad}x {s.sda} <button type="button" onClick={() => removeSda(i)} style={styles.btnTagX}>×</button></span>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
+                                {esMandoSuperior && (
+                                    <label style={{ ...styles.label, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={publicarGlobal} onChange={(e) => setPublicarGlobal(e.target.checked)} />
+                                        🌎 Difusión Global (Visible para todas las unidades)
+                                    </label>
+                                )}
+                            </div>
 
-                            <textarea placeholder="Observaciones de la misión..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} style={styles.textarea}></textarea>
-                            
-                            <button type="submit" style={{...styles.btnSave, backgroundColor: formData.color}}>
-                                {isEditing ? "ACTUALIZAR DATOS" : "GRABAR ORDEN"}
+                            <div style={styles.group}>
+                                <label style={styles.label}>Notas Marginales / Directivas Comando</label>
+                                <textarea name="notasMarginales" value={formData.notasMarginales} onChange={handleInputChange} style={styles.textarea} placeholder="Directivas especiales o restricciones de la operación..." />
+                            </div>
+
+                            <button type="submit" style={{ ...styles.btnSave, backgroundColor: isEditing ? '#f39c12' : '#27ae60' }}>
+                                {isEditing ? "ACTUALIZAR REGISTRO OPERATIVO" : "ASENTAR OPERACIÓN / EVENTO"}
                             </button>
-                            {isEditing && <button type="button" onClick={resetForm} style={{...styles.btnSave, backgroundColor: '#95a5a6', marginTop: '5px'}}>CANCELAR</button>}
+                            {isEditing && <button type="button" onClick={resetForm} style={{ ...styles.btnSave, backgroundColor: '#7f8c8d', marginTop: '5px' }}>CANCELAR</button>}
                         </form>
-                    </div>
-                ) : (
-                    <div style={styles.card}>
-                        <h3 style={styles.title}>📋 Información</h3>
-                        <p style={{fontSize: '0.9rem', color: '#666'}}>Su nivel de acceso (<strong>{rawRole.toUpperCase()}</strong>) es de solo consulta.</p>
                     </div>
                 )}
 
-                {/* COLUMNA REGISTRO */}
-                <div style={styles.card}>
-                    <h3 style={styles.title}>📜 Misiones Registradas</h3>
-                    <input type="text" placeholder="🔍 Filtrar por nombre, unidad o apoyo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{...styles.input, width: '100%', marginBottom: '15px'}} />
+                {/* COLUMNA LOG DE REGISTROS EXISTENTES */}
+                <div style={{ ...styles.card, flex: 1.5 }}>
+                    <h3 style={styles.cardTitle}>📜 REGISTROS FILTRADOS ({filteredEvents.length})</h3>
                     <div style={styles.scrollList}>
-                        {filteredEvents.length === 0 ? <p style={{textAlign: 'center', color: '#999'}}>No hay misiones bajo su jurisdicción.</p> : 
-                        filteredEvents.map(ev => {
-                            const esCreador = ev.creadorUnidad?.toUpperCase() === userUnidad;
-                            const esResponsable = ev.elemento?.toUpperCase().includes(userUnidad);
-                            const puedeEditar = esMando || esCreador || (esResponsable && ev.etapa === 'ordenada');
-                            const puedeBorrar = esMando || esCreador;
-
-                            return (
-                                <div key={ev._id} style={{...styles.logItem, borderLeft: `5px solid ${ev.color}`}}>
-                                    <div style={{flex: 1}}>
-                                        <div style={{fontWeight: 'bold', color: '#1b3a57'}}>{ev.esGlobal && "🌐 "}{ev.title}</div>
-                                        <div style={{fontSize: '0.7rem', color: ev.color, fontWeight: 'bold'}}>{ev.mision}</div>
-                                        <div style={{fontSize: '0.75rem', color: '#666'}}>Resp: {ev.elemento} | Apoyado: {ev.unidadApoyada}</div>
-                                        <div style={{marginTop: '5px'}}>
-                                            <span style={{...styles.miniBadge, backgroundColor: etapaColors[ev.etapa] || '#95a5a6'}}>{ev.etapa?.toUpperCase()}</span>
+                        {filteredEvents.length === 0 ? (
+                            <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '20px' }}>No se localizaron registros para los filtros seleccionados.</p>
+                        ) : (
+                            filteredEvents.map(event => (
+                                <div key={event._id} style={{ ...styles.logItem, borderLeft: `5px solid ${event.color || '#1b3a57'}` }}>
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={styles.itemTitle}>{event.title}</span>
+                                            {event.isRealTime && <span style={styles.badgeLive}>📡 RADAR LIVE</span>}
+                                            {event.esGlobal && <span style={styles.badgeGlobal}>🌎 GLOBAL</span>}
                                         </div>
+                                        <div style={styles.metaData}>
+                                            <span><b>Unidad:</b> {event.elemento}</span> | 
+                                            <span><b>Misión:</b> {event.mision}</span> | 
+                                            <span><b>Apoyo:</b> {event.tipoApoyo || 'S/D'}</span>
+                                        </div>
+                                        {event.matricula && (
+                                            <div style={styles.metaData}>
+                                                <span><b>Aeronave:</b> {event.aeronave} [{event.matricula}]</span>
+                                            </div>
+                                        )}
+                                        {(event.origen?.nombre || event.destino?.nombre) && (
+                                            <div style={{ ...styles.metaData, color: '#16a085' }}>
+                                                📍 {event.origen?.nombre || 'S/D'} ➔ {event.destino?.nombre || 'S/D'}
+                                            </div>
+                                        )}
                                     </div>
-                                    <div style={styles.logActions}>
-                                        {puedeEditar && <button onClick={() => handleEdit(ev)} style={styles.btnIconEdit}>✏️</button>}
-                                        {puedeBorrar && <button onClick={() => handleDelete(ev)} style={styles.btnIconDel}>🗑️</button>}
-                                    </div>
+                                    
+                                    {puedeCrearYEditar && (
+                                        <div style={styles.itemActions}>
+                                            <button onClick={() => handleEditClick(event)} style={styles.btnEdit}>✏️</button>
+                                            <button onClick={() => handleDeleteClick(event._id)} style={styles.btnDelete}>🗑️</button>
+                                        </div>
+                                    )}
                                 </div>
-                            );
-                        })}
+                            ))
+                        )}
                     </div>
                 </div>
+
             </div>
         </div>
     );
 };
 
+// --- DISEÑO INTERFAZ DE COMANDO ---
 const styles = {
-    container: { padding: '20px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'Arial, sans-serif' },
-    grid: { display: 'grid', gap: '25px', alignItems: 'start' },
-    card: { background: 'white', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f0f2f5' },
-    title: { marginTop: 0, borderBottom: '2px solid #f0f2f5', paddingBottom: '12px', fontSize: '1.2rem', color: '#1b3a57', marginBottom: '20px', fontWeight: 'bold' },
-    sectionTitle: { fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '10px', borderLeft: '3px solid #3498db', paddingLeft: '8px', textTransform: 'uppercase' },
-    form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    btnGlobal: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
-    etapaWrapper: { marginBottom: '20px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' },
-    labelEtapa: { fontSize: '0.7rem', fontWeight: 'bold', color: '#777', marginBottom: '8px', display: 'block' },
-    etapaGrid: { display: 'flex', gap: '8px' },
-    btnStep: { flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid #ddd' },
-    unidadSelector: { margin: '10px 0' },
-    unidadChips: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '8px' },
-    chip: { border: 'none', padding: '5px 10px', borderRadius: '15px', fontSize: '0.7rem', cursor: 'pointer' },
-    row: { display: 'flex', gap: '12px' },
-    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#555' },
-    input: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem', outline: 'none' },
+    dashboard: { display: 'flex', flexDirection: 'column', gap: '15px', padding: '5px' },
+    topActions: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', background: '#ffffff', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
+    searchBar: { flex: 1, minWidth: '280px', padding: '10px 15px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.9rem', outline: 'none' },
+    tabContainer: { display: 'flex', gap: '5px', background: '#f1f3f5', padding: '4px', borderRadius: '6px' },
+    tabButton: { border: 'none', background: 'transparent', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', color: '#495057', transition: '0.2s' },
+    tabActive: { background: '#1b3a57', color: '#ffffff' },
+    mainGrid: { display: 'flex', gap: '20px' },
+    card: { background: '#ffffff', borderRadius: '10px', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', gap: '15px' },
+    cardTitle: { margin: 0, fontSize: '1rem', color: '#1b3a57', borderBottom: '2px solid #f0f2f5', paddingBottom: '10px', fontWeight: 'bold' },
+    form: { display: 'flex', flexDirection: 'column', gap: '12px' },
+    row: { display: 'flex', gap: '15px', flexWrap: 'wrap' },
+    group: { flex: 1, display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '140px' },
+    label: { fontSize: '0.8rem', fontWeight: 'bold', color: '#2c3e50' },
+    input: { padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.9rem', outline: 'none', backgroundColor: '#fcfcfc' },
+    select: { padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.9rem', outline: 'none', backgroundColor: '#ffffff' },
+    fieldset: { border: '1px dashed #cbd5e1', borderRadius: '8px', padding: '12px 15px', display: 'flex', flexDirection: 'column', gap: '8px', margin: '5px 0' },
+    legend: { fontSize: '0.75rem', fontWeight: 'bold', color: '#16a085', padding: '0 5px' },
     textarea: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', minHeight: '80px', fontSize: '0.9rem', resize: 'none' },
     sdaBox: { display: 'flex', gap: '10px' },
     btnAdd: { background: '#1b3a57', color: 'white', border: 'none', borderRadius: '8px', width: '40px', cursor: 'pointer' },
@@ -432,11 +592,14 @@ const styles = {
     btnTagX: { background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', marginLeft: '5px', fontSize: '1rem' },
     btnSave: { color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', marginTop: '10px' },
     scrollList: { maxHeight: '600px', overflowY: 'auto' },
-    logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', borderBottom: '1px solid #f0f0f0' },
-    miniBadge: { color: 'white', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' },
-    logActions: { display: 'flex', gap: '5px' },
-    btnIconEdit: { background: '#f1c40f', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' },
-    btnIconDel: { background: '#fadbd8', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }
+    logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', borderRadius: '6px', marginBottom: '8px' },
+    itemTitle: { fontWeight: 'bold', color: '#2c3e50', fontSize: '0.9rem' },
+    metaData: { fontSize: '0.75rem', color: '#7f8c8d', marginTop: '4px' },
+    badgeLive: { background: '#e74c3c', color: 'white', fontSize: '0.65rem', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px' },
+    badgeGlobal: { background: '#2980b9', color: 'white', fontSize: '0.65rem', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px' },
+    itemActions: { display: 'flex', gap: '5px' },
+    btnEdit: { background: '#f39c12', border: 'none', color: 'white', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer' },
+    btnDelete: { background: '#e74c3c', border: 'none', color: 'white', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer' }
 };
 
 export default Operaciones;

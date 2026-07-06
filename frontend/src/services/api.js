@@ -57,7 +57,15 @@ API.interceptors.response.use(
         return Promise.reject(error);
     }
 );
-
+API.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 403) {
+            console.error("🛑 ACCESO DENEGADO (403): Verifica los permisos de tu usuario.");
+        }
+        return Promise.reject(error);
+    }
+);
 /**
  * SERVICIOS DE AUTENTICACIÓN
  */

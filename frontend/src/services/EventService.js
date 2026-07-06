@@ -56,7 +56,8 @@ export const getActiveOperations = async () => {
 export const getAvailableAircraft = async (elemento) => {
     try {
         const encodedElemento = encodeURIComponent(elemento || 'all');
-        const response = await API.get(`/aircraft/${encodedElemento}`);
+        // 👉 CORRECCIÓN SINCRO JOKER: Cambiado de '/aircraft/' a '/events/aircraft-available/' para rutear al controlador correcto y remover el 403
+        const response = await API.get(`/events/aircraft-available/${encodedElemento}`);
         saveLocalData(`cached_aircraft_${elemento}`, response.data);
         return response.data;
     } catch (error) {

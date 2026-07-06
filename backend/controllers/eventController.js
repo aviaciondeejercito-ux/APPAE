@@ -40,9 +40,10 @@ const getEvents = async (req, res) => {
         
         let query = { isRealTime: false }; 
 
-        const userRole = (role || '').toLowerCase();
+        // SINCRO JOKER: Normalización en mayúsculas para control estricto de roles
+        const userRoleUpper = (role || '').toUpperCase();
 
-        if (!isMando && userRole !== 'admin') {
+        if (!isMando && userRoleUpper !== 'ADMIN') {
             query.$or = [
                 { 
                     isRealTime: false,
@@ -72,14 +73,16 @@ const getActiveOperations = async (req, res) => {
     try {
         const { elemento, role } = req.user;
         const isMando = req.isMando;
-        const userRole = (role || '').toLowerCase();
+        
+        // SINCRO JOKER: Normalización en mayúsculas para control estricto de roles
+        const userRoleUpper = (role || '').toUpperCase();
 
         let query = { 
             isRealTime: true,
             status: { $in: ['en_curso', 'en_desarrollo', 'operativo', 'emergencia', 'programado'] } 
         };
 
-        if (!isMando && userRole !== 'admin') {
+        if (!isMando && userRoleUpper !== 'ADMIN') {
             query.$or = [
                 { elemento: { $regex: elemento || '', $options: 'i' }, isRealTime: true },
                 { esGlobal: true, isRealTime: true },
@@ -118,7 +121,8 @@ const createEvent = async (req, res) => {
             }
         }
 
-        const isMando = req.isMando || req.user.role?.toLowerCase() === 'admin';
+        const userRoleUpper = (req.user.role || '').toUpperCase();
+        const isMando = req.isMando || userRoleUpper === 'ADMIN';
         const userElemento = (req.user.elemento || 'DESCONOCIDO').toUpperCase();
         
         const eventData = {
@@ -186,7 +190,8 @@ const updateEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'Registro no localizado.' });
 
-        const isMando = req.isMando || req.user.role?.toLowerCase() === 'admin';
+        const userRoleUpper = (req.user.role || '').toUpperCase();
+        const isMando = req.isMando || userRoleUpper === 'ADMIN';
         const userElemento = (req.user.elemento || '').toUpperCase();
         const isOwner = event.createdBy.toString() === req.user._id.toString();
         const isCreatorUnit = event.creadorUnidad === userElemento;
@@ -236,7 +241,8 @@ const deleteEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ message: 'No existe el registro.' });
 
-        const isMando = req.isMando || req.user.role?.toLowerCase() === 'admin';
+        const userRoleUpper = (req.user.role || '').toUpperCase();
+        const isMando = req.isMando || userRoleUpper === 'ADMIN';
         const isOwner = event.createdBy.toString() === req.user._id.toString();
         const isCreatorUnit = event.creadorUnidad === (req.user.elemento || '').toUpperCase();
 
