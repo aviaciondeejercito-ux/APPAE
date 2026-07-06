@@ -10,13 +10,29 @@ const Aircraft = require('../models/Aircraft');
 const getAvailableAircraft = async (req, res) => {
     try {
         const { elemento } = req.params;
-        let query = { estado: 'E/S' };
+        
+        // LOG CONTROL: Ver qué unidad le está pidiendo el frontend al backend
+        console.log(`🔍 [Backend] Buscando aeronaves para la unidad: "${elemento}"`);
+
+        // Consulta base: Filtrado por En Servicio
+        let query = { estado: 'E/S' }; 
+        
+        // 💡 NOTA DE PRUEBA: Si querés que aparezcan TODAS (incluidas las F/S) para testear, 
+        // podés comentar la línea de arriba y descomentar la de abajo:
+        // let query = {};
 
         if (elemento && elemento !== 'all') {
             query.unidad = { $regex: elemento, $options: 'i' };
         }
         
+        // LOG CONTROL: Ver la query exacta que se le envía a MongoDB
+        console.log("⚙️ [Backend] Query enviada a MongoDB:", query);
+        
         const aircrafts = await Aircraft.find(query).sort({ sda: 1, matricula: 1 });
+        
+        // LOG CONTROL: Ver cuántas aeronaves trajo la base de datos
+        console.log(`✈️ [Backend] Aeronaves encontradas en la BD: ${aircrafts.length}`);
+
         res.status(200).json(aircrafts);
     } catch (error) {
         console.error(`❌ Error en getAvailableAircraft: ${error.message}`);
