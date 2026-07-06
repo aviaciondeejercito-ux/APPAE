@@ -78,23 +78,28 @@ const Operaciones = () => {
         setFilteredEvents(results);
     }, [searchTerm, events]);
 
-    // --- HOOK DE DISPONIBILIDAD DE AERONAVES ---
+    // --- HOOK DE DISPONIBILIDAD DE AERONAVES CORREGIDO ---
     useEffect(() => {
         const fetchAeronaves = async () => {
-            // Solo ejecutan la búsqueda las unidades dependientes o el admin global
             if (esMandoSuperior || !userUnidad || userUnidad === "") return;
             
             setLoadingAircraft(true);
             try {
                 const data = await getAvailableAircraft(userUnidad);
+                
+                // LINEA DE CONTROL: Ver en consola qué responde el servidor
+                console.log("✈️ Datos crudos recibidos del backend:", data);
+
                 if (data && Array.isArray(data)) {
                     const cleanData = data
-                        .filter(a => a.estado === 'E/S')
+                        .filter(a => a.estado === 'E/S') // Solo entran las aeronaves en servicio
                         .map(a => ({
                             ...a,
                             matricula: a.matricula || 'S/M',
-                            modelo: a.modelo || a.sda || 'S/D'
+                            modelo: a.sda || 'S/D' // Corregido: Usamos 'sda' nativo de la BD
                         }));
+
+                    console.log("✅ Aeronaves filtradas en servicio (E/S):", cleanData);
                     setAvailableAircraft(cleanData);
                 }
             } catch (err) {
@@ -321,18 +326,22 @@ const Operaciones = () => {
                                 {TIPOS_DE_APOYO.map((apoyo, idx) => <option key={idx} value={apoyo}>{apoyo}</option>)}
                             </select>
 
-                            {/* --- CONDICIONAL DE REQUERIMIENTO TÉCNICO (SdA) SEGÚN TU SOLICITUD --- */}
+                            {/* --- SECCIÓN REQUERIMIENTO TÉCNICO CORREGIDA CON DATOS NATIVOS --- */}
                             {(esElementoDependiente || esAdmin) && (
                                 <>
                                     <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA EN SERVICIO)</div>
                                     <div style={styles.sdaBox}>
                                         <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
                                             <option value="">{loadingAircraft ? "Cargando material en servicio..." : "Seleccionar Aeronave de la Unidad..."}</option>
-                                            {availableAircraft.map(air => (
-                                                <option key={air._id} value={`${air.modelo} (${air.matricula})`}>
-                                                    {air.modelo} - {air.matricula}
-                                                </option>
-                                            ))}
+                                            {availableAircraft.map(air => {
+                                                const sistemaArmas = air.sda || air.modelo || 'S/D';
+                                                const mat = air.matricula || 'S/M';
+                                                return (
+                                                    <option key={air._id} value={`${sistemaArmas} (${mat})`}>
+                                                        {sistemaArmas} — {mat}
+                                                    </option>
+                                                );
+                                            })}
                                         </select>
                                         <input type="number" min="1" value={formData.sdaCantidad} onChange={e => setFormData({...formData, sdaCantidad: e.target.value})} style={{...styles.input, width: '60px'}} />
                                         <button type="button" onClick={addSda} style={styles.btnAdd}>+</button>
