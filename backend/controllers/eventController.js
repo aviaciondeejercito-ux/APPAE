@@ -9,30 +9,28 @@ const Aircraft = require('../models/Aircraft');
 // @desc    Obtener aeronaves disponibles (Solo las que están En Servicio E/S)
 const getAvailableAircraft = async (req, res) => {
     try {
-        const { elemento } = req.params;
+        let { elemento } = req.params;
         
-        // LOG CONTROL: Ver qué unidad le está pidiendo el frontend al backend
-        console.log(`🔍 [Backend] Buscando aeronaves para la unidad: "${elemento}"`);
+        // 1. Iniciamos la query exigiendo que esté En Servicio
+        let query = { estado: 'E/S' };
 
-        // Consulta base: Filtrado por En Servicio
-        let query = { estado: 'E/S' }; 
-        
-        // 💡 NOTA DE PRUEBA: Si querés que aparezcan TODAS (incluidas las F/S) para testear, 
-        // podés comentar la línea de arriba y descomentar la de abajo:
-        // let query = {};
-
+        // 2. Si viene un elemento (unidad), limpiamos los espacios extras
         if (elemento && elemento !== 'all') {
-            query.unidad = { $regex: elemento, $options: 'i' };
+            elemento = elemento.trim();
+            
+            // Reemplazamos los espacios por un comodín de regex '.*' 
+            // Esto hace que "B AV APY COMB 601" coincida aunque busques "B AV APY COMB" o "B AV APY COMB 601"
+            const regexBusqueda = elemento.replace(/\s+/g, '.*');
+            
+            query.unidad = { $regex: regexBusqueda, $options: 'i' };
         }
         
-        // LOG CONTROL: Ver la query exacta que se le envía a MongoDB
-        console.log("⚙️ [Backend] Query enviada a MongoDB:", query);
-        
+        console.log("✈️ [Backend Query] Buscando con:", query);
+
         const aircrafts = await Aircraft.find(query).sort({ sda: 1, matricula: 1 });
         
-        // LOG CONTROL: Ver cuántas aeronaves trajo la base de datos
-        console.log(`✈️ [Backend] Aeronaves encontradas en la BD: ${aircrafts.length}`);
-
+        console.log(`✅ [Backend] Encontradas ${aircrafts.length} aeronaves para el selector.`);
+        
         res.status(200).json(aircrafts);
     } catch (error) {
         console.error(`❌ Error en getAvailableAircraft: ${error.message}`);
