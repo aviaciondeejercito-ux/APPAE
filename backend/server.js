@@ -81,7 +81,7 @@ const astronomyRoutes = require('./routes/astronomy');
 const tripulanteRoutes = require('./routes/tripulantesRoutes'); 
 const vueloRoutes = require('./routes/vueloRoutes');
 const ebmRoutes = require('./routes/ebmRoutes'); 
-
+const alertRoutes = require('./routes/alertRoutes');
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
 app.get('/api/health', (req, res) => {
@@ -104,7 +104,8 @@ app.use('/api/vuelos', vueloRoutes);
 
 // MONTAJE EBM
 app.use('/api/ebm', ebmRoutes);
-
+// MONTAJE DE ALERTAS OPERATIVAS
+app.use('/api/alerts', alertRoutes); //
 // --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
 app.use((req, res) => {
     res.status(404).json({

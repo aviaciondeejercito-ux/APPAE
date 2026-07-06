@@ -13,16 +13,17 @@ const authorize = (...rolesPermitidos) => {
         if (!userRole || !permitidosLimpios.includes(userRole)) {
             return res.status(403).json({ 
                 success: false, 
-                mensaje: `Acceso denegado: El nivel [${rawRole || 'SIN ROL'}] no posee privilegios.` 
+                mensaje: `Acceso denegado: Nivel [${rawRole || 'SIN ROL'}] sin privilegios.` 
             });
         }
         next();
     };
 };
 
-const rolesPermitidosAlertas = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'user', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
+const roles = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'user', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
 
-// Aplicar protección de sesión obligatoria y mapear endpoint
-router.get('/dashboard', protect, authorize(...rolesPermitidosAlertas), alertsController.getAlertasInternasUnidad);
+// Rutas consolidadas para el Dashboard Operativo
+router.get('/dashboard', protect, authorize(...roles), alertsController.getAlertasInternasUnidad);
+router.get('/unidad', protect, authorize(...roles), alertsController.getAlertasInternasUnidad);
 
 module.exports = router;

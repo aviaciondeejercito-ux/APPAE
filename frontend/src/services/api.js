@@ -290,7 +290,6 @@ export const getAstronomyData = async (lat, lng) => {
         throw error;
     }
 };
-
 const EventService = {
     getEvents,
     getActiveOperations,
@@ -303,7 +302,7 @@ const EventService = {
     updateTripulante,
     deleteTripulante,
     getPlanificacionEbm,
-    getAlertasDashboard, // Integrado al objeto unificado preservando lo anterior
+    getAlertasDashboard,
     getWeatherData,
     getAstronomyData,
     getVuelos,
