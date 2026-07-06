@@ -28,7 +28,7 @@ const todosLosRoles = [
 // --- 1. PROTECCIÓN DE IDENTIDAD (TOKEN JWT) ---
 router.use(protect);
 
-// --- 2. DEFINICIÓN DE RUTAS OPERATIVAS (ORDEN CRÍTICO) ---
+// --- 2. DEFINICIÓN DE RUTAS OPERATIVAS (ORDEN CRÍTICO ANTI-COLLISION) ---
 
 /**
  * @route    GET /api/events/active-map
@@ -58,13 +58,15 @@ router.post('/', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACION
 /**
  * @route    PUT /api/events/:id
  * @desc     Actualizar misión
+ * @note     Se añade restricción ([0-9a-fA-F]{24}) para que solo procese ObjectIds válidos de MongoDB
  */
-router.put('/:id', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'user'), updateEvent);
+router.put('/:id([0-9a-fA-F]{24})', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'user'), updateEvent);
 
 /**
  * @route    DELETE /api/events/:id
  * @desc     Eliminación de registro
+ * @note     Se añade restricción ([0-9a-fA-F]{24}) para evitar colisiones con texto plano
  */
-router.delete('/:id', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE'), deleteEvent);
+router.delete('/:id([0-9a-fA-F]{24})', authorize('admin', 'BOSS', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE'), deleteEvent);
 
 module.exports = router;

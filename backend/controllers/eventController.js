@@ -10,27 +10,21 @@ const Aircraft = require('../models/Aircraft');
 const getAvailableAircraft = async (req, res) => {
     try {
         let { elemento } = req.params;
-        
-        // 1. Iniciamos la query exigiendo que esté En Servicio
         let query = { estado: 'E/S' };
 
-        // 2. Si viene un elemento (unidad), limpiamos los espacios extras
-        if (elemento && elemento !== 'all') {
+        if (elemento && elemento !== 'all' && elemento !== 'undefined') {
+            // Limpiamos espacios al inicio y al final
             elemento = elemento.trim();
-            
-            // Reemplazamos los espacios por un comodín de regex '.*' 
-            // Esto hace que "B AV APY COMB 601" coincida aunque busques "B AV APY COMB" o "B AV APY COMB 601"
+            // Reemplazamos espacios múltiples por un comodín regex '.*' para evitar fallas de tipeo o formato
             const regexBusqueda = elemento.replace(/\s+/g, '.*');
-            
             query.unidad = { $regex: regexBusqueda, $options: 'i' };
         }
         
-        console.log("✈️ [Backend Query] Buscando con:", query);
-
+        console.log(`✈️ [Backend] Buscando aeronaves con Query:`, query);
+        
         const aircrafts = await Aircraft.find(query).sort({ sda: 1, matricula: 1 });
         
-        console.log(`✅ [Backend] Encontradas ${aircrafts.length} aeronaves para el selector.`);
-        
+        console.log(`✅ [Backend] Aeronaves operativas devueltas: ${aircrafts.length}`);
         res.status(200).json(aircrafts);
     } catch (error) {
         console.error(`❌ Error en getAvailableAircraft: ${error.message}`);
@@ -41,14 +35,11 @@ const getAvailableAircraft = async (req, res) => {
 // @desc    Obtener eventos para CALENDARIO (Excluye Vuelos en Tiempo Real)
 const getEvents = async (req, res) => {
     try {
-        // Extraemos role para tener una segunda validación además de isMando
         const { elemento, role } = req.user; 
         const isMando = req.isMando; 
         
         let query = { isRealTime: false }; 
 
-        // CORRECCIÓN CRÍTICA: Si no es mando Y el rol no es admin, aplicamos restricción.
-        // Si el rol es 'admin', saltamos este bloque y la query queda libre.
         const userRole = (role || '').toLowerCase();
 
         if (!isMando && userRole !== 'admin') {
@@ -88,7 +79,6 @@ const getActiveOperations = async (req, res) => {
             status: { $in: ['en_curso', 'en_desarrollo', 'operativo', 'emergencia', 'programado'] } 
         };
 
-        // Aplicamos la misma lógica de seguridad para el mapa
         if (!isMando && userRole !== 'admin') {
             query.$or = [
                 { elemento: { $regex: elemento || '', $options: 'i' }, isRealTime: true },
