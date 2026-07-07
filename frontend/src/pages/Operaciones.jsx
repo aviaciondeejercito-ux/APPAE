@@ -2,6 +2,23 @@ import React, { useEffect, useState } from 'react';
 import { getEvents, createEvent, deleteEvent, updateEvent } from '../services/EventService';
 import { TIPOS_DE_APOYO } from '../constants/TacticalData';
 
+// Listado oficial de unidades para la asignación de jerarquías superiores
+const UNIDADES_SISTEMA = [
+    "B HELIC ASAL 601",
+    "B AV APY COMB 601",
+    "SEC AE M 6",
+    "SEC AE M 8",
+    "ESC AV EXPL ATQ 602",
+    "SEC AE 11",
+    "EC AE",
+    "SEC AE MTE 3",
+    "SEC AE DR",
+    "B AB MANT AERON 601",
+    "SEC AE MTE 12",
+    "SEC AE 9",
+    "SEC AE M 5"
+];
+
 const Operaciones = () => {
     const [events, setEvents] = useState([]);
     
@@ -24,7 +41,7 @@ const Operaciones = () => {
     const esMandoSuperior = ['BOSS', 'ADMIN'].includes(roleNormalizado);
     const puedeCrearYEditar = rolesGestionUnidad.includes(roleNormalizado);
 
-    // Formulario estructurado para persistencia en Calendario y Vista Operativa
+    // Formulario estructurado
     const [formData, setFormData] = useState({
         title: "",
         mision: "Sostenimiento",
@@ -32,9 +49,8 @@ const Operaciones = () => {
         end: "",   
         notes: "",
         notasMarginales: "",
-        elemento: userUnidad, 
+        elemento: esMandoSuperior ? UNIDADES_SISTEMA[0] : userUnidad, 
         status: "programado",
-        isRealTime: false,
         unidadApoyada: "",
         tipoApoyo: TIPOS_DE_APOYO[0] || "SOSTENIMIENTO",
         responsableNom: "",
@@ -55,21 +71,10 @@ const Operaciones = () => {
         fetchData();
     }, []);
 
-    // Manejo de cambios del estado del formulario (Saneado)
+    // Manejo de cambios del estado del formulario
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
         const val = type === 'checkbox' ? checked : value;
-
-        if (name === "isRealTime") {
-            setFormData(prev => ({
-                ...prev,
-                isRealTime: val,
-                etapa: val ? 'operativo' : 'recepcion'
-                // Se removió el forzado de tipoApoyo que rompía el selector
-            }));
-            return;
-        }
-
         setFormData(prev => ({ ...prev, [name]: val }));
     };
 
@@ -81,7 +86,7 @@ const Operaciones = () => {
         const payload = {
             ...formData,
             esGlobal: esMandoSuperior ? publicarGlobal : false,
-            color: '#1b3a57' // Color por defecto institucional
+            color: '#1b3a57' 
         };
 
         try {
@@ -111,7 +116,6 @@ const Operaciones = () => {
             notasMarginales: event.notasMarginales || event.notes || "",
             elemento: event.elemento || userUnidad,
             status: event.status || "programado",
-            isRealTime: event.isRealTime || false,
             unidadApoyada: event.unidadApoyada || "",
             tipoApoyo: event.tipoApoyo || TIPOS_DE_APOYO[0] || "SOSTENIMIENTO",
             responsableNom: event.responsableNom || "",
@@ -140,9 +144,8 @@ const Operaciones = () => {
             end: "",
             notes: "",
             notasMarginales: "",
-            elemento: userUnidad,
+            elemento: esMandoSuperior ? UNIDADES_SISTEMA[0] : userUnidad,
             status: "programado",
-            isRealTime: false,
             unidadApoyada: "",
             tipoApoyo: TIPOS_DE_APOYO[0] || "SOSTENIMIENTO",
             responsableNom: "",
@@ -167,7 +170,6 @@ const Operaciones = () => {
                                 <input type="text" name="title" value={formData.title} onChange={handleInputChange} required style={styles.input} placeholder="Ej: TRASLADO SANITARIO" />
                             </div>
 
-                            {/* SELECTOR DE MISIÓN REORGANIZADO */}
                             <div style={styles.row}>
                                 <div style={styles.group}>
                                     <label style={styles.label}>Misión</label>
@@ -186,7 +188,6 @@ const Operaciones = () => {
                                 </div>
                             </div>
 
-                            {/* MARCO TEMPORAL (DESDE / HASTA PARA EL CALENDARIO) */}
                             <div style={styles.row}>
                                 <div style={styles.group}>
                                     <label style={styles.label}>Desde (Inicio)</label>
@@ -199,17 +200,29 @@ const Operaciones = () => {
                             </div>
 
                             <div style={styles.row}>
+                                {/* ASIGNACIÓN TÁCTICA DE UNIDAD SEGÚN JERARQUÍA */}
                                 <div style={styles.group}>
                                     <label style={styles.label}>Unidad / Elemento Responsable</label>
-                                    <input 
-                                        type="text" 
-                                        name="elemento" 
-                                        value={formData.elemento} 
-                                        onChange={handleInputChange} 
-                                        disabled={!esMandoSuperior} 
-                                        required 
-                                        style={styles.input} 
-                                    />
+                                    {esMandoSuperior ? (
+                                        <select 
+                                            name="elemento" 
+                                            value={formData.elemento} 
+                                            onChange={handleInputChange} 
+                                            style={styles.select}
+                                        >
+                                            {UNIDADES_SISTEMA.map(u => (
+                                                <option key={u} value={u}>{u}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <input 
+                                            type="text" 
+                                            name="elemento" 
+                                            value={formData.elemento} 
+                                            disabled 
+                                            style={{ ...styles.input, backgroundColor: '#e9ecef', color: '#495057' }} 
+                                        />
+                                    )}
                                 </div>
                                 <div style={styles.group}>
                                     <label style={styles.label}>Unidad Apoyada</label>
@@ -217,7 +230,6 @@ const Operaciones = () => {
                                 </div>
                             </div>
 
-                            {/* RESPONSABLE Y PUNTO DE CONTACTO */}
                             <div style={styles.row}>
                                 <div style={styles.group}>
                                     <label style={styles.label}>Responsable:</label>
@@ -266,24 +278,19 @@ const Operaciones = () => {
                                 </div>
                             </div>
 
-                            {/* CHECKBOXES DE TRANSPORTE Y PUBLICACIÓN */}
+                            {/* EXCLUSIVO PUBLICACIÓN GLOBAL PARA LA DIR AE */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '5px 0' }}>
-                                <label style={styles.checkboxLabel}>
-                                    <input type="checkbox" name="isRealTime" checked={formData.isRealTime} onChange={handleInputChange} style={styles.checkbox} />
-                                    📡 Transmitir en Tiempo Real (Mapa Táctico / Radar)
-                                </label>
-
                                 {esMandoSuperior && (
                                     <label style={styles.checkboxLabel}>
                                         <input type="checkbox" checked={publicarGlobal} onChange={(e) => setPublicarGlobal(e.target.checked)} style={styles.checkbox} />
-                                        🌎 Publicación Global (Visible para todas las unidades)
+                                        🌎 Publicación Global (Visibilidad en Calendario de la DIR AE)
                                     </label>
                                 )}
                             </div>
 
                             <div style={styles.group}>
                                 <label style={styles.label}>Notes / Notas Marginales</label>
-                                <textarea name="notasMarginales" value={formData.notasMarginales} onChange={handleInputChange} style={styles.textarea} placeholder="Directivas especiales o restricciones de la operación..." />
+                                <textarea name="notasMarginales" value={formData.notasMarginales} onChange={handleInputChange} style={styles.textarea} placeholder="Directivas especiales..." />
                             </div>
 
                             <button type="submit" style={{ ...styles.btnSave, backgroundColor: isEditing ? '#f39c12' : '#27ae60' }}>
@@ -306,7 +313,6 @@ const Operaciones = () => {
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                             <span style={styles.itemTitle}>{event.title}</span>
-                                            {event.isRealTime && <span style={styles.badgeLive}>📡 RADAR LIVE</span>}
                                             {event.esGlobal && <span style={styles.badgeGlobal}>🌎 GLOBAL</span>}
                                         </div>
                                         <div style={styles.metaData}>
@@ -371,7 +377,6 @@ const styles = {
     logItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', borderRadius: '6px', marginBottom: '8px' },
     itemTitle: { fontWeight: 'bold', color: '#2c3e50', fontSize: '0.9rem' },
     metaData: { fontSize: '0.75rem', color: '#7f8c8d', marginTop: '4px' },
-    badgeLive: { background: '#e74c3c', color: 'white', fontSize: '0.65rem', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px' },
     badgeGlobal: { background: '#2980b9', color: 'white', fontSize: '0.65rem', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px' },
     itemActions: { display: 'flex', gap: '5px' },
     btnEdit: { background: '#f39c12', border: 'none', color: 'white', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer' },
