@@ -20,7 +20,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         const alertasConcurridas = [];
 
         // ==========================================
-        // 🛡️ SECCIÓN 1: ALERTAS DE TRIPULANTES (PSICOFÍSICOS Y CRM)
+        // 🛡️ SECCIÓN 1: ALERTAS DE TRIPULANTES
         // ==========================================
         const queryTripulantes = esMandoEstrategico ? {} : { 
             $or: [
@@ -34,8 +34,19 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         tripulantes.forEach(t => {
             const identificacion = `${t.grado || ''} ${t.apellido || ''} ${t.nombre || ''}`.trim();
             
-            const fPsicoRaw = t.certificaciones?.psicofisico?.vencimiento;
-            const fCrmRaw = t.certificaciones?.crm?.vencimiento;
+            // Extracción segura soportando formatos crudos, anidados o sub-objetos $date
+            const getFechaSegura = (campo) => {
+                if (!campo) return null;
+                if (campo.$date) return campo.$date; // Captura el formato del JSON crudo de Mongo
+                if (campo.vencimiento) {
+                    if (campo.vencimiento.$date) return campo.vencimiento.$date;
+                    return campo.vencimiento;
+                }
+                return campo;
+            };
+
+            const fPsicoRaw = getFechaSegura(t.certificaciones?.psicofisico);
+            const fCrmRaw = getFechaSegura(t.certificaciones?.crm);
 
             // ---- EVALUACIÓN DE PSICOFÍSICO ----
             if (!fPsicoRaw) {
@@ -101,7 +112,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         });
 
         // ==========================================
-        // ✈️ SECCIÓN 2: ALERTAS DE AERONAVES (SEGUROS, INSPECCIONES, AVIÓNICA)
+        // ✈️ SECCIÓN 2: ALERTAS DE AERONAVES
         // ==========================================
         const queryAeronaves = esMandoEstrategico ? {} : { unidad: userUnidad };
         const aeronaves = await Aircraft.find(queryAeronaves).lean();
@@ -109,8 +120,9 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         aeronaves.forEach(a => {
             const refAeronave = `${a.sda} Matrícula: ${a.matricula}`;
 
-            if (a.vencimientoSeguro) {
-                const fSeg = new Date(a.vencimientoSeguro);
+            const fSeguroRaw = a.vencimientoSeguro?.$date || a.vencimientoSeguro;
+            if (fSeguroRaw) {
+                const fSeg = new Date(fSeguroRaw);
                 if (fSeg <= fechaActual) {
                     alertasConcurridas.push({
                         categoria: 'AERONAVE',
@@ -151,8 +163,9 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                 }
             }
 
-            if (a.vencimientoAvionica) {
-                const fAvionica = new Date(a.vencimientoAvionica);
+            const fAvionicaRaw = a.vencimientoAvionica?.$date || a.vencimientoAvionica;
+            if (fAvionicaRaw) {
+                const fAvionica = new Date(fAvionicaRaw);
                 if (fAvionica <= fechaActual) {
                     alertasConcurridas.push({
                         categoria: 'AERONAVE',
@@ -177,10 +190,6 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         return res.status(200).json({
             success: true,
             jurisdiccion: esMandoEstrategico ? "CONSOLIDADO GLOBAL" : userUnidad,
-            resumen: {
-                criticas: alertasConcurridas.filter(a => a.gravedad === 'CRITICO').length,
-                advertencias: alertasConcurridas.filter(a => a.gravedad === 'ADVERTENCIA').length
-            },
             data: alertasConcurridas
         });
 
