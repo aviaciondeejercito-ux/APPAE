@@ -36,7 +36,7 @@ const Operaciones = () => {
         status: "programado",
         isRealTime: false,
         unidadApoyada: "",
-        tipoApoyo: "SOSTENIMIENTO",
+        tipoApoyo: TIPOS_DE_APOYO[0] || "SOSTENIMIENTO",
         responsableNom: "",
         pntoContactoNom: ""
     });
@@ -55,7 +55,7 @@ const Operaciones = () => {
         fetchData();
     }, []);
 
-    // Manejo de cambios simples del estado del formulario
+    // Manejo de cambios del estado del formulario (Saneado)
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
         const val = type === 'checkbox' ? checked : value;
@@ -64,8 +64,8 @@ const Operaciones = () => {
             setFormData(prev => ({
                 ...prev,
                 isRealTime: val,
-                etapa: val ? 'operativo' : 'recepcion',
-                tipoApoyo: val ? 'VUELO' : prev.tipoApoyo
+                etapa: val ? 'operativo' : 'recepcion'
+                // Se removió el forzado de tipoApoyo que rompía el selector
             }));
             return;
         }
@@ -113,7 +113,7 @@ const Operaciones = () => {
             status: event.status || "programado",
             isRealTime: event.isRealTime || false,
             unidadApoyada: event.unidadApoyada || "",
-            tipoApoyo: event.tipoApoyo || "SOSTENIMIENTO",
+            tipoApoyo: event.tipoApoyo || TIPOS_DE_APOYO[0] || "SOSTENIMIENTO",
             responsableNom: event.responsableNom || "",
             pntoContactoNom: event.pntoContactoNom || ""
         });
@@ -144,7 +144,7 @@ const Operaciones = () => {
             status: "programado",
             isRealTime: false,
             unidadApoyada: "",
-            tipoApoyo: "SOSTENIMIENTO",
+            tipoApoyo: TIPOS_DE_APOYO[0] || "SOSTENIMIENTO",
             responsableNom: "",
             pntoContactoNom: ""
         });
@@ -180,7 +180,7 @@ const Operaciones = () => {
                                 </div>
                                 <div style={styles.group}>
                                     <label style={styles.label}>Tipo de Apoyo / Tarea</label>
-                                    <select name="tipoApoyo" value={formData.tipoApoyo} onChange={handleInputChange} disabled={formData.isRealTime} style={styles.select}>
+                                    <select name="tipoApoyo" value={formData.tipoApoyo} onChange={handleInputChange} style={styles.select}>
                                         {TIPOS_DE_APOYO.map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
                                 </div>
@@ -266,7 +266,7 @@ const Operaciones = () => {
                                 </div>
                             </div>
 
-                            {/* CHECKBOXES DE DIFUSIÓN */}
+                            {/* CHECKBOXES DE TRANSPORTE Y PUBLICACIÓN */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '5px 0' }}>
                                 <label style={styles.checkboxLabel}>
                                     <input type="checkbox" name="isRealTime" checked={formData.isRealTime} onChange={handleInputChange} style={styles.checkbox} />
@@ -276,13 +276,13 @@ const Operaciones = () => {
                                 {esMandoSuperior && (
                                     <label style={styles.checkboxLabel}>
                                         <input type="checkbox" checked={publicarGlobal} onChange={(e) => setPublicarGlobal(e.target.checked)} style={styles.checkbox} />
-                                        🌎 Difusión Global (Visible para todas las unidades)
+                                        🌎 Publicación Global (Visible para todas las unidades)
                                     </label>
                                 )}
                             </div>
 
                             <div style={styles.group}>
-                                <label style={styles.label}>Notas Marginales / Directivas Comando</label>
+                                <label style={styles.label}>Notes / Notas Marginales</label>
                                 <textarea name="notasMarginales" value={formData.notasMarginales} onChange={handleInputChange} style={styles.textarea} placeholder="Directivas especiales o restricciones de la operación..." />
                             </div>
 
