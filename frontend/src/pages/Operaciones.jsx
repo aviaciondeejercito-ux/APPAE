@@ -133,21 +133,27 @@ const Operaciones = () => {
 
             // --- FILTRADO PARA MANDOS SUPERIORES (DIR AE / BOSS / DIRECTOR / OTO) ---
             if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
-                // 1. Si lo creó el propio mando superior, se muestra siempre
-                if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
                 
-                // 2. REGLA ESTRICTA: Si es de una unidad dependiente, EXIGE que esté en ORDENADA Y con PUBLICACIÓN GLOBAL activa
-                if (etapa === 'ordenada' && esGlobal) return true;
+                // 1. Si el creador es estrictamente la DIR AE (Comando Superior), pasa directo siempre
+                if (creador === "DIR AE") {
+                    return true;
+                }
                 
-                // Si no cumple lo anterior, se oculta para el mando superior
+                // 2. REGLA ESTRICTA (Para Unidades y Secciones Dependientes por igual):
+                // Solo se visualiza si el evento está asentado en ORDENADA Y con el botón GLOBAL encendido.
+                if (etapa === 'ordenada' && esGlobal) {
+                    return true;
+                }
+                
+                // Si es de una unidad o sección dependiente y no tiene ambas condiciones activas, se oculta
                 return false;
             }
 
-            // --- FILTRADO PARA ELEMENTOS DEPENDIENTES (UNIDADES) ---
+            // --- FILTRADO PARA ELEMENTOS DEPENDIENTES (UNIDADES Y SECCIONES) ---
             if (rolesGestionUnidad.includes(roleNormalizado)) {
-                // Ven lo que ellas mismas crearon
+                // Ven lo que su propia base/sección cargó en el sistema
                 if (creador === unidadUsuario) return true;
-                // Ven lo que les asignó un superior, siempre que esté en ORDENADA
+                // Ven lo asignado externamente por la DIR AE, siempre que ya esté en ORDENADA
                 if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
             }
             
@@ -155,7 +161,7 @@ const Operaciones = () => {
         });
         setEvents(Array.isArray(logicFiltered) ? logicFiltered : []);
     } catch (error) { 
-        console.error("❌ Error de Sincronización de logs:", error); 
+        console.error("❌ Error de Sincronización en el filtrado de logs:", error); 
     }
 };
 
