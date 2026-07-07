@@ -45,16 +45,54 @@ const AlertasWidget = () => {
         );
     }
 
-    // Filtros por categorías nativas del Backend
-    const personalAlertas = alertas.filter(a => a.categoria === 'TRIPULANTE');
-    const aeronavesPotencial = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'MANTENIMIENTO');
+    // ==========================================
+    // 👥 LÓGICA DE PROCESAMIENTO Y AGRUPACIÓN DE PERSONAL
+    // ==========================================
+    const personalBase = alertas.filter(a => a.categoria === 'TRIPULANTE');
+    
+    const proximosAVencer = personalBase.filter(a => a.gravedad === 'ADVERTENCIA');
+    const vencidosRaw = personalBase.filter(a => a.gravedad === 'CRITICO');
+    const sinDatosRaw = personalBase.filter(a => a.gravedad === 'SINDATOS');
+
+    const personalAgrupadoEstructurado = [];
+
+    // 1️⃣ PRIMERO: Amarillos (Próximos a vencer, individuales arriba)
+    proximosAVencer.forEach(p => {
+        personalAgrupadoEstructurado.push({
+            mensaje: p.mensaje, // El backend ya viene con el emoji ⏳ y el texto formateado
+            colorBorde: '#d97706' 
+        });
+    });
+
+    // 2️⃣ SEGUNDO: Rojos (Vencidos, agrupados en el medio)
+    if (vencidosRaw.length > 0) {
+        // Limpiamos los emojis nativos del mensaje para armar la lista limpia comprimida
+        const listaVencidos = vencidosRaw.map(p => p.mensaje.replace('🚨 ', '')).join(', ');
+        personalAgrupadoEstructurado.push({
+            mensaje: `🚨 VENCIDO / PERSONAL NO APTO: ${listaVencidos}`,
+            colorBorde: '#dc2626'
+        });
+    }
+
+    // 3️⃣ TERCERO: Negros (Sin datos / Falta cargar, agrupados abajo)
+    if (sinDatosRaw.length > 0) {
+        const listaSinDatos = sinDatosRaw.map(p => p.mensaje.replace('⚫ ', '')).join(', ');
+        personalAgrupadoEstructurado.push({
+            mensaje: `⚫ SIN DATOS / FALTA CARGAR CERTIFICACIONES: ${listaSinDatos}`,
+            colorBorde: '#1e293b'
+        });
+    }
+
+    // ==========================================
+    // 🚁 LÓGICA DE AGRUPACIÓN: AERONAVES Y DOCS
+    // ==========================================
+    const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'MANTENIMIENTO');
     const aeronavesDocs = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'MANTENIMIENTO');
 
-    // Mapeo seguro de color de bordes basado estrictamente en la gravedad calculada por el Servidor
-    const getColorBorde = (gravedad) => {
-        if (gravedad === 'CRITICO') return '#dc2626';     // Rojo
-        if (gravedad === 'ADVERTENCIA') return '#d97706';  // Amarillo
-        return '#1e293b';                                  // Negro / Sin datos
+    const getColorBordeGenerico = (gravedad) => {
+        if (gravedad === 'CRITICO') return '#dc2626';
+        if (gravedad === 'ADVERTENCIA') return '#d97706';
+        return '#1e293b';
     };
 
     return (
@@ -63,10 +101,10 @@ const AlertasWidget = () => {
             
             <div style={styles.buttonGroup}>
                 <button style={styles.btnPersonal} onClick={() => setShowPersonal(true)}>
-                    👥 Personal ({personalAlertas.length})
+                    👥 Personal ({personalBase.length})
                 </button>
                 <button style={styles.btnAeronaves} onClick={() => setShowAeronaves(true)}>
-                    🚁 Aeronaves ({aeronavesPotencial.length})
+                    🚁 Aeronaves ({potencialBase.length})
                 </button>
                 <button style={styles.btnDocs} onClick={() => setShowDocumentacion(true)}>
                     📄 Docs/Venc ({aeronavesDocs.length})
@@ -74,10 +112,9 @@ const AlertasWidget = () => {
             </div>
 
             {showPersonal && (
-                <ModalGenerico 
+                <ModalPersonal 
                     titulo="Novedades de Personal" 
-                    datos={personalAlertas} 
-                    getColorBorde={getColorBorde}
+                    datos={personalAgrupadoEstructurado} 
                     onClose={() => setShowPersonal(false)} 
                 />
             )}
@@ -85,8 +122,8 @@ const AlertasWidget = () => {
             {showAeronaves && (
                 <ModalGenerico 
                     titulo="Estado de Potencial (Mantenimiento)" 
-                    datos={aeronavesPotencial} 
-                    getColorBorde={getColorBorde}
+                    datos={potencialBase} 
+                    getColorBorde={getColorBordeGenerico}
                     onClose={() => setShowAeronaves(false)} 
                 />
             )}
@@ -95,7 +132,7 @@ const AlertasWidget = () => {
                 <ModalGenerico 
                     titulo="Vencimientos de Documentación / Seguros" 
                     datos={aeronavesDocs} 
-                    getColorBorde={getColorBorde}
+                    getColorBorde={getColorBordeGenerico}
                     onClose={() => setShowDocumentacion(false)} 
                 />
             )}
@@ -103,7 +140,30 @@ const AlertasWidget = () => {
     );
 };
 
-// Componente de Ventana Modal Unificado y Autónomo
+// Modal específico para Personal (Mantiene el orden exacto de inserción: Amarillo -> Rojo -> Negro)
+const ModalPersonal = ({ titulo, datos, onClose }) => (
+    <div style={styles.modalOverlay} onClick={onClose}>
+        <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+                <h3 style={{ fontSize: '16px', margin: 0 }}>{titulo}</h3>
+                <button style={styles.closeBtn} onClick={onClose}>✕</button>
+            </div>
+            {datos.length === 0 ? (
+                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No se registran novedades vigentes.</p>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {datos.map((item, i) => (
+                        <div key={i} style={{ ...styles.item, borderLeftColor: item.colorBorde }}>
+                            {item.mensaje}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    </div>
+);
+
+// Modal genérico para Aeronaves y Documentación
 const ModalGenerico = ({ titulo, datos, getColorBorde, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
@@ -112,7 +172,7 @@ const ModalGenerico = ({ titulo, datos, getColorBorde, onClose }) => (
                 <button style={styles.closeBtn} onClick={onClose}>✕</button>
             </div>
             {datos.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No se registran novedades vigentes para esta sección.</p>
+                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No se registran novedades vigentes.</p>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {datos.map((item, i) => (
