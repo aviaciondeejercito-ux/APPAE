@@ -47,16 +47,37 @@ const AlertasWidget = () => {
         );
     }
 
-    // --- LÓGICA DE AGRUPACIÓN: PERSONAL ---
+    // --- LÓGICA DE AGRUPACIÓN OPTIMIZADA: PERSONAL ---
     const personalBase = alertas.filter(a => a.categoria === 'TRIPULANTE');
-    const personalConFecha = personalBase.filter(a => a.mensaje.toLowerCase().includes('día'));
-    const personalSinFecha = personalBase.filter(a => !a.mensaje.toLowerCase().includes('día'));
-
-    const personalAgrupado = [...personalConFecha.map(a => ({ mensaje: a.mensaje, gravedad: a.gravedad }))];
     
-    if (personalSinFecha.length > 0) {
+    // Separamos de forma segura buscando palabras clave que indiquen ausencia total de datos
+    const personalSinCargar = personalBase.filter(a => 
+        a.mensaje.toLowerCase().includes('sin cargar') || 
+        a.mensaje.toLowerCase().includes('falta cargar') ||
+        a.mensaje.toLowerCase().includes('no posee registro')
+    );
+    
+    // Todos los demás son vencimientos o alertas con fechas válidas calculadas
+    const personalConAlertasReales = personalBase.filter(a => 
+        !a.mensaje.toLowerCase().includes('sin cargar') && 
+        !a.mensaje.toLowerCase().includes('falta cargar') &&
+        !a.mensaje.toLowerCase().includes('no posee registro')
+    );
+
+    const personalAgrupado = personalConAlertasReales.map(a => ({
+        mensaje: a.mensaje,
+        gravedad: a.gravedad
+    }));
+    
+    // Si realmente hay personal sin registro cargado, se agrupa en un solo ítem limpio
+    if (personalSinCargar.length > 0) {
+        const nombresSinCargar = personalSinCargar.map(p => {
+            // Intentamos extraer el apellido/nombre si viene con formato "APELLIDO: mensaje"
+            return p.mensaje.includes(':') ? p.mensaje.split(':')[0].trim() : p.mensaje;
+        }).join(', ');
+
         personalAgrupado.push({
-            mensaje: `⚠️ SIN CARGAR: ${personalSinFecha.map(p => p.mensaje.split(':')[0]).join(', ')}`,
+            mensaje: `⚠️ FALTA DOCUMENTACIÓN EN SISTEMA DE: ${nombresSinCargar}`,
             gravedad: 'CRITICO' 
         });
     }
@@ -74,7 +95,7 @@ const AlertasWidget = () => {
     }
     if (criticos.length > 0) {
         aeronavesPotencialAgrupado.push({
-            mensaje: `🚨 CRÍTICO (0 hs): ${criticos.map(a => a.mensaje.match(/AE-\d+/)?.[0]).join(', ')}`,
+            mensaje: `🚨 CRÍTICO (0 hs): ${criticos.map(a => a.mensaje.match(/AE-\d+/)?.[0] || 'AE').join(', ')}`,
             gravedad: 'CRITICO'
         });
     }
@@ -114,13 +135,18 @@ const ModalGenerico = ({ titulo, datos, onClose }) => (
                 <button style={styles.closeBtn} onClick={onClose}>✕</button>
             </div>
             {datos.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#64748b' }}>No hay novedades registradas en esta sección.</p>
+                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No hay novedades registradas en esta sección.</p>
             ) : (
-                datos.sort((a, b) => (a.gravedad === 'CRITICO' ? 1 : -1)).map((a, i) => (
-                    <div key={i} style={{ ...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706' }}>
-                        {a.mensaje}
-                    </div>
-                ))
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {datos
+                        .sort((a, b) => (a.gravedad === 'CRITICO' ? -1 : 1)) // Corregido el sort para ordenar críticos primero
+                        .map((a, i) => (
+                            <div key={i} style={{ ...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706' }}>
+                                {a.mensaje}
+                            </div>
+                        ))
+                    }
+                </div>
             )}
         </div>
     </div>
@@ -138,7 +164,7 @@ const styles = {
     modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '90%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' },
     modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' },
     closeBtn: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', color: '#64748b' },
-    item: { padding: '12px', borderLeft: '4px solid', marginBottom: '8px', backgroundColor: '#f8fafc', fontSize: '13px', lineHeight: '1.4', borderRadius: '0 4px 4px 0' },
+    item: { padding: '12px', borderLeft: '4px solid', backgroundColor: '#f8fafc', fontSize: '13px', lineHeight: '1.4', borderRadius: '0 4px 4px 0' },
     cardOk: { display: 'flex', alignItems: 'center', backgroundColor: '#f0fdf4', borderLeft: '5px solid #166534', padding: '15px 20px', borderRadius: '6px', marginBottom: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
     loader: { textAlign: 'center', padding: '20px', fontSize: '12px', color: '#64748b', fontWeight: 'bold' }
 };
