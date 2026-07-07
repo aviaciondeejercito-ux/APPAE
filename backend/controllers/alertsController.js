@@ -1,4 +1,4 @@
-const Aeronave = require('../models/Aeronave'); 
+const Aeronave = require('../models/Aircraft'); 
 const Tripulante = require('../models/Tripulante');
 
 exports.getAlertasInternasUnidad = async (req, res) => {
