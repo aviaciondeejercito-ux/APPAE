@@ -117,41 +117,47 @@ const Operaciones = () => {
     }, [userUnidad, isEditing, esMandoSuperior]);
 
     const fetchData = async () => {
-        try {
-            const data = await getEvents();
-            const logicFiltered = data.filter(ev => {
-                if (ev.isRealTime) return false;
-                if (roleNormalizado === 'ADMIN') return true;
+    try {
+        const data = await getEvents();
+        const logicFiltered = data.filter(ev => {
+            if (ev.isRealTime) return false;
+            if (roleNormalizado === 'ADMIN') return true;
 
-                const creador = ev.creadorUnidad?.toUpperCase() || "";
-                const unidadesResponsables = ev.elemento?.toUpperCase() || "";
-                const unidadUsuario = userUnidad?.toUpperCase() || "";
-                const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
-                const esGlobal = ev.esGlobal === true;
+            const creador = ev.creadorUnidad?.toUpperCase() || "";
+            const unidadesResponsables = ev.elemento?.toUpperCase() || "";
+            const unidadUsuario = userUnidad?.toUpperCase() || "";
+            const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
+            
+            // Sanitización estricta por si el backend responde con un String "true"/"false" o Boolean
+            const esGlobal = ev.esGlobal === true || String(ev.esGlobal).toLowerCase() === 'true';
 
-                // --- FILTRADO PARA MANDOS SUPERIOR (DIR AE / BOSS / DIRECTOR) ---
-                if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
-                    // 1. Ven lo creado por ellos mismos
-                    if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
-                    // 2. REGLA SOLICITADA: Solo ven lo de unidades dependientes si está en ORDENADA Y presionaron PUBLICACIÓN GLOBAL
-                    if (esGlobal && etapa === 'ordenada') return true;
-                    // 3. Si están incluidos explícitamente en la misión
-                    if (unidadesResponsables.includes(unidadUsuario)) return true; 
-                    return false;
-                }
-
-                // --- FILTRADO PARA ELEMENTOS DEPENDIENTES (UNIDADES) ---
-                if (rolesGestionUnidad.includes(roleNormalizado)) {
-                    if (creador === unidadUsuario) return true;
-                    if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
-                }
+            // --- FILTRADO PARA MANDOS SUPERIORES (DIR AE / BOSS / DIRECTOR / OTO) ---
+            if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
+                // 1. Si lo creó el propio mando superior, se muestra siempre
+                if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
+                
+                // 2. REGLA ESTRICTA: Si es de una unidad dependiente, EXIGE que esté en ORDENADA Y con PUBLICACIÓN GLOBAL activa
+                if (etapa === 'ordenada' && esGlobal) return true;
+                
+                // Si no cumple lo anterior, se oculta para el mando superior
                 return false;
-            });
-            setEvents(Array.isArray(logicFiltered) ? logicFiltered : []);
-        } catch (error) { 
-            console.error("❌ Error de Sincronización de logs."); 
-        }
-    };
+            }
+
+            // --- FILTRADO PARA ELEMENTOS DEPENDIENTES (UNIDADES) ---
+            if (rolesGestionUnidad.includes(roleNormalizado)) {
+                // Ven lo que ellas mismas crearon
+                if (creador === unidadUsuario) return true;
+                // Ven lo que les asignó un superior, siempre que esté en ORDENADA
+                if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
+            }
+            
+            return false;
+        });
+        setEvents(Array.isArray(logicFiltered) ? logicFiltered : []);
+    } catch (error) { 
+        console.error("❌ Error de Sincronización de logs:", error); 
+    }
+};
 
     const parseFromBackend = (dateString) => {
         if (!dateString) return '';
