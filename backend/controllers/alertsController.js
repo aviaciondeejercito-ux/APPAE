@@ -1,9 +1,8 @@
-const Aeronave = require('../models/Aircraft'); 
+const Aircraft = require('../models/Aircraft'); 
 const Tripulante = require('../models/Tripulante');
 
 exports.getAlertasInternasUnidad = async (req, res) => {
     try {
-        // 1. Extraer metadatos seguros del usuario logueado
         const rawRole = req.user?.rol || req.user?.role || '';
         const userRole = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
         const userUnidad = (req.user?.elemento || req.user?.unidad || '').trim().toUpperCase();
@@ -21,7 +20,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         const alertasConcurridas = [];
 
         // ==========================================
-        // 🛡️ SECCIÓN 1: ALERTAS DE TRIPULANTES (PSICOFÍSICOS)
+        // 🛡️ SECCIÓN 1: ALERTAS DE TRIPULANTES (PSICOFÍSICOS Y CRM)
         // ==========================================
         const queryTripulantes = esMandoEstrategico ? {} : { 
             $or: [
@@ -34,56 +33,82 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
         tripulantes.forEach(t => {
             const identificacion = `${t.grado || ''} ${t.apellido || ''} ${t.nombre || ''}`.trim();
-            const fechaPsico = t.certificaciones?.psicofisico?.vencimiento;
+            
+            const fPsicoRaw = t.certificaciones?.psicofisico?.vencimiento;
+            const fCrmRaw = t.certificaciones?.crm?.vencimiento;
 
-            // CASO 1: Si no tiene datos cargados (Manda alerta de falta de carga)
-            if (!fechaPsico) {
+            // ---- EVALUACIÓN DE PSICOFÍSICO ----
+            if (!fPsicoRaw) {
                 alertasConcurridas.push({
                     categoria: 'TRIPULANTE',
                     tipo: 'SINDATOS',
                     gravedad: 'SINDATOS',
                     identificador: t._id,
-                    mensaje: identificacion
+                    mensaje: `⚫ ${identificacion} (Falta cargar Psicofísico)`
                 });
-                return; 
+            } else {
+                const fVenc = new Date(fPsicoRaw);
+                if (fVenc <= fechaActual) {
+                    alertasConcurridas.push({
+                        categoria: 'TRIPULANTE',
+                        tipo: 'PSICOFISICO',
+                        gravedad: 'CRITICO',
+                        identificador: t._id,
+                        mensaje: `🚨 ${identificacion} (Psicofísico VENCIDO)`
+                    });
+                } else if (fVenc <= limite30Dias) {
+                    const dias = Math.ceil((fVenc - fechaActual) / (1000 * 60 * 60 * 24));
+                    alertasConcurridas.push({
+                        categoria: 'TRIPULANTE',
+                        tipo: 'PSICOFISICO',
+                        gravedad: 'ADVERTENCIA',
+                        identificador: t._id,
+                        mensaje: `⏳ ${identificacion} (Psicofísico vence en ${dias} días)`
+                    });
+                }
             }
 
-            const fVenc = new Date(fechaPsico);
-
-            // CASO 2: Vencido (Crítico)
-            if (fVenc <= fechaActual) {
+            // ---- EVALUACIÓN DE CRM ----
+            if (!fCrmRaw) {
                 alertasConcurridas.push({
                     categoria: 'TRIPULANTE',
-                    tipo: 'PSICOFISICO',
-                    gravedad: 'CRITICO',
+                    tipo: 'SINDATOS',
+                    gravedad: 'SINDATOS',
                     identificador: t._id,
-                    mensaje: identificacion
+                    mensaje: `⚫ ${identificacion} (Falta cargar CRM)`
                 });
-            } 
-            // CASO 3: Próximo a vencer (Menos de 30 días - Advertencia)
-            else if (fVenc <= limite30Dias) {
-                const dias = Math.ceil((fVenc - fechaActual) / (1000 * 60 * 60 * 24));
-                alertasConcurridas.push({
-                    categoria: 'TRIPULANTE',
-                    tipo: 'PSICOFISICO',
-                    gravedad: 'ADVERTENCIA',
-                    identificador: t._id,
-                    mensaje: `${identificacion} (Vence en ${dias} días)`
-                });
+            } else {
+                const fVenc = new Date(fCrmRaw);
+                if (fVenc <= fechaActual) {
+                    alertasConcurridas.push({
+                        categoria: 'TRIPULANTE',
+                        tipo: 'CRM',
+                        gravedad: 'CRITICO',
+                        identificador: t._id,
+                        mensaje: `🚨 ${identificacion} (CRM VENCIDO)`
+                    });
+                } else if (fVenc <= limite30Dias) {
+                    const dias = Math.ceil((fVenc - fechaActual) / (1000 * 60 * 60 * 24));
+                    alertasConcurridas.push({
+                        categoria: 'TRIPULANTE',
+                        tipo: 'CRM',
+                        gravedad: 'ADVERTENCIA',
+                        identificador: t._id,
+                        mensaje: `⏳ ${identificacion} (CRM vence en ${dias} días)`
+                    });
+                }
             }
-            // CASO 4: Si fVenc > limite30Dias (ESTÁ AL DÍA) -> No se genera ninguna alerta.
         });
 
         // ==========================================
         // ✈️ SECCIÓN 2: ALERTAS DE AERONAVES (SEGUROS, INSPECCIONES, AVIÓNICA)
         // ==========================================
         const queryAeronaves = esMandoEstrategico ? {} : { unidad: userUnidad };
-        const aeronaves = await Aeronave.find(queryAeronaves).lean();
+        const aeronaves = await Aircraft.find(queryAeronaves).lean();
 
         aeronaves.forEach(a => {
             const refAeronave = `${a.sda} Matrícula: ${a.matricula}`;
 
-            // A) Vencimiento de Seguro
             if (a.vencimientoSeguro) {
                 const fSeg = new Date(a.vencimientoSeguro);
                 if (fSeg <= fechaActual) {
@@ -92,7 +117,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                         tipo: 'SEGURO',
                         gravedad: 'CRITICO',
                         identificador: a._id,
-                        mensaje: `Póliza de Seguro VENCIDA para aeronave ${refAeronave}.`
+                        mensaje: `🚨 Póliza de Seguro VENCIDA para aeronave ${refAeronave}.`
                     });
                 } else if (fSeg <= limite30Dias) {
                     const dias = Math.ceil((fSeg - fechaActual) / (1000 * 60 * 60 * 24));
@@ -101,12 +126,11 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                         tipo: 'SEGURO',
                         gravedad: 'ADVERTENCIA',
                         identificador: a._id,
-                        mensaje: `Seguro de aeronave ${refAeronave} vencerá en ${dias} días.`
+                        mensaje: `⚠️ Seguro de aeronave ${refAeronave} vencerá en ${dias} días.`
                     });
                 }
             }
 
-            // B) Horas de Vuelo Remanentes (Inspecciones)
             if (typeof a.horasRemanentes === 'number') {
                 if (a.horasRemanentes <= 0) {
                     alertasConcurridas.push({
@@ -114,7 +138,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                         tipo: 'MANTENIMIENTO',
                         gravedad: 'CRITICO',
                         identificador: a._id,
-                        mensaje: `Aeronave ${refAeronave} sin potencial disponible (0 hs). Requiere inspección.`
+                        mensaje: `🚨 Aeronave ${refAeronave} sin potencial disponible (0 hs).`
                     });
                 } else if (a.horasRemanentes <= 10) {
                     alertasConcurridas.push({
@@ -122,12 +146,11 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                         tipo: 'MANTENIMIENTO',
                         gravedad: 'ADVERTENCIA',
                         identificador: a._id,
-                        mensaje: `Aeronave ${refAeronave} con inspección próxima. Restan solo ${a.horasRemanentes.toFixed(1)} hs.`
+                        mensaje: `⚠️ Aeronave ${refAeronave} con inspección próxima (${a.horasRemanentes.toFixed(1)} hs remanentes).`
                     });
                 }
             }
 
-            // C) Vencimiento de Aviónica
             if (a.vencimientoAvionica) {
                 const fAvionica = new Date(a.vencimientoAvionica);
                 if (fAvionica <= fechaActual) {
@@ -136,7 +159,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                         tipo: 'AVIONICA',
                         gravedad: 'CRITICO',
                         identificador: a._id,
-                        mensaje: `Inspección de Aviónica VENCIDA para ${refAeronave}.`
+                        mensaje: `🚨 Inspección de Aviónica VENCIDA para ${refAeronave}.`
                     });
                 } else if (fAvionica <= limite30Dias) {
                     const dias = Math.ceil((fAvionica - fechaActual) / (1000 * 60 * 60 * 24));
@@ -145,13 +168,12 @@ exports.getAlertasInternasUnidad = async (req, res) => {
                         tipo: 'AVIONICA',
                         gravedad: 'ADVERTENCIA',
                         identificador: a._id,
-                        mensaje: `Inspección de Aviónica de ${refAeronave} vencerá en ${dias} días.`
+                        mensaje: `⚠️ Inspección de Aviónica de ${refAeronave} vencerá en ${dias} días.`
                     });
                 }
             }
         });
 
-        // 3. Respuesta consolidada
         return res.status(200).json({
             success: true,
             jurisdiccion: esMandoEstrategico ? "CONSOLIDADO GLOBAL" : userUnidad,

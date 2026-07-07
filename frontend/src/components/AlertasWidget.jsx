@@ -45,66 +45,17 @@ const AlertasWidget = () => {
         );
     }
 
-    // ==========================================
-    // 👥 LÓGICA DE PROCESAMIENTO DE PERSONAL (COORDINADO CON ENDPOINT)
-    // ==========================================
-    const personalBase = alertas.filter(a => a.categoria === 'TRIPULANTE');
-    
-    // 1. Separación estricta por la gravedad que envía el nuevo Backend
-    const proximosAVencer = personalBase.filter(a => a.gravedad === 'ADVERTENCIA');
-    const vencidosRaw = personalBase.filter(a => a.gravedad === 'CRITICO');
-    const sinDatosRaw = personalBase.filter(a => a.gravedad === 'SINDATOS');
+    // Filtros por categorías nativas del Backend
+    const personalAlertas = alertas.filter(a => a.categoria === 'TRIPULANTE');
+    const aeronavesPotencial = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'MANTENIMIENTO');
+    const aeronavesDocs = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'MANTENIMIENTO');
 
-    // Construcción del listado ordenado y agrupado
-    const personalAgrupadoEstructurado = [];
-
-    // - Primero: Próximos a vencer (Individuales arriba, borde amarillo)
-    proximosAVencer.forEach(p => {
-        personalAgrupadoEstructurado.push({
-            mensaje: `⏳ PRÓXIMO VENCIMIENTO: ${p.mensaje}`,
-            colorBorde: '#d97706' // Amarillo
-        });
-    });
-
-    // - Segundo: Vencidos (Agrupados en el medio, borde rojo)
-    if (vencidosRaw.length > 0) {
-        const nombresVencidos = vencidosRaw.map(p => p.mensaje).join(', ');
-        personalAgrupadoEstructurado.push({
-            mensaje: `🚨 VENCIDO / PERSONAL NO APTO: ${nombresVencidos}`,
-            colorBorde: '#dc2626' // Rojo
-        });
-    }
-
-    // - Tercero: Sin datos cargados (Agrupados al final, borde negro)
-    if (sinDatosRaw.length > 0) {
-        const nombresSinDatos = sinDatosRaw.map(p => p.mensaje).join(', ');
-        personalAgrupadoEstructurado.push({
-            mensaje: `⚫ SIN DATOS / FALTA CARGAR PSICOFÍSICO O CRM: ${nombresSinDatos}`,
-            colorBorde: '#1e293b' // Negro
-        });
-    }
-
-    // ==========================================
-    // 🚁 LÓGICA DE AGRUPACIÓN: AERONAVES Y DOCS
-    // ==========================================
-    const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'POTENCIAL');
-    const criticosAero = potencialBase.filter(a => a.gravedad === 'CRITICO');
-    const advertenciasAero = potencialBase.filter(a => a.gravedad === 'ADVERTENCIA');
-
-    const aeronavesPotencialAgrupado = [];
-    if (advertenciasAero.length > 0) {
-        advertenciasAero.forEach(a => {
-            aeronavesPotencialAgrupado.push({ mensaje: `⚠️ ${a.mensaje}`, gravedad: 'ADVERTENCIA' });
-        });
-    }
-    if (criticosAero.length > 0) {
-        aeronavesPotencialAgrupado.push({
-            mensaje: `🚨 CRÍTICO (0 hs): ${criticosAero.map(a => a.mensaje.match(/AE-\d+/)?.[0] || 'AE').join(', ')}`,
-            gravedad: 'CRITICO'
-        });
-    }
-
-    const aeronavesDocs = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'POTENCIAL');
+    // Mapeo seguro de color de bordes basado estrictamente en la gravedad calculada por el Servidor
+    const getColorBorde = (gravedad) => {
+        if (gravedad === 'CRITICO') return '#dc2626';     // Rojo
+        if (gravedad === 'ADVERTENCIA') return '#d97706';  // Amarillo
+        return '#1e293b';                                  // Negro / Sin datos
+    };
 
     return (
         <div style={styles.container}>
@@ -112,10 +63,10 @@ const AlertasWidget = () => {
             
             <div style={styles.buttonGroup}>
                 <button style={styles.btnPersonal} onClick={() => setShowPersonal(true)}>
-                    👥 Personal ({personalBase.length})
+                    👥 Personal ({personalAlertas.length})
                 </button>
                 <button style={styles.btnAeronaves} onClick={() => setShowAeronaves(true)}>
-                    🚁 Aeronaves ({potencialBase.length})
+                    🚁 Aeronaves ({aeronavesPotencial.length})
                 </button>
                 <button style={styles.btnDocs} onClick={() => setShowDocumentacion(true)}>
                     📄 Docs/Venc ({aeronavesDocs.length})
@@ -123,20 +74,37 @@ const AlertasWidget = () => {
             </div>
 
             {showPersonal && (
-                <ModalPersonal 
+                <ModalGenerico 
                     titulo="Novedades de Personal" 
-                    datos={personalAgrupadoEstructurado} 
+                    datos={personalAlertas} 
+                    getColorBorde={getColorBorde}
                     onClose={() => setShowPersonal(false)} 
                 />
             )}
-            {showAeronaves && <ModalGenerico titulo="Estado de Potencial" datos={aeronavesPotencialAgrupado} onClose={() => setShowAeronaves(false)} />}
-            {showDocumentacion && <ModalGenerico titulo="Vencimientos de Documentación" datos={aeronavesDocs} onClose={() => setShowDocumentacion(false)} />}
+            
+            {showAeronaves && (
+                <ModalGenerico 
+                    titulo="Estado de Potencial (Mantenimiento)" 
+                    datos={aeronavesPotencial} 
+                    getColorBorde={getColorBorde}
+                    onClose={() => setShowAeronaves(false)} 
+                />
+            )}
+
+            {showDocumentacion && (
+                <ModalGenerico 
+                    titulo="Vencimientos de Documentación / Seguros" 
+                    datos={aeronavesDocs} 
+                    getColorBorde={getColorBorde}
+                    onClose={() => setShowDocumentacion(false)} 
+                />
+            )}
         </div>
     );
 };
 
-// Modal específico para Personal (Respeta orden de inserción y colores de borde directos)
-const ModalPersonal = ({ titulo, datos, onClose }) => (
+// Componente de Ventana Modal Unificado y Autónomo
+const ModalGenerico = ({ titulo, datos, getColorBorde, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
@@ -144,35 +112,12 @@ const ModalPersonal = ({ titulo, datos, onClose }) => (
                 <button style={styles.closeBtn} onClick={onClose}>✕</button>
             </div>
             {datos.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No hay novedades críticas ni advertencias preventivas vigentes.</p>
+                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No se registran novedades vigentes para esta sección.</p>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {datos.map((item, i) => (
-                        <div key={i} style={{ ...styles.item, borderLeftColor: item.colorBorde }}>
+                        <div key={i} style={{ ...styles.item, borderLeftColor: getColorBorde(item.gravedad) }}>
                             {item.mensaje}
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    </div>
-);
-
-// Modal genérico para Aeronaves y Documentación técnica
-const ModalGenerico = ({ titulo, datos, onClose }) => (
-    <div style={styles.modalOverlay} onClick={onClose}>
-        <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-                <h3 style={{ fontSize: '16px', margin: 0 }}>{titulo}</h3>
-                <button style={styles.closeBtn} onClick={onClose}>✕</button>
-            </div>
-            {datos.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No hay novedades registradas en esta sección.</p>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {datos.map((a, i) => (
-                        <div key={i} style={{ ...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706' }}>
-                            {a.mensaje}
                         </div>
                     ))}
                 </div>
@@ -192,7 +137,7 @@ const styles = {
     modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '90%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' },
     modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' },
     closeBtn: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', color: '#64748b' },
-    item: { padding: '12px', borderLeft: '5px solid', backgroundColor: '#f8fafc', fontSize: '13px', lineHeight: '1.4', borderRadius: '0 4px 4px 0' },
+    item: { padding: '12px', borderLeft: '5px solid', backgroundColor: '#f8fafc', fontSize: '13px', lineHeight: '1.4', borderRadius: '0 4px 4px 0', color: '#334155' },
     cardOk: { display: 'flex', alignItems: 'center', backgroundColor: '#f0fdf4', borderLeft: '5px solid #166534', padding: '15px 20px', borderRadius: '6px', marginBottom: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
     loader: { textAlign: 'center', padding: '20px', fontSize: '12px', color: '#64748b', fontWeight: 'bold' }
 };
