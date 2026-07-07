@@ -25,40 +25,49 @@ const CalendarPage = () => {
             .fc .fc-day-today .fc-daygrid-day-number { background-color: #1b3a57; color: white; border-radius: 50%; padding: 4px 8px; margin: 2px; }
         `;
         document.head.appendChild(style);
-    }, []);
+        return () => { if (document.head.contains(style)) document.head.removeChild(style); };
+    }, [userUnidad, role, roleNormalizado]);
 
     const fetchData = async () => {
         try {
             const data = await getEvents();
             
             const filteredData = data.filter(ev => {
+                if (ev.isRealTime) return false;
+                
                 const evElemento = ev.elemento ? String(ev.elemento).toUpperCase().trim() : '';
                 const evCreador = ev.creadorUnidad ? String(ev.creadorUnidad).toUpperCase().trim() : '';
                 const unidadUsuario = userUnidad.toUpperCase();
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
+                
+                // Sanitización estricta del booleano global por si viene en String "true"/"false"
+                const esGlobal = ev.esGlobal === true || String(ev.esGlobal).toLowerCase() === 'true';
 
                 // 1. ADMIN: Control total
                 if (role === 'admin') return true;
 
-                // 2. MANDOS SUPERIORES: Ven todo lo de DIR AE y lo que ya fue ORDENADO a las unidades
-                if (roleNormalizado === 'DIRECTOR' || roleNormalizado === 'BOSS' || roleNormalizado === 'OTO') {
-                    const esDeDirAe = evCreador.includes('DIR AE') || evElemento.includes('DIR AE');
-                    const esUnidadOrdenado = etapa === 'ordenada'; 
-                    return esDeDirAe || esUnidadOrdenado;
+                // 2. MANDOS SUPERIORES (DIR AE / BOSS / DIRECTOR / OTO)
+                if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
+                    // Si lo creó estrictamente el comando de la DIR AE, pasa directo siempre
+                    if (evCreador === 'DIR AE') return true;
+
+                    // REGLA ESTRICTA PARA UNIDADES Y SECCIONES DEPENDIENTES:
+                    // Exige que se den las dos condiciones de forma simultánea para publicarse en su monitor
+                    if (etapa === 'ordenada' && esGlobal) return true;
+
+                    return false;
                 }
 
-                // 3. ROLES DE UNIDAD (Nuevos y Estándar): 
-                // OFICINA_TECNICA, OPERACIONES, JEFE, LOGISTICO, PERSONAL y USER
-                // Ven solo lo que ellos crearon o lo que DIR AE les ordenó específicamente (o globalmente)
+                // 3. ROLES DE UNIDAD: OFICINA_TECNICA, OPERACIONES, JEFE, LOGISTICO, PERSONAL y USER
                 const rolesUnidad = ['USER', 'OFICINATECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
                 
                 if (rolesUnidad.includes(roleNormalizado)) {
-                    // Si su unidad lo creó, lo ven siempre (incluso en recepción/borrador)
+                    // Si su propia unidad lo creó, lo ven siempre (incluso en recepción/borrador)
                     if (evCreador === unidadUsuario) return true;
-                    // Si DIR AE lo ordenó a su unidad específica
+                    // Si la DIR AE lo ordenó a su unidad específica
                     if (evCreador.includes('DIR AE') && evElemento === unidadUsuario && etapa === 'ordenada') return true;
                     // Si es una actividad global de DIR AE ya ordenada
-                    if (evCreador.includes('DIR AE') && ev.esGlobal && etapa === 'ordenada') return true;
+                    if (evCreador.includes('DIR AE') && esGlobal && etapa === 'ordenada') return true;
                     return false;
                 }
 
@@ -198,7 +207,7 @@ const CalendarPage = () => {
                         if (ev.etapa === 'recepcion') prefix = '🟡 ';
                         if (ev.etapa === 'revision') prefix = '🔵 ';
                         if (ev.etapa === 'ordenada') prefix = '🟢 ';
-                        if (ev.esGlobal) prefix += '🌐 ';
+                        if (ev.esGlobal || String(ev.esGlobal).toLowerCase() === 'true') prefix += '🌐 ';
 
                         return {
                             id: ev._id,
@@ -209,7 +218,7 @@ const CalendarPage = () => {
                             borderColor: colorBase,
                             extendedProps: { 
                                 notes: ev.notes, 
-                                user: ev.userName,
+                                user: ev.userName || 'NO REGISTRADO',
                                 creadorUnidad: ev.creadorUnidad,
                                 tipoOrigen: ev.tipoOrigen,
                                 elemento: ev.elemento,
@@ -278,7 +287,7 @@ const CalendarPage = () => {
 
                             <div style={styles.infoRow}>
                                 <strong>✍️ Gestión:</strong> 
-                                <span>{selectedEvent.creadorUnidad || 'N/C'} ({selectedEvent.user})</span>
+                                <span>{selectedEvent.creadorUnidad || 'N/C'} — <span style={{ fontWeight: 'bold', color: '#1b3a57' }}>{selectedEvent.user}</span></span>
                             </div>
 
                             {selectedEvent.unidadApoyada && (
