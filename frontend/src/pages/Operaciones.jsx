@@ -31,10 +31,8 @@ const Operaciones = () => {
     const esMando = esMandoSuperior || esAdmin;
     const esGestorUnidad = rolesGestionUnidad.includes(roleNormalizado);
 
-    // Determina si es un elemento dependiente (Unidades operativas)
-    const esElementoDependiente = !esMandoSuperior;
-    // Condición solicitada: Visible solo para unidades dependientes, oculto para DIR AE / BOSS / DIRECTOR
-    const muestraBotonPublicacionGlobal = esElementoDependiente;
+    // Condición solicitada: El botón de publicación global sólo lo ven las unidades dependientes
+    const muestraBotonPublicacionGlobal = !esMandoSuperior;
 
     const unidadesAE = [
         "B HELIC ASAL 601", 
@@ -70,7 +68,7 @@ const Operaciones = () => {
         mision: '', 
         tipoApoyo: '', sdaSelected: '', sdaCantidad: 1, sdaListado: [],
         etapa: 'recepcion', 
-        unidadesInvolucradas: [],
+        unidadesInvolucradas: [], // Array para almacenar la selección múltiple por botones
         unidadApoyada: '', 
         pntoContactoNom: '', pntoContactoTel: '',
         responsableNom: '', responsableTel: ''
@@ -89,7 +87,7 @@ const Operaciones = () => {
         setFilteredEvents(results);
     }, [searchTerm, events]);
 
-    // --- HOOK DE AERONAVES DESDE BD (FILTRADO POR UNIDAD Y E/S) ---
+    // --- SdA EN SERVICIO DIRECTO DESDE BD ---
     useEffect(() => {
         const fetchAeronaves = async () => {
             const unidadAConsultar = esMandoSuperior ? "all" : userUnidad;
@@ -99,7 +97,6 @@ const Operaciones = () => {
             try {
                 const data = await getAvailableAircraft(unidadAConsultar);
                 if (data && Array.isArray(data)) {
-                    // Filtrado estricto por En Servicio (E/S)
                     const cleanData = data
                         .filter(a => a.estado === 'E/S') 
                         .map(a => ({
@@ -132,13 +129,18 @@ const Operaciones = () => {
                 const etapa = ev.etapa ? String(ev.etapa).toLowerCase() : '';
                 const esGlobal = ev.esGlobal === true;
 
+                // --- FILTRADO PARA MANDOS SUPERIOR (DIR AE / BOSS / DIRECTOR) ---
                 if (['DIRECTOR', 'BOSS', 'OTO'].includes(roleNormalizado)) {
+                    // 1. Ven lo creado por ellos mismos
                     if (creador.includes('DIR AE') || creador.includes('SEC AE')) return true;
+                    // 2. REGLA SOLICITADA: Solo ven lo de unidades dependientes si está en ORDENADA Y presionaron PUBLICACIÓN GLOBAL
                     if (esGlobal && etapa === 'ordenada') return true;
+                    // 3. Si están incluidos explícitamente en la misión
                     if (unidadesResponsables.includes(unidadUsuario)) return true; 
                     return false;
                 }
 
+                // --- FILTRADO PARA ELEMENTOS DEPENDIENTES (UNIDADES) ---
                 if (rolesGestionUnidad.includes(roleNormalizado)) {
                     if (creador === unidadUsuario) return true;
                     if (unidadesResponsables.includes(unidadUsuario) && etapa === 'ordenada') return true;
@@ -156,6 +158,7 @@ const Operaciones = () => {
         return dateString.split('.')[0].slice(0, 16);
     };
 
+    // Manejador del panel de botones para selección múltiple
     const toggleUnidad = (unidad) => {
         const current = formData.unidadesInvolucradas;
         const updated = current.includes(unidad) 
@@ -190,7 +193,9 @@ const Operaciones = () => {
         if (!formData.start || !formData.end) return alert("Complete fechas.");
 
         const cleanNotes = formData.notes.replace(/^SdA:.*\| Obs: /, '');
-        const finalElemento = (formData.unidadesInvolucradas.length > 0)
+        
+        // Si es mando superior usa las unidades de los botones, sino usa su propia unidad fija
+        const finalElemento = (esMando && formData.unidadesInvolucradas.length > 0)
             ? formData.unidadesInvolucradas.join(', ')
             : userUnidad;
 
@@ -198,7 +203,7 @@ const Operaciones = () => {
             ...formData,
             title: formData.title.toUpperCase(),
             tipoApoyo: formData.tipoApoyo.toUpperCase(),
-            esGlobal: publicarGlobal,
+            esGlobal: publicarGlobal, // Guarda el estado del botón de visibilidad
             notes: `SdA: ${formData.sdaListado.map(s => `${s.cantidad}x ${s.sda}`).join(', ')} | Apoyado: ${formData.unidadApoyada} | Obs: ${cleanNotes}`,
             elemento: finalElemento,
             unidadApoyada: formData.unidadApoyada.toUpperCase(),
@@ -267,12 +272,12 @@ const Operaciones = () => {
                     <div style={styles.card}>
                         <h3 style={styles.title}>{isEditing ? "📝 Editar Orden" : "➕ Nueva Orden de Vuelo"}</h3>
                         
-                        {/* Control de visibilidad inversa del botón global */}
+                        {/* Control de visibilidad del botón global (Solo visible para Elementos Dependientes) */}
                         {muestraBotonPublicacionGlobal && (
                             <button type="button" 
                                 onClick={() => setPublicarGlobal(!publicarGlobal)}
                                 style={{ ...styles.btnGlobal, backgroundColor: publicarGlobal ? '#27ae60' : '#bdc3c7', marginBottom: '15px' }}>
-                                {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (VISTO POR DIR AE)" : "🏠 PUBLICACIÓN LOCAL (Solo Unidad)"}
+                                {publicarGlobal ? "🌐 PUBLICACIÓN GLOBAL (DIR AE ATENTA)" : "🏠 PUBLICACIÓN LOCAL (Solo Unidad)"}
                             </button>
                         )}
 
@@ -305,17 +310,30 @@ const Operaciones = () => {
                                 <input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} style={styles.input}/></div>
                             </div>
 
-                            {/* SELECTOR MULTIPLE DE UNIDADES CON FORMATO DE CHIPS */}
+                            {/* ASIGNACIÓN MEDIANTE BOTONERA INTERACTIVA PARA MANDOS SUPERIORES */}
                             {esMando && (
                                 <div style={styles.unidadSelector}>
-                                    <label style={styles.label}>Asignar Unidades Involucradas (Multielemento):</label>
+                                    <label style={styles.label}>Seleccionar unidades destino para el Log/Calendario:</label>
                                     <div style={styles.unidadChips}>
-                                        {unidadesAE.map(u => (
-                                            <button key={u} type="button" onClick={() => toggleUnidad(u)}
-                                                    style={{...styles.chip, backgroundColor: formData.unidadesInvolucradas.includes(u) ? '#1b3a57' : '#eee', color: formData.unidadesInvolucradas.includes(u) ? 'white' : '#555'}}>
-                                                {u}
-                                            </button>
-                                        ))}
+                                        {unidadesAE.map(u => {
+                                            const estaSeleccionada = formData.unidadesInvolucradas.includes(u);
+                                            return (
+                                                <button 
+                                                    key={u} 
+                                                    type="button" 
+                                                    onClick={() => toggleUnidad(u)}
+                                                    style={{
+                                                        ...styles.chip, 
+                                                        backgroundColor: estaSeleccionada ? '#1b3a57' : '#f0f2f5', 
+                                                        color: estaSeleccionada ? 'white' : '#333',
+                                                        border: estaSeleccionada ? '1px solid #1b3a57' : '1px solid #ccc',
+                                                        fontWeight: estaSeleccionada ? 'bold' : 'normal'
+                                                    }}
+                                                >
+                                                    {estaSeleccionada ? `✅ ${u}` : u}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -336,7 +354,6 @@ const Operaciones = () => {
                                 {TIPOS_DE_APOYO.map((apoyo, idx) => <option key={idx} value={apoyo}>{apoyo}</option>)}
                             </select>
 
-                            {/* REQUERIMIENTO TÉCNICO: MATERIAL EN SERVICIO DIRECTO DESDE BD */}
                             <div style={styles.sectionTitle}>REQUERIMIENTO TÉCNICO (SdA EN SERVICIO)</div>
                             <div style={styles.sdaBox}>
                                 <select value={formData.sdaSelected} onChange={e => setFormData({...formData, sdaSelected: e.target.value})} style={{...styles.input, flex: 1}}>
@@ -425,9 +442,9 @@ const styles = {
     labelEtapa: { fontSize: '0.7rem', fontWeight: 'bold', color: '#777', marginBottom: '8px', display: 'block' },
     etapaGrid: { display: 'flex', gap: '8px' },
     btnStep: { flex: 1, padding: '8px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid #ddd' },
-    unidadSelector: { margin: '10px 0' },
-    unidadChips: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '8px' },
-    chip: { border: 'none', padding: '6px 12px', borderRadius: '15px', fontSize: '0.75rem', cursor: 'pointer', transition: '0.2s' },
+    unidadSelector: { margin: '10px 0', padding: '10px', background: '#f4f6f8', borderRadius: '8px' },
+    unidadChips: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' },
+    chip: { padding: '8px 14px', borderRadius: '20px', fontSize: '0.75rem', cursor: 'pointer', transition: '0.2s all ease-in-out' },
     row: { display: 'flex', gap: '12px' },
     label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#555' },
     input: { padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '0.9rem', outline: 'none' },
