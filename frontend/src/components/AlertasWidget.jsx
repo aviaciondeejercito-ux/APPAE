@@ -28,12 +28,10 @@ const AlertasWidget = () => {
         }
     };
 
-    // 1. Estado de carga (Loading)
     if (loading) {
         return <div style={styles.loader}>Evaluando potenciales y vencimientos del Elemento...</div>;
     }
 
-    // 2. Vista sobria si NO hay novedades críticas ni advertencias
     if (alertas.length === 0) {
         return (
             <div style={styles.cardOk}>
@@ -47,38 +45,69 @@ const AlertasWidget = () => {
         );
     }
 
-    // --- LÓGICA DE AGRUPACIÓN OPTIMIZADA: PERSONAL ---
+    // ==========================================
+    // --- NUEVA LÓGICA DE CLASIFICACIÓN: PERSONAL ---
+    // ==========================================
     const personalBase = alertas.filter(a => a.categoria === 'TRIPULANTE');
     
-    // Separamos de forma segura buscando palabras clave que indiquen ausencia total de datos
-    const personalSinCargar = personalBase.filter(a => 
-        a.mensaje.toLowerCase().includes('sin cargar') || 
-        a.mensaje.toLowerCase().includes('falta cargar') ||
-        a.mensaje.toLowerCase().includes('no posee registro')
-    );
-    
-    // Todos los demás son vencimientos o alertas con fechas válidas calculadas
-    const personalConAlertasReales = personalBase.filter(a => 
+    // 1. Proximos a vencer (30 días - Advertencias)
+    const proximosAVencer = personalBase.filter(a => 
+        a.gravedad === 'ADVERTENCIA' && 
         !a.mensaje.toLowerCase().includes('sin cargar') && 
         !a.mensaje.toLowerCase().includes('falta cargar') &&
         !a.mensaje.toLowerCase().includes('no posee registro')
     );
 
-    const personalAgrupado = personalConAlertasReales.map(a => ({
-        mensaje: a.mensaje,
-        gravedad: a.gravedad
-    }));
-    
-    // Si realmente hay personal sin registro cargado, se agrupa en un solo ítem limpio
-    if (personalSinCargar.length > 0) {
-        const nombresSinCargar = personalSinCargar.map(p => {
-            // Intentamos extraer el apellido/nombre si viene con formato "APELLIDO: mensaje"
+    // 2. Vencidos (Tienen registro pero expiró)
+    const vencidosRaw = personalBase.filter(a => 
+        (a.gravedad === 'CRITICO' || a.mensaje.toLowerCase().includes('vencido')) &&
+        !a.mensaje.toLowerCase().includes('sin cargar') && 
+        !a.mensaje.toLowerCase().includes('falta cargar') &&
+        !a.mensaje.toLowerCase().includes('no posee registro')
+    );
+
+    // 3. Sin datos cargados
+    const sinDatosRaw = personalBase.filter(a => 
+        a.mensaje.toLowerCase().includes('sin cargar') || 
+        a.mensaje.toLowerCase().includes('falta cargar') ||
+        a.mensaje.toLowerCase().includes('no posee registro')
+    );
+
+    // Estructuramos el array final respetando estrictamente el orden requerido
+    const personalAgrupadoEstructurado = [];
+
+    // - Primero: Próximos a vencer (Individuales o listados arriba, color amarillo)
+    proximosAVencer.forEach(p => {
+        personalAgrupadoEstructurado.push({
+            tipo: 'PROXIMO',
+            mensaje: `⏳ PRÓXIMO VENCIMIENTO: ${p.mensaje}`,
+            colorBorde: '#d97706' // Amarillo/Ámbar
+        });
+    });
+
+    // - Segundo: Vencidos (Agrupados debajo, color rojo)
+    if (vencidosRaw.length > 0) {
+        const nombresVencidos = vencidosRaw.map(p => {
             return p.mensaje.includes(':') ? p.mensaje.split(':')[0].trim() : p.mensaje;
         }).join(', ');
 
-        personalAgrupado.push({
-            mensaje: `⚠️ FALTA DOCUMENTACIÓN EN SISTEMA DE: ${nombresSinCargar}`,
-            gravedad: 'CRITICO' 
+        personalAgrupadoEstructurado.push({
+            tipo: 'VENCIDO',
+            mensaje: `🚨 VENCIDO / PERSONAL NO APTO: ${nombresVencidos}`,
+            colorBorde: '#dc2626' // Rojo
+        });
+    }
+
+    // - Tercero: Sin datos cargados (Agrupados al final, color negro)
+    if (sinDatosRaw.length > 0) {
+        const nombresSinDatos = sinDatosRaw.map(p => {
+            return p.mensaje.includes(':') ? p.mensaje.split(':')[0].trim() : p.mensaje;
+        }).join(', ');
+
+        personalAgrupadoEstructurado.push({
+            tipo: 'SINDATOS',
+            mensaje: `⚫ SIN DATOS / FALTA CARGAR PSICOFÍSICO O CRM: ${nombresSinDatos}`,
+            colorBorde: '#1e293b' // Negro/Gris Oscuro
         });
     }
 
@@ -102,7 +131,6 @@ const AlertasWidget = () => {
 
     const aeronavesDocs = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'POTENCIAL');
 
-    // 3. Renderizado del panel con botones y modales
     return (
         <div style={styles.container}>
             <h4 style={styles.titleArea}>Novedades Operativas ({unidad})</h4>
@@ -119,14 +147,43 @@ const AlertasWidget = () => {
                 </button>
             </div>
 
-            {showPersonal && <ModalGenerico titulo="Novedades de Personal" datos={personalAgrupado} onClose={() => setShowPersonal(false)} />}
+            {showPersonal && (
+                <ModalPersonal 
+                    titulo="Novedades de Personal" 
+                    datos={personalAgrupadoEstructurado} 
+                    onClose={() => setShowPersonal(false)} 
+                />
+            )}
             {showAeronaves && <ModalGenerico titulo="Estado de Potencial" datos={aeronavesPotencialAgrupado} onClose={() => setShowAeronaves(false)} />}
             {showDocumentacion && <ModalGenerico titulo="Vencimientos de Documentación" datos={aeronavesDocs} onClose={() => setShowDocumentacion(false)} />}
         </div>
     );
 };
 
-// Componente secundario para los Modales de Alertas
+// Componente de Modal específico para Personal (Respeta orden y colores exactos)
+const ModalPersonal = ({ titulo, datos, onClose }) => (
+    <div style={styles.modalOverlay} onClick={onClose}>
+        <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+                <h3 style={{ fontSize: '16px', margin: 0 }}>{titulo}</h3>
+                <button style={styles.closeBtn} onClick={onClose}>✕</button>
+            </div>
+            {datos.length === 0 ? (
+                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No hay novedades registradas en esta sección.</p>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {datos.map((item, i) => (
+                        <div key={i} style={{ ...styles.item, borderLeftColor: item.colorBorde }}>
+                            {item.mensaje}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    </div>
+);
+
+// Componente genérico para Aeronaves y Documentación
 const ModalGenerico = ({ titulo, datos, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
@@ -138,21 +195,17 @@ const ModalGenerico = ({ titulo, datos, onClose }) => (
                 <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No hay novedades registradas en esta sección.</p>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {datos
-                        .sort((a, b) => (a.gravedad === 'CRITICO' ? -1 : 1)) // Corregido el sort para ordenar críticos primero
-                        .map((a, i) => (
-                            <div key={i} style={{ ...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706' }}>
-                                {a.mensaje}
-                            </div>
-                        ))
-                    }
+                    {datos.map((a, i) => (
+                        <div key={i} style={{ ...styles.item, borderLeftColor: a.gravedad === 'CRITICO' ? '#dc2626' : '#d97706' }}>
+                            {a.mensaje}
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
     </div>
 );
 
-// Estilos consolidados y limpios
 const styles = {
     container: { backgroundColor: 'white', padding: '18px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', marginBottom: '20px' },
     titleArea: { fontSize: '14px', color: '#1e293b', marginBottom: '12px', fontWeight: 'bold' },
@@ -164,7 +217,7 @@ const styles = {
     modalContent: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', width: '90%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' },
     modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' },
     closeBtn: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', color: '#64748b' },
-    item: { padding: '12px', borderLeft: '4px solid', backgroundColor: '#f8fafc', fontSize: '13px', lineHeight: '1.4', borderRadius: '0 4px 4px 0' },
+    item: { padding: '12px', borderLeft: '5px solid', backgroundColor: '#f8fafc', fontSize: '13px', lineHeight: '1.4', borderRadius: '0 4px 4px 0' },
     cardOk: { display: 'flex', alignItems: 'center', backgroundColor: '#f0fdf4', borderLeft: '5px solid #166534', padding: '15px 20px', borderRadius: '6px', marginBottom: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
     loader: { textAlign: 'center', padding: '20px', fontSize: '12px', color: '#64748b', fontWeight: 'bold' }
 };
