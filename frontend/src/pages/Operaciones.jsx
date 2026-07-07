@@ -41,7 +41,7 @@ const Operaciones = () => {
     const esMandoSuperior = ['BOSS', 'ADMIN'].includes(roleNormalizado);
     const puedeCrearYEditar = rolesGestionUnidad.includes(roleNormalizado);
 
-    // Formulario estructurado
+    // Formulario estructurado con Aeronaves y Soporte Multielemento
     const [formData, setFormData] = useState({
         title: "",
         mision: "Sostenimiento",
@@ -49,12 +49,14 @@ const Operaciones = () => {
         end: "",   
         notes: "",
         notasMarginales: "",
-        elemento: esMandoSuperior ? UNIDADES_SISTEMA[0] : userUnidad, 
+        elemento: esMandoSuperior ? [UNIDADES_SISTEMA[0]] : [userUnidad], // Se maneja como Array para selección múltiple
         status: "programado",
         unidadApoyada: "",
         tipoApoyo: TIPOS_DE_APOYO[0] || "SOSTENIMIENTO",
         responsableNom: "",
-        pntoContactoNom: ""
+        pntoContactoNom: "",
+        aeronave: "",
+        estadoAeronave: "E/S" // Selector de disponibilidad de aeronave solicitado
     });
 
     // Carga inicial de datos desde la API centralizada
@@ -71,9 +73,22 @@ const Operaciones = () => {
         fetchData();
     }, []);
 
-    // Manejo de cambios del estado del formulario
+    // Manejo de cambios dinámicos (soporta inputs comunes y selects múltiples)
     const handleInputChange = (e) => {
-        const { name, value, type, checked } = e.target;
+        const { name, value, type, checked, options } = e.target;
+        
+        if (name === "elemento" && options) {
+            // Lógica para capturar múltiples opciones seleccionadas (Ctrl + Click)
+            const valoresSeleccionados = [];
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].selected) {
+                    valoresSeleccionados.push(options[i].value);
+                }
+            }
+            setFormData(prev => ({ ...prev, [name]: valoresSeleccionados }));
+            return;
+        }
+
         const val = type === 'checkbox' ? checked : value;
         setFormData(prev => ({ ...prev, [name]: val }));
     };
@@ -83,8 +98,10 @@ const Operaciones = () => {
         e.preventDefault();
         if (!puedeCrearYEditar) return alert("No cuenta con jerarquía de edición.");
 
+        // Convertimos el array de elementos a un string separado por comas para guardar de forma limpia en la DB
         const payload = {
             ...formData,
+            elemento: Array.isArray(formData.elemento) ? formData.elemento.join(', ') : formData.elemento,
             esGlobal: esMandoSuperior ? publicarGlobal : false,
             color: '#1b3a57' 
         };
@@ -107,6 +124,12 @@ const Operaciones = () => {
         setIsEditing(true);
         setSelectedId(event._id);
         setPublicarGlobal(event.esGlobal || false);
+
+        // Al editar, si viene como string, lo pasamos a array para que se marque en el select múltiple
+        const elementosArray = event.elemento 
+            ? event.elemento.split(',').map(item => item.trim()) 
+            : [userUnidad];
+
         setFormData({
             title: event.title || "",
             mision: event.mision || "Sostenimiento",
@@ -114,12 +137,14 @@ const Operaciones = () => {
             end: event.end ? event.end.substring(0, 16) : "",     
             notes: event.notes || "",
             notasMarginales: event.notasMarginales || event.notes || "",
-            elemento: event.elemento || userUnidad,
+            elemento: elementosArray,
             status: event.status || "programado",
             unidadApoyada: event.unidadApoyada || "",
             tipoApoyo: event.tipoApoyo || TIPOS_DE_APOYO[0] || "SOSTENIMIENTO",
             responsableNom: event.responsableNom || "",
-            pntoContactoNom: event.pntoContactoNom || ""
+            pntoContactoNom: event.pntoContactoNom || "",
+            aeronave: event.aeronave || "",
+            estadoAeronave: event.estadoAeronave || "E/S"
         });
     };
 
@@ -144,12 +169,14 @@ const Operaciones = () => {
             end: "",
             notes: "",
             notasMarginales: "",
-            elemento: esMandoSuperior ? UNIDADES_SISTEMA[0] : userUnidad,
+            elemento: esMandoSuperior ? [UNIDADES_SISTEMA[0]] : [userUnidad],
             status: "programado",
             unidadApoyada: "",
             tipoApoyo: TIPOS_DE_APOYO[0] || "SOSTENIMIENTO",
             responsableNom: "",
-            pntoContactoNom: ""
+            pntoContactoNom: "",
+            aeronave: "",
+            estadoAeronave: "E/S"
         });
     };
 
@@ -200,15 +227,16 @@ const Operaciones = () => {
                             </div>
 
                             <div style={styles.row}>
-                                {/* ASIGNACIÓN TÁCTICA DE UNIDAD SEGÚN JERARQUÍA */}
+                                {/* ASIGNACIÓN TÁCTICA MULTIPLE DE UNIDADES */}
                                 <div style={styles.group}>
-                                    <label style={styles.label}>Unidad / Elemento Responsable</label>
+                                    <label style={styles.label}>Unidades Responsables {esMandoSuperior && <span style={{fontSize: '0.7rem', color: '#7f8c8d'}}>(Ctrl+Click para elegir varias)</span>}</label>
                                     {esMandoSuperior ? (
                                         <select 
                                             name="elemento" 
+                                            multiple={true}
                                             value={formData.elemento} 
                                             onChange={handleInputChange} 
-                                            style={styles.select}
+                                            style={{ ...styles.select, height: '100px' }}
                                         >
                                             {UNIDADES_SISTEMA.map(u => (
                                                 <option key={u} value={u}>{u}</option>
@@ -218,7 +246,7 @@ const Operaciones = () => {
                                         <input 
                                             type="text" 
                                             name="elemento" 
-                                            value={formData.elemento} 
+                                            value={formData.elemento.join(', ')} 
                                             disabled 
                                             style={{ ...styles.input, backgroundColor: '#e9ecef', color: '#495057' }} 
                                         />
@@ -227,6 +255,21 @@ const Operaciones = () => {
                                 <div style={styles.group}>
                                     <label style={styles.label}>Unidad Apoyada</label>
                                     <input type="text" name="unidadApoyada" value={formData.unidadApoyada} onChange={handleInputChange} style={styles.input} placeholder="Ej: RI MEC 7" />
+                                </div>
+                            </div>
+
+                            {/* SECCIÓN REINCORPORADA: AERONAVE Y ESTADO E/S */}
+                            <div style={styles.row}>
+                                <div style={{ ...styles.group, flex: 2 }}>
+                                    <label style={styles.label}>Aeronave (Modelo / Matrícula)</label>
+                                    <input type="text" name="aeronave" value={formData.aeronave} onChange={handleInputChange} style={styles.input} placeholder="Ej: UH-1H AE-400 o C-208" />
+                                </div>
+                                <div style={{ ...styles.group, flex: 1 }}>
+                                    <label style={styles.label}>Estado de Aeronave</label>
+                                    <select name="estadoAeronave" value={formData.estadoAeronave} onChange={handleInputChange} style={styles.select}>
+                                        <option value="E/S">E/S (En Servicio)</option>
+                                        <option value="F/S">F/S (Fuera de Servicio)</option>
+                                    </select>
                                 </div>
                             </div>
 
@@ -241,7 +284,7 @@ const Operaciones = () => {
                                 </div>
                             </div>
 
-                            {/* ESTADO DEL REGISTRO - TRES BOTONES ORIGINALES */}
+                            {/* ESTADO DEL REGISTRO */}
                             <div style={styles.group}>
                                 <label style={styles.label}>Estado del Registro</label>
                                 <div style={styles.statusButtonGroup}>
@@ -316,10 +359,15 @@ const Operaciones = () => {
                                             {event.esGlobal && <span style={styles.badgeGlobal}>🌎 GLOBAL</span>}
                                         </div>
                                         <div style={styles.metaData}>
-                                            <span><b>Unidad:</b> {event.elemento}</span> | 
+                                            <span><b>Unidades Asignadas:</b> {event.elemento}</span> | 
                                             <span><b>Misión:</b> {event.mision}</span> | 
                                             <span><b>Apoyo:</b> {event.tipoApoyo || 'S/D'}</span>
                                         </div>
+                                        {event.aeronave && (
+                                            <div style={styles.metaData}>
+                                                🚁 <b>Aeronave:</b> {event.aeronave} <span style={{ color: event.estadoAeronave === 'F/S' ? '#e74c3c' : '#27ae60', fontWeight: 'bold' }}>({event.estadoAeronave})</span>
+                                            </div>
+                                        )}
                                         {(event.start || event.end) && (
                                             <div style={styles.metaData}>
                                                 🗓️ {event.start ? new Date(event.start).toLocaleString() : ''} al {event.end ? new Date(event.end).toLocaleString() : ''}
