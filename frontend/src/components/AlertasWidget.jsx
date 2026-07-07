@@ -18,6 +18,7 @@ const AlertasWidget = () => {
         try {
             const response = await getAlertasDashboard();
             if (response.data?.success) {
+                // Seteamos estrictamente lo que devuelve el backend nuevo
                 setAlertas(response.data.data || []);
                 setUnidad(response.data.jurisdiccion || '');
             }
@@ -46,27 +47,29 @@ const AlertasWidget = () => {
     }
 
     // ==========================================
-    // 👥 LÓGICA DE PROCESAMIENTO Y AGRUPACIÓN DE PERSONAL
+    // 👥 FILTROS PUREMENTE BASADOS EN EL BACKEND
     // ==========================================
     const personalBase = alertas.filter(a => a.categoria === 'TRIPULANTE');
-    
+    const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'MANTENIMIENTO');
+    const aeronavesDocs = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'MANTENIMIENTO');
+
+    // Construcción del listado de Personal respetando el orden estricto: Amarillo -> Rojo -> Negro
+    const personalAgrupadoEstructurado = [];
+
     const proximosAVencer = personalBase.filter(a => a.gravedad === 'ADVERTENCIA');
     const vencidosRaw = personalBase.filter(a => a.gravedad === 'CRITICO');
     const sinDatosRaw = personalBase.filter(a => a.gravedad === 'SINDATOS');
 
-    const personalAgrupadoEstructurado = [];
-
-    // 1️⃣ PRIMERO: Amarillos (Próximos a vencer, individuales arriba)
+    // 1️⃣ AMARILLOS (Advertencias individuales)
     proximosAVencer.forEach(p => {
         personalAgrupadoEstructurado.push({
-            mensaje: p.mensaje, // El backend ya viene con el emoji ⏳ y el texto formateado
+            mensaje: p.mensaje,
             colorBorde: '#d97706' 
         });
     });
 
-    // 2️⃣ SEGUNDO: Rojos (Vencidos, agrupados en el medio)
+    // 2️⃣ ROJOS (Vencidos agrupados)
     if (vencidosRaw.length > 0) {
-        // Limpiamos los emojis nativos del mensaje para armar la lista limpia comprimida
         const listaVencidos = vencidosRaw.map(p => p.mensaje.replace('🚨 ', '')).join(', ');
         personalAgrupadoEstructurado.push({
             mensaje: `🚨 VENCIDO / PERSONAL NO APTO: ${listaVencidos}`,
@@ -74,7 +77,7 @@ const AlertasWidget = () => {
         });
     }
 
-    // 3️⃣ TERCERO: Negros (Sin datos / Falta cargar, agrupados abajo)
+    // 3️⃣ NEGROS (Sin datos agrupados)
     if (sinDatosRaw.length > 0) {
         const listaSinDatos = sinDatosRaw.map(p => p.mensaje.replace('⚫ ', '')).join(', ');
         personalAgrupadoEstructurado.push({
@@ -82,12 +85,6 @@ const AlertasWidget = () => {
             colorBorde: '#1e293b'
         });
     }
-
-    // ==========================================
-    // 🚁 LÓGICA DE AGRUPACIÓN: AERONAVES Y DOCS
-    // ==========================================
-    const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'MANTENIMIENTO');
-    const aeronavesDocs = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'MANTENIMIENTO');
 
     const getColorBordeGenerico = (gravedad) => {
         if (gravedad === 'CRITICO') return '#dc2626';
@@ -140,7 +137,6 @@ const AlertasWidget = () => {
     );
 };
 
-// Modal específico para Personal (Mantiene el orden exacto de inserción: Amarillo -> Rojo -> Negro)
 const ModalPersonal = ({ titulo, datos, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
@@ -163,7 +159,6 @@ const ModalPersonal = ({ titulo, datos, onClose }) => (
     </div>
 );
 
-// Modal genérico para Aeronaves y Documentación
 const ModalGenerico = ({ titulo, datos, getColorBorde, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
