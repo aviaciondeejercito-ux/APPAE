@@ -46,85 +46,60 @@ const AlertasWidget = () => {
     }
 
     // ==========================================
-    // --- NUEVA LÓGICA DE CLASIFICACIÓN: PERSONAL ---
+    // 👥 LÓGICA DE PROCESAMIENTO DE PERSONAL (COORDINADO CON ENDPOINT)
     // ==========================================
     const personalBase = alertas.filter(a => a.categoria === 'TRIPULANTE');
     
-    // 1. Proximos a vencer (30 días - Advertencias)
-    const proximosAVencer = personalBase.filter(a => 
-        a.gravedad === 'ADVERTENCIA' && 
-        !a.mensaje.toLowerCase().includes('sin cargar') && 
-        !a.mensaje.toLowerCase().includes('falta cargar') &&
-        !a.mensaje.toLowerCase().includes('no posee registro')
-    );
+    // 1. Separación estricta por la gravedad que envía el nuevo Backend
+    const proximosAVencer = personalBase.filter(a => a.gravedad === 'ADVERTENCIA');
+    const vencidosRaw = personalBase.filter(a => a.gravedad === 'CRITICO');
+    const sinDatosRaw = personalBase.filter(a => a.gravedad === 'SINDATOS');
 
-    // 2. Vencidos (Tienen registro pero expiró)
-    const vencidosRaw = personalBase.filter(a => 
-        (a.gravedad === 'CRITICO' || a.mensaje.toLowerCase().includes('vencido')) &&
-        !a.mensaje.toLowerCase().includes('sin cargar') && 
-        !a.mensaje.toLowerCase().includes('falta cargar') &&
-        !a.mensaje.toLowerCase().includes('no posee registro')
-    );
-
-    // 3. Sin datos cargados
-    const sinDatosRaw = personalBase.filter(a => 
-        a.mensaje.toLowerCase().includes('sin cargar') || 
-        a.mensaje.toLowerCase().includes('falta cargar') ||
-        a.mensaje.toLowerCase().includes('no posee registro')
-    );
-
-    // Estructuramos el array final respetando estrictamente el orden requerido
+    // Construcción del listado ordenado y agrupado
     const personalAgrupadoEstructurado = [];
 
-    // - Primero: Próximos a vencer (Individuales o listados arriba, color amarillo)
+    // - Primero: Próximos a vencer (Individuales arriba, borde amarillo)
     proximosAVencer.forEach(p => {
         personalAgrupadoEstructurado.push({
-            tipo: 'PROXIMO',
             mensaje: `⏳ PRÓXIMO VENCIMIENTO: ${p.mensaje}`,
-            colorBorde: '#d97706' // Amarillo/Ámbar
+            colorBorde: '#d97706' // Amarillo
         });
     });
 
-    // - Segundo: Vencidos (Agrupados debajo, color rojo)
+    // - Segundo: Vencidos (Agrupados en el medio, borde rojo)
     if (vencidosRaw.length > 0) {
-        const nombresVencidos = vencidosRaw.map(p => {
-            return p.mensaje.includes(':') ? p.mensaje.split(':')[0].trim() : p.mensaje;
-        }).join(', ');
-
+        const nombresVencidos = vencidosRaw.map(p => p.mensaje).join(', ');
         personalAgrupadoEstructurado.push({
-            tipo: 'VENCIDO',
             mensaje: `🚨 VENCIDO / PERSONAL NO APTO: ${nombresVencidos}`,
             colorBorde: '#dc2626' // Rojo
         });
     }
 
-    // - Tercero: Sin datos cargados (Agrupados al final, color negro)
+    // - Tercero: Sin datos cargados (Agrupados al final, borde negro)
     if (sinDatosRaw.length > 0) {
-        const nombresSinDatos = sinDatosRaw.map(p => {
-            return p.mensaje.includes(':') ? p.mensaje.split(':')[0].trim() : p.mensaje;
-        }).join(', ');
-
+        const nombresSinDatos = sinDatosRaw.map(p => p.mensaje).join(', ');
         personalAgrupadoEstructurado.push({
-            tipo: 'SINDATOS',
             mensaje: `⚫ SIN DATOS / FALTA CARGAR PSICOFÍSICO O CRM: ${nombresSinDatos}`,
-            colorBorde: '#1e293b' // Negro/Gris Oscuro
+            colorBorde: '#1e293b' // Negro
         });
     }
 
-    // --- LÓGICA DE AGRUPACIÓN: AERONAVES ---
+    // ==========================================
+    // 🚁 LÓGICA DE AGRUPACIÓN: AERONAVES Y DOCS
+    // ==========================================
     const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'POTENCIAL');
-    const criticos = potencialBase.filter(a => a.gravedad === 'CRITICO');
-    const advertencias = potencialBase.filter(a => a.gravedad === 'ADVERTENCIA');
+    const criticosAero = potencialBase.filter(a => a.gravedad === 'CRITICO');
+    const advertenciasAero = potencialBase.filter(a => a.gravedad === 'ADVERTENCIA');
 
     const aeronavesPotencialAgrupado = [];
-    if (advertencias.length > 0) {
-        advertencias.forEach(a => {
+    if (advertenciasAero.length > 0) {
+        advertenciasAero.forEach(a => {
             aeronavesPotencialAgrupado.push({ mensaje: `⚠️ ${a.mensaje}`, gravedad: 'ADVERTENCIA' });
         });
     }
-    if (criticos.length > 0) {
+    if (criticosAero.length > 0) {
         aeronavesPotencialAgrupado.push({
-            mensaje: `🚨 CRÍTICO (0 hs): ${criticos.map(a => a.mensaje.match(/AE-\d+/)?.[0] || 'AE').join(', ')}`,
+            mensaje: `🚨 CRÍTICO (0 hs): ${criticosAero.map(a => a.mensaje.match(/AE-\d+/)?.[0] || 'AE').join(', ')}`,
             gravedad: 'CRITICO'
         });
     }
@@ -160,7 +135,7 @@ const AlertasWidget = () => {
     );
 };
 
-// Componente de Modal específico para Personal (Respeta orden y colores exactos)
+// Modal específico para Personal (Respeta orden de inserción y colores de borde directos)
 const ModalPersonal = ({ titulo, datos, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
@@ -169,7 +144,7 @@ const ModalPersonal = ({ titulo, datos, onClose }) => (
                 <button style={styles.closeBtn} onClick={onClose}>✕</button>
             </div>
             {datos.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No hay novedades registradas en esta sección.</p>
+                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No hay novedades críticas ni advertencias preventivas vigentes.</p>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {datos.map((item, i) => (
@@ -183,7 +158,7 @@ const ModalPersonal = ({ titulo, datos, onClose }) => (
     </div>
 );
 
-// Componente genérico para Aeronaves y Documentación
+// Modal genérico para Aeronaves y Documentación técnica
 const ModalGenerico = ({ titulo, datos, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
