@@ -56,26 +56,26 @@ const AlertasWidget = () => {
 
     const personalAgrupadoEstructurado = [];
 
-    // Helper interno por si algún mensaje viene con formato de objeto inesperado de MongoDB
-    const limpiarMensaje = (item) => {
-        if (!item) return '';
-        if (typeof item.mensaje === 'string') return item.mensaje;
-        if (item.mensaje?.$date) return String(item.mensaje.$date);
-        return String(item.mensaje || '');
+    // Helper para extraer de manera limpia el texto del mensaje venga como venga
+    const extraerTextoMensaje = (p) => {
+        if (!p) return '';
+        if (typeof p.mensaje === 'string') return p.mensaje;
+        if (p.mensaje?.$date) return String(p.mensaje.$date);
+        return String(p.mensaje || '');
     };
 
-    // 1️⃣ PRIMERO: Amarillos (Próximos a vencer, individuales arriba)
+    // 1️⃣ ARRIBA: Amarillos (Próximos a vencer - Individuales para ver los días restantes)
     proximosAVencer.forEach(p => {
         personalAgrupadoEstructurado.push({
-            mensaje: limpiarMensaje(p), 
+            mensaje: extraerTextoMensaje(p), 
             colorBorde: '#d97706' 
         });
     });
 
-    // 2️⃣ SEGUNDO: Rojos (Vencidos, agrupados en el medio)
+    // 2️⃣ ABAJO (MEDIO): Rojos (Vencidos - Lista comprimida separada por comas)
     if (vencidosRaw.length > 0) {
         const listaVencidos = vencidosRaw
-            .map(p => limpiarMensaje(p).replace('🚨 ', ''))
+            .map(p => extraerTextoMensaje(p).replace('🚨 ', ''))
             .filter(Boolean)
             .join(', ');
             
@@ -87,10 +87,10 @@ const AlertasWidget = () => {
         }
     }
 
-    // 3️⃣ TERCERO: Negros (Sin datos / Falta cargar, agrupados abajo)
+    // 3️⃣ ABAJO DEL TODO: Negros (Sin datos / Falta cargar - Lista comprimida separada por comas)
     if (sinDatosRaw.length > 0) {
         const listaSinDatos = sinDatosRaw
-            .map(p => limpiarMensaje(p).replace('⚫ ', ''))
+            .map(p => extraerTextoMensaje(p).replace('⚫ ', ''))
             .filter(Boolean)
             .join(', ');
 
