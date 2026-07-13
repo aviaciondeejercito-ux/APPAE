@@ -45,18 +45,7 @@ const AlertasWidget = () => {
         );
     }
 
-    // ==========================================
-    // 👥 LÓGICA DE PROCESAMIENTO Y AGRUPACIÓN DE PERSONAL
-    // ==========================================
-    const personalBase = alertas.filter(a => a.categoria === 'TRIPULANTE');
-    
-    const proximosAVencer = personalBase.filter(a => a.gravedad === 'ADVERTENCIA');
-    const vencidosRaw = personalBase.filter(a => a.gravedad === 'CRITICO');
-    const sinDatosRaw = personalBase.filter(a => a.gravedad === 'SINDATOS');
-
-    const personalAgrupadoEstructurado = [];
-
-    // Helper para extraer de manera limpia el texto del mensaje venga como venga
+    // Helper único para extraer el texto limpio del mensaje
     const extraerTextoMensaje = (p) => {
         if (!p) return '';
         if (typeof p.mensaje === 'string') return p.mensaje;
@@ -64,55 +53,80 @@ const AlertasWidget = () => {
         return String(p.mensaje || '');
     };
 
-    // 1️⃣ ARRIBA: Amarillos (Próximos a vencer - Individuales para ver los días restantes)
-    proximosAVencer.forEach(p => {
-        personalAgrupadoEstructurado.push({
-            mensaje: extraerTextoMensaje(p), 
-            colorBorde: '#d97706' 
+    // ========================================================
+    // 📊 MOTOR DE ORDENAMIENTO Y COMPRESIÓN UNIFICADO (REUTILIZABLE)
+    // ========================================================
+    const procesarYAgruparCategoria = (alertasFiltradas, emojiRojo, txtRojo, emojiNegro, txtNegro) => {
+        const proximos = alertasFiltradas.filter(a => a.gravedad === 'ADVERTENCIA');
+        const vencidos = alertasFiltradas.filter(a => a.gravedad === 'CRITICO');
+        const sinDatos = alertasFiltradas.filter(a => a.gravedad === 'SINDATOS');
+
+        const resultadoEstructurado = [];
+
+        // 1️⃣ AMARILLOS: Arriba e individuales
+        proximos.forEach(p => {
+            resultadoEstructurado.push({
+                mensaje: extraerTextoMensaje(p),
+                colorBorde: '#d97706'
+            });
         });
-    });
 
-    // 2️⃣ ABAJO (MEDIO): Rojos (Vencidos - Lista comprimida separada por comas)
-    if (vencidosRaw.length > 0) {
-        const listaVencidos = vencidosRaw
-            .map(p => extraerTextoMensaje(p).replace('🚨 ', ''))
-            .filter(Boolean)
-            .join(', ');
+        // 2️⃣ ROJOS: En el medio y comprimidos para no llenar la pantalla
+        if (vencidos.length > 0) {
+            const listaVencidos = vencidos
+                .map(p => extraerTextoMensaje(p).replace(/🚨|⚠️/g, '').trim())
+                .filter(Boolean)
+                .join(', ');
             
-        if (listaVencidos) {
-            personalAgrupadoEstructurado.push({
-                mensaje: `🚨 VENCIDO / PERSONAL NO APTO: ${listaVencidos}`,
-                colorBorde: '#dc2626'
-            });
+            if (listaVencidos) {
+                resultadoEstructurado.push({
+                    mensaje: `${emojiRojo} ${txtRojo}: ${listaVencidos}`,
+                    colorBorde: '#dc2626'
+                });
+            }
         }
-    }
 
-    // 3️⃣ ABAJO DEL TODO: Negros (Sin datos / Falta cargar - Lista comprimida separada por comas)
-    if (sinDatosRaw.length > 0) {
-        const listaSinDatos = sinDatosRaw
-            .map(p => extraerTextoMensaje(p).replace('⚫ ', ''))
-            .filter(Boolean)
-            .join(', ');
+        // 3️⃣ NEGROS: Abajo del todo y comprimidos
+        if (sinDatos.length > 0) {
+            const listaSinDatos = sinDatos
+                .map(p => extraerTextoMensaje(p).replace(/⚫/g, '').trim())
+                .filter(Boolean)
+                .join(', ');
 
-        if (listaSinDatos) {
-            personalAgrupadoEstructurado.push({
-                mensaje: `⚫ SIN DATOS / FALTA CARGAR CERTIFICACIONES: ${listaSinDatos}`,
-                colorBorde: '#1e293b'
-            });
+            if (listaSinDatos) {
+                resultadoEstructurado.push({
+                    mensaje: `${emojiNegro} ${txtNegro}: ${listaSinDatos}`,
+                    colorBorde: '#1e293b'
+                });
+            }
         }
-    }
 
-    // ==========================================
-    // 🚁 LÓGICA DE AGRUPACIÓN: AERONAVES Y DOCS
-    // ==========================================
-    const potencialBase = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'MANTENIMIENTO');
-    const aeronavesDocs = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'MANTENIMIENTO');
-
-    const getColorBordeGenerico = (gravedad) => {
-        if (gravedad === 'CRITICO') return '#dc2626';
-        if (gravedad === 'ADVERTENCIA') return '#d97706';
-        return '#1e293b';
+        return resultadoEstructurado;
     };
+
+    // ==========================================
+    // 👥 FILTRADO Y PROCESAMIENTO POR CATEGORÍA
+    // ==========================================
+    const alertasPersonalRaw = alertas.filter(a => a.categoria === 'TRIPULANTE');
+    const personalAgrupado = procesarYAgruparCategoria(
+        alertasPersonalRaw, 
+        '🚨', 'VENCIDO / PERSONAL NO APTO', 
+        '⚫', 'SIN DATOS / FALTA CARGAR CERTIFICACIONES'
+    );
+
+    const alertasAeronavesRaw = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo === 'MANTENIMIENTO');
+    const aeronavesAgrupado = procesarYAgruparCategoria(
+        alertasAeronavesRaw, 
+        '🚨', 'MANTENIMIENTO VENCIDO / AVIONES EN RECORRIDA', 
+        '⚫', 'SIN REGISTRO DE HORAS / POTENCIAL DESCONOCIDO'
+    );
+
+    const alertasDocsRaw = alertas.filter(a => a.categoria === 'AERONAVE' && a.tipo !== 'MANTENIMIENTO');
+    const docsAgrupado = procesarYAgruparCategoria(
+        alertasDocsRaw, 
+        '🚨', 'DOCUMENTACIÓN O SEGUROS VENCIDOS', 
+        '⚫', 'FALTA CARGAR VENCIMIENTO DE DOCUMENTACIÓN'
+    );
 
     return (
         <div style={styles.container}>
@@ -120,38 +134,36 @@ const AlertasWidget = () => {
             
             <div style={styles.buttonGroup}>
                 <button style={styles.btnPersonal} onClick={() => setShowPersonal(true)}>
-                    👥 Personal ({personalBase.length})
+                    👥 Personal ({alertasPersonalRaw.length})
                 </button>
                 <button style={styles.btnAeronaves} onClick={() => setShowAeronaves(true)}>
-                    🚁 Aeronaves ({potencialBase.length})
+                    🚁 Aeronaves ({alertasAeronavesRaw.length})
                 </button>
                 <button style={styles.btnDocs} onClick={() => setShowDocumentacion(true)}>
-                    📄 Docs/Venc ({aeronavesDocs.length})
+                    📄 Docs/Venc ({alertasDocsRaw.length})
                 </button>
             </div>
 
             {showPersonal && (
-                <ModalPersonal 
+                <ModalEstructurado 
                     titulo="Novedades de Personal" 
-                    datos={personalAgrupadoEstructurado} 
+                    datos={personalAgrupado} 
                     onClose={() => setShowPersonal(false)} 
                 />
             )}
             
             {showAeronaves && (
-                <ModalGenerico 
+                <ModalEstructurado 
                     titulo="Estado de Potencial (Mantenimiento)" 
-                    datos={potencialBase} 
-                    getColorBorde={getColorBordeGenerico}
+                    datos={aeronavesAgrupado} 
                     onClose={() => setShowAeronaves(false)} 
                 />
             )}
 
             {showDocumentacion && (
-                <ModalGenerico 
+                <ModalEstructurado 
                     titulo="Vencimientos de Documentación / Seguros" 
-                    datos={aeronavesDocs} 
-                    getColorBorde={getColorBordeGenerico}
+                    datos={docsAgrupado} 
                     onClose={() => setShowDocumentacion(false)} 
                 />
             )}
@@ -159,8 +171,8 @@ const AlertasWidget = () => {
     );
 };
 
-// Modal específico para Personal (Mantiene el orden exacto de inserción: Amarillo -> Rojo -> Negro)
-const ModalPersonal = ({ titulo, datos, onClose }) => (
+// Componente de Modal Único y Limpio que respeta el orden estructural (Amarillo -> Rojo -> Negro)
+const ModalEstructurado = ({ titulo, datos, onClose }) => (
     <div style={styles.modalOverlay} onClick={onClose}>
         <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
@@ -174,29 +186,6 @@ const ModalPersonal = ({ titulo, datos, onClose }) => (
                     {datos.map((item, i) => (
                         <div key={i} style={{ ...styles.item, borderLeftColor: item.colorBorde }}>
                             {item.mensaje}
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    </div>
-);
-
-// Modal genérico para Aeronaves y Documentación
-const ModalGenerico = ({ titulo, datos, getColorBorde, onClose }) => (
-    <div style={styles.modalOverlay} onClick={onClose}>
-        <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-                <h3 style={{ fontSize: '16px', margin: 0 }}>{titulo}</h3>
-                <button style={styles.closeBtn} onClick={onClose}>✕</button>
-            </div>
-            {datos.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>No se registran novedades vigentes.</p>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {datos.map((item, i) => (
-                        <div key={i} style={{ ...styles.item, borderLeftColor: getColorBorde(item.gravedad) }}>
-                            {typeof item.mensaje === 'string' ? item.mensaje : JSON.stringify(item.mensaje)}
                         </div>
                     ))}
                 </div>
