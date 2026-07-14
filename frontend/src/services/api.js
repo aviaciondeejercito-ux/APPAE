@@ -11,7 +11,6 @@ const getBaseURL = () => {
         return url.endsWith('/api') ? url : `${url}/api`;
     }
     
-    // CORRECCIÓN: Apuntamos al dominio real que se observa en tu entorno de producción
     const isProduction = window.location.hostname !== 'localhost';
     return isProduction 
         ? 'https://aviaciondeejercito-ux.onrender.com/api' 
@@ -28,6 +27,7 @@ const API = axios.create({
 
 /**
  * INTERCEPTOR DE SEGURIDAD JWT (Peticiones)
+ * Añade automáticamente el token de sesión a cada consulta al servidor.
  */
 API.interceptors.request.use(
     (config) => {
@@ -41,31 +41,26 @@ API.interceptors.request.use(
 );
 
 /**
- * INTERCEPTOR DE RESPUESTA
+ * INTERCEPTOR DE RESPUESTA (Manejo unificado de errores de red y sesión)
  */
 API.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response && error.response.status === 401) {
-            console.warn("⚠️ SESIÓN EXPIRADA - REDIRIGIENDO A LOGIN");
-            localStorage.clear(); 
-            window.location.href = '/login';
-        }
-        if (!error.response) {
+        if (error.response) {
+            if (error.response.status === 401) {
+                console.warn("⚠️ SESIÓN EXPIRADA - REDIRIGIENDO A LOGIN");
+                localStorage.clear();
+                window.location.href = '/login';
+            } else if (error.response.status === 403) {
+                console.error("🛑 ACCESO DENEGADO (403): Verifica los permisos de tu usuario.");
+            }
+        } else {
             console.error("❌ ERROR DE RED: Servidor AE inalcanzable en " + API.defaults.baseURL);
         }
         return Promise.reject(error);
     }
 );
-API.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        if (error.response?.status === 403) {
-            console.error("🛑 ACCESO DENEGADO (403): Verifica los permisos de tu usuario.");
-        }
-        return Promise.reject(error);
-    }
-);
+
 /**
  * SERVICIOS DE AUTENTICACIÓN
  */
@@ -219,7 +214,7 @@ export const deleteEvent = (id) => API.delete(`/events/${id}`);
 export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
     const userElemento = localStorage.getItem('elemento')?.trim();
-    const hasGlobalView = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
+    const hasGlobalView = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(role);
 
     if (!hasGlobalView && userElemento) {
         return API.get(`/aircraft`, { params: { unidad: userElemento.toUpperCase() } });
@@ -231,7 +226,7 @@ export const createAircraft = (aircraftData) => {
     const rawRole = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
     const userElemento = localStorage.getItem('elemento')?.trim();
     const userName = localStorage.getItem('username') || 'Usuario';
-    const isMandoEstrategico = ['admin', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(rawRole);
+    const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(rawRole);
 
     const dataNormalized = {
         ...aircraftData, 
@@ -263,6 +258,13 @@ export const updateAircraftStatus = (id, aircraftData) => {
 };
 
 export const deleteAircraft = (id) => API.delete(`/aircraft/${id}`);
+
+/**
+ * 🌟 SERVICIOS EXCLUSIVOS MÓDULO F-13 (REGISTRO HISTÓRICO DE AERONAVES)
+ */
+export const getF13s = () => API.get('/f13');
+export const registrarF13 = (payload) => API.post('/f13/nuevo', payload);
+export const deleteF13 = (id) => API.delete(`/f13/eliminar/${id}`);
 
 /**
  * SERVICIOS DE ADMINISTRACIÓN
@@ -298,6 +300,7 @@ export const getAstronomyData = async (lat, lng) => {
         throw error;
     }
 };
+
 const EventService = {
     getEvents,
     getActiveOperations,
@@ -315,7 +318,10 @@ const EventService = {
     getAstronomyData,
     getVuelos,
     registrarVuelo,
-    deleteVuelo
+    deleteVuelo,
+    getF13s,
+    registrarF13,
+    deleteF13
 };
 
 export { EventService };

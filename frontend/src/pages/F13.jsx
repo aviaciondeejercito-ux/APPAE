@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Users, Clock, Save, Trash2, Calendar, ClipboardCheck } from 'lucide-react';
-import API from '../services/api'; //[cite: 6]
+import { Plane, Users, Clock, Save, Trash2 } from 'lucide-react';
+import { getF13s, registrarF13, deleteF13, getAircrafts } from '../services/api'; //[cite: 6]
 
 const F13Component = () => {
     const [registrosF13, setRegistrosF13] = useState([]);
@@ -12,6 +12,7 @@ const F13Component = () => {
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, ''); //[cite: 6]
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
 
+    // Oficina Técnica ("OFICINATECNICA") ahora cuenta con todos los permisos habilitados
     const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'USER'].includes(roleNormalizado); //[cite: 6]
     const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado); //[cite: 6]
 
@@ -25,12 +26,11 @@ const F13Component = () => {
         ciclos: 0,
         apu: 0,
         aterrizajes: 1,
-        comandante: '', // ◀️ Ahora será texto libre (Nombre/Rango del piloto)
-        mecanico: '',   // ◀️ Ahora será texto libre (Nombre/Rango del mecánico)
-        // ◀️ Inspecciones ahora son texto libre para observaciones o firmas
-        inspeccionDiaria: '',
-        inspeccionPrevuelo: '',
-        inspeccionPostvuelo: ''
+        comandante: '', // ◀️ Campo de texto libre para escribir
+        mecanico: '',   // ◀️ Campo de texto libre para escribir
+        inspeccionDiaria: '',   // ◀️ Campo de texto libre para escribir
+        inspeccionPrevuelo: '', // ◀️ Campo de texto libre para escribir
+        inspeccionPostvuelo: '' // ◀️ Campo de texto libre para escribir
     });
 
     const misiones = [
@@ -48,8 +48,8 @@ const F13Component = () => {
 
     const fetchF13s = async () => {
         try {
-            const res = await API.get('/f13');
-            setRegistrosF13(res.data);
+            const res = await getF13s();
+            setRegistrosF13(res.data || []);
         } catch (error) {
             console.error("Error cargando historial de F-13", error);
         }
@@ -57,38 +57,23 @@ const F13Component = () => {
 
     const fetchAeronaves = async () => {
         try {
-            // Intentamos traer el listado general de aeronaves del sistema
-            const resGlobal = await API.get('/aircraft');
-            const todasLasAeronaves = resGlobal.data || [];
+            // Traemos las aeronaves usando la lógica de getAircrafts que filtra por Unidad en el backend
+            const res = await getAircrafts();
+            const todasLasAeronaves = res.data || [];
 
-            // Filtramos en el frontend bajo dos condiciones estrictas:
-            // 1. Que el estado sea exactamente "E/S"
-            // 2. Que pertenezca a la unidad del usuario (ignorando espacios extra y mayúsculas/minúsculas)
-            const filtradas = todasLasAeronaves.filter(a => {
-                const coincideEstado = a.estado === 'E/S';
-                const coincideUnidad = !userUnidad || 
-                    (a.unidad && a.unidad.trim().toUpperCase() === userUnidad.trim().toUpperCase());
-                
-                return coincideEstado && coincideUnidad;
-            });
-
-            setAeronavesDisponibles(filtradas);
+            // Filtramos estrictamente por estado "E/S" (En Servicio)
+            const operativas = todasLasAeronaves.filter(a => a.estado === 'E/S');
+            setAeronavesDisponibles(operativas);
         } catch (error) {
-            console.error("Error cargando aeronaves desde /aircraft, intentando fallback de F-13...", error);
-            try {
-                // Fallback secundario por si tu backend tiene la ruta /f13/aeronaves-disponibles armada de otra forma
-                const res = await API.get('/f13/aeronaves-disponibles');
-                setAeronavesDisponibles(res.data.aeronaves || []);
-            } catch (err) {
-                console.error("Error crítico al obtener aeronaves:", err);
-            }
+            console.error("Error cargando aeronaves del elemento", error);
         }
     };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
-        // Mapeamos los campos de texto de inspección al formato requerido por el backend
+        // Mapeamos los campos de texto de inspección al formato del backend para que no rompa esquemas
         const payload = {
             ...formData,
             horasALaFecha: Number(formData.horasALaFecha),
@@ -102,7 +87,7 @@ const F13Component = () => {
         };
 
         try {
-            await API.post('/f13/nuevo', payload);
+            await registrarF13(payload);
             alert("✅ Formulario F-13 registrado y acumuladores actualizados.");
             
             setFormData({
@@ -113,7 +98,7 @@ const F13Component = () => {
             });
             fetchF13s();
         } catch (error) {
-            alert("❌ Error: " + (error.response?.data?.msg || "Fallo al procesar el formulario F-13"));
+            alert("❌ Error: " + (error.response?.data?.msg || "Fallo al procesar el formulario F-13. Verifique su autenticación."));
         } finally {
             setLoading(false);
         }
@@ -127,7 +112,7 @@ const F13Component = () => {
 
         if (window.confirm("¿Seguro desea eliminar este registro? Se reajustarán las horas acumuladas de la aeronave de forma automática.")) {
             try {
-                await API.delete(`/f13/eliminar/${id}`);
+                await deleteF13(id);
                 alert("✅ Registro de F-13 eliminado y horas reajustadas.");
                 fetchF13s();
             } catch (error) {
@@ -165,11 +150,11 @@ const F13Component = () => {
                                 <input type="date" style={styles.input} value={formData.fecha} onChange={e => setFormData({ ...formData, fecha: e.target.value })} required />
                             </div>
                             <div style={styles.group}>
-                                <label style={styles.label}>Aeronave del Elemento</label>
+                                <label style={styles.label}>Aeronave en Servicio (E/S)</label>
                                 <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({ ...formData, aeronave: e.target.value })} required>
                                     <option value="">Seleccionar aeronave...</option>
                                     {aeronavesDisponibles.map(a => (
-                                        <option key={a._id} value={a._id}>{a.modelo} ({a.matricula})</option>
+                                        <option key={a._id} value={a._id}>{a.modelo || a.sda} ({a.matricula})</option>
                                     ))}
                                 </select>
                             </div>
@@ -211,7 +196,7 @@ const F13Component = () => {
                             </div>
                         </div>
 
-                        {/* 🌟 CAMPOS DE TEXTO ESCRIBIBLES PARA TRIPULACIÓN */}
+                        {/* CAMPOS DE TEXTO ESCRIBIBLES PARA TRIPULACIÓN */}
                         <div style={styles.row}>
                             <div style={styles.group}>
                                 <label style={styles.label}>Comandante de Aeronave</label>
@@ -237,7 +222,7 @@ const F13Component = () => {
                             </div>
                         </div>
 
-                        {/* 🌟 SECCIÓN INSPECCIONES TÉCNICAS (AHORA CAMPOS DE TEXTO) */}
+                        {/* SECCIÓN INSPECCIONES TÉCNICAS (CAMPOS DE TEXTO LIBRE) */}
                         <div style={styles.inspeccionContainer}>
                             <label style={{ ...styles.label, marginBottom: '8px', display: 'block' }}>Inspecciones Técnicas (Firmas / Observaciones)</label>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -245,7 +230,7 @@ const F13Component = () => {
                                     <label style={{ ...styles.label, fontSize: '0.6rem', color: '#555' }}>Inspección Pre-vuelo</label>
                                     <input 
                                         type="text" 
-                                        placeholder="Firma o 'Realizada por...'" 
+                                        placeholder="Ingrese firma o novedades pre-vuelo" 
                                         style={styles.inputSmall} 
                                         value={formData.inspeccionPrevuelo} 
                                         onChange={e => setFormData({ ...formData, inspeccionPrevuelo: e.target.value })} 
@@ -255,7 +240,7 @@ const F13Component = () => {
                                     <label style={{ ...styles.label, fontSize: '0.6rem', color: '#555' }}>Inspección Diaria</label>
                                     <input 
                                         type="text" 
-                                        placeholder="Firma o 'Realizada por...'" 
+                                        placeholder="Ingrese firma o novedades diarias" 
                                         style={styles.inputSmall} 
                                         value={formData.inspeccionDiaria} 
                                         onChange={e => setFormData({ ...formData, inspeccionDiaria: e.target.value })} 
@@ -265,7 +250,7 @@ const F13Component = () => {
                                     <label style={{ ...styles.label, fontSize: '0.6rem', color: '#555' }}>Inspección Post-vuelo</label>
                                     <input 
                                         type="text" 
-                                        placeholder="Firma o 'Realizada por...'" 
+                                        placeholder="Ingrese firma o novedades post-vuelo" 
                                         style={styles.inputSmall} 
                                         value={formData.inspeccionPostvuelo} 
                                         onChange={e => setFormData({ ...formData, inspeccionPostvuelo: e.target.value })} 
@@ -308,7 +293,7 @@ const F13Component = () => {
                                             )}
                                         </td>
                                         <td style={styles.td}>
-                                            <div style={{ fontWeight: 'bold' }}>{r.aeronave?.modelo || 'S/D'}</div>
+                                            <div style={{ fontWeight: 'bold' }}>{r.aeronave?.modelo || r.aeronave?.sda || 'S/D'}</div>
                                             <div style={{ fontSize: '0.75rem', color: '#004a99' }}>{r.aeronave?.matricula || 'S/D'}</div>
                                         </td>
                                         <td style={styles.td}>
