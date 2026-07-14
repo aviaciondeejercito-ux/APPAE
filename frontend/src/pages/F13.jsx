@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plane, Users, Clock, Save, Trash2 } from 'lucide-react';
-import { getF13s, registrarF13, deleteF13, getAeronavesF13 } from '../services/api'; 
+import { getF13s, registrarF13, deleteF13, getAircrafts } from '../services/api'; 
 
 const F13Component = () => {
     const [registrosF13, setRegistrosF13] = useState([]);
@@ -56,18 +56,18 @@ const F13Component = () => {
     };
 
     const fetchAeronaves = async () => {
-        try {
-            // Consumimos el endpoint del F13Controller que trae las aeronaves autorizadas
-            const res = await getAeronavesF13();
-            const todasLasAeronaves = res.data || [];
+    try {
+        // Usamos la ruta de flota general que ya sabemos que funciona y no da 404
+        const res = await getAircrafts();
+        const todasLasAeronaves = res.data || [];
 
-            // Filtramos estrictamente por estado "E/S" (En Servicio)
-            const operativas = todasLasAeronaves.filter(a => a.estado === 'E/S');
-            setAeronavesDisponibles(operativas);
-        } catch (error) {
-            console.error("Error cargando aeronaves autorizadas para F-13", error);
-        }
-    };
+        // Filtramos para mostrar únicamente las que están En Servicio ("E/S")
+        const operativas = todasLasAeronaves.filter(a => a.estado === 'E/S');
+        setAeronavesDisponibles(operativas);
+    } catch (error) {
+        console.error("Error cargando aeronaves del elemento", error);
+    }
+};
 
     const handleSubmit = async (e) => {
         e.preventDefault();
