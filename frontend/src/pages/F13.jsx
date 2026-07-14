@@ -1,38 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Users, Clock, Save, Trash2, Calendar, ClipboardCheck, Eye } from 'lucide-react';
-import API from '../services/api'; // Si tu carpeta 'services' está al mismo nivel que 'pages' dentro de 'src'[cite: 6]
+import { Plane, Users, Clock, Save, Trash2, Calendar, ClipboardCheck } from 'lucide-react';
+import API from '../services/api'; //[cite: 6]
 
 const F13Component = () => {
     const [registrosF13, setRegistrosF13] = useState([]);
     const [aeronavesDisponibles, setAeronavesDisponibles] = useState([]);
-    const [tripulantes, setTripulantes] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    // --- NORMALIZACIÓN DE ROLES (Adaptado para Oficina Técnica) ---
+    // --- NORMALIZACIÓN DE ROLES ---
     const rawRole = localStorage.getItem('role') || 'user';
-    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, ''); // Remueve espacios y guiones bajos (ej: "OFICINA_TECNICA" -> "OFICINATECNICA")[cite: 6]
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, ''); //[cite: 6]
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
 
-    // 🌟 Oficina Técnica ("OFICINATECNICA") ahora está explícitamente autorizada para cargar y eliminar
-    const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'USER'].includes(roleNormalizado);
-    const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado);
+    const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'USER'].includes(roleNormalizado); //[cite: 6]
+    const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado); //[cite: 6]
 
     // --- ESTADO DEL FORMULARIO ---
     const [formData, setFormData] = useState({
         fecha: '',
-        aeronave: '', // Será un ObjectId de la Aeronave seleccionada[cite: 6]
+        aeronave: '', 
         misionVuelo: '',
         horasALaFecha: 0,
         horasDelDia: 0,
         ciclos: 0,
         apu: 0,
         aterrizajes: 1,
-        comandante: '', // ObjectId de Piloto[cite: 6]
-        mecanico: '',   // ObjectId de Mecánico[cite: 6]
-        // Inspecciones
-        inspeccionDiaria: false,
-        inspeccionPrevuelo: false,
-        inspeccionPostvuelo: false
+        comandante: '', // ◀️ Ahora será texto libre (Nombre/Rango del piloto)
+        mecanico: '',   // ◀️ Ahora será texto libre (Nombre/Rango del mecánico)
+        // ◀️ Inspecciones ahora son texto libre para observaciones o firmas
+        inspeccionDiaria: '',
+        inspeccionPrevuelo: '',
+        inspeccionPostvuelo: ''
     });
 
     const misiones = [
@@ -46,7 +44,6 @@ const F13Component = () => {
     useEffect(() => {
         fetchF13s();
         fetchAeronaves();
-        fetchTripulantes();
     }, [userUnidad]);
 
     const fetchF13s = async () => {
@@ -60,26 +57,38 @@ const F13Component = () => {
 
     const fetchAeronaves = async () => {
         try {
-            const res = await API.get('/f13/aeronaves-disponibles');
-            setAeronavesDisponibles(res.data.aeronaves || []);
+            // Intentamos traer el listado general de aeronaves del sistema
+            const resGlobal = await API.get('/aircraft');
+            const todasLasAeronaves = resGlobal.data || [];
+
+            // Filtramos en el frontend bajo dos condiciones estrictas:
+            // 1. Que el estado sea exactamente "E/S"
+            // 2. Que pertenezca a la unidad del usuario (ignorando espacios extra y mayúsculas/minúsculas)
+            const filtradas = todasLasAeronaves.filter(a => {
+                const coincideEstado = a.estado === 'E/S';
+                const coincideUnidad = !userUnidad || 
+                    (a.unidad && a.unidad.trim().toUpperCase() === userUnidad.trim().toUpperCase());
+                
+                return coincideEstado && coincideUnidad;
+            });
+
+            setAeronavesDisponibles(filtradas);
         } catch (error) {
-            console.error("Error cargando aeronaves en servicio", error);
+            console.error("Error cargando aeronaves desde /aircraft, intentando fallback de F-13...", error);
+            try {
+                // Fallback secundario por si tu backend tiene la ruta /f13/aeronaves-disponibles armada de otra forma
+                const res = await API.get('/f13/aeronaves-disponibles');
+                setAeronavesDisponibles(res.data.aeronaves || []);
+            } catch (err) {
+                console.error("Error crítico al obtener aeronaves:", err);
+            }
         }
     };
-
-    const fetchTripulantes = async () => {
-        try {
-            const res = await API.get('/tripulantes');
-            setTripulantes(res.data);
-        } catch (error) {
-            console.error("Error cargando tripulantes", error);
-        }
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
+        // Mapeamos los campos de texto de inspección al formato requerido por el backend
         const payload = {
             ...formData,
             horasALaFecha: Number(formData.horasALaFecha),
@@ -87,9 +96,9 @@ const F13Component = () => {
             ciclos: Number(formData.ciclos),
             apu: Number(formData.apu),
             aterrizajes: Number(formData.aterrizajes),
-            inspeccionDiaria: { realizada: formData.inspeccionDiaria, fechaHora: new Date() },
-            inspeccionPrevuelo: { realizada: formData.inspeccionPrevuelo, fechaHora: new Date() },
-            inspeccionPostvuelo: { realizada: formData.inspeccionPostvuelo, fechaHora: new Date() }
+            inspeccionDiaria: { realizada: !!formData.inspeccionDiaria, firmaResponsable: formData.inspeccionDiaria, fechaHora: new Date() },
+            inspeccionPrevuelo: { realizada: !!formData.inspeccionPrevuelo, firmaResponsable: formData.inspeccionPrevuelo, fechaHora: new Date() },
+            inspeccionPostvuelo: { realizada: !!formData.inspeccionPostvuelo, firmaResponsable: formData.inspeccionPostvuelo, fechaHora: new Date() }
         };
 
         try {
@@ -100,7 +109,7 @@ const F13Component = () => {
                 fecha: '', aeronave: '', misionVuelo: '',
                 horasALaFecha: 0, horasDelDia: 0, ciclos: 0, apu: 0, aterrizajes: 1,
                 comandante: '', mecanico: '',
-                inspeccionDiaria: false, inspeccionPrevuelo: false, inspeccionPostvuelo: false
+                inspeccionDiaria: '', inspeccionPrevuelo: '', inspeccionPostvuelo: ''
             });
             fetchF13s();
         } catch (error) {
@@ -116,10 +125,10 @@ const F13Component = () => {
             return;
         }
 
-        if (window.confirm("¿Seguro desea eliminar este registro? Se reajustarán las horas acumuladas de la aeronave de forma automática en el sistema.")) {
+        if (window.confirm("¿Seguro desea eliminar este registro? Se reajustarán las horas acumuladas de la aeronave de forma automática.")) {
             try {
                 await API.delete(`/f13/eliminar/${id}`);
-                alert("✅ Registro de F-13 eliminado y horas reajustadas correctamente.");
+                alert("✅ Registro de F-13 eliminado y horas reajustadas.");
                 fetchF13s();
             } catch (error) {
                 console.error("Error al eliminar F-13:", error);
@@ -139,7 +148,7 @@ const F13Component = () => {
         <div style={styles.container}>
             <div style={styles.header}>
                 <div>
-                    <h1 style={styles.title}>Registro Histórico F-13 - Historial de Aeronave</h1>
+                    <h1 style={styles.title}>Registro Histórico F-13 - Historial de Aeronaves</h1>
                     <span style={styles.subtitle}>Unidad: {userUnidad || "SIN UNIDAD"} | Acceso: {roleNormalizado}</span>
                 </div>
             </div>
@@ -156,7 +165,7 @@ const F13Component = () => {
                                 <input type="date" style={styles.input} value={formData.fecha} onChange={e => setFormData({ ...formData, fecha: e.target.value })} required />
                             </div>
                             <div style={styles.group}>
-                                <label style={styles.label}>Aeronave en Servicio</label>
+                                <label style={styles.label}>Aeronave del Elemento</label>
                                 <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({ ...formData, aeronave: e.target.value })} required>
                                     <option value="">Seleccionar aeronave...</option>
                                     {aeronavesDisponibles.map(a => (
@@ -202,40 +211,66 @@ const F13Component = () => {
                             </div>
                         </div>
 
+                        {/* 🌟 CAMPOS DE TEXTO ESCRIBIBLES PARA TRIPULACIÓN */}
                         <div style={styles.row}>
                             <div style={styles.group}>
-                                <label style={styles.label}>Comandante</label>
-                                <select style={styles.input} value={formData.comandante} onChange={e => setFormData({ ...formData, comandante: e.target.value })} required>
-                                    <option value="">Seleccionar comandante...</option>
-                                    {tripulantes.filter(t => t.rolActual === 'Piloto').map(t => (
-                                        <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>
-                                    ))}
-                                </select>
+                                <label style={styles.label}>Comandante de Aeronave</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Ej: Cap. Pérez" 
+                                    style={styles.input} 
+                                    value={formData.comandante} 
+                                    onChange={e => setFormData({ ...formData, comandante: e.target.value })} 
+                                    required 
+                                />
                             </div>
                             <div style={styles.group}>
                                 <label style={styles.label}>Mecánico de a bordo</label>
-                                <select style={styles.input} value={formData.mecanico} onChange={e => setFormData({ ...formData, mecanico: e.target.value })} required>
-                                    <option value="">Seleccionar mecánico...</option>
-                                    {tripulantes.filter(t => t.rolActual === 'Mecanico' || t.rolActual === 'Suboficial').map(t => (
-                                        <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>
-                                    ))}
-                                </select>
+                                <input 
+                                    type="text" 
+                                    placeholder="Ej: Subof. Prado" 
+                                    style={styles.input} 
+                                    value={formData.mecanico} 
+                                    onChange={e => setFormData({ ...formData, mecanico: e.target.value })} 
+                                    required 
+                                />
                             </div>
                         </div>
 
-                        {/* SECCIÓN INSPECCIONES */}
+                        {/* 🌟 SECCIÓN INSPECCIONES TÉCNICAS (AHORA CAMPOS DE TEXTO) */}
                         <div style={styles.inspeccionContainer}>
-                            <label style={{ ...styles.label, marginBottom: '8px', display: 'block' }}>Inspecciones Técnicas Realizadas</label>
-                            <div style={{ display: 'flex', gap: '15px' }}>
-                                <label style={styles.checkboxLabel}>
-                                    <input type="checkbox" checked={formData.inspeccionPrevuelo} onChange={e => setFormData({ ...formData, inspeccionPrevuelo: e.target.checked })} /> Pre-vuelo
-                                </label>
-                                <label style={styles.checkboxLabel}>
-                                    <input type="checkbox" checked={formData.inspeccionDiaria} onChange={e => setFormData({ ...formData, inspeccionDiaria: e.target.checked })} /> Diaria
-                                </label>
-                                <label style={styles.checkboxLabel}>
-                                    <input type="checkbox" checked={formData.inspeccionPostvuelo} onChange={e => setFormData({ ...formData, inspeccionPostvuelo: e.target.checked })} /> Post-vuelo
-                                </label>
+                            <label style={{ ...styles.label, marginBottom: '8px', display: 'block' }}>Inspecciones Técnicas (Firmas / Observaciones)</label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={styles.group}>
+                                    <label style={{ ...styles.label, fontSize: '0.6rem', color: '#555' }}>Inspección Pre-vuelo</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Firma o 'Realizada por...'" 
+                                        style={styles.inputSmall} 
+                                        value={formData.inspeccionPrevuelo} 
+                                        onChange={e => setFormData({ ...formData, inspeccionPrevuelo: e.target.value })} 
+                                    />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={{ ...styles.label, fontSize: '0.6rem', color: '#555' }}>Inspección Diaria</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Firma o 'Realizada por...'" 
+                                        style={styles.inputSmall} 
+                                        value={formData.inspeccionDiaria} 
+                                        onChange={e => setFormData({ ...formData, inspeccionDiaria: e.target.value })} 
+                                    />
+                                </div>
+                                <div style={styles.group}>
+                                    <label style={{ ...styles.label, fontSize: '0.6rem', color: '#555' }}>Inspección Post-vuelo</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Firma o 'Realizada por...'" 
+                                        style={styles.inputSmall} 
+                                        value={formData.inspeccionPostvuelo} 
+                                        onChange={e => setFormData({ ...formData, inspeccionPostvuelo: e.target.value })} 
+                                    />
+                                </div>
                             </div>
                         </div>
 
@@ -254,7 +289,7 @@ const F13Component = () => {
                                 <tr style={styles.thead}>
                                     <th style={styles.th}>Fecha / Misión</th>
                                     <th style={styles.th}>Aeronave</th>
-                                    <th style={styles.th}>Tiempos del Motor</th>
+                                    <th style={styles.th}>Tiempos</th>
                                     <th style={styles.th}>Tripulación</th>
                                     <th style={styles.th}>Inspecciones</th>
                                     <th style={styles.th}>Acción</th>
@@ -285,16 +320,25 @@ const F13Component = () => {
                                         </td>
                                         <td style={styles.td}>
                                             <div style={styles.tripuList}>
-                                                <span><Users size={10} /> <strong>CMD:</strong> {r.comandante?.apellido || 'N/C'}</span>
-                                                <span><Users size={10} /> <strong>MEC:</strong> {r.mecanico?.apellido || 'N/C'}</span>
+                                                <span><strong>CMD:</strong> {r.comandante || 'N/C'}</span>
+                                                <span><strong>MEC:</strong> {r.mecanico || 'N/C'}</span>
                                                 <span style={{ fontSize: '0.7rem', color: '#666' }}>Aterrizajes: {r.aterrizajes}</span>
                                             </div>
                                         </td>
                                         <td style={styles.td}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                <span style={r.inspeccionPrevuelo?.realizada ? styles.inspeccionOk : styles.inspeccionNo}>Pre: ✔</span>
-                                                <span style={r.inspeccionDiaria?.realizada ? styles.inspeccionOk : styles.inspeccionNo}>Diaria: ✔</span>
-                                                <span style={r.inspeccionPostvuelo?.realizada ? styles.inspeccionOk : styles.inspeccionNo}>Post: ✔</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                {r.inspeccionPrevuelo?.firmaResponsable && (
+                                                    <span style={styles.inspeccionOk}>Pre: {r.inspeccionPrevuelo.firmaResponsable}</span>
+                                                )}
+                                                {r.inspeccionDiaria?.firmaResponsable && (
+                                                    <span style={styles.inspeccionOk}>Diaria: {r.inspeccionDiaria.firmaResponsable}</span>
+                                                )}
+                                                {r.inspeccionPostvuelo?.firmaResponsable && (
+                                                    <span style={styles.inspeccionOk}>Post: {r.inspeccionPostvuelo.firmaResponsable}</span>
+                                                )}
+                                                {!r.inspeccionPrevuelo?.firmaResponsable && !r.inspeccionDiaria?.firmaResponsable && !r.inspeccionPostvuelo?.firmaResponsable && (
+                                                    <span style={styles.inspeccionNo}>Sin Inspecciones</span>
+                                                )}
                                             </div>
                                         </td>
                                         <td style={styles.td}>
@@ -316,7 +360,6 @@ const F13Component = () => {
     );
 };
 
-// Los estilos heredados y adaptados para que matcheen perfecto con tu UI original
 const styles = {
     container: { padding: '20px', backgroundColor: '#f4f7f6', minHeight: 'calc(100vh - 65px)' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
@@ -330,6 +373,7 @@ const styles = {
     group: { display: 'flex', flexDirection: 'column', gap: '3px' },
     label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' },
     input: { padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.85rem', outline: 'none' },
+    inputSmall: { padding: '6px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.75rem', outline: 'none' },
     btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px', transition: '0.2s' },
     tableContainer: { overflowX: 'auto' },
     table: { width: '100%', borderCollapse: 'collapse' },
@@ -344,9 +388,8 @@ const styles = {
     btnDel: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' },
     noData: { textAlign: 'center', padding: '40px', color: '#9ca3af', fontSize: '0.9rem' },
     inspeccionContainer: { border: '1px solid #e5e7eb', padding: '10px', borderRadius: '6px', backgroundColor: '#fafafa', marginTop: '5px' },
-    checkboxLabel: { fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: '500' },
-    inspeccionOk: { fontSize: '0.65rem', fontWeight: 'bold', color: '#166534', backgroundColor: '#dcfce7', padding: '1px 5px', borderRadius: '3px', width: 'fit-content' },
-    inspeccionNo: { fontSize: '0.65rem', fontWeight: 'bold', color: '#991b1b', backgroundColor: '#fee2e2', padding: '1px 5px', borderRadius: '3px', width: 'fit-content' }
+    inspeccionOk: { fontSize: '0.68rem', fontWeight: 'bold', color: '#166534', backgroundColor: '#dcfce7', padding: '2px 6px', borderRadius: '3px', width: 'fit-content', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' },
+    inspeccionNo: { fontSize: '0.68rem', color: '#9ca3af', fontStyle: 'italic' }
 };
 
 export default F13Component;
