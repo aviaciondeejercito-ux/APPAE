@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plane, Users, Clock, Save, Trash2, Calendar, ClipboardCheck, Eye } from 'lucide-react';
-import API from '../services/api'; // Si tu carpeta 'services' está al mismo nivel que 'pages' dentro de 'src'
-// o bien: import API from '../../services/api'; (depende de tu estructura exacta)
+import API from '../services/api'; // Si tu carpeta 'services' está al mismo nivel que 'pages' dentro de 'src'[cite: 6]
 
 const F13Component = () => {
     const [registrosF13, setRegistrosF13] = useState([]);
@@ -9,26 +8,27 @@ const F13Component = () => {
     const [tripulantes, setTripulantes] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    // --- NORMALIZACIÓN DE ROLES (Igual a tu modelo original) ---
+    // --- NORMALIZACIÓN DE ROLES (Adaptado para Oficina Técnica) ---
     const rawRole = localStorage.getItem('role') || 'user';
-    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, ''); // Remueve espacios y guiones bajos (ej: "OFICINA_TECNICA" -> "OFICINATECNICA")[cite: 6]
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
 
-    const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'USER'].includes(roleNormalizado);
-    const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
+    // 🌟 Oficina Técnica ("OFICINATECNICA") ahora está explícitamente autorizada para cargar y eliminar
+    const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'USER'].includes(roleNormalizado);
+    const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado);
 
     // --- ESTADO DEL FORMULARIO ---
     const [formData, setFormData] = useState({
         fecha: '',
-        aeronave: '', // Será un ObjectId de la Aeronave seleccionada
+        aeronave: '', // Será un ObjectId de la Aeronave seleccionada[cite: 6]
         misionVuelo: '',
         horasALaFecha: 0,
         horasDelDia: 0,
         ciclos: 0,
         apu: 0,
         aterrizajes: 1,
-        comandante: '', // ObjectId de Piloto
-        mecanico: '',   // ObjectId de Mecánico
+        comandante: '', // ObjectId de Piloto[cite: 6]
+        mecanico: '',   // ObjectId de Mecánico[cite: 6]
         // Inspecciones
         inspeccionDiaria: false,
         inspeccionPrevuelo: false,
@@ -51,7 +51,6 @@ const F13Component = () => {
 
     const fetchF13s = async () => {
         try {
-            // Reemplazar endpoint según tu ruteo de Express (/api/f13)
             const res = await API.get('/f13');
             setRegistrosF13(res.data);
         } catch (error) {
@@ -61,7 +60,6 @@ const F13Component = () => {
 
     const fetchAeronaves = async () => {
         try {
-            // Traemos solo las aeronaves operativas "En Servicio"
             const res = await API.get('/f13/aeronaves-disponibles');
             setAeronavesDisponibles(res.data.aeronaves || []);
         } catch (error) {
@@ -80,10 +78,8 @@ const F13Component = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
         setLoading(true);
 
-        // Mapeamos los booleanos simples de la UI a la estructura detallada del backend
         const payload = {
             ...formData,
             horasALaFecha: Number(formData.horasALaFecha),
@@ -100,7 +96,6 @@ const F13Component = () => {
             await API.post('/f13/nuevo', payload);
             alert("✅ Formulario F-13 registrado y acumuladores actualizados.");
             
-            // Reset del formulario
             setFormData({
                 fecha: '', aeronave: '', misionVuelo: '',
                 horasALaFecha: 0, horasDelDia: 0, ciclos: 0, apu: 0, aterrizajes: 1,
@@ -117,7 +112,7 @@ const F13Component = () => {
 
     const eliminarRegistro = async (id) => {
         if (!puedeEliminarF13) {
-            alert("Acceso Denegado: Su nivel jerárquico no permite anular registros de F-13.");
+            alert("Acceso Denegado: Su nivel jerárquico o rol no permite anular registros de F-13.");
             return;
         }
 
@@ -271,7 +266,6 @@ const F13Component = () => {
                                         <td style={styles.td}>
                                             <div style={{ fontWeight: 'bold' }}>{formatearFechaLocal(r.fecha)}</div>
                                             <span style={styles.misionTag}>{r.misionVuelo}</span>
-                                            {/* 🌟 Muestra de forma elegante el usuario que realizó la carga de datos */}
                                             {r.creadoPor && (
                                                 <div style={styles.operadorTag}>
                                                     <span>Cargó: {r.creadoPor.rango || r.creadoPor.nombre || ''} {r.creadoPor.apellido}</span>
@@ -349,7 +343,6 @@ const styles = {
     operadorTag: { fontSize: '0.68rem', color: '#4b5563', backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '6px', border: '1px dashed #d1d5db' },
     btnDel: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' },
     noData: { textAlign: 'center', padding: '40px', color: '#9ca3af', fontSize: '0.9rem' },
-    // Estilos extras específicos para F-13
     inspeccionContainer: { border: '1px solid #e5e7eb', padding: '10px', borderRadius: '6px', backgroundColor: '#fafafa', marginTop: '5px' },
     checkboxLabel: { fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: '500' },
     inspeccionOk: { fontSize: '0.65rem', fontWeight: 'bold', color: '#166534', backgroundColor: '#dcfce7', padding: '1px 5px', borderRadius: '3px', width: 'fit-content' },
