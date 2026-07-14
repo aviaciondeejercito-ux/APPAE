@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plane, Users, Clock, Save, Trash2 } from 'lucide-react';
-import { getF13s, registrarF13, deleteF13, getAircrafts } from '../services/api'; //[cite: 6]
+import { getF13s, registrarF13, deleteF13, getAeronavesF13 } from '../services/api'; 
 
 const F13Component = () => {
     const [registrosF13, setRegistrosF13] = useState([]);
@@ -9,12 +9,12 @@ const F13Component = () => {
 
     // --- NORMALIZACIÓN DE ROLES ---
     const rawRole = localStorage.getItem('role') || 'user';
-    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, ''); //[cite: 6]
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, ''); 
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
 
     // Oficina Técnica ("OFICINATECNICA") ahora cuenta con todos los permisos habilitados
-    const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'USER'].includes(roleNormalizado); //[cite: 6]
-    const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado); //[cite: 6]
+    const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'USER'].includes(roleNormalizado); 
+    const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado); 
 
     // --- ESTADO DEL FORMULARIO ---
     const [formData, setFormData] = useState({
@@ -26,11 +26,11 @@ const F13Component = () => {
         ciclos: 0,
         apu: 0,
         aterrizajes: 1,
-        comandante: '', // ◀️ Campo de texto libre para escribir
-        mecanico: '',   // ◀️ Campo de texto libre para escribir
-        inspeccionDiaria: '',   // ◀️ Campo de texto libre para escribir
-        inspeccionPrevuelo: '', // ◀️ Campo de texto libre para escribir
-        inspeccionPostvuelo: '' // ◀️ Campo de texto libre para escribir
+        comandante: '', 
+        mecanico: '',   
+        inspeccionDiaria: '',   
+        inspeccionPrevuelo: '', 
+        inspeccionPostvuelo: '' 
     });
 
     const misiones = [
@@ -57,15 +57,15 @@ const F13Component = () => {
 
     const fetchAeronaves = async () => {
         try {
-            // Traemos las aeronaves usando la lógica de getAircrafts que filtra por Unidad en el backend
-            const res = await getAircrafts();
+            // Consumimos el endpoint del F13Controller que trae las aeronaves autorizadas
+            const res = await getAeronavesF13();
             const todasLasAeronaves = res.data || [];
 
             // Filtramos estrictamente por estado "E/S" (En Servicio)
             const operativas = todasLasAeronaves.filter(a => a.estado === 'E/S');
             setAeronavesDisponibles(operativas);
         } catch (error) {
-            console.error("Error cargando aeronaves del elemento", error);
+            console.error("Error cargando aeronaves autorizadas para F-13", error);
         }
     };
 
@@ -73,7 +73,6 @@ const F13Component = () => {
         e.preventDefault();
         setLoading(true);
 
-        // Mapeamos los campos de texto de inspección al formato del backend para que no rompa esquemas
         const payload = {
             ...formData,
             horasALaFecha: Number(formData.horasALaFecha),
@@ -196,7 +195,6 @@ const F13Component = () => {
                             </div>
                         </div>
 
-                        {/* CAMPOS DE TEXTO ESCRIBIBLES PARA TRIPULACIÓN */}
                         <div style={styles.row}>
                             <div style={styles.group}>
                                 <label style={styles.label}>Comandante de Aeronave</label>
@@ -222,7 +220,6 @@ const F13Component = () => {
                             </div>
                         </div>
 
-                        {/* SECCIÓN INSPECCIONES TÉCNICAS (CAMPOS DE TEXTO LIBRE) */}
                         <div style={styles.inspeccionContainer}>
                             <label style={{ ...styles.label, marginBottom: '8px', display: 'block' }}>Inspecciones Técnicas (Firmas / Observaciones)</label>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

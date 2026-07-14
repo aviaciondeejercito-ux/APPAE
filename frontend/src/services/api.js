@@ -118,6 +118,15 @@ export const registrarVuelo = (vueloData) => {
 export const deleteVuelo = (id) => API.delete(`/vuelos/${id}`);
 
 /**
+ * 🌟 SERVICIOS EXCLUSIVOS MÓDULO F-13 (REGISTRO HISTÓRICO DE AERONAVES)
+ * Mapeados idénticamente a tu F13Controller en el Backend
+ */
+export const getAeronavesF13 = () => API.get('/f13/aeronaves-disponibles');
+export const getF13s = () => API.get('/f13'); 
+export const registrarF13 = (payload) => API.post('/f13/nuevo', payload);
+export const deleteF13 = (id) => API.delete(`/f13/eliminar/${id}`);
+
+/**
  * SERVICIOS DE EVENTOS Y OPERACIONES (MAPA TÁCTICO)
  */
 export const getEvents = () => API.get('/events');
@@ -266,14 +275,6 @@ export const updateAircraftStatus = (id, aircraftData) => {
 export const deleteAircraft = (id) => API.delete(`/aircraft/${id}`);
 
 /**
- * 🌟 SERVICIOS EXCLUSIVOS MÓDULO F-13 (REGISTRO HISTÓRICO DE AERONAVES)
- * Endpoints adaptados al enrutamiento estándar REST del backend
- */
-export const getF13s = () => API.get('/f13');
-export const registrarF13 = (payload) => API.post('/f13', payload);
-export const deleteF13 = (id) => API.delete(`/f13/${id}`);
-
-/**
  * SERVICIOS DE ADMINISTRACIÓN
  */
 export const getUsers = () => API.get('/admin/users');
@@ -326,6 +327,7 @@ const EventService = {
     getVuelos,
     registrarVuelo,
     deleteVuelo,
+    getAeronavesF13,
     getF13s,
     registrarF13,
     deleteF13
