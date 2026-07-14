@@ -1,5 +1,5 @@
-const F13 = require('../models/F13');
-const Aeronave = require('../models/Aeronave'); // Asegurá la ruta y nombre exacto de tu modelo de Aeronaves
+const F13 = require('../models/F13'); // ◀️ Cambiado a "F13" sin guion medio
+const Aeronave = require('../models/Aircraft');
 
 /**
  * 1. Obtener todos los registros de F-13 (con Populate para auditoría y visualización)
