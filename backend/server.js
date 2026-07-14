@@ -82,6 +82,8 @@ const tripulanteRoutes = require('./routes/tripulantesRoutes');
 const vueloRoutes = require('./routes/vueloRoutes');
 const ebmRoutes = require('./routes/ebmRoutes'); 
 const alertRoutes = require('./routes/alertRoutes');
+const f13Routes = require('./routes/f13'); // ◀️ IMPORTACIÓN NUEVAS RUTAS F-13
+
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
 app.get('/api/health', (req, res) => {
@@ -105,7 +107,10 @@ app.use('/api/vuelos', vueloRoutes);
 // MONTAJE EBM
 app.use('/api/ebm', ebmRoutes);
 // MONTAJE DE ALERTAS OPERATIVAS
-app.use('/api/alerts', alertRoutes); //
+app.use('/api/alerts', alertRoutes); 
+// MONTAJE REGISTRO HISTÓRICO F-13
+app.use('/api/f13', f13Routes); // ◀️ REGISTRO DEL ENDPOINT F-13
+
 // --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
 app.use((req, res) => {
     res.status(404).json({
@@ -134,6 +139,13 @@ server.listen(PORT, () => {
         console.log("✅ Módulo EBM cargado correctamente.");
     } else {
         console.warn("⚠️ Advertencia: El módulo EBM no pudo cargarse.");
+    }
+
+    // Verificación de carga de rutas F-13
+    if (f13Routes) {
+        console.log("✅ Módulo F-13 (Libretas Históricas) cargado correctamente.");
+    } else {
+        console.warn("⚠️ Advertencia: El módulo F-13 no pudo cargarse.");
     }
 });
 

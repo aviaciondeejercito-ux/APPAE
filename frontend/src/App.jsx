@@ -18,6 +18,7 @@ import Tripulantes from './pages/Tripulantes';
 import Vuelos from './pages/Vuelos';
 import EbmPage from './pages/EbmPage'; 
 import AlertasWidget from './components/AlertasWidget'; 
+import F13Page from './pages/F13'; 
 
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
@@ -84,9 +85,10 @@ function App() {
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
     const puedeVerEbm = esAdmin || esBoss || esDirector || esOperaciones || esJefe || esOperaciones || esOTO;
+    const puedeVerF13 = esAdmin || esOperaciones || esUser;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm'].includes(view);
+    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm', 'f13'].includes(view);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -136,6 +138,13 @@ function App() {
                                     onClick={() => setView('vuelos')} 
                                     style={{...styles.btnNav, backgroundColor: view === 'vuelos' ? '#1b3a57' : '#4a69bd'}}
                                 >✈️ Vuelos</button>
+                            )}
+
+                            {puedeVerF13 && (
+                                <button 
+                                    onClick={() => setView('f13')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'f13' ? '#1b3a57' : '#4a69bd'}}
+                                >📋 F-13</button>
                             )}
 
                             {puedeVerPlaneamiento && (
@@ -208,6 +217,7 @@ function App() {
                             case 'tripulantes': return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
                             case 'ebm': return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
                             case 'vuelos': return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
+                            case 'f13': return puedeVerF13 ? <F13Page /> : <CalendarPage />;
                             case 'planeamiento': return puedeVerPlaneamiento ? <PlaneamientoMapa /> : <CalendarPage />;
                             case 'admin': return esAdmin ? <AdminPanel /> : <CalendarPage />;
                             case 'stats': return puedeVerStats ? <Estadisticas /> : <CalendarPage />;
