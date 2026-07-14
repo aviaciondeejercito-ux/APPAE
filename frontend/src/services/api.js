@@ -37,22 +37,28 @@ API.interceptors.request.use(
         }
         return config;
     },
-    (error) => Promise.reject(error)
+    (error) => {
+        return Promise.reject(error);
+    }
 );
 
 /**
  * INTERCEPTOR DE RESPUESTA (Manejo unificado de errores de red y sesión)
+ * Evita desloguear al usuario por errores comunes de rutas (404) o permisos (403).
  */
 API.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response) {
+            // 🔒 SOLO desloguear si es estrictamente un 401 (Sesión expirada / Token inválido)
             if (error.response.status === 401) {
                 console.warn("⚠️ SESIÓN EXPIRADA - REDIRIGIENDO A LOGIN");
-                localStorage.clear();
+                localStorage.clear(); 
                 window.location.href = '/login';
             } else if (error.response.status === 403) {
                 console.error("🛑 ACCESO DENEGADO (403): Verifica los permisos de tu usuario.");
+            } else if (error.response.status === 404) {
+                console.error("❌ RUTA NO ENCONTRADA (404): Comprobá que los endpoints coincidan en el backend.");
             }
         } else {
             console.error("❌ ERROR DE RED: Servidor AE inalcanzable en " + API.defaults.baseURL);
@@ -261,10 +267,11 @@ export const deleteAircraft = (id) => API.delete(`/aircraft/${id}`);
 
 /**
  * 🌟 SERVICIOS EXCLUSIVOS MÓDULO F-13 (REGISTRO HISTÓRICO DE AERONAVES)
+ * Endpoints adaptados al enrutamiento estándar REST del backend
  */
 export const getF13s = () => API.get('/f13');
-export const registrarF13 = (payload) => API.post('/f13/nuevo', payload);
-export const deleteF13 = (id) => API.delete(`/f13/eliminar/${id}`);
+export const registrarF13 = (payload) => API.post('/f13', payload);
+export const deleteF13 = (id) => API.delete(`/f13/${id}`);
 
 /**
  * SERVICIOS DE ADMINISTRACIÓN
