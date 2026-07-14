@@ -85,7 +85,7 @@ function App() {
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
     const puedeVerEbm = esAdmin || esBoss || esDirector || esOperaciones || esJefe || esOperaciones || esOTO;
-    const puedeVerF13 = esAdmin || esOperaciones || esUser;
+    const puedeVerF13 = esAdmin || esOfTecnica || esUser;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
     const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm', 'f13'].includes(view);
