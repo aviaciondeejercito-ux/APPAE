@@ -91,12 +91,12 @@ const DashboardNovedades = () => {
 
   const { resumenMantenimiento, resumenVuelos } = novedades;
 
-  // Filtrado de seguridad en Frontend para asegurar que pertenezcan a la unidad
+  // Filtrado de seguridad en Frontend
   const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
     nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
   );
 
-  // 🛡️ CORRECCIÓN CLAVE: Validación estricta para siglas militares "E/S" (En Servicio)
+  // Validación para siglas militares "E/S" (En Servicio) o "F/S"
   const chequearOperativo = (nave) => {
     return (
       nave.estado === 'E/S' || 
@@ -105,13 +105,26 @@ const DashboardNovedades = () => {
     );
   };
 
-  // Cálculo de totales basados en la corrección
   const cantidadOperativas = flotaFiltrada.filter(n => chequearOperativo(n)).length;
   const cantidadEnMantenimiento = flotaFiltrada.length - cantidadOperativas;
 
+  // 🛡️ EXTRAER SDAs DINÁMICAMENTE DE LA FLOTA ASIGNADA A LA UNIDAD
+  const sdaDisponibles = Array.from(new Set(flotaFiltrada.map(nave => nave.sda).filter(Boolean))).sort();
+
+  // --- CÁLCULO ESTRICTO DE HORAS VOLADAS EN EL AÑO ACTUAL ---
+  const anioActual = new Date().getFullYear(); // 2026
+  const totalHorasAnioActual = resumenVuelos.ultimosVuelos.reduce((sum, v) => {
+    if (!v.fecha) return sum;
+    const fechaVuelo = new Date(v.fecha);
+    if (fechaVuelo.getFullYear() === anioActual) {
+      return sum + (v.horasDelDia || 0);
+    }
+    return sum;
+  }, 0);
+
   // --- PROCESAMIENTO DINÁMICO DE DATOS PARA ANALÍTICA DE HORAS ---
   
-  // 1. Horas acumuladas por Aeronave (Matrícula) en el período filtrado
+  // 1. Horas acumuladas por Aeronave únicamente en el período / año seleccionado (Derecha)
   const horasPorAeronave = {};
   resumenVuelos.ultimosVuelos.forEach(v => {
     const mat = v.aeronave?.matricula || 'S/M';
@@ -131,7 +144,7 @@ const DashboardNovedades = () => {
     .map(([mision, horas]) => ({ mision, horas: Number(horas.toFixed(2)) }))
     .sort((a, b) => b.horas - a.horas);
 
-  // 3. Horas acumuladas por Mes del año actual
+  // 3. Horas acumuladas por Mes del año
   const horasPorMes = {};
   resumenVuelos.ultimosVuelos.forEach(v => {
     if (!v.fecha) return;
@@ -154,7 +167,7 @@ const DashboardNovedades = () => {
         <p style={styles.subtitle}>Consolidado operativo y analítico de flota e historial F-13.</p>
       </div>
 
-      {/* MINI KPIs: Super compactos en una sola fila */}
+      {/* MINI KPIs con el nuevo detalle de Horas del Año */}
       <div style={styles.miniKpiRow}>
         <div style={styles.miniKpiCard}>
           <span style={styles.miniKpiIcon}>✈️</span>
@@ -167,7 +180,7 @@ const DashboardNovedades = () => {
           <span style={{...styles.miniKpiIcon, color: '#059669'}}>✓</span>
           <div>
             <span style={styles.miniKpiLabel}>E/S (En Serv.)</span>
-            <span style={{...styles.miniKpiValue, color: '#059669'}}>{cantidadOperativas}</span>
+            <span style={{...styles.miniKpiValue, color: '#059669'}}>{amount => cantidadOperativas}</span>
           </div>
         </div>
         <div style={styles.miniKpiCard}>
@@ -180,8 +193,16 @@ const DashboardNovedades = () => {
         <div style={styles.miniKpiCard}>
           <span style={{...styles.miniKpiIcon, color: '#4f46e5'}}>⏱️</span>
           <div>
-            <span style={styles.miniKpiLabel}>Total Horas</span>
+            <span style={styles.miniKpiLabel}>Horas Período / Filtro</span>
             <span style={{...styles.miniKpiValue, color: '#4f46e5'}}>{resumenVuelos.totalHorasVoladas} hs</span>
+          </div>
+        </div>
+        {/* NUEVO CUADRO: Total de horas voladas en el año (independiente de los filtros) */}
+        <div style={{...styles.miniKpiCard, borderLeft: '4px solid #06b6d4'}}>
+          <span style={{...styles.miniKpiIcon, color: '#06b6d4'}}>📅</span>
+          <div>
+            <span style={styles.miniKpiLabel}>Total Volado Año ({anioActual})</span>
+            <span style={{...styles.miniKpiValue, color: '#06b6d4'}}>{Number(totalHorasAnioActual.toFixed(2))} hs</span>
           </div>
         </div>
       </div>
@@ -189,12 +210,13 @@ const DashboardNovedades = () => {
       {/* FILTROS OPERATIVOS */}
       <div style={styles.filterBar}>
         <div style={styles.filterGroup}>
-          <label style={styles.filterLabel}>SDA</label>
+          <label style={styles.filterLabel}>SDA (Sistema de Armas)</label>
           <select value={sda} onChange={(e) => setSda(e.target.value)} style={styles.select}>
-            <option value="">Todos</option>
-            <option value="HUEY">UH-1H Huey</option>
-            <option value="SUPER_PUMA">Super Puma</option>
-            <option value="BELL206">Bell 206</option>
+            <option value="">Todos los asignados</option>
+            {/* Renderizado dinámico de los Sistemas de Armas de tu flota real */}
+            {sdaDisponibles.map(sistema => (
+              <option key={sistema} value={sistema}>{sistema}</option>
+            ))}
           </select>
         </div>
         <div style={styles.filterGroup}>
@@ -213,7 +235,7 @@ const DashboardNovedades = () => {
       {/* CUADRO PRINCIPAL DEL TABLERO */}
       <div style={styles.tablesGrid}>
         
-        {/* COLUMNA 1: ESTADO DE LA FLOTA (Lista compacta con nomenclador correcto) */}
+        {/* COLUMNA 1: ESTADO DE LA FLOTA (Muestra horas totales de la célula acumuladas en estructura) */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>🛠️ Estado de la Flota</h2>
           <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
@@ -222,7 +244,7 @@ const DashboardNovedades = () => {
                 <tr style={styles.tableHeaderRow}>
                   <th style={styles.th}>Matrícula</th>
                   <th style={styles.th}>SDA</th>
-                  <th style={{...styles.th, textAlign: 'right'}}>Totales</th>
+                  <th style={{...styles.th, textAlign: 'right'}}>Hrs. Totales (Estructura)</th>
                   <th style={{...styles.th, textAlign: 'center'}}>Estado</th>
                 </tr>
               </thead>
@@ -233,7 +255,9 @@ const DashboardNovedades = () => {
                     <tr key={nave._id} style={styles.tableRow}>
                       <td style={{...styles.td, fontWeight: 'bold'}}>{nave.matricula}</td>
                       <td style={styles.td}>{nave.sda}</td>
-                      <td style={{...styles.td, textAlign: 'right'}}>{nave.horasTotales} hs</td>
+                      <td style={{...styles.td, textAlign: 'right', fontWeight: '600'}}>
+                        {(nave.horasTotales !== undefined && nave.horasTotales !== null) ? nave.horasTotales : '0'} hs
+                      </td>
                       <td style={{...styles.td, textAlign: 'center'}}>
                         <span style={{
                           ...styles.statusBadge,
@@ -251,7 +275,7 @@ const DashboardNovedades = () => {
           </div>
         </div>
 
-        {/* COLUMNA 2: ANALÍTICA AVANZADA DE HORAS VOLADAS (Con Tabs) */}
+        {/* COLUMNA 2: ANALÍTICA AVANZADA (Horas consumidas en el rango seleccionado) */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>📊 Desglose Analítico de Horas</h2>
           
@@ -261,7 +285,7 @@ const DashboardNovedades = () => {
               onClick={() => setTabActiva('aeronave')} 
               style={{...styles.tabButton, ...(tabActiva === 'aeronave' ? styles.tabButtonActive : {})}}
             >
-              Por Aeronave
+              Por Aeronave (Año/Filtro)
             </button>
             <button 
               onClick={() => setTabActiva('mision')} 
@@ -277,7 +301,7 @@ const DashboardNovedades = () => {
             </button>
           </div>
 
-          {/* CONTENIDO DINÁMICO DE LA PESTAÑA SELECCIONADA */}
+          {/* CONTENIDO DINÁMICO */}
           <div style={{ maxHeight: '360px', overflowY: 'auto', paddingTop: '10px' }}>
             
             {tabActiva === 'aeronave' && (
@@ -361,7 +385,7 @@ const DashboardNovedades = () => {
   );
 };
 
-// --- ESTILOS CSS INLINE REESTRUCTURADOS Y COMPACTOS ---
+// --- ESTILOS CSS INLINE COMPACTOS ---
 const styles = {
   dashboardContainer: {
     padding: '15px 20px',
@@ -402,7 +426,7 @@ const styles = {
   },
   miniKpiCard: {
     flex: '1',
-    minWidth: '140px',
+    minWidth: '130px',
     backgroundColor: '#ffffff',
     padding: '8px 12px',
     borderRadius: '8px',
