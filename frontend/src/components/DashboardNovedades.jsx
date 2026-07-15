@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
 const DashboardNovedades = () => {
+  // 🛡️ REBOTAR AL LOGIN SI NO HAY TOKEN (Evita que entren PCs no autenticadas)
+  const token = localStorage.getItem('token');
+  if (!token) {
+    window.location.href = '/login';
+    return null;
+  }
+
   // --- ESTADOS ---
   const [novedades, setNovedades] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +44,6 @@ const DashboardNovedades = () => {
       
       params.append('unidad', unidadUsuario);
 
-      const token = localStorage.getItem('token'); 
       const BASE_URL = OBTENER_BASE_URL();
       const url = `${BASE_URL}/api/dashboard/novedades?${params.toString()}`;
       
@@ -48,6 +54,15 @@ const DashboardNovedades = () => {
           'Authorization': `Bearer ${token}`
         }
       });
+
+      // 🛡️ CONTROL DE EXPIRACIÓN DE SESIÓN (401)
+      if (respuesta.status === 401) {
+        console.warn("⚠️ Sesión expirada o inválida. Limpiando credenciales...");
+        localStorage.removeItem('token');
+        localStorage.removeItem('unidad');
+        window.location.href = '/login';
+        return;
+      }
 
       if (!respuesta.ok) {
         throw new Error('No se pudieron recuperar las novedades de la unidad.');
@@ -70,7 +85,7 @@ const DashboardNovedades = () => {
     return (
       <div style={styles.centerContainer}>
         <div style={styles.spinner}></div>
-        <p style={{ marginLeft: '15px', color: '#555', fontWeight: 'bold' }}>
+        <p style={{ marginLeft: '15px', color: '#1e293b', fontWeight: 'bold' }}>
           Sincronizando panel de novedades tácticas...
         </p>
       </div>
@@ -91,12 +106,11 @@ const DashboardNovedades = () => {
 
   const { resumenMantenimiento, resumenVuelos } = novedades;
 
-  // Filtrado de seguridad en Frontend
+  // Filtrado de seguridad de flota
   const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
     nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
   );
 
-  // Validación para siglas militares "E/S" (En Servicio) o "F/S"
   const chequearOperativo = (nave) => {
     return (
       nave.estado === 'E/S' || 
@@ -108,11 +122,34 @@ const DashboardNovedades = () => {
   const cantidadOperativas = flotaFiltrada.filter(n => chequearOperativo(n)).length;
   const cantidadEnMantenimiento = flotaFiltrada.length - cantidadOperativas;
 
-  // 🛡️ EXTRAER SDAs DINÁMICAMENTE DE LA FLOTA ASIGNADA A LA UNIDAD
+  // Extraer SDAs de la unidad
   const sdaDisponibles = Array.from(new Set(flotaFiltrada.map(nave => nave.sda).filter(Boolean))).sort();
 
-  // --- CÁLCULO ESTRICTO DE HORAS VOLADAS EN EL AÑO ACTUAL ---
-  const anioActual = new Date().getFullYear(); // 2026
+  // --- 🛠️ HORAS ESTRUCTURALES SÓLIDAS ---
+  const mapaUltimoVueloAeronave = {};
+  const vuelosOrdenadosCronologicamente = [...resumenVuelos.ultimosVuelos].sort(
+    (a, b) => new Date(a.fecha) - new Date(b.fecha)
+  );
+
+  vuelosOrdenadosCronologicamente.forEach(v => {
+    const matricula = v.aeronave?.matricula;
+    if (matricula) {
+      const acumuladoAnterior = v.horasAnteriores || 0;
+      const delDia = v.horasDelDia || 0;
+      mapaUltimoVueloAeronave[matricula] = Number((acumuladoAnterior + delDia).toFixed(2));
+    }
+  });
+
+  const obtenerHorasEstructuralesSólidas = (nave) => {
+    const ultimoAcumuladoF13 = mapaUltimoVueloAeronave[nave.matricula];
+    if (ultimoAcumuladoF13 !== undefined && ultimoAcumuladoF13 > 0) {
+      return ultimoAcumuladoF13;
+    }
+    return nave.horasTotales || 0;
+  };
+
+  // --- CÁLCULO ESTRICTO DE HORAS DEL AÑO ---
+  const anioActual = new Date().getFullYear();
   const totalHorasAnioActual = resumenVuelos.ultimosVuelos.reduce((sum, v) => {
     if (!v.fecha) return sum;
     const fechaVuelo = new Date(v.fecha);
@@ -122,9 +159,7 @@ const DashboardNovedades = () => {
     return sum;
   }, 0);
 
-  // --- PROCESAMIENTO DINÁMICO DE DATOS PARA ANALÍTICA DE HORAS ---
-  
-  // 1. Horas acumuladas por Aeronave únicamente en el período / año seleccionado (Derecha)
+  // --- PROCESAMIENTO DINÁMICO DE DATOS PARA ANALÍTICA ---
   const horasPorAeronave = {};
   resumenVuelos.ultimosVuelos.forEach(v => {
     const mat = v.aeronave?.matricula || 'S/M';
@@ -134,7 +169,6 @@ const DashboardNovedades = () => {
     .map(([matricula, horas]) => ({ matricula, horas: Number(horas.toFixed(2)) }))
     .sort((a, b) => b.horas - a.horas);
 
-  // 2. Horas acumuladas por Misión de Vuelo
   const horasPorMision = {};
   resumenVuelos.ultimosVuelos.forEach(v => {
     const mision = v.misionVuelo || 'Otras Operaciones';
@@ -144,7 +178,6 @@ const DashboardNovedades = () => {
     .map(([mision, horas]) => ({ mision, horas: Number(horas.toFixed(2)) }))
     .sort((a, b) => b.horas - a.horas);
 
-  // 3. Horas acumuladas por Mes del año
   const horasPorMes = {};
   resumenVuelos.ultimosVuelos.forEach(v => {
     if (!v.fecha) return;
@@ -167,7 +200,7 @@ const DashboardNovedades = () => {
         <p style={styles.subtitle}>Consolidado operativo y analítico de flota e historial F-13.</p>
       </div>
 
-      {/* MINI KPIs con el nuevo detalle de Horas del Año */}
+      {/* MINI KPIs */}
       <div style={styles.miniKpiRow}>
         <div style={styles.miniKpiCard}>
           <span style={styles.miniKpiIcon}>✈️</span>
@@ -180,7 +213,8 @@ const DashboardNovedades = () => {
           <span style={{...styles.miniKpiIcon, color: '#059669'}}>✓</span>
           <div>
             <span style={styles.miniKpiLabel}>E/S (En Serv.)</span>
-            <span style={{...styles.miniKpiValue, color: '#059669'}}>{amount => cantidadOperativas}</span>
+            {/* 🛡️ CORREGIDO: Ya no es una función JSX anónima */}
+            <span style={{...styles.miniKpiValue, color: '#059669'}}>{cantidadOperativas}</span>
           </div>
         </div>
         <div style={styles.miniKpiCard}>
@@ -197,7 +231,6 @@ const DashboardNovedades = () => {
             <span style={{...styles.miniKpiValue, color: '#4f46e5'}}>{resumenVuelos.totalHorasVoladas} hs</span>
           </div>
         </div>
-        {/* NUEVO CUADRO: Total de horas voladas en el año (independiente de los filtros) */}
         <div style={{...styles.miniKpiCard, borderLeft: '4px solid #06b6d4'}}>
           <span style={{...styles.miniKpiIcon, color: '#06b6d4'}}>📅</span>
           <div>
@@ -213,7 +246,6 @@ const DashboardNovedades = () => {
           <label style={styles.filterLabel}>SDA (Sistema de Armas)</label>
           <select value={sda} onChange={(e) => setSda(e.target.value)} style={styles.select}>
             <option value="">Todos los asignados</option>
-            {/* Renderizado dinámico de los Sistemas de Armas de tu flota real */}
             {sdaDisponibles.map(sistema => (
               <option key={sistema} value={sistema}>{sistema}</option>
             ))}
@@ -235,7 +267,7 @@ const DashboardNovedades = () => {
       {/* CUADRO PRINCIPAL DEL TABLERO */}
       <div style={styles.tablesGrid}>
         
-        {/* COLUMNA 1: ESTADO DE LA FLOTA (Muestra horas totales de la célula acumuladas en estructura) */}
+        {/* COLUMNA 1: ESTADO DE LA FLOTA */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>🛠️ Estado de la Flota</h2>
           <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
@@ -251,12 +283,13 @@ const DashboardNovedades = () => {
               <tbody>
                 {flotaFiltrada.map((nave) => {
                   const operativo = chequearOperativo(nave);
+                  const horasEstructurales = obtenerHorasEstructuralesSólidas(nave);
                   return (
                     <tr key={nave._id} style={styles.tableRow}>
                       <td style={{...styles.td, fontWeight: 'bold'}}>{nave.matricula}</td>
                       <td style={styles.td}>{nave.sda}</td>
-                      <td style={{...styles.td, textAlign: 'right', fontWeight: '600'}}>
-                        {(nave.horasTotales !== undefined && nave.horasTotales !== null) ? nave.horasTotales : '0'} hs
+                      <td style={{...styles.td, textAlign: 'right', fontWeight: '700', color: '#1e293b'}}>
+                        {horasEstructurales} hs
                       </td>
                       <td style={{...styles.td, textAlign: 'center'}}>
                         <span style={{
@@ -275,11 +308,10 @@ const DashboardNovedades = () => {
           </div>
         </div>
 
-        {/* COLUMNA 2: ANALÍTICA AVANZADA (Horas consumidas en el rango seleccionado) */}
+        {/* COLUMNA 2: ANALÍTICA AVANZADA */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>📊 Desglose Analítico de Horas</h2>
           
-          {/* BOTONES DE PESTAÑAS (TABS) */}
           <div style={styles.tabContainer}>
             <button 
               onClick={() => setTabActiva('aeronave')} 
@@ -301,7 +333,6 @@ const DashboardNovedades = () => {
             </button>
           </div>
 
-          {/* CONTENIDO DINÁMICO */}
           <div style={{ maxHeight: '360px', overflowY: 'auto', paddingTop: '10px' }}>
             
             {tabActiva === 'aeronave' && (
@@ -385,13 +416,13 @@ const DashboardNovedades = () => {
   );
 };
 
-// --- ESTILOS CSS INLINE COMPACTOS ---
+// --- ESTILOS COMPACTOS PROTEGIDOS (CORREGIDOS) ---
 const styles = {
   dashboardContainer: {
     padding: '15px 20px',
-    backgroundColor: '#f8fafc',
-    minHeight: '100vh',
-    fontFamily: 'system-ui, -apple-system, sans-serif'
+    // 🛡️ ELIMINADOS: minHeight: '100vh' y backgroundColor para no tapar el Layout principal
+    width: '100%',
+    boxSizing: 'border-box'
   },
   header: {
     marginBottom: '15px',
@@ -400,7 +431,7 @@ const styles = {
     gap: '2px'
   },
   title: {
-    fontSize: '1.5rem',
+    fontSize: '1.25rem',
     fontWeight: '800',
     color: '#1e293b',
     margin: 0
@@ -408,25 +439,24 @@ const styles = {
   badgeUnidad: {
     backgroundColor: '#1b3a57',
     color: '#ffffff',
-    padding: '3px 8px',
+    padding: '2px 6px',
     borderRadius: '4px',
-    fontSize: '0.75rem',
+    fontSize: '0.7rem',
     fontWeight: 'bold'
   },
   subtitle: {
-    fontSize: '0.85rem',
+    fontSize: '0.8rem',
     color: '#64748b',
     margin: 0
   },
   miniKpiRow: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '12px',
+    gap: '10px',
     marginBottom: '15px'
   },
   miniKpiCard: {
-    flex: '1',
-    minWidth: '130px',
+    flex: '1 1 150px',
     backgroundColor: '#ffffff',
     padding: '8px 12px',
     borderRadius: '8px',
@@ -443,13 +473,13 @@ const styles = {
   },
   miniKpiLabel: {
     display: 'block',
-    fontSize: '0.7rem',
+    fontSize: '0.65rem',
     fontWeight: '600',
     color: '#64748b',
     textTransform: 'uppercase'
   },
   miniKpiValue: {
-    fontSize: '1.1rem',
+    fontSize: '1rem',
     fontWeight: '800',
     color: '#1e293b'
   },
@@ -518,7 +548,7 @@ const styles = {
     padding: '15px'
   },
   tableTitle: {
-    fontSize: '0.95rem',
+    fontSize: '0.9rem',
     fontWeight: '700',
     color: '#1e293b',
     margin: '0 0 12px 0'
@@ -579,7 +609,7 @@ const styles = {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    height: '250px'
+    height: '200px'
   },
   spinner: {
     width: '30px',
