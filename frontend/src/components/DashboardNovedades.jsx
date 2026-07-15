@@ -11,6 +11,15 @@ const DashboardNovedades = () => {
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
 
+  // --- CONFIGURACIÓN DE URL DINÁMICA ---
+  // Detecta automáticamente si estás trabajando local o apuntando al servidor de producción
+  const OBTENER_BASE_URL = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5000'; // Tu backend local
+    }
+    return 'https://appae.onrender.com'; // Tu backend real en producción 🚀
+  };
+
   // --- FUNCIÓN PARA CONSULTAR LA API ---
   const obtenerNovedades = async () => {
     setLoading(true);
@@ -22,10 +31,11 @@ const DashboardNovedades = () => {
       if (fechaInicio) params.append('fechaInicio', fechaInicio);
       if (fechaFin) params.append('fechaFin', fechaFin);
 
-      // Obtenemos el token de sesión (ajustá la clave según tu app, ej: 'token' o 'x-token')
+      // Obtenemos el token de sesión
       const token = localStorage.getItem('token'); 
 
-      const url = `https://tu-backend-en-render.onrender.com/api/dashboard/novedades?${params.toString()}`;
+      const BASE_URL = OBTENER_BASE_URL();
+      const url = `${BASE_URL}/api/dashboard/novedades?${params.toString()}`;
       
       const respuesta = await fetch(url, {
         method: 'GET',
