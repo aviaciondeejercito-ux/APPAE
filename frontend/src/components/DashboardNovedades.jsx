@@ -70,7 +70,7 @@ const DashboardNovedades = () => {
     return (
       <div style={styles.centerContainer}>
         <div style={styles.spinner}></div>
-        <p style={{ marginLeft: '15px', color: '#fff', fontWeight: 'bold' }}>
+        <p style={{ marginLeft: '15px', color: '#555', fontWeight: 'bold' }}>
           Sincronizando panel de novedades tácticas...
         </p>
       </div>
@@ -91,11 +91,12 @@ const DashboardNovedades = () => {
 
   const { resumenMantenimiento, resumenVuelos } = novedades;
 
-  // Filtrado de seguridad de flota
+  // Filtrado de seguridad en Frontend
   const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
     nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
   );
 
+  // Validación para siglas militares "E/S" (En Servicio) o "F/S"
   const chequearOperativo = (nave) => {
     return (
       nave.estado === 'E/S' || 
@@ -107,34 +108,11 @@ const DashboardNovedades = () => {
   const cantidadOperativas = flotaFiltrada.filter(n => chequearOperativo(n)).length;
   const cantidadEnMantenimiento = flotaFiltrada.length - cantidadOperativas;
 
-  // Extraer SDAs de la unidad
+  // 🛡️ EXTRAER SDAs DINÁMICAMENTE DE LA FLOTA ASIGNADA A LA UNIDAD
   const sdaDisponibles = Array.from(new Set(flotaFiltrada.map(nave => nave.sda).filter(Boolean))).sort();
 
-  // --- 🛠️ HORAS ESTRUCTURALES SÓLIDAS ---
-  const mapaUltimoVueloAeronave = {};
-  const vuelosOrdenadosCronologicamente = [...resumenVuelos.ultimosVuelos].sort(
-    (a, b) => new Date(a.fecha) - new Date(b.fecha)
-  );
-
-  vuelosOrdenadosCronologicamente.forEach(v => {
-    const matricula = v.aeronave?.matricula;
-    if (matricula) {
-      const acumuladoAnterior = v.horasAnteriores || 0;
-      const delDia = v.horasDelDia || 0;
-      mapaUltimoVueloAeronave[matricula] = Number((acumuladoAnterior + delDia).toFixed(2));
-    }
-  });
-
-  const obtenerHorasEstructuralesSólidas = (nave) => {
-    const ultimoAcumuladoF13 = mapaUltimoVueloAeronave[nave.matricula];
-    if (ultimoAcumuladoF13 !== undefined && ultimoAcumuladoF13 > 0) {
-      return ultimoAcumuladoF13;
-    }
-    return nave.horasTotales || 0;
-  };
-
-  // --- CÁLCULO ESTRICTO DE HORAS DEL AÑO (Derecha) ---
-  const anioActual = new Date().getFullYear();
+  // --- CÁLCULO ESTRICTO DE HORAS VOLADAS EN EL AÑO ACTUAL ---
+  const anioActual = new Date().getFullYear(); // 2026
   const totalHorasAnioActual = resumenVuelos.ultimosVuelos.reduce((sum, v) => {
     if (!v.fecha) return sum;
     const fechaVuelo = new Date(v.fecha);
@@ -144,7 +122,9 @@ const DashboardNovedades = () => {
     return sum;
   }, 0);
 
-  // --- PROCESAMIENTO DINÁMICO DE DATOS PARA ANALÍTICA ---
+  // --- PROCESAMIENTO DINÁMICO DE DATOS PARA ANALÍTICA DE HORAS ---
+  
+  // 1. Horas acumuladas por Aeronave únicamente en el período / año seleccionado (Derecha)
   const horasPorAeronave = {};
   resumenVuelos.ultimosVuelos.forEach(v => {
     const mat = v.aeronave?.matricula || 'S/M';
@@ -154,6 +134,7 @@ const DashboardNovedades = () => {
     .map(([matricula, horas]) => ({ matricula, horas: Number(horas.toFixed(2)) }))
     .sort((a, b) => b.horas - a.horas);
 
+  // 2. Horas acumuladas por Misión de Vuelo
   const horasPorMision = {};
   resumenVuelos.ultimosVuelos.forEach(v => {
     const mision = v.misionVuelo || 'Otras Operaciones';
@@ -163,6 +144,7 @@ const DashboardNovedades = () => {
     .map(([mision, horas]) => ({ mision, horas: Number(horas.toFixed(2)) }))
     .sort((a, b) => b.horas - a.horas);
 
+  // 3. Horas acumuladas por Mes del año
   const horasPorMes = {};
   resumenVuelos.ultimosVuelos.forEach(v => {
     if (!v.fecha) return;
@@ -176,7 +158,16 @@ const DashboardNovedades = () => {
   return (
     <div style={styles.dashboardContainer}>
       
-      {/* MINI KPIs */}
+      {/* CABECERA REDUCIDA */}
+      <div style={styles.header}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h1 style={styles.title}>Panel de Novedades</h1>
+          <span style={styles.badgeUnidad}>{unidadUsuario}</span>
+        </div>
+        <p style={styles.subtitle}>Consolidado operativo y analítico de flota e historial F-13.</p>
+      </div>
+
+      {/* MINI KPIs con el nuevo detalle de Horas del Año */}
       <div style={styles.miniKpiRow}>
         <div style={styles.miniKpiCard}>
           <span style={styles.miniKpiIcon}>✈️</span>
@@ -188,28 +179,29 @@ const DashboardNovedades = () => {
         <div style={styles.miniKpiCard}>
           <span style={{...styles.miniKpiIcon, color: '#059669'}}>✓</span>
           <div>
-            <span style={styles.miniKpiLabel}>E/S</span>
-            <span style={{...styles.miniKpiValue, color: '#059669'}}>{cantidadOperativas}</span>
+            <span style={styles.miniKpiLabel}>E/S (En Serv.)</span>
+            <span style={{...styles.miniKpiValue, color: '#059669'}}>{amount => cantidadOperativas}</span>
           </div>
         </div>
         <div style={styles.miniKpiCard}>
           <span style={{...styles.miniKpiIcon, color: '#d97706'}}>🔧</span>
           <div>
-            <span style={styles.miniKpiLabel}>F/S</span>
+            <span style={styles.miniKpiLabel}>F/S (En Mant.)</span>
             <span style={{...styles.miniKpiValue, color: '#d97706'}}>{cantidadEnMantenimiento}</span>
           </div>
         </div>
         <div style={styles.miniKpiCard}>
           <span style={{...styles.miniKpiIcon, color: '#4f46e5'}}>⏱️</span>
           <div>
-            <span style={styles.miniKpiLabel}>Horas Período</span>
+            <span style={styles.miniKpiLabel}>Horas Período / Filtro</span>
             <span style={{...styles.miniKpiValue, color: '#4f46e5'}}>{resumenVuelos.totalHorasVoladas} hs</span>
           </div>
         </div>
-        <div style={{...styles.miniKpiCard, borderLeft: '3px solid #06b6d4'}}>
+        {/* NUEVO CUADRO: Total de horas voladas en el año (independiente de los filtros) */}
+        <div style={{...styles.miniKpiCard, borderLeft: '4px solid #06b6d4'}}>
           <span style={{...styles.miniKpiIcon, color: '#06b6d4'}}>📅</span>
           <div>
-            <span style={styles.miniKpiLabel}>Volado {anioActual}</span>
+            <span style={styles.miniKpiLabel}>Total Volado Año ({anioActual})</span>
             <span style={{...styles.miniKpiValue, color: '#06b6d4'}}>{Number(totalHorasAnioActual.toFixed(2))} hs</span>
           </div>
         </div>
@@ -218,9 +210,10 @@ const DashboardNovedades = () => {
       {/* FILTROS OPERATIVOS */}
       <div style={styles.filterBar}>
         <div style={styles.filterGroup}>
-          <label style={styles.filterLabel}>SDA</label>
+          <label style={styles.filterLabel}>SDA (Sistema de Armas)</label>
           <select value={sda} onChange={(e) => setSda(e.target.value)} style={styles.select}>
-            <option value="">Todos</option>
+            <option value="">Todos los asignados</option>
+            {/* Renderizado dinámico de los Sistemas de Armas de tu flota real */}
             {sdaDisponibles.map(sistema => (
               <option key={sistema} value={sistema}>{sistema}</option>
             ))}
@@ -239,32 +232,31 @@ const DashboardNovedades = () => {
         </button>
       </div>
 
-      {/* CUADRO PRINCIPAL */}
+      {/* CUADRO PRINCIPAL DEL TABLERO */}
       <div style={styles.tablesGrid}>
         
-        {/* COLUMNA 1: ESTADO DE LA FLOTA */}
+        {/* COLUMNA 1: ESTADO DE LA FLOTA (Muestra horas totales de la célula acumuladas en estructura) */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>🛠️ Estado de la Flota</h2>
-          <div style={{ overflowX: 'auto', maxHeight: '350px', overflowY: 'auto' }}>
+          <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
             <table style={styles.table}>
               <thead>
                 <tr style={styles.tableHeaderRow}>
                   <th style={styles.th}>Matrícula</th>
                   <th style={styles.th}>SDA</th>
-                  <th style={{...styles.th, textAlign: 'right'}}>Totales</th>
+                  <th style={{...styles.th, textAlign: 'right'}}>Hrs. Totales (Estructura)</th>
                   <th style={{...styles.th, textAlign: 'center'}}>Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {flotaFiltrada.map((nave) => {
                   const operativo = chequearOperativo(nave);
-                  const horasEstructurales = obtenerHorasEstructuralesSólidas(nave);
                   return (
                     <tr key={nave._id} style={styles.tableRow}>
                       <td style={{...styles.td, fontWeight: 'bold'}}>{nave.matricula}</td>
                       <td style={styles.td}>{nave.sda}</td>
-                      <td style={{...styles.td, textAlign: 'right', fontWeight: '700', color: '#1e293b'}}>
-                        {horasEstructurales} hs
+                      <td style={{...styles.td, textAlign: 'right', fontWeight: '600'}}>
+                        {(nave.horasTotales !== undefined && nave.horasTotales !== null) ? nave.horasTotales : '0'} hs
                       </td>
                       <td style={{...styles.td, textAlign: 'center'}}>
                         <span style={{
@@ -283,16 +275,17 @@ const DashboardNovedades = () => {
           </div>
         </div>
 
-        {/* COLUMNA 2: ANALÍTICA AVANZADA */}
+        {/* COLUMNA 2: ANALÍTICA AVANZADA (Horas consumidas en el rango seleccionado) */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>📊 Desglose Analítico de Horas</h2>
           
+          {/* BOTONES DE PESTAÑAS (TABS) */}
           <div style={styles.tabContainer}>
             <button 
               onClick={() => setTabActiva('aeronave')} 
               style={{...styles.tabButton, ...(tabActiva === 'aeronave' ? styles.tabButtonActive : {})}}
             >
-              Por Aeronave
+              Por Aeronave (Año/Filtro)
             </button>
             <button 
               onClick={() => setTabActiva('mision')} 
@@ -308,14 +301,15 @@ const DashboardNovedades = () => {
             </button>
           </div>
 
-          <div style={{ maxHeight: '300px', overflowY: 'auto', paddingTop: '10px' }}>
+          {/* CONTENIDO DINÁMICO */}
+          <div style={{ maxHeight: '360px', overflowY: 'auto', paddingTop: '10px' }}>
             
             {tabActiva === 'aeronave' && (
               <table style={styles.table}>
                 <thead>
                   <tr style={styles.tableHeaderRow}>
                     <th style={styles.th}>Aeronave (Matrícula)</th>
-                    <th style={{...styles.th, textAlign: 'right'}}>Horas Voladas</th>
+                    <th style={{...styles.th, textAlign: 'right'}}>Horas Voladas en Período</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -327,7 +321,7 @@ const DashboardNovedades = () => {
                   ))}
                   {rankingAeronaves.length === 0 && (
                     <tr>
-                      <td colSpan="2" style={{...styles.td, textAlign: 'center', color: '#95a5a6'}}>No hay vuelos registrados.</td>
+                      <td colSpan="2" style={{...styles.td, textAlign: 'center', color: '#95a5a6'}}>No hay vuelos registrados en este rango.</td>
                     </tr>
                   )}
                 </tbody>
@@ -338,7 +332,7 @@ const DashboardNovedades = () => {
               <table style={styles.table}>
                 <thead>
                   <tr style={styles.tableHeaderRow}>
-                    <th style={styles.th}>Misión de Vuelo</th>
+                    <th style={styles.th}>Misión de Vuelo / Tarea</th>
                     <th style={{...styles.th, textAlign: 'right'}}>Horas Voladas</th>
                   </tr>
                 </thead>
@@ -351,7 +345,7 @@ const DashboardNovedades = () => {
                   ))}
                   {rankingMisiones.length === 0 && (
                     <tr>
-                      <td colSpan="2" style={{...styles.td, textAlign: 'center', color: '#95a5a6'}}>No hay misiones.</td>
+                      <td colSpan="2" style={{...styles.td, textAlign: 'center', color: '#95a5a6'}}>No hay misiones registradas en este rango.</td>
                     </tr>
                   )}
                 </tbody>
@@ -375,7 +369,7 @@ const DashboardNovedades = () => {
                   ))}
                   {rankingFechas.length === 0 && (
                     <tr>
-                      <td colSpan="2" style={{...styles.td, textAlign: 'center', color: '#95a5a6'}}>No hay registros mensuales.</td>
+                      <td colSpan="2" style={{...styles.td, textAlign: 'center', color: '#95a5a6'}}>No hay registros mensuales disponibles.</td>
                     </tr>
                   )}
                 </tbody>
@@ -391,68 +385,94 @@ const DashboardNovedades = () => {
   );
 };
 
-// --- ESTILOS COMPACTOS Y NO INVASIVOS (CORREGIDOS) ---
+// --- ESTILOS CSS INLINE COMPACTOS ---
 const styles = {
   dashboardContainer: {
-    padding: '10px 15px',
-    // 🛡️ NO ponemos minHeight ni background-color aquí para no tapar el layout de navegación general.
-    width: '100%',
-    boxSizing: 'border-box'
+    padding: '15px 20px',
+    backgroundColor: '#f8fafc',
+    minHeight: '100vh',
+    fontFamily: 'system-ui, -apple-system, sans-serif'
+  },
+  header: {
+    marginBottom: '15px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px'
+  },
+  title: {
+    fontSize: '1.5rem',
+    fontWeight: '800',
+    color: '#1e293b',
+    margin: 0
+  },
+  badgeUnidad: {
+    backgroundColor: '#1b3a57',
+    color: '#ffffff',
+    padding: '3px 8px',
+    borderRadius: '4px',
+    fontSize: '0.75rem',
+    fontWeight: 'bold'
+  },
+  subtitle: {
+    fontSize: '0.85rem',
+    color: '#64748b',
+    margin: 0
   },
   miniKpiRow: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '10px',
+    gap: '12px',
     marginBottom: '15px'
   },
   miniKpiCard: {
-    flex: '1 1 180px', // Se expande de forma elástica
+    flex: '1',
+    minWidth: '130px',
     backgroundColor: '#ffffff',
     padding: '8px 12px',
-    borderRadius: '6px',
+    borderRadius: '8px',
     border: '1px solid #e2e8f0',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '10px',
     boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
   },
   miniKpiIcon: {
-    fontSize: '1rem',
+    fontSize: '1.1rem',
     fontWeight: 'bold',
     color: '#1e40af'
   },
   miniKpiLabel: {
     display: 'block',
-    fontSize: '0.65rem',
+    fontSize: '0.7rem',
     fontWeight: '600',
     color: '#64748b',
     textTransform: 'uppercase'
   },
   miniKpiValue: {
-    fontSize: '1rem',
+    fontSize: '1.1rem',
     fontWeight: '800',
     color: '#1e293b'
   },
   filterBar: {
     backgroundColor: '#ffffff',
-    padding: '10px 12px',
-    borderRadius: '6px',
+    padding: '10px 15px',
+    borderRadius: '8px',
     border: '1px solid #e2e8f0',
     marginBottom: '15px',
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '12px',
+    gap: '15px',
     alignItems: 'flex-end'
   },
   filterGroup: {
     flex: '1',
-    minWidth: '120px',
+    minWidth: '130px',
     display: 'flex',
     flexDirection: 'column',
     gap: '4px'
   },
   filterLabel: {
-    fontSize: '0.6rem',
+    fontSize: '0.65rem',
     fontWeight: '700',
     color: '#64748b',
     textTransform: 'uppercase'
@@ -461,9 +481,9 @@ const styles = {
     width: '100%',
     backgroundColor: '#f8fafc',
     border: '1px solid #cbd5e1',
-    borderRadius: '4px',
-    padding: '4px 6px',
-    fontSize: '0.75rem',
+    borderRadius: '6px',
+    padding: '6px 8px',
+    fontSize: '0.8rem',
     color: '#1e293b',
     outline: 'none'
   },
@@ -471,9 +491,9 @@ const styles = {
     width: '100%',
     backgroundColor: '#f8fafc',
     border: '1px solid #cbd5e1',
-    borderRadius: '4px',
-    padding: '3px 6px',
-    fontSize: '0.75rem',
+    borderRadius: '6px',
+    padding: '5px 8px',
+    fontSize: '0.8rem',
     color: '#1e293b',
     outline: 'none'
   },
@@ -481,27 +501,27 @@ const styles = {
     color: '#3b82f6',
     background: 'none',
     border: 'none',
-    fontSize: '0.75rem',
+    fontSize: '0.8rem',
     fontWeight: '600',
     cursor: 'pointer',
-    padding: '5px 8px'
+    padding: '5px 10px'
   },
   tablesGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
     gap: '15px'
   },
   tableCard: {
     backgroundColor: '#ffffff',
-    borderRadius: '8px',
+    borderRadius: '10px',
     border: '1px solid #e2e8f0',
-    padding: '12px'
+    padding: '15px'
   },
   tableTitle: {
-    fontSize: '0.85rem',
+    fontSize: '0.95rem',
     fontWeight: '700',
     color: '#1e293b',
-    margin: '0 0 10px 0'
+    margin: '0 0 12px 0'
   },
   table: {
     width: '100%',
@@ -512,8 +532,8 @@ const styles = {
     backgroundColor: '#f1f5f9'
   },
   th: {
-    padding: '6px 8px',
-    fontSize: '0.65rem',
+    padding: '8px',
+    fontSize: '0.7rem',
     fontWeight: '700',
     color: '#475569',
     textTransform: 'uppercase'
@@ -522,33 +542,34 @@ const styles = {
     borderBottom: '1px solid #f1f5f9'
   },
   td: {
-    padding: '6px 8px',
-    fontSize: '0.75rem',
+    padding: '8px',
+    fontSize: '0.8rem',
     color: '#334155'
   },
   statusBadge: {
     display: 'inline-block',
-    padding: '1px 4px',
-    borderRadius: '3px',
-    fontSize: '0.6rem',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    fontSize: '0.65rem',
     fontWeight: '700'
   },
   tabContainer: {
     display: 'flex',
     borderBottom: '2px solid #e2e8f0',
-    marginBottom: '8px',
-    gap: '4px'
+    marginBottom: '10px',
+    gap: '5px'
   },
   tabButton: {
-    padding: '4px 10px',
-    fontSize: '0.7rem',
+    padding: '6px 12px',
+    fontSize: '0.75rem',
     fontWeight: '600',
     color: '#64748b',
     backgroundColor: 'transparent',
     border: 'none',
     borderBottom: '2px solid transparent',
     cursor: 'pointer',
-    marginBottom: '-2px'
+    marginBottom: '-2px',
+    transition: '0.2s'
   },
   tabButtonActive: {
     color: '#1e3a57',
@@ -558,31 +579,31 @@ const styles = {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    height: '150px'
+    height: '250px'
   },
   spinner: {
-    width: '25px',
-    height: '25px',
+    width: '30px',
+    height: '30px',
     border: '3px solid #f3f3f3',
-    borderTop: '3px solid #3498db',
+    borderTop: '3px solid #1e3799',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite'
   },
   errorAlert: {
     backgroundColor: '#fef2f2',
     borderLeft: '4px solid #ef4444',
-    padding: '10px',
-    borderRadius: '4px',
-    margin: '10px 0'
+    padding: '12px',
+    borderRadius: '6px',
+    margin: '15px 0'
   },
   btnRetry: {
     backgroundColor: '#ef4444',
     color: '#ffffff',
     border: 'none',
-    padding: '4px 8px',
-    borderRadius: '3px',
+    padding: '5px 10px',
+    borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '0.75rem',
+    fontSize: '0.8rem',
     fontWeight: '600'
   }
 };
