@@ -91,10 +91,23 @@ const DashboardNovedades = () => {
 
   const { resumenMantenimiento, resumenVuelos } = novedades;
 
-  // Filtrado de seguridad en Frontend
+  // Filtrado de seguridad en Frontend para asegurar que pertenezcan a la unidad
   const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
     nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
   );
+
+  // 🛡️ CORRECCIÓN CLAVE: Validación estricta para siglas militares "E/S" (En Servicio)
+  const chequearOperativo = (nave) => {
+    return (
+      nave.estado === 'E/S' || 
+      nave.estado === 'En Servicio' || 
+      nave.enServicio === true
+    );
+  };
+
+  // Cálculo de totales basados en la corrección
+  const cantidadOperativas = flotaFiltrada.filter(n => chequearOperativo(n)).length;
+  const cantidadEnMantenimiento = flotaFiltrada.length - cantidadOperativas;
 
   // --- PROCESAMIENTO DINÁMICO DE DATOS PARA ANALÍTICA DE HORAS ---
   
@@ -141,7 +154,7 @@ const DashboardNovedades = () => {
         <p style={styles.subtitle}>Consolidado operativo y analítico de flota e historial F-13.</p>
       </div>
 
-      {/* MINI KPIs: Ahora son súper compactos y ocupan una sola fila muy fina */}
+      {/* MINI KPIs: Super compactos en una sola fila */}
       <div style={styles.miniKpiRow}>
         <div style={styles.miniKpiCard}>
           <span style={styles.miniKpiIcon}>✈️</span>
@@ -153,19 +166,15 @@ const DashboardNovedades = () => {
         <div style={styles.miniKpiCard}>
           <span style={{...styles.miniKpiIcon, color: '#059669'}}>✓</span>
           <div>
-            <span style={styles.miniKpiLabel}>Operativas</span>
-            <span style={{...styles.miniKpiValue, color: '#059669'}}>
-              {flotaFiltrada.filter(n => n.estado === 'En Servicio' || n.enServicio).length}
-            </span>
+            <span style={styles.miniKpiLabel}>E/S (En Serv.)</span>
+            <span style={{...styles.miniKpiValue, color: '#059669'}}>{cantidadOperativas}</span>
           </div>
         </div>
         <div style={styles.miniKpiCard}>
           <span style={{...styles.miniKpiIcon, color: '#d97706'}}>🔧</span>
           <div>
-            <span style={styles.miniKpiLabel}>En Mant.</span>
-            <span style={{...styles.miniKpiValue, color: '#d97706'}}>
-              {flotaFiltrada.filter(n => n.estado !== 'En Servicio' && !n.enServicio).length}
-            </span>
+            <span style={styles.miniKpiLabel}>F/S (En Mant.)</span>
+            <span style={{...styles.miniKpiValue, color: '#d97706'}}>{cantidadEnMantenimiento}</span>
           </div>
         </div>
         <div style={styles.miniKpiCard}>
@@ -204,7 +213,7 @@ const DashboardNovedades = () => {
       {/* CUADRO PRINCIPAL DEL TABLERO */}
       <div style={styles.tablesGrid}>
         
-        {/* COLUMNA 1: ESTADO DE LA FLOTA (Lista compacta) */}
+        {/* COLUMNA 1: ESTADO DE LA FLOTA (Lista compacta con nomenclador correcto) */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>🛠️ Estado de la Flota</h2>
           <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
@@ -219,7 +228,7 @@ const DashboardNovedades = () => {
               </thead>
               <tbody>
                 {flotaFiltrada.map((nave) => {
-                  const operativo = nave.estado === 'En Servicio' || nave.enServicio;
+                  const operativo = chequearOperativo(nave);
                   return (
                     <tr key={nave._id} style={styles.tableRow}>
                       <td style={{...styles.td, fontWeight: 'bold'}}>{nave.matricula}</td>
@@ -231,7 +240,7 @@ const DashboardNovedades = () => {
                           backgroundColor: operativo ? '#e6f4ea' : '#fce8e6',
                           color: operativo ? '#137333' : '#c5221f'
                         }}>
-                          {operativo ? 'OPR' : 'INOP'}
+                          {operativo ? 'E/S' : 'F/S'}
                         </span>
                       </td>
                     </tr>
@@ -385,7 +394,6 @@ const styles = {
     color: '#64748b',
     margin: 0
   },
-  // Contenedor super reducido para los KPIs (ahora tipo insignias/pills)
   miniKpiRow: {
     display: 'flex',
     flexWrap: 'wrap',
@@ -491,7 +499,6 @@ const styles = {
     color: '#1e293b',
     margin: '0 0 12px 0'
   },
-  // Tablas compactas
   table: {
     width: '100%',
     borderCollapse: 'collapse',
@@ -522,7 +529,6 @@ const styles = {
     fontSize: '0.65rem',
     fontWeight: '700'
   },
-  // Sistema de pestañas (Tabs)
   tabContainer: {
     display: 'flex',
     borderBottom: '2px solid #e2e8f0',
