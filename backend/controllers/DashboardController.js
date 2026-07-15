@@ -7,66 +7,93 @@ const F13 = require('../models/F13');
  */
 const getNovedadesElemento = async (req, res) => {
     try {
-        // 1. Recibimos el parámetro 'unidad' enviado desde el frontend
+        // 1. Recibimos parámetros desde el frontend
         const { sda, fechaInicio, fechaFin, unidad } = req.query;
 
         // --- 1. CONSTRUCCIÓN DE FILTROS ---
         let filtroAeronave = {};
         let filtroF13 = {};
 
-        // 🛡️ FILTRO CRÍTICO DE UNIDAD: Si viene la unidad, restringimos las búsquedas a ella
+        // 🛡️ Filtro de Unidad
         if (unidad) {
             filtroAeronave.unidad = unidad;
         }
 
-        // Si se filtra por Sistema de Armas (SDA)
+        // Filtro por Sistema de Armas (SDA)
         if (sda) {
             filtroAeronave.sda = sda;
         }
 
-        // Si se filtra por rango de fechas en los vuelos (F13)
+        // --- 2. OBTENER FLOTA Y CORREGIR ESTADOS (E/S) ---
+        const aeronaves = await Aircraft.find(filtroAeronave)
+            .select('matricula modelo sda horasTotales estado enServicio unidad')
+            .lean();
+
+        // 🛡️ CORRECCIÓN: Comprobación estricta usando siglas militares "E/S"
+        const chequearOperativo = (a) => {
+            return a.estado === 'E/S' || a.estado === 'En Servicio' || a.enServicio === true;
+        };
+
+        const totalAeronaves = aeronaves.length;
+        const operativas = aeronaves.filter(chequearOperativo).length;
+        const enMantenimiento = totalAeronaves - operativas;
+
+        // --- 3. CONSULTAR EL HISTORIAL DE VUELOS (F13) DE LA UNIDAD ---
+        const idsAeronavesUnidad = aeronaves.map(a => a._id);
+        filtroF13.aeronave = { $in: idsAeronavesUnidad };
+
+        // Para las métricas anuales/mensuales de la derecha, aplicamos los filtros temporales si existen
         if (fechaInicio || fechaFin) {
             filtroF13.fecha = {};
             if (fechaInicio) filtroF13.fecha.$gte = new Date(fechaInicio);
             if (fechaFin) filtroF13.fecha.$lte = new Date(fechaFin);
         }
 
-        // --- 2. CONSULTA DE NOVEDADES DE MANTENIMIENTO (Aircraft) ---
-        // Buscamos SOLO las aeronaves pertenecientes a la unidad/SDA seleccionados
-        const aeronaves = await Aircraft.find(filtroAeronave)
-            .select('matricula modelo sda horasTotales estado enServicio unidad')
-            .lean();
-
-        // Métricas rápidas de mantenimiento para el panel basadas EXCLUSIVAMENTE en la flota filtrada
-        const totalAeronaves = aeronaves.length;
-        const operativas = aeronaves.filter(a => a.estado === 'En Servicio' || a.enServicio === true).length;
-        const enMantenimiento = totalAeronaves - operativas;
-
-        // --- 3. CONSULTA DE NOVEDADES DE HORAS VOLADAS (F13) ---
-        // Para que los vuelos también correspondan únicamente a tu unidad,
-        // vinculamos los registros F13 a los IDs de las aeronaves de tu unidad.
-        const idsAeronavesUnidad = aeronaves.map(a => a._id);
-        filtroF13.aeronave = { $in: idsAeronavesUnidad };
-
+        // Traemos los vuelos sin el límite estricto de 50 para no perder cálculos anuales,
+        // pero ordenados para procesar estadísticas cronológicas
         const historialVuelos = await F13.find(filtroF13)
             .populate('aeronave', 'matricula modelo sda unidad')
             .populate('creadoPor', 'nombre apellido rango')
-            .sort({ fecha: -1 }) // Trae los más recientes primero
-            .limit(50) // Limitamos a los últimos 50 para no sobrecargar el panel
+            .sort({ fecha: -1 }) 
             .lean();
 
-        // Métricas rápidas de vuelo basadas únicamente en el historial de la unidad
+        // --- 4. ⚙️ PROCESAMIENTO DINÁMICO DE HORAS ESTRUCTURALES SÓLIDAS ---
+        // Para cada aeronave de la unidad, buscaremos de forma garantizada su F13 más reciente histórico
+        // (ignorando los filtros de fecha del cliente) para saber cuál es su verdadero odómetro actual.
+        const detalleFlotaActualizado = await Promise.all(aeronaves.map(async (nave) => {
+            // Buscamos el último F13 de esta aeronave específica cargado en el sistema
+            const ultimoF13 = await F13.findOne({ aeronave: nave._id })
+                .sort({ fecha: -1, createdAt: -1 })
+                .select('horasAnteriores horasDelDia')
+                .lean();
+
+            let horasEstructuralesReales = nave.horasTotales || 0;
+
+            if (ultimoF13) {
+                // El acumulado real al último minuto es: horasAnteriores del último vuelo + lo que voló ese día
+                const acumuladoCalculado = (ultimoF13.horasAnteriores || 0) + (ultimoF13.horasDelDia || 0);
+                horasEstructuralesReales = Number(acumuladoCalculado.toFixed(2));
+            }
+
+            return {
+                ...nave,
+                // Reemplazamos/aseguramos el campo 'horasTotales' con el número robusto definitivo
+                horasTotales: horasEstructuralesReales
+            };
+        }));
+
+        // Métricas rápidas de vuelo en el rango seleccionado
         const totalHorasVoladasPeriodo = historialVuelos.reduce((sum, f13) => sum + (f13.horasDelDia || 0), 0);
         const totalAterrizajesPeriodo = historialVuelos.reduce((sum, f13) => sum + (f13.aterrizajes || 0), 0);
 
-        // --- 4. RESPUESTA CONSOLIDADA ---
+        // --- 5. RESPUESTA CONSOLIDADA IMPENETRABLE ---
         return res.status(200).json({
             ok: true,
             resumenMantenimiento: {
                 totalAeronaves,
                 operativas,
                 enMantenimiento,
-                detalleFlota: aeronaves
+                detalleFlota: detalleFlotaActualizado // Enviamos la flota con los odómetros reales calculados
             },
             resumenVuelos: {
                 totalHorasVoladas: Number(totalHorasVoladasPeriodo.toFixed(2)),
