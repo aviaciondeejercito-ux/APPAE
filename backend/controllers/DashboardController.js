@@ -3,14 +3,21 @@ const F13 = require('../models/F13');
 
 /**
  * Obtiene el consolidado de novedades del elemento (Aeronaves + Formularios F-13)
+ * Filtrado estrictamente por la unidad del usuario.
  */
 const getNovedadesElemento = async (req, res) => {
     try {
-        const { sda, fechaInicio, fechaFin } = req.query;
+        // 1. Recibimos el parámetro 'unidad' enviado desde el frontend
+        const { sda, fechaInicio, fechaFin, unidad } = req.query;
 
         // --- 1. CONSTRUCCIÓN DE FILTROS ---
         let filtroAeronave = {};
         let filtroF13 = {};
+
+        // 🛡️ FILTRO CRÍTICO DE UNIDAD: Si viene la unidad, restringimos las búsquedas a ella
+        if (unidad) {
+            filtroAeronave.unidad = unidad;
+        }
 
         // Si se filtra por Sistema de Armas (SDA)
         if (sda) {
@@ -25,30 +32,30 @@ const getNovedadesElemento = async (req, res) => {
         }
 
         // --- 2. CONSULTA DE NOVEDADES DE MANTENIMIENTO (Aircraft) ---
+        // Buscamos SOLO las aeronaves pertenecientes a la unidad/SDA seleccionados
         const aeronaves = await Aircraft.find(filtroAeronave)
-            .select('matricula modelo sda horasTotales estado enServicio')
+            .select('matricula modelo sda horasTotales estado enServicio unidad')
             .lean();
 
-        // Métricas rápidas de mantenimiento para el panel
+        // Métricas rápidas de mantenimiento para el panel basadas EXCLUSIVAMENTE en la flota filtrada
         const totalAeronaves = aeronaves.length;
         const operativas = aeronaves.filter(a => a.estado === 'En Servicio' || a.enServicio === true).length;
         const enMantenimiento = totalAeronaves - operativas;
 
         // --- 3. CONSULTA DE NOVEDADES DE HORAS VOLADAS (F13) ---
-        // Si filtramos por SDA, primero debemos identificar los IDs de esas aeronaves
-        if (sda) {
-            const idsAeronavesFiltradas = aeronaves.map(a => a._id);
-            filtroF13.aeronave = { $in: idsAeronavesFiltradas };
-        }
+        // Para que los vuelos también correspondan únicamente a tu unidad,
+        // vinculamos los registros F13 a los IDs de las aeronaves de tu unidad.
+        const idsAeronavesUnidad = aeronaves.map(a => a._id);
+        filtroF13.aeronave = { $in: idsAeronavesUnidad };
 
         const historialVuelos = await F13.find(filtroF13)
-            .populate('aeronave', 'matricula modelo sda')
+            .populate('aeronave', 'matricula modelo sda unidad')
             .populate('creadoPor', 'nombre apellido rango')
             .sort({ fecha: -1 }) // Trae los más recientes primero
             .limit(50) // Limitamos a los últimos 50 para no sobrecargar el panel
             .lean();
 
-        // Métricas rápidas de vuelo para el panel
+        // Métricas rápidas de vuelo basadas únicamente en el historial de la unidad
         const totalHorasVoladasPeriodo = historialVuelos.reduce((sum, f13) => sum + (f13.horasDelDia || 0), 0);
         const totalAterrizajesPeriodo = historialVuelos.reduce((sum, f13) => sum + (f13.aterrizajes || 0), 0);
 
