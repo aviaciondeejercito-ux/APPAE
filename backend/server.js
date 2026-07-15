@@ -106,7 +106,6 @@ app.use('/api/vuelos', vueloRoutes);
 app.use('/api/ebm', ebmRoutes);
 app.use('/api/alerts', alertRoutes); 
 app.use('/api/f13', f13Routes); 
-app.use('/api/f13', f13Routes);
 app.use('/api/dashboard', dashboardRoutes);
 // --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
 app.use((req, res) => {
