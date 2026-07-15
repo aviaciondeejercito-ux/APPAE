@@ -19,6 +19,7 @@ import Vuelos from './pages/Vuelos';
 import EbmPage from './pages/EbmPage'; 
 import AlertasWidget from './components/AlertasWidget'; 
 import F13Page from './pages/F13'; 
+import DashboardNovedades from './components/DashboardNovedades'; // 📊 Componente del Panel de Novedades importado
 
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
@@ -86,9 +87,12 @@ function App() {
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
     const puedeVerEbm = esAdmin || esBoss || esDirector || esOperaciones || esJefe || esOperaciones || esOTO;
     const puedeVerF13 = esAdmin || esOfTecnica || esUser;
+    
+    // Nueva regla de visibilidad para el panel consolidado de reportes
+    const puedeVerReportes = esAdmin || esOfTecnica || esBoss || esDirector || esJefe || esOTO;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm', 'f13'].includes(view);
+    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm', 'f13', 'reportes'].includes(view);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -145,6 +149,14 @@ function App() {
                                     onClick={() => setView('f13')} 
                                     style={{...styles.btnNav, backgroundColor: view === 'f13' ? '#1b3a57' : '#4a69bd'}}
                                 >📋 F-13</button>
+                            )}
+
+                            {/* 📊 Botón del Panel de Novedades / Reportes */}
+                            {puedeVerReportes && (
+                                <button 
+                                    onClick={() => setView('reportes')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'reportes' ? '#0984e3' : '#4a69bd'}}
+                                >📊 Reportes</button>
                             )}
 
                             {puedeVerPlaneamiento && (
@@ -218,6 +230,7 @@ function App() {
                             case 'ebm': return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
                             case 'vuelos': return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
                             case 'f13': return puedeVerF13 ? <F13Page /> : <CalendarPage />;
+                            case 'reportes': return puedeVerReportes ? <DashboardNovedades /> : <CalendarPage />; // ◀️ Renderizado del panel
                             case 'planeamiento': return puedeVerPlaneamiento ? <PlaneamientoMapa /> : <CalendarPage />;
                             case 'admin': return esAdmin ? <AdminPanel /> : <CalendarPage />;
                             case 'stats': return puedeVerStats ? <Estadisticas /> : <CalendarPage />;

@@ -5,7 +5,7 @@ const helmet = require('helmet');
 const http = require('http'); 
 const { Server } = require('socket.io'); 
 const conectarDB = require('./config/db');
-
+const f13Routes = require('./routes/f13');
 /**
  * ESTÁNDAR DE SEGURIDAD AE - SINCRO JOKER
  * Configuración de motor centralizado para API de Aviación de Ejército.
@@ -83,7 +83,7 @@ const vueloRoutes = require('./routes/vueloRoutes');
 const ebmRoutes = require('./routes/ebmRoutes'); 
 const alertRoutes = require('./routes/alertRoutes');
 const f13Routes = require('./routes/f13'); // ◀️ IMPORTACIÓN NUEVAS RUTAS F-13
-
+const dashboardRoutes = require('./routes/dashboard');
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
 app.get('/api/health', (req, res) => {
@@ -103,14 +103,11 @@ app.use('/api/weather', weatherRoutes);
 app.use('/api/astronomy', astronomyRoutes); 
 app.use('/api/tripulantes', tripulanteRoutes); 
 app.use('/api/vuelos', vueloRoutes);
-
-// MONTAJE EBM
 app.use('/api/ebm', ebmRoutes);
-// MONTAJE DE ALERTAS OPERATIVAS
 app.use('/api/alerts', alertRoutes); 
-// MONTAJE REGISTRO HISTÓRICO F-13
-app.use('/api/f13', f13Routes); // ◀️ REGISTRO DEL ENDPOINT F-13
-
+app.use('/api/f13', f13Routes); 
+app.use('/api/f13', f13Routes);
+app.use('/api/dashboard', dashboardRoutes);
 // --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
 app.use((req, res) => {
     res.status(404).json({
