@@ -6,18 +6,21 @@ const DashboardNovedades = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Filtros
+  // Filtros operativos
   const [sda, setSda] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
 
+  // --- DETECTAR UNIDAD DEL USUARIO ---
+  // Extraemos la unidad del localStorage (comúnmente guardada al hacer login bajo 'unidad' o 'elemento')
+  const unidadUsuario = localStorage.getItem('unidad') || 'B AV APY COMB 601';
+
   // --- CONFIGURACIÓN DE URL DINÁMICA ---
-  // Detecta automáticamente si estás trabajando local o apuntando al servidor de producción
   const OBTENER_BASE_URL = () => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'http://localhost:5000'; // Tu backend local
+      return 'http://localhost:5000';
     }
-    return 'https://appae.onrender.com'; // Tu backend real en producción 🚀
+    return 'https://appae.onrender.com';
   };
 
   // --- FUNCIÓN PARA CONSULTAR LA API ---
@@ -25,15 +28,15 @@ const DashboardNovedades = () => {
     setLoading(true);
     setError(null);
     try {
-      // Armamos los query params dinámicamente
       const params = new URLSearchParams();
       if (sda) params.append('sda', sda);
       if (fechaInicio) params.append('fechaInicio', fechaInicio);
       if (fechaFin) params.append('fechaFin', fechaFin);
+      
+      // 🛡️ FILTRO CLAVE: Forzamos que solo consulte la información de TU unidad
+      params.append('unidad', unidadUsuario);
 
-      // Obtenemos el token de sesión
       const token = localStorage.getItem('token'); 
-
       const BASE_URL = OBTENER_BASE_URL();
       const url = `${BASE_URL}/api/dashboard/novedades?${params.toString()}`;
       
@@ -41,7 +44,7 @@ const DashboardNovedades = () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // Middleware de seguridad activo 🛡️
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -58,29 +61,27 @@ const DashboardNovedades = () => {
     }
   };
 
-  // Consultar datos al montar el componente o al cambiar filtros
   useEffect(() => {
     obtenerNovedades();
   }, [sda, fechaInicio, fechaFin]);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
-        <p className="ml-3 text-gray-600 font-medium">Sincronizando panel de novedades...</p>
+      <div style={styles.centerContainer}>
+        <div style={styles.spinner}></div>
+        <p style={{ marginLeft: '15px', color: '#555', fontWeight: 'bold' }}>
+          Sincronizando panel de novedades tácticas...
+        </p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded my-4">
-        <p className="text-red-700 font-bold">⚠️ Error en el Panel</p>
-        <p className="text-red-600">{error}</p>
-        <button 
-          onClick={obtenerNovedades} 
-          className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition"
-        >
+      <div style={styles.errorAlert}>
+        <p style={{ fontWeight: 'bold', margin: '0 0 5px 0' }}>⚠️ Error en el Canal de Datos</p>
+        <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem' }}>{error}</p>
+        <button onClick={obtenerNovedades} style={styles.btnRetry}>
           Reintentar conexión
         </button>
       </div>
@@ -89,23 +90,31 @@ const DashboardNovedades = () => {
 
   const { resumenMantenimiento, resumenVuelos } = novedades;
 
+  // Filtrado secundario en Frontend por seguridad: garantizamos mostrar solo aeronaves de tu unidad
+  const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
+    nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
+  );
+
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div style={styles.dashboardContainer}>
       
       {/* CABECERA */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Panel de Novedades del Elemento</h1>
-        <p className="text-gray-500 text-sm">Consolidado operativo: Estado de flota e historial de horas voladas (F-13).</p>
+      <div style={styles.header}>
+        <h1 style={styles.title}>Panel de Novedades del Elemento</h1>
+        <div style={styles.badgeUnidad}>{unidadUsuario}</div>
+        <p style={styles.subtitle}>
+          Consolidado operativo: Estado de flota e historial de horas voladas (F-13) exclusivo de la unidad.
+        </p>
       </div>
 
-      {/* BARRA DE FILTROS */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-end">
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Sistema de Armas (SDA)</label>
+      {/* BARRA DE FILTROS TÁCTICOS */}
+      <div style={styles.filterBar}>
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>SISTEMA DE ARMAS (SDA)</label>
           <select 
             value={sda} 
             onChange={(e) => setSda(e.target.value)}
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={styles.select}
           >
             <option value="">Todos los Sistemas</option>
             <option value="HUEY">UH-1H Huey</option>
@@ -114,148 +123,164 @@ const DashboardNovedades = () => {
           </select>
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Desde</label>
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>DESDE</label>
           <input 
             type="date" 
             value={fechaInicio} 
             onChange={(e) => setFechaInicio(e.target.value)}
-            className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={styles.inputDate}
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Hasta</label>
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>HASTA</label>
           <input 
             type="date" 
             value={fechaFin} 
             onChange={(e) => setFechaFin(e.target.value)}
-            className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={styles.inputDate}
           />
         </div>
 
         <button 
           onClick={() => { setSda(''); setFechaInicio(''); setFechaFin(''); }}
-          className="text-sm text-blue-600 hover:text-blue-800 font-semibold h-9 px-4"
+          style={styles.btnClean}
         >
           Limpiar Filtros
         </button>
       </div>
 
       {/* TARJETAS DE INDICADORES (KPIs) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div style={styles.kpiGrid}>
         
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+        <div style={styles.kpiCard}>
           <div>
-            <p className="text-sm font-semibold text-gray-400 uppercase">Flota Total</p>
-            <h3 className="text-2xl font-bold text-gray-800 mt-1">{resumenMantenimiento.totalAeronaves}</h3>
+            <p style={styles.kpiLabel}>Aeronaves Asignadas</p>
+            <h3 style={styles.kpiValue}>{flotaFiltrada.length}</h3>
           </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg font-bold">✈️</div>
+          <div style={{...styles.kpiIcon, backgroundColor: '#ebf5ff', color: '#1e40af'}}>✈️</div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+        <div style={styles.kpiCard}>
           <div>
-            <p className="text-sm font-semibold text-gray-400 uppercase">En Servicio</p>
-            <h3 className="text-2xl font-bold text-emerald-600 mt-1">{resumenMantenimiento.operativas}</h3>
+            <p style={styles.kpiLabel}>En Servicio (Operativas)</p>
+            <h3 style={{...styles.kpiValue, color: '#059669'}}>
+              {flotaFiltrada.filter(n => n.estado === 'En Servicio' || n.enServicio).length}
+            </h3>
           </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg font-bold">✓</div>
+          <div style={{...styles.kpiIcon, backgroundColor: '#ecfdf5', color: '#065f46'}}>✓</div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+        <div style={styles.kpiCard}>
           <div>
-            <p className="text-sm font-semibold text-gray-400 uppercase">En Mantenimiento</p>
-            <h3 className="text-2xl font-bold text-amber-600 mt-1">{resumenMantenimiento.enMantenimiento}</h3>
+            <p style={styles.kpiLabel}>En Mantenimiento</p>
+            <h3 style={{...styles.kpiValue, color: '#d97706'}}>
+              {flotaFiltrada.filter(n => n.estado !== 'En Servicio' && !n.enServicio).length}
+            </h3>
           </div>
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-lg font-bold">🔧</div>
+          <div style={{...styles.kpiIcon, backgroundColor: '#fffbeb', color: '#92400e'}}>🔧</div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+        <div style={styles.kpiCard}>
           <div>
-            <p className="text-sm font-semibold text-gray-400 uppercase">Horas del Período</p>
-            <h3 className="text-2xl font-bold text-indigo-600 mt-1">{resumenVuelos.totalHorasVoladas} hs</h3>
+            <p style={styles.kpiLabel}>Horas Voladas (Período)</p>
+            <h3 style={{...styles.kpiValue, color: '#4f46e5'}}>{resumenVuelos.totalHorasVoladas} hs</h3>
           </div>
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg font-bold">⏱️</div>
+          <div style={{...styles.kpiIcon, backgroundColor: '#eef2ff', color: '#3730a3'}}>⏱️</div>
         </div>
 
       </div>
 
-      {/* TABLAS DE NOVEDADES */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* TABLAS DE INFORMACIÓN */}
+      <div style={styles.tablesGrid}>
         
-        {/* COLUMNA 1: NOVEDADES DE MANTENIMIENTO */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <span>🛠️</span> Estado Actual de la Flota
+        {/* COLUMNA 1: ESTADO DE LA FLOTA */}
+        <div style={styles.tableCard}>
+          <h2 style={styles.tableTitle}>
+            <span style={{ marginRight: '8px' }}>🛠️</span> Estado Actual de la Flota ({unidadUsuario})
           </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-500">
-              <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-semibold">
-                <tr>
-                  <th className="px-4 py-3">Matrícula</th>
-                  <th className="px-4 py-3">Modelo / SDA</th>
-                  <th className="px-4 py-3 text-right">Horas Totales</th>
-                  <th className="px-4 py-3 text-center">Estado</th>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.tableHeaderRow}>
+                  <th style={styles.th}>Matrícula</th>
+                  <th style={styles.th}>Modelo / SDA</th>
+                  <th style={{...styles.th, textAlign: 'right'}}>Horas Totales</th>
+                  <th style={{...styles.th, textAlign: 'center'}}>Estado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {resumenMantenimiento.detalleFlota.map((nave) => (
-                  <tr key={nave._id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-bold text-gray-800">{nave.matricula}</td>
-                    <td className="px-4 py-3 text-xs">{nave.modelo} <span className="text-gray-400">({nave.sda})</span></td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-700">{nave.horasTotales} hs</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
-                        nave.estado === 'En Servicio' || nave.enServicio
-                          ? 'bg-emerald-50 text-emerald-700' 
-                          : 'bg-amber-50 text-amber-700'
-                      }`}>
-                        {nave.estado === 'En Servicio' || nave.enServicio ? 'Operativo' : 'Inoperativo'}
-                      </span>
+              <tbody>
+                {flotaFiltrada.map((nave) => {
+                  const operativo = nave.estado === 'En Servicio' || nave.enServicio;
+                  return (
+                    <tr key={nave._id} style={styles.tableRow}>
+                      <td style={{...styles.td, fontWeight: 'bold', color: '#2c3e50'}}>{nave.matricula}</td>
+                      <td style={styles.td}>
+                        {nave.modelo} <span style={{ color: '#95a5a6', fontSize: '0.8rem' }}>({nave.sda})</span>
+                      </td>
+                      <td style={{...styles.td, textAlign: 'right', fontWeight: '500'}}>{nave.horasTotales} hs</td>
+                      <td style={{...styles.td, textAlign: 'center'}}>
+                        <span style={{
+                          ...styles.statusBadge,
+                          backgroundColor: operativo ? '#d1fae5' : '#fee2e2',
+                          color: operativo ? '#065f46' : '#991b1b'
+                        }}>
+                          {operativo ? 'OPERATIVO' : 'INOPERATIVO'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {flotaFiltrada.length === 0 && (
+                  <tr>
+                    <td colSpan="4" style={{...styles.td, textAlign: 'center', color: '#7f8c8d', padding: '20px'}}>
+                      No se encontraron aeronaves registradas para este elemento.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* COLUMNA 2: NOVEDADES DE HORAS VOLADAS */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <span>📝</span> Últimos Vuelos Registrados (F-13)
+        {/* COLUMNA 2: REGISTRO DE VUELOS F-13 */}
+        <div style={styles.tableCard}>
+          <h2 style={styles.tableTitle}>
+            <span style={{ marginRight: '8px' }}>📝</span> Últimos Vuelos Registrados (F-13)
           </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-500">
-              <thead className="text-xs text-gray-700 uppercase bg-gray-50 font-semibold">
-                <tr>
-                  <th className="px-4 py-3">Fecha</th>
-                  <th className="px-4 py-3">Aeronave</th>
-                  <th className="px-4 py-3">Misión / Tripulación</th>
-                  <th className="px-4 py-3 text-right">Horas</th>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.tableHeaderRow}>
+                  <th style={styles.th}>Fecha</th>
+                  <th style={styles.th}>Aeronave</th>
+                  <th style={styles.th}>Misión / Tripulación</th>
+                  <th style={{...styles.th, textAlign: 'right'}}>Horas</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody>
                 {resumenVuelos.ultimosVuelos.slice(0, 10).map((vuelo) => (
-                  <tr key={vuelo._id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-xs text-gray-400">
+                  <tr key={vuelo._id} style={styles.tableRow}>
+                    <td style={{...styles.td, color: '#7f8c8d', fontSize: '0.8rem'}}>
                       {new Date(vuelo.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}
                     </td>
-                    <td className="px-4 py-3 font-bold text-gray-800">
+                    <td style={{...styles.td, fontWeight: 'bold', color: '#2c3e50'}}>
                       {vuelo.aeronave?.matricula || 'N/A'}
                     </td>
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-gray-700 text-xs">{vuelo.misionVuelo}</p>
-                      <p className="text-[10px] text-gray-400">Cmdte: {vuelo.comandante} | Mec: {vuelo.mecanico}</p>
+                    <td style={styles.td}>
+                      <div style={{fontWeight: '600', color: '#34495e', fontSize: '0.85rem'}}>{vuelo.misionVuelo}</div>
+                      <div style={{fontSize: '0.75rem', color: '#95a5a6'}}>Cmdte: {vuelo.comandante} | Mec: {vuelo.mecanico}</div>
                     </td>
-                    <td className="px-4 py-3 text-right font-bold text-indigo-600">
+                    <td style={{...styles.td, textAlign: 'right', fontWeight: 'bold', color: '#4f46e5'}}>
                       +{vuelo.horasDelDia} hs
                     </td>
                   </tr>
                 ))}
                 {resumenVuelos.ultimosVuelos.length === 0 && (
                   <tr>
-                    <td colSpan="4" className="text-center py-6 text-gray-400">
-                      No se encontraron registros de vuelo para los filtros seleccionados.
+                    <td colSpan="4" style={{...styles.td, textAlign: 'center', color: '#7f8c8d', padding: '20px'}}>
+                      No se encontraron reportes de vuelo en este período.
                     </td>
                   </tr>
                 )}
@@ -268,6 +293,221 @@ const DashboardNovedades = () => {
 
     </div>
   );
+};
+
+// --- DISEÑO CSS INLINE CENTRALIZADO (Para no depender de Tailwind) ---
+const styles = {
+  dashboardContainer: {
+    padding: '25px',
+    backgroundColor: '#f8fafc',
+    minHeight: '100vh',
+    fontFamily: 'system-ui, -apple-system, sans-serif'
+  },
+  header: {
+    marginBottom: '25px',
+    position: 'relative'
+  },
+  title: {
+    fontSize: '2rem',
+    fontWeight: '800',
+    color: '#1e293b',
+    margin: '0 0 5px 0'
+  },
+  badgeUnidad: {
+    display: 'inline-block',
+    backgroundColor: '#1b3a57',
+    color: '#ffffff',
+    padding: '4px 10px',
+    borderRadius: '4px',
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    marginBottom: '8px'
+  },
+  subtitle: {
+    fontSize: '0.95rem',
+    color: '#64748b',
+    margin: 0
+  },
+  filterBar: {
+    backgroundColor: '#ffffff',
+    padding: '18px',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    border: '1px solid #e2e8f0',
+    marginBottom: '25px',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '20px',
+    alignItems: 'flex-end'
+  },
+  filterGroup: {
+    flex: '1',
+    minWidth: '200px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  filterLabel: {
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  },
+  select: {
+    width: '100%',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #cbd5e1',
+    borderRadius: '8px',
+    padding: '10px',
+    fontSize: '0.9rem',
+    outline: 'none',
+    color: '#1e293b'
+  },
+  inputDate: {
+    width: '100%',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #cbd5e1',
+    borderRadius: '8px',
+    padding: '8px 10px',
+    fontSize: '0.9rem',
+    outline: 'none',
+    color: '#1e293b'
+  },
+  btnClean: {
+    color: '#3b82f6',
+    background: 'none',
+    border: 'none',
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    height: '40px',
+    padding: '0 15px',
+    transition: '0.2s'
+  },
+  kpiGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '20px',
+    marginBottom: '30px'
+  },
+  kpiCard: {
+    backgroundColor: '#ffffff',
+    padding: '20px',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    border: '1px solid #e2e8f0',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  kpiLabel: {
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    color: '#64748b',
+    margin: '0 0 5px 0'
+  },
+  kpiValue: {
+    fontSize: '1.8rem',
+    fontWeight: '800',
+    color: '#1e293b',
+    margin: 0
+  },
+  kpiIcon: {
+    width: '45px',
+    height: '45px',
+    borderRadius: '10px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '1.2rem',
+    fontWeight: 'bold'
+  },
+  tablesGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))',
+    gap: '25px'
+  },
+  tableCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    border: '1px solid #e2e8f0',
+    padding: '20px'
+  },
+  tableTitle: {
+    fontSize: '1.1rem',
+    fontWeight: '700',
+    color: '#1e293b',
+    margin: '0 0 15px 0',
+    display: 'flex',
+    alignItems: 'center'
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    textAlign: 'left'
+  },
+  tableHeaderRow: {
+    backgroundColor: '#f1f5f9',
+    borderBottom: '2px solid #e2e8f0'
+  },
+  th: {
+    padding: '12px 10px',
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: '#475569',
+    textTransform: 'uppercase'
+  },
+  tableRow: {
+    borderBottom: '1px solid #f1f5f9',
+    transition: 'background-color 0.2s'
+  },
+  td: {
+    padding: '12px 10px',
+    fontSize: '0.85rem',
+    color: '#334155',
+    verticalAlign: 'middle'
+  },
+  statusBadge: {
+    display: 'inline-block',
+    padding: '3px 8px',
+    borderRadius: '20px',
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    letterSpacing: '0.3px'
+  },
+  centerContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '300px'
+  },
+  spinner: {
+    width: '40px',
+    height: '40px',
+    border: '4px solid #f3f3f3',
+    borderTop: '4px solid #1e3799',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
+  },
+  errorAlert: {
+    backgroundColor: '#fef2f2',
+    borderLeft: '4px solid #ef4444',
+    padding: '15px',
+    borderRadius: '6px',
+    margin: '20px 0'
+  },
+  btnRetry: {
+    backgroundColor: '#ef4444',
+    color: '#ffffff',
+    border: 'none',
+    padding: '6px 12px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    fontWeight: '600'
+  }
 };
 
 export default DashboardNovedades;
