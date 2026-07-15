@@ -9,10 +9,10 @@ const F13Schema = new Schema({
     default: Date.now
   },
   
-  // Aeronave vinculada (relación con tu colección de Aeronaves/Material de la unidad)
+  // Aeronave vinculada (Relación con la colección de Aeronaves/Material de la unidad)
   aeronave: {
     type: Schema.Types.ObjectId,
-    ref: 'Aeronave', // Ajustá al nombre exacto de tu modelo de Aeronaves
+    ref: 'Aircraft', // ◀️ Sincronizado con el nombre exacto de tu modelo de Aeronaves (Aircraft)
     required: [true, 'La aeronave es obligatoria.']
   },
   
@@ -37,10 +37,10 @@ const F13Schema = new Schema({
     min: [0, 'Las horas no pueden ser negativas.']
   },
   
-  // Horas Totales (Calculadas: horasALaFecha + horasDelDia)
+  // Horas Totales (Calculadas automáticamente en el hook pre-save)
   horasTotales: {
     type: Number,
-    required: [true, 'Las horas totales son obligatorias.'],
+    // ◀️ Se quitó 'required: true' para que no falle la validación inicial de Mongoose
     min: [0, 'Las horas no pueden ser negativas.']
   },
   
@@ -66,31 +66,29 @@ const F13Schema = new Schema({
     default: 1
   },
   
-  // Comandante de Aeronave / Piloto al mando (relación con tu colección de Pilotos/Usuarios)
+  // Comandante de Aeronave / Piloto al mando
   comandante: {
-    type: Schema.Types.ObjectId,
-    ref: 'Piloto', // Ajustá al nombre de tu colección de tripulantes/usuarios
+    type: String, // ◀️ Cambiado a String para permitir el texto ingresado en el frontend
     required: [true, 'El Comandante es obligatorio.']
   },
   
-  // Mecánico de a bordo / Motorista (relación con tu colección de Mecánicos/Usuarios)
+  // Mecánico de a bordo / Motorista
   mecanico: {
-    type: Schema.Types.ObjectId,
-    ref: 'Mecanico', // Ajustá según tu modelo de mecánicos o personal técnico
+    type: String, // ◀️ Cambiado a String para permitir el texto ingresado en el frontend
     required: [true, 'El Mecánico es obligatorio.']
   },
   
   // 🌟 Auditoría: Usuario del sistema que cargó este registro
   creadoPor: {
     type: Schema.Types.ObjectId,
-    ref: 'Usuario', // Ajustá al nombre exacto de tu modelo de usuarios/operadores
+    ref: 'User', // ◀️ Sincronizado con tu modelo de autenticación (User)
     required: [true, 'El usuario que registra el F-13 es obligatorio.']
   },
   
   // --- Estados de Inspección ---
   inspeccionDiaria: {
     realizada: { type: Boolean, default: false },
-    firmaResponsable: { type: String, default: '' }, // Puede ser texto o una referencia a un usuario
+    firmaResponsable: { type: String, default: '' },
     fechaHora: { type: Date }
   },
   

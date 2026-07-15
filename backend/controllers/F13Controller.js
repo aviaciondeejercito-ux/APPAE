@@ -1,17 +1,15 @@
-const F13 = require('../models/F13'); // ◀️ Cambiado a "F13" sin guion medio
+const F13 = require('../models/F13'); 
 const Aeronave = require('../models/Aircraft');
 
 /**
- * 1. Obtener todos los registros de F-13 (con Populate para auditoría y visualización)
+ * 1. Obtener todos los registros de F-13 (con Populate adaptado)
  */
 const getF13s = async (req, res) => {
     try {
-        // Traemos los registros populando las referencias para mostrarlas en la tabla del frontend
+        // Solo populamos 'aeronave' y 'creadoPor' que sí son ObjectIds reales en la base de datos
         const registros = await F13.find()
             .populate('aeronave', 'matricula modelo sda')
-            .populate('comandante', 'apellido grado')
-            .populate('mecanico', 'apellido grado')
-            .populate('creadoPor', 'nombre apellido rango'); // 🌟 Trae los datos de quién cargó el registro
+            .populate('creadoPor', 'nombre apellido rango'); 
 
         return res.status(200).json(registros);
     } catch (error) {
@@ -28,11 +26,10 @@ const getF13s = async (req, res) => {
  */
 const getAeronavesDisponibles = async (req, res) => {
     try {
-        // Buscamos aeronaves que pertenezcan a la unidad y estén en servicio (operativas)
-        // Ajustá los campos "estado" o "enServicio" según cómo los tengas en tu modelo de Aeronave
+        // Buscamos aeronaves operativas en la base de datos
         const aeronaves = await Aeronave.find({ 
-            estado: 'En Servicio' // o { enServicio: true }
-        }).select('matricula modelo sda'); // Traemos solo lo necesario para el select
+            estado: 'En Servicio' 
+        }).select('matricula modelo sda'); 
 
         return res.status(200).json({
             ok: true,
@@ -48,13 +45,13 @@ const getAeronavesDisponibles = async (req, res) => {
 };
 
 /**
- * 3. Crear y guardar un nuevo formulario F-13 (Asociando el usuario que carga)
+ * 3. Crear y guardar un nuevo formulario F-13
  */
 const crearF13 = async (req, res) => {
     try {
         const { aeronave, horasDelDia, horasALaFecha } = req.body;
 
-        // Validamos que la aeronave exista antes de continuar
+        // Validamos que la aeronave exista
         const aeronaveExiste = await Aeronave.findById(aeronave);
         if (!aeronaveExiste) {
             return res.status(404).json({
@@ -63,33 +60,39 @@ const crearF13 = async (req, res) => {
             });
         }
 
-        // Validamos que el middleware haya inyectado el ID del usuario autenticado
-        if (!req.usuarioId) {
+        // Extraemos de forma segura el ID del usuario autenticado (soporta req.usuarioId y req.user._id)
+        const creadorId = req.usuarioId || (req.user && req.user._id);
+
+        if (!creadorId) {
             return res.status(401).json({
                 ok: false,
-                msg: 'No se pudo identificar al usuario que realiza la operación. Verifique la autenticación.'
+                msg: 'No se pudo identificar al usuario que realiza la operación. Verifique su autenticación.'
             });
         }
 
-        // Creamos el registro de F-13 inyectando "creadoPor" de forma segura desde la sesión/token
+        // Creamos el registro F-13 asociando el ID del creador
         const nuevoF13 = new F13({
             ...req.body,
-            creadoPor: req.usuarioId // 🌟 Auditoría forzada desde el backend
+            creadoPor: creadorId 
         });
 
         const f13Guardado = await nuevoF13.save();
 
-        // ⚡ Sincronización: Actualizamos las horas totales de la aeronave en su propia colección
-        // Sumamos las horas voladas en el día a su contador histórico acumulado
-        const totalHorasActualizadas = Number((horasALaFecha + horasDelDia).toFixed(2));
-        
-        await Aeronave.findByIdAndUpdate(aeronave, {
-            $set: { horasTotales: totalHorasActualizadas } // Ajustá el nombre de la propiedad en tu modelo Aeronave
-        });
+        // ⚡ Sincronización de horas de la aeronave (aislada para evitar rebotes del formulario)
+        try {
+            const totalHorasActualizadas = Number((horasALaFecha + horasDelDia).toFixed(2));
+            
+            await Aeronave.findByIdAndUpdate(aeronave, {
+                $set: { horasTotales: totalHorasActualizadas } 
+            });
+            console.log(`✅ Horas de la aeronave ${aeronave} actualizadas con éxito.`);
+        } catch (updateError) {
+            console.error('⚠️ Advertencia: No se pudieron sincronizar las horas en la colección de aeronaves:', updateError.message);
+        }
 
         return res.status(201).json({
             ok: true,
-            msg: 'Formulario F-13 registrado exitosamente y horas de la aeronave actualizadas.',
+            msg: 'Formulario F-13 registrado exitosamente.',
             f13: f13Guardado
         });
 
@@ -110,7 +113,6 @@ const eliminarF13 = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Buscamos el F-13 antes de borrarlo para saber cuántas horas restarle a la aeronave
         const f13AEliminar = await F13.findById(id);
         if (!f13AEliminar) {
             return res.status(404).json({
@@ -122,13 +124,18 @@ const eliminarF13 = async (req, res) => {
         const idAeronave = f13AEliminar.aeronave;
         const horasARestar = f13AEliminar.horasDelDia;
 
-        // Borramos el documento de F-13
+        // Borramos el documento físico
         await F13.findByIdAndDelete(id);
 
-        // ⚡ Rollback: Restamos las horas del día de este vuelo eliminado del historial de la aeronave
-        await Aeronave.findByIdAndUpdate(idAeronave, {
-            $inc: { horasTotales: -horasARestar } // $inc con valor negativo resta automáticamente en MongoDB
-        });
+        // ⚡ Rollback de horas (con salvaguarda por si falla)
+        try {
+            await Aeronave.findByIdAndUpdate(idAeronave, {
+                $inc: { horasTotales: -horasARestar } 
+            });
+            console.log(`✅ Horas de la aeronave reajustadas tras eliminación (-${horasARestar} hs).`);
+        } catch (updateError) {
+            console.error('⚠️ Advertencia: No se pudo realizar el rollback de horas de la aeronave:', updateError.message);
+        }
 
         return res.status(200).json({
             ok: true,
