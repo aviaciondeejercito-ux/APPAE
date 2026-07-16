@@ -103,7 +103,7 @@ const DashboardNovedades = () => {
       <div style={styles.centerContainer}>
         <div style={styles.spinner}></div>
         <p style={{ marginLeft: '15px', color: '#1e293b', fontWeight: 'bold' }}>
-          Sincronizando panel de novedades tácticas...
+          Sincronizando panel de novedades
         </p>
       </div>
     );
@@ -224,7 +224,7 @@ const DashboardNovedades = () => {
       {/* CABECERA REDUCIDA */}
       <div style={styles.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h1 style={styles.title}>Panel de Novedades</h1>
+          <h1 style={styles.title}>Panel de Novedades de Mantenimiento</h1>
           <span style={styles.badgeUnidad}>
             {tieneAccesoTotal ? `VISTA SUPERVISOR (${rolUsuario})` : unidadUsuario}
           </span>
