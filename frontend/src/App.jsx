@@ -19,8 +19,8 @@ import Vuelos from './pages/Vuelos';
 import EbmPage from './pages/EbmPage'; 
 import AlertasWidget from './components/AlertasWidget'; 
 import F13Page from './pages/F13'; 
-import DashboardNovedades from './components/DashboardNovedades'; // 📊 Componente del Panel de Novedades importado
-
+import DashboardNovedades from './components/DashboardNovedades'; 
+import F16Page from './pages/F16';
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
     const [role, setRole] = useState(localStorage.getItem('role') || localStorage.getItem('rol') || 'user');
@@ -87,15 +87,11 @@ function App() {
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
     const puedeVerEbm = esAdmin || esOperaciones || esJefe;
     const puedeVerF13 = esAdmin || esOfTecnica || esUser;
-    
-    // Nueva regla de visibilidad para el panel consolidado de reportes
     const puedeVerReportes = esAdmin || esOfTecnica || esBoss || esDirector || esJefe || esOTO;
-
-    // 🚨 REGLA PARA EL WIDGET DE ALERTAS: Se oculta para OTO, DIRECTOR y BOSS
     const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
-
+const puedeVerF16 = esAdmin; 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm', 'f13', 'reportes'].includes(view);
+    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm', 'f13', 'reportes', 'f16'].includes(view);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -210,6 +206,12 @@ function App() {
                                     style={{...styles.btnNav, backgroundColor: view === 'operaciones' ? '#60a3bc' : '#4a69bd'}}
                                 >📝 Carga</button>
                             )}
+                            {puedeVerF16 && (
+    <button 
+        onClick={() => setView('f16')} 
+        style={{...styles.btnNav, backgroundColor: view === 'f16' ? '#2980b9' : '#4a69bd'}}
+    >📋 F-16</button>
+)}
 
                             <button onClick={handleLogout} style={styles.btnLogout}>Salir</button>
                         </>
@@ -242,6 +244,7 @@ function App() {
                             case 'operaciones': return puedeVerCarga ? <Operaciones /> : <CalendarPage />;
                             case 'estado': return puedeVerEstadoAeronaves ? <EstadoAeronaves /> : <CalendarPage />;
                             case 'material': return puedeVerOficinaTecnica ? <Material /> : <CalendarPage />;
+                            case 'f16': return puedeVerF16 ? <F16Page /> : <CalendarPage />;
                             default: return <CalendarPage />;
                         }
                     })()
