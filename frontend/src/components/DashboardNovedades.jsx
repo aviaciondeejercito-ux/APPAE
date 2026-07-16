@@ -25,7 +25,7 @@ const DashboardNovedades = () => {
   const [horasManuales, setHorasManuales] = useState({});
 
   // --- DETECTAR UNIDAD DEL USUARIO ---
-  const unidadUsuario = localStorage.getItem('unidad');
+  const unidadUsuario = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
 
   // --- CONFIGURACIÓN DE URL DINÁMICA ---
   const OBTENER_BASE_URL = () => {
@@ -115,9 +115,9 @@ const DashboardNovedades = () => {
   const { resumenMantenimiento, resumenVuelos } = novedades;
 
   // Filtrado de seguridad de flota
-  const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
-    nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
-  );
+ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
+  nave => !nave.elemento || nave.elemento.toUpperCase() === unidadUsuario.toUpperCase()
+);
 
   const chequearOperativo = (nave) => {
     return (
