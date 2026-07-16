@@ -8,6 +8,13 @@ const DashboardNovedades = () => {
     return null;
   }
 
+  // --- DETECTAR UNIDAD Y ROL DEL USUARIO ---
+  const unidadUsuario = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
+  const rolUsuario = (localStorage.getItem('role') || localStorage.getItem('rol') || 'USER').toUpperCase();
+  
+  // 👑 DEFINICIÓN DE ROLES CON ACCESO TOTAL (ADMIN, BOSS, DIRECTOR)
+  const tieneAccesoTotal = rolUsuario === 'ADMIN' || rolUsuario === 'BOSS' || rolUsuario === 'DIRECTOR';
+
   // --- ESTADOS ---
   const [novedades, setNovedades] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,15 +24,15 @@ const DashboardNovedades = () => {
   const [sda, setSda] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
+  
+  // Si tiene acceso total empieza viendo "TODAS", si no, toma su unidad asignada de forma estricta
+  const [unidadSeleccionada, setUnidadSeleccionada] = useState(tieneAccesoTotal ? 'TODAS' : unidadUsuario);
 
   // Pestaña activa para las métricas de horas
   const [tabActiva, setTabActiva] = useState('aeronave');
 
   // 📝 ESTADO PARA HORAS MANUALES (Por si la base de datos viene vacía/en 0)
   const [horasManuales, setHorasManuales] = useState({});
-
-  // --- DETECTAR UNIDAD DEL USUARIO ---
-  const unidadUsuario = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
 
   // --- CONFIGURACIÓN DE URL DINÁMICA ---
   const OBTENER_BASE_URL = () => {
@@ -37,57 +44,59 @@ const DashboardNovedades = () => {
 
   // --- FUNCIÓN PARA CONSULTAR LA API ---
   const obtenerNovedades = async () => {
-  if (!unidadUsuario) {
-    setError("No se detectó la unidad asignada a tu usuario. Contactá al administrador.");
-    setLoading(false);
-    return;
-  }
-
-  setLoading(true);
-  setError(null);
-  try {
-    const params = new URLSearchParams();
-    if (sda) params.append('sda', sda);
-    if (fechaInicio) params.append('fechaInicio', fechaInicio);
-    if (fechaFin) params.append('fechaFin', fechaFin);
-    
-    // Enviamos estrictamente la unidad del usuario logueado
-    params.append('unidad', unidadUsuario);
-
-    const BASE_URL = OBTENER_BASE_URL();
-    const url = `${BASE_URL}/api/dashboard/novedades?${params.toString()}`;
-    
-    const respuesta = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (respuesta.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('unidad');
-      window.location.href = '/login';
+    // Si no tiene acceso total y tampoco tiene unidad asignada, mostramos error
+    if (!tieneAccesoTotal && !unidadUsuario) {
+      setError("No se detectó la unidad asignada a tu usuario. Contactá al administrador.");
+      setLoading(false);
       return;
     }
 
-    if (!respuesta.ok) {
-      throw new Error('No se pudieron recuperar las novedades de tu unidad.');
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (sda) params.append('sda', sda);
+      if (fechaInicio) params.append('fechaInicio', fechaInicio);
+      if (fechaFin) params.append('fechaFin', fechaFin);
+      
+      // Enviamos el filtro seleccionado (el usuario privilegiado puede mandar "TODAS" o un elemento específico)
+      params.append('unidad', unidadSeleccionada);
+
+      const BASE_URL = OBTENER_BASE_URL();
+      const url = `${BASE_URL}/api/dashboard/novedades?${params.toString()}`;
+      
+      const respuesta = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (respuesta.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('unidad');
+        window.location.href = '/login';
+        return;
+      }
+
+      if (!respuesta.ok) {
+        throw new Error('No se pudieron recuperar las novedades de tu unidad.');
+      }
+
+      const resultado = await respuesta.json();
+      setNovedades(resultado);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const resultado = await respuesta.json();
-    setNovedades(resultado);
-  } catch (err) {
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-};
-
+  // El efecto reacciona cuando el usuario cambia filtros o el selector de Unidad
   useEffect(() => {
     obtenerNovedades();
-  }, [sda, fechaInicio, fechaFin]);
+  }, [sda, fechaInicio, fechaFin, unidadSeleccionada]);
 
   if (loading) {
     return (
@@ -113,11 +122,14 @@ const DashboardNovedades = () => {
   }
 
   const { resumenMantenimiento, resumenVuelos } = novedades;
+  const flotaCompleta = resumenMantenimiento.detalleFlota;
 
-  // Filtrado de seguridad de flota
-const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
-  nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
-);
+  // Filtrado de seguridad de flota en Frontend (Solo aplica a usuarios sin acceso total)
+  const flotaFiltrada = tieneAccesoTotal 
+    ? flotaCompleta
+    : flotaCompleta.filter(
+        nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
+      );
 
   const chequearOperativo = (nave) => {
     return (
@@ -130,8 +142,11 @@ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
   const cantidadOperativas = flotaFiltrada.filter(n => chequearOperativo(n)).length;
   const cantidadEnMantenimiento = flotaFiltrada.length - cantidadOperativas;
 
-  // Extraer SDAs de la unidad
+  // Extraer SDAs dinámicamente según la flota visible
   const sdaDisponibles = Array.from(new Set(flotaFiltrada.map(nave => nave.sda).filter(Boolean))).sort();
+
+  // Extraer lista única de unidades existentes para que los usuarios privilegiados puedan filtrar
+  const unidadesDisponibles = Array.from(new Set(flotaCompleta.map(nave => nave.unidad).filter(Boolean))).sort();
 
   // --- 🛠️ HORAS ESTRUCTURALES SÓLIDAS ---
   const mapaUltimoVueloAeronave = {};
@@ -142,7 +157,6 @@ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
   vuelosOrdenadosCronologicamente.forEach(v => {
     const matricula = v.aeronave?.matricula;
     if (matricula) {
-      // Usamos el campo real 'horasTotales' que envía el nuevo controlador [source: 6]
       const totalVuelo = v.horasTotales || 0;
       mapaUltimoVueloAeronave[matricula] = Number(totalVuelo.toFixed(2));
     }
@@ -211,7 +225,9 @@ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
       <div style={styles.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <h1 style={styles.title}>Panel de Novedades</h1>
-          <span style={styles.badgeUnidad}>{unidadUsuario}</span>
+          <span style={styles.badgeUnidad}>
+            {tieneAccesoTotal ? `VISTA SUPERVISOR (${rolUsuario})` : unidadUsuario}
+          </span>
         </div>
         <p style={styles.subtitle}>Consolidado operativo y analítico de flota e historial F-13.</p>
       </div>
@@ -257,6 +273,24 @@ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
 
       {/* FILTROS OPERATIVOS */}
       <div style={styles.filterBar}>
+        
+        {/* 🏢 FILTRO DE UNIDADES EXCLUSIVO PARA ROLES AUTORIZADOS */}
+        {tieneAccesoTotal && (
+          <div style={styles.filterGroup}>
+            <label style={styles.filterLabel}>🏢 Unidad / Elemento</label>
+            <select 
+              value={unidadSeleccionada} 
+              onChange={(e) => setUnidadSeleccionada(e.target.value)} 
+              style={{...styles.select, border: '1px solid #3b82f6', backgroundColor: '#f0fdf4'}}
+            >
+              <option value="TODAS">TODAS LAS UNIDADES</option>
+              {unidadesDisponibles.map(uni => (
+                <option key={uni} value={uni}>{uni}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div style={styles.filterGroup}>
           <label style={styles.filterLabel}>SDA (Sistema de Armas)</label>
           <select value={sda} onChange={(e) => setSda(e.target.value)} style={styles.select}>
@@ -274,7 +308,15 @@ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
           <label style={styles.filterLabel}>Hasta</label>
           <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} style={styles.inputDate} />
         </div>
-        <button onClick={() => { setSda(''); setFechaInicio(''); setFechaFin(''); }} style={styles.btnClean}>
+        <button 
+          onClick={() => { 
+            setSda(''); 
+            setFechaInicio(''); 
+            setFechaFin(''); 
+            if (tieneAccesoTotal) setUnidadSeleccionada('TODAS');
+          }} 
+          style={styles.btnClean}
+        >
           Limpiar
         </button>
       </div>
@@ -282,7 +324,7 @@ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
       {/* CUADRO PRINCIPAL DEL TABLERO */}
       <div style={styles.tablesGrid}>
         
-        {/* COLUMNA 1: ESTADO DE LA FLOTA (CUADRO ABAJO A LA IZQUIERDA) */}
+        {/* COLUMNA 1: ESTADO DE LA FLOTA */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>🛠️ Estado de la Flota</h2>
           <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
@@ -291,6 +333,7 @@ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
                 <tr style={styles.tableHeaderRow}>
                   <th style={styles.th}>Matrícula</th>
                   <th style={styles.th}>SDA</th>
+                  {tieneAccesoTotal && <th style={styles.th}>Unidad</th>}
                   <th style={{...styles.th, textAlign: 'right'}}>Hrs. Totales (Estructura)</th>
                   <th style={{...styles.th, textAlign: 'center'}}>Estado</th>
                 </tr>
@@ -299,22 +342,23 @@ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
                 {flotaFiltrada.map((nave) => {
                   const operativo = chequearOperativo(nave);
                   const horasEstructurales = obtenerHorasEstructuralesSólidas(nave);
-                  
-                  // 🛡️ CONDICIÓN CLAVE: Si viene un valor de horas de la DB (mayor a 0), bloquea el campo.
                   const tieneDatoDb = horasEstructurales > 0;
 
                   return (
                     <tr key={nave._id} style={styles.tableRow}>
                       <td style={{...styles.td, fontWeight: 'bold'}}>{nave.matricula}</td>
                       <td style={styles.td}>{nave.sda}</td>
+                      {tieneAccesoTotal && (
+                        <td style={{...styles.td, fontSize: '0.7rem', color: '#64748b', fontWeight: '600'}}>
+                          {nave.unidad || 'S/U'}
+                        </td>
+                      )}
                       <td style={{...styles.td, textAlign: 'right'}}>
                         {tieneDatoDb ? (
-                          // CASO A: Viene información real de la DB, pisa la escritura.
                           <span style={{ fontWeight: '700', color: '#1e293b' }}>
                             {horasEstructurales} hs
                           </span>
                         ) : (
-                          // CASO B: No hay datos en la DB (0 o nulo), permite que el operador escriba libremente.
                           <input
                             type="number"
                             step="0.1"
@@ -450,238 +494,41 @@ const flotaFiltrada = resumenMantenimiento.detalleFlota.filter(
   );
 };
 
-// --- ESTILOS COMPACTOS PROTEGIDOS (CORREGIDOS) ---
+// --- ESTILOS COMPACTOS PROTEGIDOS ---
 const styles = {
-  dashboardContainer: {
-    padding: '15px 20px',
-    width: '100%',
-    boxSizing: 'border-box'
-  },
-  header: {
-    marginBottom: '15px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px'
-  },
-  title: {
-    fontSize: '1.25rem',
-    fontWeight: '800',
-    color: '#1e293b',
-    margin: 0
-  },
-  badgeUnidad: {
-    backgroundColor: '#1b3a57',
-    color: '#ffffff',
-    padding: '2px 6px',
-    borderRadius: '4px',
-    fontSize: '0.7rem',
-    fontWeight: 'bold'
-  },
-  subtitle: {
-    fontSize: '0.8rem',
-    color: '#64748b',
-    margin: 0
-  },
-  miniKpiRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '10px',
-    marginBottom: '15px'
-  },
-  miniKpiCard: {
-    flex: '1 1 150px',
-    backgroundColor: '#ffffff',
-    padding: '8px 12px',
-    borderRadius: '8px',
-    border: '1px solid #e2e8f0',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-  },
-  miniKpiIcon: {
-    fontSize: '1.1rem',
-    fontWeight: 'bold',
-    color: '#1e40af'
-  },
-  miniKpiLabel: {
-    display: 'block',
-    fontSize: '0.65rem',
-    fontWeight: '600',
-    color: '#64748b',
-    textTransform: 'uppercase'
-  },
-  miniKpiValue: {
-    fontSize: '1rem',
-    fontWeight: '800',
-    color: '#1e293b'
-  },
-  filterBar: {
-    backgroundColor: '#ffffff',
-    padding: '10px 15px',
-    borderRadius: '8px',
-    border: '1px solid #e2e8f0',
-    marginBottom: '15px',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '15px',
-    alignItems: 'flex-end'
-  },
-  filterGroup: {
-    flex: '1',
-    minWidth: '130px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px'
-  },
-  filterLabel: {
-    fontSize: '0.65rem',
-    fontWeight: '700',
-    color: '#64748b',
-    textTransform: 'uppercase'
-  },
-  select: {
-    width: '100%',
-    backgroundColor: '#f8fafc',
-    border: '1px solid #cbd5e1',
-    borderRadius: '6px',
-    padding: '6px 8px',
-    fontSize: '0.8rem',
-    color: '#1e293b',
-    outline: 'none'
-  },
-  inputDate: {
-    width: '100%',
-    backgroundColor: '#f8fafc',
-    border: '1px solid #cbd5e1',
-    borderRadius: '6px',
-    padding: '5px 8px',
-    fontSize: '0.8rem',
-    color: '#1e293b',
-    outline: 'none'
-  },
-  btnClean: {
-    color: '#3b82f6',
-    background: 'none',
-    border: 'none',
-    fontSize: '0.8rem',
-    fontWeight: '600',
-    cursor: 'pointer',
-    padding: '5px 10px'
-  },
-  tablesGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-    gap: '15px'
-  },
-  tableCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '10px',
-    border: '1px solid #e2e8f0',
-    padding: '15px'
-  },
-  tableTitle: {
-    fontSize: '0.9rem',
-    fontWeight: '700',
-    color: '#1e293b',
-    margin: '0 0 12px 0'
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    textAlign: 'left'
-  },
-  tableHeaderRow: {
-    backgroundColor: '#f1f5f9'
-  },
-  th: {
-    padding: '8px',
-    fontSize: '0.7rem',
-    fontWeight: '700',
-    color: '#475569',
-    textTransform: 'uppercase'
-  },
-  tableRow: {
-    borderBottom: '1px solid #f1f5f9'
-  },
-  td: {
-    padding: '8px',
-    fontSize: '0.8rem',
-    color: '#334155'
-  },
-  statusBadge: {
-    display: 'inline-block',
-    padding: '2px 6px',
-    borderRadius: '4px',
-    fontSize: '0.65rem',
-    fontWeight: '700'
-  },
-  tabContainer: {
-    display: 'flex',
-    borderBottom: '2px solid #e2e8f0',
-    marginBottom: '10px',
-    gap: '5px'
-  },
-  tabButton: {
-    padding: '6px 12px',
-    fontSize: '0.75rem',
-    fontWeight: '600',
-    color: '#64748b',
-    backgroundColor: 'transparent',
-    border: 'none',
-    borderBottom: '2px solid transparent',
-    cursor: 'pointer',
-    marginBottom: '-2px',
-    transition: '0.2s'
-  },
-  tabButtonActive: {
-    color: '#1e3a57',
-    borderBottom: '2px solid #1e3a57'
-  },
-  centerContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '200px'
-  },
-  spinner: {
-    width: '30px',
-    height: '30px',
-    border: '3px solid #f3f3f3',
-    borderTop: '3px solid #1e3799',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite'
-  },
-  errorAlert: {
-    backgroundColor: '#fef2f2',
-    borderLeft: '4px solid #ef4444',
-    padding: '12px',
-    borderRadius: '6px',
-    margin: '15px 0'
-  },
-  btnRetry: {
-    backgroundColor: '#ef4444',
-    color: '#ffffff',
-    border: 'none',
-    padding: '5px 10px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '0.8rem',
-    fontWeight: '600'
-  },
-  // ✍️ ESTILO TÁCTICO PARA EL INPUT DE HORAS MANUALES
-  inputManualHours: {
-    width: '80px',
-    padding: '4px 8px',
-    fontSize: '0.8rem',
-    border: '1px solid #cbd5e1',
-    borderRadius: '6px',
-    textAlign: 'right',
-    backgroundColor: '#fff',
-    outline: 'none',
-    color: '#0f172a',
-    fontWeight: 'bold'
-  }
+  dashboardContainer: { padding: '15px 20px', width: '100%', boxSizing: 'border-box' },
+  header: { marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '2px' },
+  title: { fontSize: '1.25rem', fontWeight: '800', color: '#1e293b', margin: 0 },
+  badgeUnidad: { backgroundColor: '#1b3a57', color: '#ffffff', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' },
+  subtitle: { fontSize: '0.8rem', color: '#64748b', margin: 0 },
+  miniKpiRow: { display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '15px' },
+  miniKpiCard: { flex: '1 1 150px', backgroundColor: '#ffffff', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' },
+  miniKpiIcon: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e40af' },
+  miniKpiLabel: { display: 'block', fontSize: '0.65rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' },
+  miniKpiValue: { fontSize: '1rem', fontWeight: '800', color: '#1e293b' },
+  filterBar: { backgroundColor: '#ffffff', padding: '10px 15px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '15px', display: 'flex', flexWrap: 'wrap', gap: '15px', alignItems: 'flex-end' },
+  filterGroup: { flex: '1', minWidth: '130px', display: 'flex', flexDirection: 'column', gap: '4px' },
+  filterLabel: { fontSize: '0.65rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' },
+  select: { width: '100%', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 8px', fontSize: '0.8rem', color: '#1e293b', outline: 'none' },
+  inputDate: { width: '100%', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '5px 8px', fontSize: '0.8rem', color: '#1e293b', outline: 'none' },
+  btnClean: { color: '#3b82f6', background: 'none', border: 'none', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer', padding: '5px 10px' },
+  tablesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '15px' },
+  tableCard: { backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', padding: '15px' },
+  tableTitle: { fontSize: '0.9rem', fontWeight: '700', color: '#1e293b', margin: '0 0 12px 0' },
+  table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
+  tableHeaderRow: { backgroundColor: '#f1f5f9' },
+  th: { padding: '8px', fontSize: '0.7rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase' },
+  tableRow: { borderBottom: '1px solid #f1f5f9' },
+  td: { padding: '8px', fontSize: '0.8rem', color: '#334155' },
+  statusBadge: { display: 'inline-block', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: '700' },
+  tabContainer: { display: 'flex', borderBottom: '2px solid #e2e8f0', marginBottom: '10px', gap: '5px' },
+  tabButton: { padding: '6px 12px', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', backgroundColor: 'transparent', border: 'none', borderBottom: '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', transition: '0.2s' },
+  tabButtonActive: { color: '#1e3a57', borderBottom: '2px solid #1e3a57' },
+  centerContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' },
+  spinner: { width: '30px', height: '30px', border: '3px solid #f3f3f3', borderTop: '3px solid #1e3799', borderRadius: '50%', animation: 'spin 1s linear infinite' },
+  errorAlert: { backgroundColor: '#fef2f2', borderLeft: '4px solid #ef4444', padding: '12px', borderRadius: '6px', margin: '15px 0' },
+  btnRetry: { backgroundColor: '#ef4444', color: '#ffffff', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600' },
+  inputManualHours: { width: '80px', padding: '4px 8px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '6px', textAlign: 'right', backgroundColor: '#fff', outline: 'none', color: '#0f172a', fontWeight: 'bold' }
 };
 
 export default DashboardNovedades;
