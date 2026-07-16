@@ -21,6 +21,9 @@ const DashboardNovedades = () => {
   // Pestaña activa para las métricas de horas
   const [tabActiva, setTabActiva] = useState('aeronave');
 
+  // 📝 ESTADO PARA HORAS MANUALES (Por si la base de datos viene vacía/en 0)
+  const [horasManuales, setHorasManuales] = useState({});
+
   // --- DETECTAR UNIDAD DEL USUARIO ---
   const unidadUsuario = localStorage.getItem('unidad') || 'B AV APY COMB 601';
 
@@ -134,9 +137,9 @@ const DashboardNovedades = () => {
   vuelosOrdenadosCronologicamente.forEach(v => {
     const matricula = v.aeronave?.matricula;
     if (matricula) {
-      const acumuladoAnterior = v.horasAnteriores || 0;
-      const delDia = v.horasDelDia || 0;
-      mapaUltimoVueloAeronave[matricula] = Number((acumuladoAnterior + delDia).toFixed(2));
+      // Usamos el campo real 'horasTotales' que envía el nuevo controlador [source: 6]
+      const totalVuelo = v.horasTotales || 0;
+      mapaUltimoVueloAeronave[matricula] = Number(totalVuelo.toFixed(2));
     }
   });
 
@@ -188,6 +191,14 @@ const DashboardNovedades = () => {
   const rankingFechas = Object.entries(horasPorMes)
     .map(([mes, horas]) => ({ mes, horas: Number(horas.toFixed(2)) }));
 
+  // Manejador del cambio de input manual
+  const handleCambioHorasManuales = (naveId, valor) => {
+    setHorasManuales(prev => ({
+      ...prev,
+      [naveId]: valor
+    }));
+  };
+
   return (
     <div style={styles.dashboardContainer}>
       
@@ -213,7 +224,6 @@ const DashboardNovedades = () => {
           <span style={{...styles.miniKpiIcon, color: '#059669'}}>✓</span>
           <div>
             <span style={styles.miniKpiLabel}>E/S (En Serv.)</span>
-            {/* 🛡️ CORREGIDO: Ya no es una función JSX anónima */}
             <span style={{...styles.miniKpiValue, color: '#059669'}}>{cantidadOperativas}</span>
           </div>
         </div>
@@ -267,7 +277,7 @@ const DashboardNovedades = () => {
       {/* CUADRO PRINCIPAL DEL TABLERO */}
       <div style={styles.tablesGrid}>
         
-        {/* COLUMNA 1: ESTADO DE LA FLOTA */}
+        {/* COLUMNA 1: ESTADO DE LA FLOTA (CUADRO ABAJO A LA IZQUIERDA) */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>🛠️ Estado de la Flota</h2>
           <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
@@ -284,12 +294,31 @@ const DashboardNovedades = () => {
                 {flotaFiltrada.map((nave) => {
                   const operativo = chequearOperativo(nave);
                   const horasEstructurales = obtenerHorasEstructuralesSólidas(nave);
+                  
+                  // 🛡️ CONDICIÓN CLAVE: Si viene un valor de horas de la DB (mayor a 0), bloquea el campo.
+                  const tieneDatoDb = horasEstructurales > 0;
+
                   return (
                     <tr key={nave._id} style={styles.tableRow}>
                       <td style={{...styles.td, fontWeight: 'bold'}}>{nave.matricula}</td>
                       <td style={styles.td}>{nave.sda}</td>
-                      <td style={{...styles.td, textAlign: 'right', fontWeight: '700', color: '#1e293b'}}>
-                        {horasEstructurales} hs
+                      <td style={{...styles.td, textAlign: 'right'}}>
+                        {tieneDatoDb ? (
+                          // CASO A: Viene información real de la DB, pisa la escritura.
+                          <span style={{ fontWeight: '700', color: '#1e293b' }}>
+                            {horasEstructurales} hs
+                          </span>
+                        ) : (
+                          // CASO B: No hay datos en la DB (0 o nulo), permite que el operador escriba libremente.
+                          <input
+                            type="number"
+                            step="0.1"
+                            placeholder="Cargar hs"
+                            value={horasManuales[nave._id] !== undefined ? horasManuales[nave._id] : ''}
+                            onChange={(e) => handleCambioHorasManuales(nave._id, e.target.value)}
+                            style={styles.inputManualHours}
+                          />
+                        )}
                       </td>
                       <td style={{...styles.td, textAlign: 'center'}}>
                         <span style={{
@@ -420,7 +449,6 @@ const DashboardNovedades = () => {
 const styles = {
   dashboardContainer: {
     padding: '15px 20px',
-    // 🛡️ ELIMINADOS: minHeight: '100vh' y backgroundColor para no tapar el Layout principal
     width: '100%',
     boxSizing: 'border-box'
   },
@@ -635,6 +663,19 @@ const styles = {
     cursor: 'pointer',
     fontSize: '0.8rem',
     fontWeight: '600'
+  },
+  // ✍️ ESTILO TÁCTICO PARA EL INPUT DE HORAS MANUALES
+  inputManualHours: {
+    width: '80px',
+    padding: '4px 8px',
+    fontSize: '0.8rem',
+    border: '1px solid #cbd5e1',
+    borderRadius: '6px',
+    textAlign: 'right',
+    backgroundColor: '#fff',
+    outline: 'none',
+    color: '#0f172a',
+    fontWeight: 'bold'
   }
 };
 

@@ -49,35 +49,50 @@ const getNovedadesElemento = async (req, res) => {
             if (fechaFin) filtroF13.fecha.$lte = new Date(fechaFin);
         }
 
-        // Traemos los vuelos sin el límite estricto de 50 para no perder cálculos anuales,
-        // pero ordenados para procesar estadísticas cronológicas
-        const historialVuelos = await F13.find(filtroF13)
+        // Traemos los vuelos ordenados cronológicamente
+        const historialVuelosRaw = await F13.find(filtroF13)
             .populate('aeronave', 'matricula modelo sda unidad')
             .populate('creadoPor', 'nombre apellido rango')
             .sort({ fecha: -1 }) 
             .lean();
 
+        // 🚀 MAPEO CON LOS CAMPOS REALES DE TU MONGO
+        const historialVuelos = historialVuelosRaw.map(vuelo => {
+            // Usamos el 'horasTotales' que ya viene en tu base de datos. 
+            // Si por alguna razón no existiera, hacemos la suma de seguridad (horasALaFecha + horasDelDia)
+            const sumatoriaSeguridad = (vuelo.horasALaFecha || 0) + (vuelo.horasDelDia || 0);
+            
+            return {
+                ...vuelo,
+                horasTotales: vuelo.horasTotales !== undefined 
+                    ? vuelo.horasTotales 
+                    : Number(sumatoriaSeguridad.toFixed(2))
+            };
+        });
+
         // --- 4. ⚙️ PROCESAMIENTO DINÁMICO DE HORAS ESTRUCTURALES SÓLIDAS ---
-        // Para cada aeronave de la unidad, buscaremos de forma garantizada su F13 más reciente histórico
-        // (ignorando los filtros de fecha del cliente) para saber cuál es su verdadero odómetro actual.
+        // Para cada aeronave de la unidad, buscamos su F13 más reciente histórico
         const detalleFlotaActualizado = await Promise.all(aeronaves.map(async (nave) => {
             // Buscamos el último F13 de esta aeronave específica cargado en el sistema
             const ultimoF13 = await F13.findOne({ aeronave: nave._id })
                 .sort({ fecha: -1, createdAt: -1 })
-                .select('horasAnteriores horasDelDia')
+                .select('horasALaFecha horasDelDia horasTotales') // Cambiado a tus campos reales
                 .lean();
 
             let horasEstructuralesReales = nave.horasTotales || 0;
 
             if (ultimoF13) {
-                // El acumulado real al último minuto es: horasAnteriores del último vuelo + lo que voló ese día
-                const acumuladoCalculado = (ultimoF13.horasAnteriores || 0) + (ultimoF13.horasDelDia || 0);
+                // Usamos su campo 'horasTotales' nativo, o calculamos el fallback
+                const acumuladoCalculado = ultimoF13.horasTotales !== undefined
+                    ? ultimoF13.horasTotales
+                    : (ultimoF13.horasALaFecha || 0) + (ultimoF13.horasDelDia || 0);
+                
                 horasEstructuralesReales = Number(acumuladoCalculado.toFixed(2));
             }
 
             return {
                 ...nave,
-                // Reemplazamos/aseguramos el campo 'horasTotales' con el número robusto definitivo
+                // Reemplazamos/aseguramos el campo 'horasTotales' de la aeronave con el odómetro real definitivo
                 horasTotales: horasEstructuralesReales
             };
         }));
@@ -93,13 +108,13 @@ const getNovedadesElemento = async (req, res) => {
                 totalAeronaves,
                 operativas,
                 enMantenimiento,
-                detalleFlota: detalleFlotaActualizado // Enviamos la flota con los odómetros reales calculados
+                detalleFlota: detalleFlotaActualizado // Flota con odómetros reales calculados
             },
             resumenVuelos: {
                 totalHorasVoladas: Number(totalHorasVoladasPeriodo.toFixed(2)),
                 totalAterrizajes: totalAterrizajesPeriodo,
                 cantidadVuelos: historialVuelos.length,
-                ultimosVuelos: historialVuelos
+                ultimosVuelos: historialVuelos // Historial con horasTotales garantizadas
             }
         });
 
