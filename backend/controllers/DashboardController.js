@@ -3,37 +3,37 @@ const F13 = require('../models/F13');
 
 /**
  * Obtiene el consolidado de novedades del elemento (Aeronaves + Formularios F-13)
- * Filtrado estrictamente por el 'elemento' del usuario.
+ * Filtrado estrictamente por la unidad/elemento del usuario.
  */
 const getNovedadesElemento = async (req, res) => {
     try {
-        // 1. Recibimos parámetros desde el frontend (mantenemos 'unidad' en el query para compatibilidad)
+        // 1. Recibimos la unidad del usuario (que en su perfil es su 'elemento')
         const { sda, fechaInicio, fechaFin, unidad } = req.query;
 
-        // 🛡️ CONTROL DE SEGURIDAD EXTREMO: Si no hay elemento/unidad del operador, abortamos
+        // 🛡️ CONTROL DE SEGURIDAD: Si no hay unidad/elemento, abortamos
         if (!unidad) {
             return res.status(400).json({
                 ok: false,
-                msg: 'El elemento del usuario es requerido para segmentar la información y evitar fugas de datos.'
+                msg: 'El elemento/unidad del usuario es requerido para segmentar la información.'
             });
         }
 
         // --- 1. CONSTRUCCIÓN DE FILTROS ---
-        // 🔧 CORRECCIÓN: Filtramos las aeronaves buscando por la propiedad 'elemento' en lugar de 'unidad'
+        // 🔧 CORRECCIÓN CLAVE: Buscamos en el campo "unidad" de la Aeronave usando el string del "elemento" del usuario
         let filtroAeronave = {
-            elemento: { $regex: new RegExp(`^${unidad}$`, 'i') }
+            unidad: { $regex: new RegExp(`^${unidad}$`, 'i') }
         };
         let filtroF13 = {};
 
-        // Filtro por Sistema de Armas (SDA) si el operador lo selecciona en el panel
+        // Filtro por Sistema de Armas (SDA) si se selecciona en el panel
         if (sda) {
             filtroAeronave.sda = sda;
         }
 
-        // --- 2. OBTENER FLOTA DEL ELEMENTO Y CORREGIR ESTADOS (E/S) ---
-        // 🔧 CORRECCIÓN: Seleccionamos 'elemento' en lugar de 'unidad' en la proyección
+        // --- 2. OBTENER FLOTA Y CORREGIR ESTADOS (E/S) ---
+        // Volvemos a proyectar 'unidad' que es el campo real del modelo Aircraft
         const aeronaves = await Aircraft.find(filtroAeronave)
-            .select('matricula modelo sda horasTotales estado enServicio elemento')
+            .select('matricula modelo sda horasTotales estado enServicio unidad')
             .lean();
 
         // 🛡️ COMPROBACIÓN: Comprobación usando siglas militares "E/S"
@@ -45,10 +45,10 @@ const getNovedadesElemento = async (req, res) => {
         const operativas = aeronaves.filter(chequearOperativo).length;
         const enMantenimiento = totalAeronaves - operativas;
 
-        // --- 3. CONSULTAR HISTORIAL DE VUELOS (F13) EXCLUSIVO DE ESTE ELEMENTO ---
+        // --- 3. CONSULTAR HISTORIAL DE VUELOS (F13) EXCLUSIVO DE ESTA UNIDAD ---
         const idsAeronavesUnidad = aeronaves.map(a => a._id);
         
-        // El historial solo traerá vuelos pertenecientes a las aeronaves de este elemento
+        // El historial solo traerá vuelos pertenecientes a las aeronaves de esta unidad
         filtroF13.aeronave = { $in: idsAeronavesUnidad };
 
         // Aplicamos filtros temporales si existen en el frontend
@@ -59,9 +59,8 @@ const getNovedadesElemento = async (req, res) => {
         }
 
         // Traemos los vuelos ordenados cronológicamente
-        // 🔧 CORRECCIÓN: En el populate traemos 'elemento' de la aeronave
         const historialVuelosRaw = await F13.find(filtroF13)
-            .populate('aeronave', 'matricula modelo sda elemento')
+            .populate('aeronave', 'matricula modelo sda unidad')
             .populate('creadoPor', 'nombre apellido rango')
             .sort({ fecha: -1 }) 
             .lean();
