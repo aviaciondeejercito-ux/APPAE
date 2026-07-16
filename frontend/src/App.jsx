@@ -85,11 +85,14 @@ function App() {
     const puedeVerOficinaTecnica = esAdmin || esOfTecnica;
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
-    const puedeVerEbm = esAdmin || esBoss || esDirector || esOperaciones || esJefe ||  esOTO;
+    const puedeVerEbm = esAdmin || esOperaciones || esJefe;
     const puedeVerF13 = esAdmin || esOfTecnica || esUser;
     
     // Nueva regla de visibilidad para el panel consolidado de reportes
     const puedeVerReportes = esAdmin || esOfTecnica || esBoss || esDirector || esJefe || esOTO;
+
+    // 🚨 REGLA PARA EL WIDGET DE ALERTAS: Se oculta para OTO, DIRECTOR y BOSS
+    const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
     const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm', 'f13', 'reportes'].includes(view);
@@ -184,7 +187,7 @@ function App() {
                                 <button 
                                     onClick={() => setView('estado')} 
                                     style={{...styles.btnNav, backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd'}}
-                                >🚁 Estado Aeronaves</button>
+                                >🦅 Estado Aeronaves</button>
                             )}
 
                             {puedeVerOficinaTecnica && (
@@ -218,8 +221,8 @@ function App() {
 
             {/* CONTENIDO PRINCIPAL DINÁMICO */}
             <main style={esVistaFull ? styles.containerFull : styles.container}>
-                {/* 📌 ALERTAS PREVENTIVAS DE UNIDAD: Inyección en contenedor dinámico */}
-                {auth && <AlertasWidget />}
+                {/* 📌 ALERTAS PREVENTIVAS DE UNIDAD: Filtrado según rol asignado */}
+                {auth && puedeVerAlertas && <AlertasWidget />}
 
                 {!auth ? (
                     <Login setAuth={setAuth} />
@@ -230,7 +233,7 @@ function App() {
                             case 'ebm': return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
                             case 'vuelos': return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
                             case 'f13': return puedeVerF13 ? <F13Page /> : <CalendarPage />;
-                            case 'reportes': return puedeVerReportes ? <DashboardNovedades /> : <CalendarPage />; // ◀️ Renderizado del panel
+                            case 'reportes': return puedeVerReportes ? <DashboardNovedades /> : <CalendarPage />; 
                             case 'planeamiento': return puedeVerPlaneamiento ? <PlaneamientoMapa /> : <CalendarPage />;
                             case 'admin': return esAdmin ? <AdminPanel /> : <CalendarPage />;
                             case 'stats': return puedeVerStats ? <Estadisticas /> : <CalendarPage />;
