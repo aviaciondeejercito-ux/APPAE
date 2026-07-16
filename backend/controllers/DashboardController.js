@@ -10,26 +10,32 @@ const getNovedadesElemento = async (req, res) => {
         // 1. Recibimos parámetros desde el frontend
         const { sda, fechaInicio, fechaFin, unidad } = req.query;
 
-        // --- 1. CONSTRUCCIÓN DE FILTROS ---
-        let filtroAeronave = {};
-        let filtroF13 = {};
-
-        // 🛡️ Filtro de Unidad
-        if (unidad) {
-            filtroAeronave.unidad = unidad;
+        // 🛡️ CONTROL DE SEGURIDAD EXTREMO: Si no hay unidad del operador, abortamos
+        if (!unidad) {
+            return res.status(400).json({
+                ok: false,
+                msg: 'La unidad del usuario es requerida para segmentar la información y evitar fugas de datos.'
+            });
         }
 
-        // Filtro por Sistema de Armas (SDA)
+        // --- 1. CONSTRUCCIÓN DE FILTROS ---
+        // Usamos regex con flag 'i' para que la comparación de la unidad sea insensible a mayúsculas/minúsculas
+        let filtroAeronave = {
+            unidad: { $regex: new RegExp(`^${unidad}$`, 'i') }
+        };
+        let filtroF13 = {};
+
+        // Filtro por Sistema de Armas (SDA) si el operador lo selecciona en el panel
         if (sda) {
             filtroAeronave.sda = sda;
         }
 
-        // --- 2. OBTENER FLOTA Y CORREGIR ESTADOS (E/S) ---
+        // --- 2. OBTENER FLOTA DE LA UNIDAD Y CORREGIR ESTADOS (E/S) ---
         const aeronaves = await Aircraft.find(filtroAeronave)
             .select('matricula modelo sda horasTotales estado enServicio unidad')
             .lean();
 
-        // 🛡️ CORRECCIÓN: Comprobación estricta usando siglas militares "E/S"
+        // 🛡️ COMPROBACIÓN: Comprobación usando siglas militares "E/S"
         const chequearOperativo = (a) => {
             return a.estado === 'E/S' || a.estado === 'En Servicio' || a.enServicio === true;
         };
@@ -38,11 +44,13 @@ const getNovedadesElemento = async (req, res) => {
         const operativas = aeronaves.filter(chequearOperativo).length;
         const enMantenimiento = totalAeronaves - operativas;
 
-        // --- 3. CONSULTAR EL HISTORIAL DE VUELOS (F13) DE LA UNIDAD ---
+        // --- 3. CONSULTAR HISTORIAL DE VUELOS (F13) EXCLUSIVO DE ESTA UNIDAD ---
         const idsAeronavesUnidad = aeronaves.map(a => a._id);
+        
+        // El historial solo traerá vuelos pertenecientes a las aeronaves de esta unidad
         filtroF13.aeronave = { $in: idsAeronavesUnidad };
 
-        // Para las métricas anuales/mensuales de la derecha, aplicamos los filtros temporales si existen
+        // Aplicamos filtros temporales si existen en el frontend
         if (fechaInicio || fechaFin) {
             filtroF13.fecha = {};
             if (fechaInicio) filtroF13.fecha.$gte = new Date(fechaInicio);
@@ -59,7 +67,7 @@ const getNovedadesElemento = async (req, res) => {
         // 🚀 MAPEO CON LOS CAMPOS REALES DE TU MONGO
         const historialVuelos = historialVuelosRaw.map(vuelo => {
             // Usamos el 'horasTotales' que ya viene en tu base de datos. 
-            // Si por alguna razón no existiera, hacemos la suma de seguridad (horasALaFecha + horasDelDia)
+            // Si no existiera, hacemos la suma de seguridad (horasALaFecha + horasDelDia)
             const sumatoriaSeguridad = (vuelo.horasALaFecha || 0) + (vuelo.horasDelDia || 0);
             
             return {
@@ -71,12 +79,12 @@ const getNovedadesElemento = async (req, res) => {
         });
 
         // --- 4. ⚙️ PROCESAMIENTO DINÁMICO DE HORAS ESTRUCTURALES SÓLIDAS ---
-        // Para cada aeronave de la unidad, buscamos su F13 más reciente histórico
+        // Para cada aeronave de la unidad, buscamos su F13 más reciente histórico para calcular su odómetro actual
         const detalleFlotaActualizado = await Promise.all(aeronaves.map(async (nave) => {
             // Buscamos el último F13 de esta aeronave específica cargado en el sistema
             const ultimoF13 = await F13.findOne({ aeronave: nave._id })
                 .sort({ fecha: -1, createdAt: -1 })
-                .select('horasALaFecha horasDelDia horasTotales') // Cambiado a tus campos reales
+                .select('horasALaFecha horasDelDia horasTotales')
                 .lean();
 
             let horasEstructuralesReales = nave.horasTotales || 0;
@@ -92,7 +100,7 @@ const getNovedadesElemento = async (req, res) => {
 
             return {
                 ...nave,
-                // Reemplazamos/aseguramos el campo 'horasTotales' de la aeronave con el odómetro real definitivo
+                // Reemplazamos/aseguramos el campo 'horasTotales' con el odómetro dinámico definitivo
                 horasTotales: horasEstructuralesReales
             };
         }));
@@ -114,7 +122,7 @@ const getNovedadesElemento = async (req, res) => {
                 totalHorasVoladas: Number(totalHorasVoladasPeriodo.toFixed(2)),
                 totalAterrizajes: totalAterrizajesPeriodo,
                 cantidadVuelos: historialVuelos.length,
-                ultimosVuelos: historialVuelos // Historial con horasTotales garantizadas
+                ultimosVuelos: historialVuelos // Historial de vuelos con horasTotales garantizadas
             }
         });
 

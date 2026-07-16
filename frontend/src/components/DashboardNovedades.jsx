@@ -25,7 +25,7 @@ const DashboardNovedades = () => {
   const [horasManuales, setHorasManuales] = useState({});
 
   // --- DETECTAR UNIDAD DEL USUARIO ---
-  const unidadUsuario = localStorage.getItem('unidad') || 'B AV APY COMB 601';
+  const unidadUsuario = localStorage.getItem('unidad');
 
   // --- CONFIGURACIÓN DE URL DINÁMICA ---
   const OBTENER_BASE_URL = () => {
@@ -37,48 +37,53 @@ const DashboardNovedades = () => {
 
   // --- FUNCIÓN PARA CONSULTAR LA API ---
   const obtenerNovedades = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (sda) params.append('sda', sda);
-      if (fechaInicio) params.append('fechaInicio', fechaInicio);
-      if (fechaFin) params.append('fechaFin', fechaFin);
-      
-      params.append('unidad', unidadUsuario);
+  if (!unidadUsuario) {
+    setError("No se detectó la unidad asignada a tu usuario. Contactá al administrador.");
+    setLoading(false);
+    return;
+  }
 
-      const BASE_URL = OBTENER_BASE_URL();
-      const url = `${BASE_URL}/api/dashboard/novedades?${params.toString()}`;
-      
-      const respuesta = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
+  setLoading(true);
+  setError(null);
+  try {
+    const params = new URLSearchParams();
+    if (sda) params.append('sda', sda);
+    if (fechaInicio) params.append('fechaInicio', fechaInicio);
+    if (fechaFin) params.append('fechaFin', fechaFin);
+    
+    // Enviamos estrictamente la unidad del usuario logueado
+    params.append('unidad', unidadUsuario);
 
-      // 🛡️ CONTROL DE EXPIRACIÓN DE SESIÓN (401)
-      if (respuesta.status === 401) {
-        console.warn("⚠️ Sesión expirada o inválida. Limpiando credenciales...");
-        localStorage.removeItem('token');
-        localStorage.removeItem('unidad');
-        window.location.href = '/login';
-        return;
+    const BASE_URL = OBTENER_BASE_URL();
+    const url = `${BASE_URL}/api/dashboard/novedades?${params.toString()}`;
+    
+    const respuesta = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       }
+    });
 
-      if (!respuesta.ok) {
-        throw new Error('No se pudieron recuperar las novedades de la unidad.');
-      }
-
-      const resultado = await respuesta.json();
-      setNovedades(resultado);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    if (respuesta.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('unidad');
+      window.location.href = '/login';
+      return;
     }
-  };
+
+    if (!respuesta.ok) {
+      throw new Error('No se pudieron recuperar las novedades de tu unidad.');
+    }
+
+    const resultado = await respuesta.json();
+    setNovedades(resultado);
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     obtenerNovedades();
