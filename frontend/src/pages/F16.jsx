@@ -119,49 +119,55 @@ const F16Page = () => {
 
     // 💾 OPERACIÓN: GUARDAR ALTA (POST) O ACTUALIZAR (PUT)
     const guardarAltaAeronave = async () => {
-        if (!cabecera.matricula) {
-            alert("Por favor, ingrese al menos la Matrícula para procesar el registro.");
-            return;
-        }
+    if (!cabecera.matricula) {
+        alert("Por favor, ingrese al menos la Matrícula para procesar el registro.");
+        return;
+    }
 
-        // Estructura completa del Payload relacional que va a procesar Mongoose
-        const payload = {
-            ...cabecera,
-            compPlaneador,
-            motores,
-            helices
-        };
-
-        try {
-            let url = '/api/aircraft';
-            let method = 'POST';
-
-            // Si estamos editando una aeronave cargada del selector, mutamos la petición a un PUT parametrizado
-            if (esEdicion && aeronaveSeleccionadaId) {
-                url = `/api/aircraft/${aeronaveSeleccionadaId}`;
-                method = 'PUT';
-            }
-
-            const res = await fetch(url, {
-                method: method,
-                headers: getHeaders(),
-                body: JSON.stringify(payload)
-            });
-            const json = await res.json();
-
-            if (json.success) {
-                alert(json.message || "Operación metricial ejecutada con éxito.");
-                // Refrescamos la lista local forzando un ciclo de actualización en el dropdown
-                setUnidadNavegacion(prev => String(prev)); 
-                if(!esEdicion) limpiarFormularioParaNuevoAlta();
-            } else {
-                alert(`⚠️ Error: ${json.message}`);
-            }
-        } catch (error) {
-            console.error("Fallo de comunicación con la API:", error);
-            alert("Fallo crítico de red al intentar impactar los registros aeronáuticos.");
-        }
+    const payload = {
+        ...cabecera,
+        compPlaneador,
+        motores,
+        helices
     };
+
+    try {
+        let url = '/api/aircraft';
+        let method = 'POST';
+
+        if (esEdicion && aeronaveSeleccionadaId) {
+            url = `/api/aircraft/${aeronaveSeleccionadaId}`;
+            method = 'PUT';
+        }
+
+        const res = await fetch(url, {
+            method: method,
+            headers: getHeaders(),
+            body: JSON.stringify(payload)
+        });
+
+        // ⚠️ PRIMERO VALIDAMOS SI LA RESPUESTA ES CORRECTA
+        if (!res.ok) {
+            const textoError = await res.text(); // Leemos el error como texto (evita el "Unexpected token N")
+            throw new Error(`Error ${res.status}: ${textoError || 'Ruta no encontrada en el Servidor.'}`);
+        }
+
+        // Si el servidor responde un 200/201 pero viene vacío, evitamos el "Unexpected end of JSON input"
+        const textoCompleto = await res.text();
+        const json = textoCompleto ? JSON.parse(textoCompleto) : { success: true, message: "Operación ejecutada." };
+
+        if (json.success) {
+            alert(json.message || "Operación matricial ejecutada con éxito.");
+            setUnidadNavegacion(prev => String(prev)); 
+            if(!esEdicion) limpiarFormularioParaNuevoAlta();
+        } else {
+            alert(`⚠️ Error: ${json.message}`);
+        }
+    } catch (error) {
+        console.error("❌ Fallo de comunicación con la API:", error);
+        alert(error.message); // Te va a decir exactamente qué ruta falló y por qué
+    }
+};
 
     // 🗑️ OPERACIÓN: ELIMINAR REGISTRO PERMANENTE (DELETE)
     const eliminarFormularioAeronave = async () => {
