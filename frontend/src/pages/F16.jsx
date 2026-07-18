@@ -17,11 +17,14 @@ const F16Page = () => {
         elemento: (localStorage.getItem('elemento') || '').toUpperCase().trim()
     };
 
-    // Encabezados globales requeridos por las políticas de CORS y el AuthMiddleware de tu backend
+    // Permisos globales ubicados al inicio para evitar errores de referencia limpia
+    const esAdminGlobal = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
+
+    // Encabezados globales requeridos por las políticas de CORS y el AuthMiddleware
     const getHeaders = () => ({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
-        'x-auth-token': token // Doble contingencia admitida por tu server.js
+        'x-auth-token': token 
     });
 
     // Estados de navegación, búsqueda y base de datos local
@@ -54,20 +57,17 @@ const F16Page = () => {
     const [motores, setMotores] = useState([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
     const [helices, setHelices] = useState([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
 
-    // 🔄 EFFECT: Sincronización restrictiva y en tiempo real con el Backend (aircraftController)
+    // 🔄 EFFECT: Sincronización restrictiva y en tiempo real con el Backend
     useEffect(() => {
         const fetchAeronavesPermitidas = async () => {
             try {
-                const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
-                
-                // Incorporamos el API_BASE_URL para que impacte en tu instancia de Render
-                const url = (esMandoEstrategico && unidadNavegacion) 
+                const url = (esAdminGlobal && unidadNavegacion) 
                     ? `${API_BASE_URL}/api/aircraft/elemento/${encodeURIComponent(unidadNavegacion)}` 
                     : `${API_BASE_URL}/api/aircraft`;
 
                 const res = await fetch(url, { method: 'GET', headers: getHeaders() });
-                
                 const textoCompleto = await res.text();
+                
                 let json;
                 try {
                     json = JSON.parse(textoCompleto);
@@ -137,13 +137,15 @@ const F16Page = () => {
             return;
         }
 
-        // 🌟 CORRECCIÓN CRÍTICA: Inyectamos dinámicamente la unidad correspondiente según el rol del operador
+        // Inyección de auditoría de usuario requerida por el esquema Mongoose
         const payload = {
             ...cabecera,
             unidad: esAdminGlobal ? unidadNavegacion : usuarioSesion.elemento,
             compPlaneador,
             motores,
-            helices
+            helices,
+            creadoPor: usuarioSesion.username,
+            actualizadoPor: usuarioSesion.username
         };
 
         try {
@@ -221,8 +223,8 @@ const F16Page = () => {
                     alert(`🚫 Acceso Denegado: ${json.message}`);
                 }
             } catch (error) {
-                console.error("Error en operación de borrado:", error);
-                alert(error.message || "No se pudo conectar con el servidor central para procesar la baja.");
+                console.error("Error en operation de borrado:", error);
+                alert(error.message || "No se pudo conectar con el servidor central.");
             }
         }
     };
@@ -415,7 +417,6 @@ const F16Page = () => {
     };
 
     const colorEstadoOperativo = cabecera.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c';
-    const esAdminGlobal = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
 
     return (
         <div style={styles.container}>
@@ -430,7 +431,6 @@ const F16Page = () => {
 
             <div style={styles.cardAdminPanel}>
                 <div style={styles.adminGrid}>
-                    
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>
                             {esAdminGlobal 
@@ -539,6 +539,8 @@ const F16Page = () => {
                             <div style={styles.field}><label style={styles.label}>TG Planeador Actual</label><input type="number" value={cabecera.tgPlaneadorActual} onChange={e => handleCabeceraChange('tgPlaneadorActual', e.target.value)} style={{...styles.input, backgroundColor: '#fff9db', fontWeight: 'bold'}} placeholder="0.0" /></div>
                         </div>
                     </div>
+                    
+                    {/* ⚙️ BLOQUE DE GRUPO MOTOPROPULSOR SIRCUNIZADO AL MODELO MONGOOSE */}
                     <div style={styles.block}>
                         <div style={styles.blockTitle}>GRUPO MOTOPROPULSOR</div>
                         <div style={styles.formRow}>
