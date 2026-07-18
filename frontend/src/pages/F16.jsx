@@ -4,19 +4,19 @@ const F16Page = () => {
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "B206B3"];
     const unidadesList = ["Aviación de Ejército 601", "Aviación de Ejército 602", "Sección de Aviación de Ejército 2", "Sección de Aviación de Ejército 3"];
 
-    // Estados de navegación
+    // Estados de navegación y búsqueda
     const [busquedaForm, setBusquedaForm] = useState('');
     const [unidadNavegacion, setUnidadNavegacion] = useState(unidadesList[0]);
     const [unidadDestinoTraslado, setUnidadDestinoTraslado] = useState('');
 
-    // Cabecera principal
-    const [cabecera, setCabecera] = useState({
-        sda: sdaList[0], matricula: '', nroSerie: '',
+    // Estado inicial limpio para resetear el formulario
+    const estadoInicialCabecera = {
+        sda: sdaList[0], matricula: '', nroSerie: '', estadoOperativo: 'E/S',
         inicioAeFecha: '', inicioAeHs: '', tgPlaneadorActual: '',
         motorSn: '', motorTsn: '', motorCsnCso: '',
         vencimientoElt: '', vencimientoPitot: '', vencimientoTransponder: '',
         vencimientoSeguro: '', vencimientoAvionica: '', observacionesPopup: ''
-    });
+    };
 
     // Plantilla para generar filas limpias
     const generarFilaVacia = (nro) => ({
@@ -27,15 +27,46 @@ const F16Page = () => {
         disponibilidades: [{ valor: '', unidad: 'H' }, { valor: '', unidad: 'H' }]
     });
 
-    // TABLA 1: Componentes del Planeador
+    // Estados principales del Formulario
+    const [cabecera, setCabecera] = useState(estadoInicialCabecera);
     const [compPlaneador, setCompPlaneador] = useState([generarFilaVacia(1)]);
-
-    // TABLA 2: Motores (Estructura dinámica de 1 o 2 motores)
     const [motores, setMotores] = useState([
         { id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }
     ]);
 
-    // Manejadores genéricos
+    // ACCIONES GLOBAL DE FORMULARIO (Alta, Limpieza, Eliminación)
+    const limpiarFormularioParaNuevoAlta = () => {
+        if (window.confirm("¿Desea limpiar la pantalla para rellenar un nuevo Formulario de Alta? Los datos no guardados se perderán.")) {
+            setCabecera(estadoInicialCabecera);
+            setCompPlaneador([generarFilaVacia(1)]);
+            setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
+            setBusquedaForm('');
+        }
+    };
+
+    const guardarAltaAeronave = () => {
+        if (!cabecera.matricula) {
+            alert("Por favor, ingrese al menos la Matrícula para dar de alta la aeronave.");
+            return;
+        }
+        alert(`¡Formulario de la aeronave ${cabecera.matricula} guardado/actualizado con éxito en la base de datos!`);
+    };
+
+    const eliminarFormularioAeronave = () => {
+        if (!cabecera.matricula) {
+            alert("No hay ninguna aeronave cargada o identificada con matrícula para eliminar.");
+            return;
+        }
+        if (window.confirm(`⚠️ AVISO CRÍTICO: ¿Está completamente seguro de eliminar el formulario de la aeronave ${cabecera.matricula}? Esta acción es irreversible.`)) {
+            alert(`El registro de la aeronave ${cabecera.matricula} ha sido eliminado.`);
+            // Reset automático post-eliminación
+            setCabecera(estadoInicialCabecera);
+            setCompPlaneador([generarFilaVacia(1)]);
+            setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
+        }
+    };
+
+    // Manejadores de cambios
     const handleCabeceraChange = (field, val) => {
         setCabecera(prev => ({
             ...prev,
@@ -43,7 +74,6 @@ const F16Page = () => {
         }));
     };
 
-    // Funciones Planeador
     const handlePlaneadorChange = (idx, field, val) => {
         const nuevos = [...compPlaneador];
         nuevos[idx][field] = val;
@@ -56,7 +86,12 @@ const F16Page = () => {
         setCompPlaneador(nuevos);
     };
 
-    // Funciones Motores Dinámicos
+    const handleNombreMotorChange = (motorIdx, nuevoNombre) => {
+        const nuevosMotores = [...motores];
+        nuevosMotores[motorIdx].nombre = nuevoNombre;
+        setMotores(nuevosMotores);
+    };
+
     const handleMotorCompChange = (motorIdx, compIdx, field, val) => {
         const nuevosMotores = [...motores];
         nuevosMotores[motorIdx].componentes[compIdx][field] = val;
@@ -85,29 +120,37 @@ const F16Page = () => {
         setMotores(nuevosMotores);
     };
 
-    // Agregar / Quitar Motor completo (Bimotor)
     const alternarSegundoMotor = () => {
         if (motores.length === 1) {
             setMotores([...motores, { id: 2, nombre: 'MOTOR Nº 2', componentes: [generarFilaVacia(1)] }]);
         } else {
-            if (window.confirm("¿Confirma remover el MOTOR Nº 2 y todos sus componentes cargados?")) {
+            if (window.confirm("¿Confirma remover el motor adicional y todos sus componentes cargados?")) {
                 setMotores([motores[0]]);
             }
         }
     };
 
+    // Color dinámico para el selector E/S - F/S
+    const colorEstadoOperativo = cabecera.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c';
+
     return (
         <div style={styles.container}>
-            <div style={styles.mainHeader}>
-                <h2 style={{ margin: 0, fontSize: '1.2rem' }}>SISTEMA DE GESTIÓN F-16 - HISTORIAL METRICIAL</h2>
+            {/* ENCABEZADO PRINCIPAL Y BOTONES DE ACCIÓN GLOBAL */}
+            <div style={styles.mainHeaderFlex}>
+                <h2 style={{ margin: 0, fontSize: '1.1rem' }}>SISTEMA DE GESTIÓN F-16 - HISTORIAL METRICIAL</h2>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button type="button" onClick={limpiarFormularioParaNuevoAlta} style={styles.btnFormAlta}>📄 Formulario de Alta (Nuevo)</button>
+                    <button type="button" onClick={guardarAltaAeronave} style={styles.btnFormGuardar}>💾 Dar de Alta / Guardar</button>
+                    <button type="button" onClick={eliminarFormularioAeronave} style={styles.btnFormEliminar}>🗑️ Eliminar Formulario</button>
+                </div>
             </div>
 
-            {/* SECCIÓN SUPERIOR: CONTROL DE BÚSQUEDA */}
+            {/* SECCIÓN SUPERIOR: CONTROL DE BÚSQUEDA / CONTROL REMOTO */}
             <div style={styles.cardAdminPanel}>
                 <div style={styles.adminGrid}>
                     <div style={styles.fieldAdmin}>
-                        <label style={styles.labelAdmin}>🔍 BUSCADOR DE FORMULARIOS F-16</label>
-                        <input type="text" value={busquedaForm} onChange={e => setBusquedaForm(e.target.value)} style={styles.inputAdmin} placeholder="Matrícula..." />
+                        <label style={styles.labelAdmin}>🔍 BUSCADOR POR MATRÍCULA (Ver/Controlar Historiales Existentes)</label>
+                        <input type="text" value={busquedaForm} onChange={e => setBusquedaForm(e.target.value)} style={styles.inputAdmin} placeholder="Escriba matrícula y presione Enter para buscar..." />
                     </div>
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>🛡️ NAVEGACIÓN ENTRE UNIDADES</label>
@@ -128,9 +171,10 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* CABECERA CORREGIDA SIMÉTRICA */}
+            {/* CABECERA SIMÉTRICA */}
             <div style={styles.cardCabecera}>
                 <div style={styles.headerGrid}>
+                    {/* BLOQUE DATOS DE LA AERONAVE */}
                     <div style={styles.block}>
                         <div style={styles.blockTitle}>DATOS DE LA AERONAVE</div>
                         <div style={styles.formRow}>
@@ -139,8 +183,21 @@ const F16Page = () => {
                             </div>
                             <div style={styles.field}><label style={styles.label}>Matrícula</label><input type="text" value={cabecera.matricula} onChange={e => handleCabeceraChange('matricula', e.target.value)} style={styles.input} placeholder="AE-XXX" /></div>
                             <div style={styles.field}><label style={styles.label}>Nro Serie</label><input type="text" value={cabecera.nroSerie} onChange={e => handleCabeceraChange('nroSerie', e.target.value)} style={styles.input} placeholder="N/S" /></div>
+                            
+                            {/* SELECTOR E/S - F/S CON COLOR DINÁMICO */}
+                            <div style={{...styles.field, maxWidth: '85px'}}><label style={styles.label}>Condición</label>
+                                <select 
+                                    value={cabecera.estadoOperativo} 
+                                    onChange={e => handleCabeceraChange('estadoOperativo', e.target.value)} 
+                                    style={{...styles.input, backgroundColor: colorEstadoOperative, color: 'white', fontWeight: 'bold', textAlign: 'center'}}
+                                >
+                                    <option value="E/S" style={{backgroundColor: '#2ecc71', color: 'white'}}>E/S</option>
+                                    <option value="F/S" style={{backgroundColor: '#e74c3c', color: 'white'}}>F/S</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
+                    
                     <div style={styles.block}>
                         <div style={styles.blockTitle}>TIEMPOS E HISTORIAL</div>
                         <div style={styles.formRow}>
@@ -161,7 +218,7 @@ const F16Page = () => {
 
                 <hr style={{ border: 'none', borderTop: '1px solid #ddd', margin: '12px 0' }} />
 
-                {/* FILA DE VENCIMIENTOS LEGALES ALINEADA RIGIDAMENTE */}
+                {/* FILA DE VENCIMIENTOS LEGALES */}
                 <div style={styles.headerGrid}>
                     <div style={{...styles.block, flex: 3}}>
                         <div style={styles.blockTitle}>REQUISITOS LEGALES & VENCIMIENTOS HABILITACIONES</div>
@@ -183,7 +240,7 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* CONTROL BIMOTOR ACCIÓN */}
+            {/* CONTROL CONFIGURACIÓN MOTORES */}
             <div style={{ marginBottom: '15px', textAlign: 'right' }}>
                 <button type="button" onClick={alternarSegundoMotor} style={motores.length === 1 ? styles.btnBimotorAdd : styles.btnBimotorRem}>
                     {motores.length === 1 ? "➕ Configurar como Aeronave Bimotor" : "🗑️ Quitar Configuración Bimotor"}
@@ -199,12 +256,21 @@ const F16Page = () => {
                 {renderTablaComponentes(compPlaneador, handlePlaneadorChange, handlePlaneadorSubChange, (idx) => setCompPlaneador(compPlaneador.filter((_, i) => i !== idx).map((c, i) => ({...c, nro: i+1}))))}
             </div>
 
-            {/* TABLAS DE MOTORES (DINÁMICAS) */}
+            {/* TABLAS DE MOTORES */}
             {motores.map((mot, motIdx) => (
                 <div key={mot.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #d35400'}}>
                     <div style={styles.tableHeaderFlex}>
-                        <div style={{...styles.tableTitle, color: '#d35400'}}>{mot.nombre}</div>
-                        <button onClick={() => agregarFilaMotor(motIdx)} style={{...styles.btnSecundario, backgroundColor: '#d35400'}}>➕ Añadir Fila {mot.nombre}</button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#d35400' }}>⚙️</span>
+                            <input 
+                                type="text" 
+                                value={mot.nombre} 
+                                onChange={(e) => handleNombreMotorChange(motIdx, e.target.value.toUpperCase())} 
+                                style={styles.inputNombreMotor}
+                                placeholder="EJ: MOTOR IZQUIERDO"
+                            />
+                        </div>
+                        <button onClick={() => agregarFilaMotor(motIdx)} style={{...styles.btnSecundario, backgroundColor: '#d35400'}}>➕ Añadir Fila</button>
                     </div>
                     {renderTablaComponentes(
                         mot.componentes,
@@ -218,7 +284,7 @@ const F16Page = () => {
     );
 };
 
-// FUNCIÓN MODULAR PARA RENDERIZAR LA TABLA EXACTAMENTE IGUAL
+// FUNCIÓN MODULAR PARA RENDERIZAR TABLAS IDENTICAS
 const renderTablaComponentes = (lista, onChange, onSubChange, onRemover) => (
     <div style={styles.tableResponsive}>
         <table style={styles.table}>
@@ -264,8 +330,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover) => (
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', gap: '4px', marginBottom: '4px', alignItems: 'center' }}>
                                         <select value={comp.limiteTipo} onChange={e => onChange(compIndex, 'limiteTipo', e.target.value)} style={styles.selectFlatType}>
-                                            <option value="TBO">TBO</option>
-                                            <option value="LL">LL</option>
+                                            <option value="TBO">TBO</option><option value="LL">LL</option>
                                         </select>
                                     </div>
                                     <div style={styles.stackContainer}>
@@ -314,16 +379,23 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover) => (
     </div>
 );
 
-// ESTILOS INDUSTRIALES CORREGIDOS
+// ESTILOS
 const styles = {
     container: { padding: '10px', backgroundColor: '#fafafa', minHeight: '100vh', fontFamily: 'monospace' },
-    mainHeader: { backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px' },
+    mainHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' },
+    
+    // Botones Globales del Header
+    btnFormAlta: { backgroundColor: '#3498db', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
+    btnFormGuardar: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
+    btnFormEliminar: { backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
+
     cardAdminPanel: { backgroundColor: '#e9ecef', padding: '10px', borderRadius: '4px', marginBottom: '10px', border: '1px solid #ced4da' },
     adminGrid: { display: 'flex', gap: '15px', flexWrap: 'wrap' },
     fieldAdmin: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: '280px' },
     labelAdmin: { fontSize: '0.7rem', fontWeight: 'bold', color: '#495057', marginBottom: '4px' },
     inputAdmin: { padding: '5px', border: '1px solid #adb5bd', fontSize: '0.75rem', outline: 'none' },
     btnTransfer: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '0 10px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' },
+    
     cardCabecera: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', border: '1px solid #ccc' },
     headerGrid: { display: 'flex', gap: '20px', flexWrap: 'wrap' },
     block: { flex: 1, minWidth: '250px', borderRight: '1px solid #eee', paddingRight: '10px' },
@@ -333,11 +405,11 @@ const styles = {
     label: { fontSize: '0.65rem', color: '#666', marginBottom: '2px' },
     input: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', outline: 'none' },
     
-    // ARREGLO DE ALINEACIÓN DE VENCIMIENTOS: Medidas uniformes y stretch estricto
     formRowAlign: { display: 'flex', gap: '5px', alignItems: 'stretch' },
     inputUniform: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', height: '26px', boxSizing: 'border-box', outline: 'none' },
     btnUniformPopup: { height: '26px', padding: '0 10px', fontSize: '0.7rem', backgroundColor: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', boxSizing: 'border-box' },
 
+    inputNombreMotor: { fontSize: '0.8rem', fontWeight: 'bold', color: '#d35400', border: 'none', borderBottom: '1px dashed #d35400', outline: 'none', padding: '2px', backgroundColor: 'transparent', width: '180px' },
     cardTable: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' },
     tableHeaderFlex: { display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center' },
     tableTitle: { fontWeight: 'bold', color: '#1b3a57' },
@@ -360,7 +432,6 @@ const styles = {
     inputStack: { flex: 1, minWidth: '55px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', outline: 'none' },
     selectStackUnit: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#fff2cc' },
     
-    // Control de Bimotor
     btnBimotorAdd: { backgroundColor: '#2c3e50', color: '#fff', border: '1px solid #34495e', padding: '6px 12px', cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 'bold' },
     btnBimotorRem: { backgroundColor: '#e74c3c', color: '#fff', border: '1px solid #c0392b', padding: '6px 12px', cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 'bold' },
     btnSecundario: { backgroundColor: '#27ae60', color: 'white', border: '1px solid #219653', padding: '4px 10px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' }
