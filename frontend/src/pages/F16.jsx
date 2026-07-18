@@ -1,16 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const F16Page = () => {
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "B206B3"];
-    // CORREGIDO: Renombrado a unidadesList para evitar el ReferenceError abajo
     const unidadesList = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
 
-    // Estados de navegación y búsqueda
+    // 👤 SIMULACIÓN DE USUARIO LOGUEADO (Cambiar 'ADMIN' por 'S4UNIDAD' para probar la restricción de unidad)
+    const [usuarioSesion] = useState({
+        username: "operador1",
+        role: "ADMIN", // Puede ser: 'ADMIN', 'BOSS', 'S4UNIDAD', etc.
+        elemento: "B HELIC ASAL 601" // Su unidad de origen asignada
+    });
+
+    // Estados de navegación, búsqueda y base de datos local
+    const [aeronavesBD, setAeronavesBD] = useState([]); // Almacena la flota traída del backend
+    const [aeronaveSeleccionadaId, setAeronaveSeleccionadaId] = useState('');
     const [busquedaForm, setBusquedaForm] = useState('');
     const [unidadNavegacion, setUnidadNavegacion] = useState(unidadesList[0]);
     const [unidadDestinoTraslado, setUnidadDestinoTraslado] = useState('');
-    
-    // Estado para saber si la información proviene de una búsqueda (Bloquea campos clave)
     const [esEdicion, setEsEdicion] = useState(false);
 
     // Estado inicial limpio para resetear el formulario
@@ -22,26 +28,88 @@ const F16Page = () => {
         vencimientoSeguro: '', vencimientoAvionica: '', observacionesPopup: ''
     };
 
-    // Plantilla para generar filas limpias con sub-renglones iniciales
     const generarFilaVacia = (nro) => ({
         nro: nro, ata: '', pn: '', componente: '', sn: '',
-        limiteTipo: 'TBO', 
-        limites: [{ valor: '', unidad: 'H' }],
+        limiteTipo: 'TBO', limites: [{ valor: '', unidad: 'H' }],
         instaladoFecha: '', instaladoHoras: '', 
-        tsnCsnRenglones: [{ valor: '', unidad: 'H' }], 
-        tgInstalacion: '', estadoTipo: 'TSO', estadoActual: '',
-        disponibilidades: [{ valor: '', unidad: 'H' }]
+        tsnCsnRenglones: [{ valor: '', unidad: 'H' }], tgInstalacion: '', 
+        estadoTipo: 'TSO', estadoActual: '', disponibilidades: [{ valor: '', unidad: 'H' }]
     });
 
     // Estados principales del Formulario
     const [cabecera, setCabecera] = useState(estadoInicialCabecera);
     const [compPlaneador, setCompPlaneador] = useState([generarFilaVacia(1)]);
-    const [motores, setMotores] = useState([
-        { id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }
-    ]);
-    const [helices, setHelices] = useState([
-        { id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }
-    ]);
+    const [motores, setMotores] = useState([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
+    const [helices, setHelices] = useState([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
+
+    // 🔄 EFFECT: Sincronización restrictiva con el Backend (o Mock de Datos)
+    useEffect(() => {
+        const fetchAeronavesPermitidas = async () => {
+            try {
+                // AQUÍ CONECTARÍAS CON TU CONTROLADOR DE EXPRESS:
+                // const res = await axios.get('/api/aircrafts');
+                // setAeronavesBD(res.data.data);
+
+                // MOCK DE DATOS REALES EN BASE DE DATOS PARA DESARROLLO
+                const mockFlotaDB = [
+                    { _id: '101', matricula: 'AE-401', sda: 'UH-1H', unidad: 'B HELIC ASAL 601', estadoOperativo: 'E/S' },
+                    { _id: '102', matricula: 'AE-402', sda: 'BELL 212', unidad: 'B HELIC ASAL 601', estadoOperativo: 'F/S' },
+                    { _id: '103', matricula: 'AE-221', sda: 'C-212', unidad: 'SEC AE M 6', estadoOperativo: 'E/S' },
+                    { _id: '104', matricula: 'AE-501', sda: 'DA-62', unidad: 'SEC AE 11', estadoOperativo: 'E/S' }
+                ];
+
+                // Aplicamos la misma restricción que armaste en tu backend (getAircrafts)
+                const roleUpper = String(usuarioSesion.role).toUpperCase().trim();
+                const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper) || usuarioSesion.elemento === 'COMANDO';
+
+                if (!esMandoEstrategico) {
+                    // Restricción estricta: El usuario común solo ve lo cargado en SU unidad asignada
+                    const filtradoUnidad = mockFlotaDB.filter(a => a.unidad === usuarioSesion.elemento.toUpperCase().trim());
+                    setAeronavesBD(filtradoUnidad);
+                } else {
+                    // El Administrador puede ver absolutamente TODO. 
+                    // Lo filtramos opcionalmente por la "Unidad de navegación" que elija en el panel superior
+                    const filtradoAdmin = mockFlotaDB.filter(a => a.unidad === unidadNavegacion);
+                    setAeronavesBD(filtradoAdmin);
+                }
+            } catch (error) {
+                console.error("Error al sincronizar flota matricial:", error);
+            }
+        };
+
+        fetchAeronavesPermitidas();
+    }, [unidadNavegacion, usuarioSesion]);
+
+    // 🖲️ MANEJADOR DE SELECCIÓN DIRECTA DESDE EL SELECTOR
+    const handleSelectorAeronaveChange = (id) => {
+        setAeronaveSeleccionadaId(id);
+        if (!id) {
+            setEsEdicion(false);
+            setCabecera(estadoInicialCabecera);
+            return;
+        }
+
+        const aeronaveTarget = aeronavesBD.find(a => a._id === id);
+        if (aeronaveTarget) {
+            setEsEdicion(true);
+            setBusquedaForm(aeronaveTarget.matricula);
+            
+            // Seteamos la cabecera con los datos básicos recuperados de la purga
+            setCabecera({
+                ...estadoInicialCabecera,
+                sda: aeronaveTarget.sda,
+                matricula: aeronaveTarget.matricula,
+                estadoOperativo: aeronaveTarget.estadoOperativo
+            });
+
+            // Inyectamos las estructuras de tablas dinámicas limpias listas para trabajar
+            setCompPlaneador([generarFilaVacia(1)]);
+            setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
+            setHelices([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
+            
+            alert(`Aeronave ${aeronaveTarget.matricula} cargada al panel de edición. Se bloquearon campos estructurales.`);
+        }
+    };
 
     // ACCIONES GLOBALES DE FORMULARIO
     const limpiarFormularioParaNuevoAlta = () => {
@@ -51,6 +119,7 @@ const F16Page = () => {
             setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
             setHelices([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
             setBusquedaForm('');
+            setAeronaveSeleccionadaId('');
             setEsEdicion(false);
         }
     };
@@ -58,7 +127,7 @@ const F16Page = () => {
     const handleKeyDownBusqueda = (e) => {
         if (e.key === 'Enter' && busquedaForm.trim() !== '') {
             setEsEdicion(true); 
-            alert(`Cargando datos de la aeronave: ${busquedaForm}. Campos críticos SdA, Matrícula y Nro Serie bloqueados.`);
+            alert(`Buscando por texto libre: ${busquedaForm}.`);
         }
     };
 
@@ -77,15 +146,10 @@ const F16Page = () => {
         }
         if (window.confirm(`⚠️ AVISO CRÍTICO: ¿Está completamente seguro de eliminar el formulario de la aeronave ${cabecera.matricula}? Esta acción es irreversible.`)) {
             alert(`El registro de la aeronave ${cabecera.matricula} ha sido eliminado.`);
-            setCabecera(estadoInicialCabecera);
-            setCompPlaneador([generarFilaVacia(1)]);
-            setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
-            setHelices([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
-            setEsEdicion(false);
+            limpiarFormularioParaNuevoAlta();
         }
     };
 
-    // Manejadores de cambios en Cabecera
     const handleCabeceraChange = (field, val) => {
         setCabecera(prev => ({
             ...prev,
@@ -232,6 +296,9 @@ const F16Page = () => {
 
     const colorEstadoOperativo = cabecera.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c';
 
+    // Verificamos si el usuario actual posee rol jerárquico
+    const esAdminGlobal = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role.toUpperCase());
+
     return (
         <div style={styles.container}>
             <div style={styles.mainHeaderFlex}>
@@ -245,23 +312,46 @@ const F16Page = () => {
 
             <div style={styles.cardAdminPanel}>
                 <div style={styles.adminGrid}>
+                    
+                    {/* 🔍 SECTOR SELECTOR JERÁRQUICO INTERACTIVO */}
                     <div style={styles.fieldAdmin}>
-                        <label style={styles.labelAdmin}>🔍 BUSCADOR POR MATRÍCULA (Ver/Controlar Historiales Existentes)</label>
-                        <input 
-                            type="text" 
-                            value={busquedaForm} 
-                            onChange={e => setBusquedaForm(e.target.value)} 
-                            onKeyDown={handleKeyDownBusqueda}
-                            style={styles.inputAdmin} 
-                            placeholder="Escriba matrícula y presione Enter para buscar..." 
-                        />
+                        <label style={styles.labelAdmin}>
+                            {esAdminGlobal 
+                                ? `📂 SELECTOR FLOTA (Vista Global Admin - Unidad: ${unidadNavegacion})` 
+                                : `📂 SELECTOR FLOTA (Restringido a tu Unidad: ${usuarioSesion.elemento})`
+                            }
+                        </label>
+                        <select 
+                            value={aeronaveSeleccionadaId} 
+                            onChange={e => handleSelectorAeronaveChange(e.target.value)} 
+                            style={{...styles.inputAdmin, backgroundColor: '#e8f8f5', fontWeight: 'bold', border: '1px solid #27ae60'}}
+                        >
+                            <option value="">-- Seleccionar Aeronave Guardada --</option>
+                            {aeronavesBD.map(aero => (
+                                <option key={aero._id} value={aero._id}>
+                                    {aero.matricula} - {aero.sda} ({aero.estadoOperativo})
+                                </option>
+                            ))}
+                        </select>
                     </div>
+
+                    {/* CONTROL ADMIN DE FILTRADO DE UNIDADES */}
                     <div style={styles.fieldAdmin}>
-                        <label style={styles.labelAdmin}>🛡️ NAVEGACIÓN ENTRE UNIDADES</label>
-                        <select value={unidadNavegacion} onChange={e => setUnidadNavegacion(e.target.value)} style={{...styles.inputAdmin, backgroundColor: '#f0f4f8'}}>
+                        <label style={styles.labelAdmin}>🛡️ NAVEGACIÓN ENTRE UNIDADES {!esAdminGlobal && '🔒 (BLOQUEADO)'}</label>
+                        <select 
+                            value={unidadNavegacion} 
+                            onChange={e => setUnidadNavegacion(e.target.value)} 
+                            disabled={!esAdminGlobal}
+                            style={{
+                                ...styles.inputAdmin, 
+                                backgroundColor: esAdminGlobal ? '#f0f4f8' : '#e9ecef',
+                                cursor: esAdminGlobal ? 'default' : 'not-allowed'
+                            }}
+                        >
                             {unidadesList.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                     </div>
+
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>✈️ TRANSFERIR FORMULARIO ACTUAL</label>
                         <div style={{ display: 'flex', gap: '2px' }}>
@@ -275,6 +365,7 @@ const F16Page = () => {
                 </div>
             </div>
 
+            {/* RESTO DEL COMPONENTE INTACTO CON TUS TABLAS ESTRUCTURALES COMPLEJAS */}
             <div style={styles.cardCabecera}>
                 <div style={styles.headerGrid}>
                     <div style={styles.block}>
@@ -442,6 +533,7 @@ const F16Page = () => {
     );
 };
 
+// Se mantiene la función auxiliar renderTablaComponentes idéntica a tu código original...
 const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgregarSub, onRemoverSub) => (
     <div style={styles.tableResponsive}>
         <table style={styles.table}>
@@ -569,6 +661,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
     </div>
 );
 
+// Agregamos estilos bases compartidos
 const styles = {
     container: { padding: '10px', backgroundColor: '#fafafa', minHeight: '100vh', fontFamily: 'monospace' },
     mainHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' },
