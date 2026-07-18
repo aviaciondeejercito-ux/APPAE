@@ -4,6 +4,7 @@ import { getAircrafts } from '../services/api';
 const ProgramaMantenimiento = () => {
     // Estados de Datos de la API
     const [aeronaves, setAeronaves] = useState([]);
+    const [unidadesDisponibles, setUnidadesDisponibles] = useState([]); 
     const [loading, setLoading] = useState(true);
 
     // Estados de Selección y Cabecera de Aeronave
@@ -18,11 +19,11 @@ const ProgramaMantenimiento = () => {
         tgMotorActual: '0,0'
     });
 
-    // 📊 MATRICES DINÁMICAS
+    // 📊 MATRICES DINÁMICAS (PLANEADOR Y MOTOR)
     const [tablaPlaneador, setTablaPlaneador] = useState([]);
     const [tablaMotor, setTablaMotor] = useState([]);
 
-    // Seguridad e Institucional (RBAC)
+    // 🔐 SEGURIDAD Y RBAC MILITAR
     const rawRole = localStorage.getItem('role') || 'user';
     const roleUpper = String(rawRole).trim().toUpperCase().replace(/[\s_]/g, '');
     const roleLower = String(rawRole).trim().toLowerCase().replace(/[\s_]/g, '');
@@ -33,35 +34,46 @@ const ProgramaMantenimiento = () => {
     const isMandoPorRol = esAdminPorContenido || esMandoPorLista;
     const isMandoEstrategico = isMandoPorRol || userElemento === 'COMANDO';
 
+    // 🔄 CARGA INICIAL Y CONFIGURACIÓN DE FILTROS SEGÚN ROL
     useEffect(() => {
-        const inicializarUnidad = isMandoEstrategico ? 'B AV APY COMB 601' : userElemento;
-        setUnidadNavegacion(inicializarUnidad);
+        const inicializarPanel = async () => {
+            setLoading(true);
+            try {
+                const respuesta = await getAircrafts();
+                let listaAviones = [];
+                if (Array.isArray(respuesta)) listaAviones = respuesta;
+                else if (respuesta && Array.isArray(respuesta.data)) listaAviones = respuesta.data;
+                
+                setAeronaves(listaAviones);
+
+                // Recolectamos todas las unidades de la BD (Solo útil si es Admin)
+                const unidadesUnicas = [...new Set(listaAviones.map(a => a.unidad?.trim().toUpperCase()).filter(Boolean))];
+                setUnidadesDisponibles(unidadesUnicas);
+
+                // 🎯 DETECCION AUTOMÁTICA DE UNIDAD
+                if (isMandoEstrategico) {
+                    // Si es Admin/Comando, arranca mostrando la primera unidad que encuentre en la BD o una por defecto
+                    const unidadInicialAdmin = unidadesUnicas.includes(userElemento) ? userElemento : (unidadesUnicas[0] || 'B AV APY COMB 601');
+                    setUnidadNavegacion(unidadInicialAdmin);
+                } else {
+                    // Si es un usuario de Unidad, se le clava SU unidad del LocalStorage y no se mueve de ahí
+                    setUnidadNavegacion(userElemento);
+                }
+                
+                setLoading(false);
+            } catch (error) {
+                console.error("❌ Error al inicializar flota:", error);
+                setLoading(false);
+            }
+        };
+
+        inicializarPanel();
     }, []);
 
-    useEffect(() => {
-        if (unidadNavegacion) {
-            cargarDatosPorUnidad();
-        }
-    }, [unidadNavegacion]);
-
-    const cargarDatosPorUnidad = async () => {
-        setLoading(true);
-        try {
-            const respuesta = await getAircrafts();
-            let listaAviones = [];
-            if (Array.isArray(respuesta)) listaAviones = respuesta;
-            else if (respuesta && Array.isArray(respuesta.data)) listaAviones = respuesta.data;
-            
-            const filtrados = listaAviones.filter(a => 
-                a.unidad && String(a.unidad).trim().toUpperCase() === unidadNavegacion.toUpperCase()
-            );
-            setAeronaves(filtrados);
-            setLoading(false);
-        } catch (error) {
-            console.error("Error al cargar aeronaves:", error);
-            setLoading(false);
-        }
-    };
+    // 🔍 FILTRADO ESTRICTO EN TIEMPO REAL
+    const aeronavesFiltradas = aeronaves.filter(a => 
+        a.unidad && String(a.unidad).trim().toUpperCase() === unidadNavegacion.toUpperCase()
+    );
 
     const handleAeronaveChange = async (e) => {
         const id = e.target.value;
@@ -171,9 +183,7 @@ const ProgramaMantenimiento = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            
             const resultado = await respuesta.json();
-            
             if (respuesta.ok) {
                 alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} guardado con éxito!`);
             } else {
@@ -188,7 +198,7 @@ const ProgramaMantenimiento = () => {
     return (
         <div style={styles.container}>
             
-            {/* 🟦 BARRA DE TÍTULO SUPERIOR OSCURA */}
+            {/* 🟦 BARRA DE TÍTULO SUPERIOR */}
             <div style={styles.topHeaderBar}>
                 <h2 style={styles.mainTitle}>SISTEMA DE GESTIÓN MANTENIMIENTO</h2>
                 <div style={styles.topButtonBar}>
@@ -201,13 +211,13 @@ const ProgramaMantenimiento = () => {
                 </div>
             </div>
 
-            {/* 📁 BARRA GRIS DE SELECTORES */}
+            {/* 📁 BARRA GRIS DE SELECTORES - AHORA SEGURA POR ROL */}
             <div style={styles.selectorsBar}>
                 <div style={styles.selectorGroup}>
-                    <label style={styles.labelTitle}>📁 SELECCIONAR AERONAVE DE LA FLOTA ({userElemento || 'N/D'})</label>
-                    <select style={styles.selectInputFlota} value={aeronaveSeleccionadaId} onChange={handleAeronaveChange}>
-                        <option value="">-- Seleccione una aeronave registrada para gestionar su programa --</option>
-                        {aeronaves.map(a => {
+                    <label style={styles.labelTitle}>📁 SU FLOTA ASIGNADA ({unidadNavegacion})</label>
+                    <select style={styles.selectInputFlota} value={aeronaveSeleccionadaId} onChange={handleAeronChange}>
+                        <option value="">-- Seleccione Aeronave --</option>
+                        {aeronavesFiltradas.map(a => {
                             const idReal = a._id?.$oid || a._id;
                             return (
                                 <option key={idReal} value={idReal}>
@@ -217,15 +227,33 @@ const ProgramaMantenimiento = () => {
                         })}
                     </select>
                 </div>
+                
                 <div style={styles.selectorGroup}>
-                    <label style={styles.labelTitle}>🛡️ NAVEGACIÓN ENTRE UNIDADES {!isMandoEstrategico && '🔒 (BLOQUEADO)'}</label>
-                    <select style={styles.selectInputNav} value={unidadNavegacion} disabled={!isMandoEstrategico} onChange={(e) => { setUnidadNavegacion(e.target.value); resetVistaLocal(); }}>
-                        <option value={unidadNavegacion}>{unidadNavegacion}</option>
+                    <label style={styles.labelTitle}>
+                        {isMandoEstrategico ? "🛡️ NAVEGACIÓN GLOBAL DE UNIDADES" : "🔒 SU UNIDAD (SISTEMA BLOQUEADO)"}
+                    </label>
+                    <select 
+                        style={{
+                            ...styles.selectInputNav,
+                            backgroundColor: isMandoEstrategico ? '#fff' : '#e9ecef',
+                            color: isMandoEstrategico ? '#000' : '#7f8c8d'
+                        }} 
+                        value={unidadNavegacion} 
+                        disabled={!isMandoEstrategico} 
+                        onChange={(e) => { setUnidadNavegacion(e.target.value); resetVistaLocal(); }}
+                    >
+                        {isMandoEstrategico ? (
+                            unidadesDisponibles.map(un => (
+                                <option key={un} value={un}>{un}</option>
+                            ))
+                        ) : (
+                            <option value={unidadNavegacion}>{unidadNavegacion}</option>
+                        )}
                     </select>
                 </div>
             </div>
 
-            {/* 📝 PANEL DE INFORMACIÓN CABECERA */}
+            {/* PANEL DE INFORMACIÓN CABECERA */}
             <div style={styles.cardForm}>
                 <h3 style={styles.sectionHeader}>DATOS ESTRUCTURALES DE LA AERONAVE SELECCIONADA</h3>
                 <div style={styles.formRow}>
@@ -244,9 +272,7 @@ const ProgramaMantenimiento = () => {
                 </div>
             </div>
 
-            {/* ========================================================================= */}
-            {/* 🛡️ SECCIÓN 1: HOJA DE SEGUIMIENTO DEL PLANEADOR */}
-            {/* ========================================================================= */}
+            {/* SECCIÓN 1: PLANEADOR */}
             <div style={styles.sectionDivider}>
                 <div style={styles.miniKpiExcel}>
                     <span style={styles.kpiLabel}>TOTAL GRAL PLANEADOR:</span>
@@ -283,7 +309,7 @@ const ProgramaMantenimiento = () => {
                             tablaPlaneador.map((row) => (
                                 <tr key={row.id} style={styles.tr}>
                                     <td style={styles.td}><input type="text" style={styles.inputInCellBold} value={row.descripcion} onChange={(e) => handleCellChangePlaneador(row.id, 'descripcion', e.target.value)} placeholder="Escribir descripción..." /></td>
-                                    <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.ultHs} onChange={(e) => handleCellChangePlaneador(row.id, 'ultHs', e.target.value)} /></td>
+                                    <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.gridHs || row.ultHs} onChange={(e) => handleCellChangePlaneador(row.id, 'ultHs', e.target.value)} /></td>
                                     <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.ultFecha} onChange={(e) => handleCellChangePlaneador(row.id, 'ultFecha', e.target.value)} /></td>
                                     <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.ultOt} onChange={(e) => handleCellChangePlaneador(row.id, 'ultOt', e.target.value)} /></td>
                                     <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.proxHs} onChange={(e) => handleCellChangePlaneador(row.id, 'proxHs', e.target.value)} /></td>
@@ -298,9 +324,7 @@ const ProgramaMantenimiento = () => {
                 </table>
             </div>
 
-            {/* ========================================================================= */}
-            {/* ⚙️ SECCIÓN 2: HOJA DE SEGUIMIENTO DEL MOTOR */}
-            {/* ========================================================================= */}
+            {/* SECCIÓN 2: MOTOR */}
             <div style={{...styles.sectionDivider, marginTop: '25px'}}>
                 <div style={{...styles.miniKpiExcel, backgroundColor: '#00a8ff'}}>
                     <span style={styles.kpiLabel}>TOTAL GRAL MOTOR:</span>
@@ -356,7 +380,6 @@ const ProgramaMantenimiento = () => {
     );
 };
 
-// Objeto de estilos exactamente igual al de tu diseño original en CSS-in-JS
 const styles = {
     container: { padding: '10px 20px', maxWidth: '100%', margin: '0 auto', fontFamily: 'monospace, sans-serif' },
     topHeaderBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1b2a4a', padding: '10px 20px', border: '1px solid #111a30' },
@@ -368,7 +391,7 @@ const styles = {
     selectorGroup: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' },
     labelTitle: { fontSize: '0.7rem', fontWeight: 'bold', color: '#444' },
     selectInputFlota: { padding: '5px 10px', border: '1px solid #3498db', backgroundColor: '#fff', fontSize: '0.85rem', fontWeight: 'bold', outline: 'none' },
-    selectInputNav: { padding: '5px 10px', border: '1px solid #ccc', backgroundColor: '#e9ecef', fontSize: '0.85rem', color: '#495057' },
+    selectInputNav: { padding: '5px 10px', border: '1px solid #ccc', fontSize: '0.85rem', fontWeight: 'bold', outline: 'none' },
     
     cardForm: { background: '#fff', border: '1px solid #ccc', padding: '10px 15px', marginTop: '10px' },
     sectionHeader: { margin: '0 0 6px 0', fontSize: '0.75rem', color: '#7f8c8d', fontWeight: 'bold' },
