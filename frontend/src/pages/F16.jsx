@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 
 const F16Page = () => {
-    // 1. LISTADOS DE REFERENCIA (Sincronizados con tu sistema)
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "B206B3"];
 
-    // 2. ESTADO INICIAL DEL FORMULARIO DE CABECERA
     const [cabecera, setCabecera] = useState({
         sda: 'B206B3',
         matricula: 'AE-365',
         nroSerie: '4550',
-        inicioAeFecha: '2012-02-01', // Representa "Feb-12"
+        inicioAeFecha: '2012-02-01',
         inicioAeHs: 885.7,
         tgPlaneadorActual: 4030.1,
         motorSn: 'CAE-271029',
@@ -17,8 +15,7 @@ const F16Page = () => {
         motorCsnCso: 1573
     });
 
-    // 3. ESTADO INICIAL DE LA TABLA DE COMPONENTES
-    // Cargamos las dos primeras filas de tu imagen como mocks iniciales interactivos
+    // Adaptamos el mock de datos a la nueva estructura de doble celda e indicadores
     const [componentes, setComponentes] = useState([
         {
             nro: 1,
@@ -26,159 +23,96 @@ const F16Page = () => {
             pn: '206-011-100-107',
             componente: 'M/R HUB ASSEMBLY',
             sn: 'HB-1809',
-            limitesValor: 2400,
-            instaladoFecha: '2021-11-01',
-            instaladoHoras: 0.0, // TSO de instalación
-            instaladoTsnCsn: 2400.0,
-            tgInstalacion: 2935.7
-        },
-        {
-            nro: 2,
-            ata: '62-99',
-            pn: '206-011-149-105',
-            componente: 'YOKE ASSEMBLY',
-            sn: 'HB-2719',
-            limitesValor: 2400,
-            instaladoFecha: '2021-11-01',
+            limiteTipo: 'TBO', // TBO o LL
+            limiteHoras: 2400,  // Casillero Superior
+            limiteCal: '2028-11-01', // Casillero Inferior (Calendario)
+            instaladoFecha: '2021-11-01', // Fab/UI Compacto
             instaladoHoras: 0.0,
             instaladoTsnCsn: 2400.0,
-            tgInstalacion: 2935.7
+            tgInstalacion: 2935.7,
+            estadoTipo: 'TSO', // TSO, TSHMI, TSN
+            estadoActual: 1094.4,
+            dispSuperior: 1305.6, // Disponible Arriba
+            dispInferior: 1200.0, // Disponible Abajo
+            estadoUnidad: 'H' // H, C, M
         }
     ]);
 
-    // 4. CONTROLADORES DE CAMBIOS EN CABECERA
     const handleCabeceraChange = (field, val) => {
         setCabecera(prev => ({
             ...prev,
-            [field]: field.includes('Hs') || field.includes('Actual') || field.includes('Tsn') || field.includes('CsnCso')
-                ? Number(val) || 0
-                : val
+            [field]: field.includes('Hs') || field.includes('Actual') || field.includes('Tsn') || field.includes('CsnCso') ? Number(val) || 0 : val
         }));
     };
 
-    // 5. CONTROLADORES DE CAMBIOS EN TABLA DE COMPONENTES
     const handleComponenteChange = (index, field, val) => {
-        const nuevosComponentes = [...componentes];
-        nuevosComponentes[index][field] = field.includes('Valor') || field.includes('Horas') || field.includes('TsnCsn') || field.includes('tgInstalacion')
-            ? Number(val) || 0
-            : val;
-        setComponentes(nuevosComponentes);
+        const nuevos = [...componentes];
+        nuevos[index][field] = val;
+        setComponentes(nuevos);
     };
 
-    // Agregar nueva fila a la tabla
     const agregarFila = () => {
-        const nuevoNro = componentes.length + 1;
         setComponentes(prev => [
             ...prev,
             {
-                nro: nuevoNro,
-                ata: '',
-                pn: '',
-                componente: '',
-                sn: '',
-                limitesValor: 0,
-                instaladoFecha: '',
-                instaladoHoras: 0,
-                instaladoTsnCsn: 0,
-                tgInstalacion: 0
+                nro: prev.length + 1,
+                ata: '', pn: '', componente: '', sn: '',
+                limiteTipo: 'TBO', limiteHoras: 0, limiteCal: '',
+                instaladoFecha: '', instaladoHoras: 0, instaladoTsnCsn: 0,
+                tgInstalacion: 0, estadoTipo: 'TSO', estadoActual: 0,
+                dispSuperior: 0, dispInferior: 0, estadoUnidad: 'H'
             }
         ]);
     };
 
-    // Quitar última fila
     const removerFila = (index) => {
-        if (componentes.length === 1) return alert("Debe haber al menos un componente registrado.");
-        const filtrados = componentes.filter((_, idx) => idx !== index).map((c, idx) => ({ ...c, nro: idx + 1 }));
-        setComponentes(filtrados);
-    };
-
-    const handleGuardarMock = () => {
-        console.log("F-16 Payload listo para el controlador:", { ...cabecera, componentes });
-        alert("¡Estructura validada! Datos listos en consola. Ya podés guardar este modelo.");
+        if (componentes.length === 1) return;
+        setComponentes(componentes.filter((_, idx) => idx !== index).map((c, idx) => ({ ...c, nro: idx + 1 })));
     };
 
     return (
         <div style={styles.container}>
-            {/* ENCABEZADO PRINCIPAL DE LA VISTA */}
             <div style={styles.mainHeader}>
                 <h2 style={{ margin: 0, fontSize: '1.4rem' }}>📋 Ficha Historial de Planeador y Componentes (F-16)</h2>
-                <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#bdc3c7' }}>Inspección, control de tiempos de vida útil y trazabilidad de material aéreo.</p>
             </div>
 
-            {/* SECCIÓN 1: PANEL DE CONTROL Y CABECERA DEL DOCUMENTO */}
+            {/* CABECERA (Se mantiene idéntica) */}
             <div style={styles.cardCabecera}>
                 <div style={styles.headerGrid}>
-                    
-                    {/* Bloque Izquierdo: Identificación */}
                     <div style={styles.block}>
                         <h4 style={styles.blockTitle}>Aeronave</h4>
                         <div style={styles.formRow}>
-                            <div style={styles.field}>
-                                <label style={styles.label}>Sistemas de Armas</label>
-                                <select value={cabecera.sda} onChange={e => handleCabeceraChange('sda', e.target.value)} style={styles.input}>
-                                    {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                            <div style={styles.field}><label style={styles.label}>SdA</label>
+                                <select value={cabecera.sda} onChange={e => handleCabeceraChange('sda', e.target.value)} style={styles.input}>{sdaList.map(s => <option key={s} value={s}>{s}</option>)}</select>
                             </div>
-                            <div style={styles.field}>
-                                <label style={styles.label}>Matrícula</label>
-                                <input type="text" value={cabecera.matricula} onChange={e => handleCabeceraChange('matricula', e.target.value)} style={styles.input} />
-                            </div>
-                            <div style={styles.field}>
-                                <label style={styles.label}>Nro Serie</label>
-                                <input type="text" value={cabecera.nroSerie} onChange={e => handleCabeceraChange('nroSerie', e.target.value)} style={styles.input} />
-                            </div>
+                            <div style={styles.field}><label style={styles.label}>Matrícula</label><input type="text" value={cabecera.matricula} onChange={e => handleCabeceraChange('matricula', e.target.value)} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>Nro Serie</label><input type="text" value={cabecera.nroSerie} onChange={e => handleCabeceraChange('nroSerie', e.target.value)} style={styles.input} /></div>
                         </div>
                     </div>
-
-                    {/* Bloque Medio: Tiempos Planeador */}
                     <div style={styles.block}>
-                        <h4 style={styles.blockTitle}>Historial / Tiempos Planeador</h4>
+                        <h4 style={styles.blockTitle}>Historial Planeador</h4>
                         <div style={styles.formRow}>
-                            <div style={styles.field}>
-                                <label style={styles.label}>Inicio AE (Fecha)</label>
-                                <input type="date" value={cabecera.inicioAeFecha} onChange={e => handleCabeceraChange('inicioAeFecha', e.target.value)} style={styles.input} />
-                            </div>
-                            <div style={styles.field}>
-                                <label style={styles.label}>Inicio AE (Horas Iniciales)</label>
-                                <input type="number" step="0.1" value={cabecera.inicioAeHs} onChange={e => handleCabeceraChange('inicioAeHs', e.target.value)} style={styles.input} />
-                            </div>
-                            <div style={styles.field}>
-                                <label style={{...styles.label, color: '#e67e22'}}>TG Planeador Actual</label>
-                                <input type="number" step="0.1" value={cabecera.tgPlaneadorActual} onChange={e => handleCabeceraChange('tgPlaneadorActual', e.target.value)} style={{...styles.input, border: '1px solid #e67e22', backgroundColor: '#fdf6e2', fontWeight: 'bold'}} />
-                            </div>
+                            <div style={styles.field}><label style={styles.label}>Inicio AE</label><input type="date" value={cabecera.inicioAeFecha} onChange={e => handleCabeceraChange('inicioAeFecha', e.target.value)} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>Hs Iniciales</label><input type="number" value={cabecera.inicioAeHs} onChange={e => handleCabeceraChange('inicioAeHs', e.target.value)} style={styles.input} /></div>
+                            <div style={styles.field}><label style={{...styles.label, color: '#e67e22'}}>TG Plan Actual</label><input type="number" value={cabecera.tgPlaneadorActual} onChange={e => handleCabeceraChange('tgPlaneadorActual', e.target.value)} style={{...styles.input, backgroundColor: '#fdf6e2', fontWeight: 'bold'}} /></div>
                         </div>
                     </div>
-
-                    {/* Bloque Derecho: Planta Motriz */}
                     <div style={styles.block}>
-                        <h4 style={styles.blockTitle}>Grupo Motopropulsor</h4>
+                        <h4 style={styles.blockTitle}>Planta Motriz</h4>
                         <div style={styles.formRow}>
-                            <div style={styles.field}>
-                                <label style={styles.label}>Motor S/N</label>
-                                <input type="text" value={cabecera.motorSn} onChange={e => handleCabeceraChange('motorSn', e.target.value)} style={styles.input} />
-                            </div>
-                            <div style={styles.field}>
-                                <label style={styles.label}>TSN (hs)</label>
-                                <input type="number" step="0.1" value={cabecera.motorTsn} onChange={e => handleCabeceraChange('motorTsn', e.target.value)} style={styles.input} />
-                            </div>
-                            <div style={styles.field}>
-                                <label style={styles.label}>CSN / CSO</label>
-                                <input type="number" value={cabecera.motorCsnCso} onChange={e => handleCabeceraChange('motorCsnCso', e.target.value)} style={styles.input} />
-                            </div>
+                            <div style={styles.field}><label style={styles.label}>S/N</label><input type="text" value={cabecera.motorSn} onChange={e => handleCabeceraChange('motorSn', e.target.value)} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>TSN</label><input type="number" value={cabecera.motorTsn} onChange={e => handleCabeceraChange('motorTsn', e.target.value)} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>CSN/CSO</label><input type="number" value={cabecera.motorCsnCso} onChange={e => handleCabeceraChange('motorCsnCso', e.target.value)} style={styles.input} /></div>
                         </div>
                     </div>
-
                 </div>
             </div>
 
-            {/* SECCIÓN 2: PLANILLA DINÁMICA DE COMPONENTES */}
+            {/* TABLA MEJORADA ULTRA-FIEL A LA IMAGEN */}
             <div style={styles.cardTable}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1b3a57' }}>⚙️ Componentes del Planeador en Servicio</h3>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={agregarFila} style={styles.btnSecundario}>➕ Agregar Item</button>
-                        <button onClick={handleGuardarMock} style={styles.btnPrimario}>💾 Validar Formulario</button>
-                    </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1b3a57' }}>⚙️ Control de Componentes</h3>
+                    <button onClick={agregarFila} style={styles.btnSecundario}>➕ Agregar Item</button>
                 </div>
 
                 <div style={styles.tableResponsive}>
@@ -190,87 +124,85 @@ const F16Page = () => {
                                 <th rowSpan="2" style={styles.th}>P/N</th>
                                 <th rowSpan="2" style={styles.th}>Componente</th>
                                 <th rowSpan="2" style={styles.th}>S/N</th>
-                                <th rowSpan="2" style={styles.th}>Límites (TBO)</th>
+                                <th rowSpan="2" style={{...styles.th, minWidth: '120px'}}>Límites</th>
                                 <th colSpan="3" style={styles.thGroup}>Instalado Con</th>
                                 <th colSpan="2" style={styles.thGroup}>TG Planeador</th>
                                 <th colSpan="2" style={styles.thGroup}>Estado de Componente</th>
                                 <th rowSpan="2" style={styles.th}></th>
                             </tr>
                             <tr style={styles.thRow}>
-                                <th style={styles.thSub}>Fecha Fab/UI</th>
-                                <th style={styles.thSub}>Tiempos (TSO)</th>
-                                <th style={styles.thSub}>TSN / CSN</th>
-                                <th style={styles.thSub}>A Instal.</th>
-                                <th style={{...styles.thSub, backgroundColor: '#e2f0d9', color: '#1e4620'}}>Retiro / OH</th>
-                                <th style={styles.thSub}>TSO Actual</th>
-                                <th style={{...styles.thSub, backgroundColor: '#fff2cc', color: '#7f6000'}}>Disp. (Rem)</th>
+                                <th style={{...styles.thSub, width: '70px', backgroundColor: '#f5f5f5'}}>Fab/UI</th>
+                                <th style={styles.thSub}>Tiempos/Ciclos</th>
+                                <th style={styles.thSub}>TSN/CSN</th>
+                                <th style={styles.thSub}>a Instal</th>
+                                <th style={styles.thSub}>Retiro/OH</th>
+                                <th style={styles.thSub}>Tiempos/Ciclos</th>
+                                <th style={{...styles.thSub, minWidth: '90px'}}>Disp</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {componentes.map((comp, index) => {
-                                // 🧮 CÁLCULOS LOGICOS MATEMÁTICOS EN TIEMPO REAL
-                                const limiteTbo = Number(comp.limitesValor) || 0;
-                                const tgInstal = Number(comp.tgInstalacion) || 0;
-                                const tsoInstalacion = Number(comp.instaladoHoras) || 0;
-                                const tgActual = Number(cabecera.tgPlaneadorActual) || 0;
-
-                                // 1. Retiro/OH = TG Instalación + TBO
-                                const retiroOh = tgInstal + limiteTbo;
-
-                                // 2. TSO Actual = TSO de instalación + (TG Planeador Actual - TG Instalación)
-                                const tsoActual = tsoInstalacion + (tgActual - tgInstal);
-
-                                // 3. Disponibilidad = Límite (TBO) - TSO Actual
-                                const disp = limiteTbo - tsoActual;
-
-                                // Alerta visual de bajo remanente (menos de 100 horas)
-                                const esCritico = disp < 100;
-
-                                return (
-                                    <tr key={comp.nro} style={styles.tr}>
-                                        <td style={{ textAlign: 'center', fontWeight: 'bold', width: '30px' }}>{comp.nro}</td>
-                                        <td><input type="text" value={comp.ata} onChange={e => handleComponenteChange(index, 'ata', e.target.value)} style={styles.inputTable} placeholder="62-99" /></td>
-                                        <td><input type="text" value={comp.pn} onChange={e => handleComponenteChange(index, 'pn', e.target.value)} style={styles.inputTable} placeholder="P/N" /></td>
-                                        <td><input type="text" value={comp.componente} onChange={e => handleComponenteChange(index, 'componente', e.target.value)} style={{...styles.inputTable, width: '160px'}} placeholder="Descripción" /></td>
-                                        <td><input type="text" value={comp.sn} onChange={e => handleComponenteChange(index, 'sn', e.target.value)} style={styles.inputTable} placeholder="S/N" /></td>
-                                        <td>
-                                            <div style={styles.inputGroupTable}>
-                                                <span style={styles.preInput}>hs</span>
-                                                <input type="number" value={comp.limitesValor} onChange={e => handleComponenteChange(index, 'limitesValor', e.target.value)} style={styles.inputTableNum} />
+                            {componentes.map((comp, index) => (
+                                <tr key={comp.nro} style={styles.tr}>
+                                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{comp.nro}</td>
+                                    <td><input type="text" value={comp.ata} onChange={e => handleComponenteChange(index, 'ata', e.target.value)} style={styles.inputTableCompact} placeholder="62-99" /></td>
+                                    <td><input type="text" value={comp.pn} onChange={e => handleComponenteChange(index, 'pn', e.target.value)} style={{...styles.inputTableCompact, width: '110px'}} placeholder="P/N" /></td>
+                                    <td><input type="text" value={comp.componente} onChange={e => handleComponenteChange(index, 'componente', e.target.value)} style={{...styles.inputTableCompact, width: '150px'}} placeholder="Descripción" /></td>
+                                    <td><input type="text" value={comp.sn} onChange={e => handleComponenteChange(index, 'sn', e.target.value)} style={styles.inputTableCompact} placeholder="S/N" /></td>
+                                    
+                                    {/* CELDA LÍMITES: Selector + Doble fila interna */}
+                                    <td>
+                                        <div style={styles.cellFlex}>
+                                            <select value={comp.limiteTipo} onChange={e => handleComponenteChange(index, 'limiteTipo', e.target.value)} style={styles.selectInline}>
+                                                <option value="TBO">TBO</option>
+                                                <option value="LL">LL</option>
+                                            </select>
+                                            <div style={styles.doubleStack}>
+                                                <input type="number" placeholder="Horas" value={comp.limiteHoras} onChange={e => handleComponenteChange(index, 'limiteHoras', e.target.value)} style={styles.inputStack} />
+                                                <input type="text" placeholder="Calendario" value={comp.limiteCal} onChange={e => handleComponenteChange(index, 'limiteCal', e.target.value)} style={styles.inputStack} />
                                             </div>
-                                        </td>
+                                        </div>
+                                    </td>
 
-                                        {/* INSTALADO CON */}
-                                        <td><input type="date" value={comp.instaladoFecha} onChange={e => handleComponenteChange(index, 'instaladoFecha', e.target.value)} style={styles.inputTableDate} /></td>
-                                        <td>
-                                            <div style={styles.inputGroupTable}>
-                                                <span style={styles.preInput}>TSO</span>
-                                                <input type="number" step="0.1" value={comp.instaladoHoras} onChange={e => handleComponenteChange(index, 'instaladoHoras', e.target.value)} style={styles.inputTableNum} />
+                                    {/* CELDA FAB/UI: Ultra reducida */}
+                                    <td style={{backgroundColor: '#fafafa'}}>
+                                        <input type="text" value={comp.instaladoFecha} onChange={e => handleComponenteChange(index, 'instaladoFecha', e.target.value)} style={styles.inputTableMin} placeholder="Nov-21" />
+                                    </td>
+
+                                    <td><input type="number" value={comp.instaladoHoras} onChange={e => handleComponenteChange(index, 'instaladoHoras', e.target.value)} style={styles.inputTableCompact} /></td>
+                                    <td><input type="number" value={comp.instaladoTsnCsn} onChange={e => handleComponenteChange(index, 'instaladoTsnCsn', e.target.value)} style={styles.inputTableCompact} /></td>
+                                    <td><input type="number" value={comp.tgInstalacion} onChange={e => handleComponenteChange(index, 'tgInstalacion', e.target.value)} style={styles.inputTableCompact} /></td>
+                                    <td style={{textAlign: 'center', fontWeight: '500'}}>{(Number(comp.tgInstalacion) + Number(comp.limiteHoras)).toFixed(1)}</td>
+
+                                    {/* CELDA ESTADO COMPONENTE: Selector Tipo + Campo numérico */}
+                                    <td>
+                                        <div style={styles.cellFlex}>
+                                            <select value={comp.estadoTipo} onChange={e => handleComponenteChange(index, 'estadoTipo', e.target.value)} style={styles.selectInline}>
+                                                <option value="TSO">TSO</option>
+                                                <option value="TSHMI">TSHMI</option>
+                                                <option value="TSN">TSN</option>
+                                            </select>
+                                            <input type="number" value={comp.estadoActual} onChange={e => handleComponenteChange(index, 'estadoActual', e.target.value)} style={{...styles.inputTableCompact, width: '60px'}} />
+                                        </div>
+                                    </td>
+
+                                    {/* CELDA DISPONIBILIDAD: Doble renglón + Selector final H, C, M */}
+                                    <td>
+                                        <div style={styles.cellFlex}>
+                                            <div style={styles.doubleStack}>
+                                                <input type="number" placeholder="Disp 1" value={comp.dispSuperior} onChange={e => handleComponenteChange(index, 'dispSuperior', e.target.value)} style={{...styles.inputStack, backgroundColor: '#e2f0d9'}} />
+                                                <input type="number" placeholder="Disp 2" value={comp.dispInferior} onChange={e => handleComponenteChange(index, 'dispInferior', e.target.value)} style={{...styles.inputStack, backgroundColor: '#e2f0d9'}} />
                                             </div>
-                                        </td>
-                                        <td><input type="number" step="0.1" value={comp.instaladoTsnCsn} onChange={e => handleComponenteChange(index, 'instaladoTsnCsn', e.target.value)} style={styles.inputTableNum} /></td>
+                                            <select value={comp.estadoUnidad} onChange={e => handleComponenteChange(index, 'estadoUnidad', e.target.value)} style={styles.selectUnit}>
+                                                <option value="H">H</option>
+                                                <option value="C">C</option>
+                                                <option value="M">M</option>
+                                            </select>
+                                        </div>
+                                    </td>
 
-                                        {/* TG PLANEADOR */}
-                                        <td><input type="number" step="0.1" value={comp.tgInstalacion} onChange={e => handleComponenteChange(index, 'tgInstalacion', e.target.value)} style={styles.inputTableNum} /></td>
-                                        <td style={styles.tdCalculated}>{retiroOh.toFixed(1)} h</td>
-
-                                        {/* ESTADOS CALCULADOS */}
-                                        <td style={styles.tdCalculated}>{tsoActual.toFixed(1)} h</td>
-                                        <td style={{
-                                            ...styles.tdCalculated, 
-                                            backgroundColor: esCritico ? '#fadbd8' : '#d4efdf',
-                                            color: esCritico ? '#c0392b' : '#27ae60',
-                                            fontWeight: 'bold'
-                                        }}>
-                                            {disp.toFixed(1)} h
-                                        </td>
-                                        
-                                        <td style={{ textAlign: 'center' }}>
-                                            <button onClick={() => removerFila(index)} style={styles.btnDelete}>🗑️</button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                                    <td style={{ textAlign: 'center' }}><button onClick={() => removerFila(index)} style={{background:'none', border:'none', cursor:'pointer'}}>🗑️</button></td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
@@ -279,40 +211,38 @@ const F16Page = () => {
     );
 };
 
-// 🎨 HOJA DE ESTILOS LIMPIA Y TÁCTICA
 const styles = {
-    container: { padding: '20px', maxWidth: '100%', margin: '0 auto', backgroundColor: '#f4f6f9', minHeight: '100vh' },
-    mainHeader: { backgroundColor: '#1b3a57', color: 'white', padding: '15px 25px', borderRadius: '8px', marginBottom: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' },
-    cardCabecera: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: '20px', border: '1px solid #e1e8ed' },
-    headerGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' },
-    block: { borderRight: '1px solid #f0f2f5', paddingRight: '15px' },
-    blockTitle: { margin: '0 0 12px 0', fontSize: '0.9rem', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' },
-    formRow: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
-    field: { display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '90px' },
-    label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#7f8c8d', textTransform: 'uppercase' },
-    input: { padding: '8px 10px', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '0.8rem', outline: 'none', width: '100%' },
-    
-    // Tabla y Componentes
-    cardTable: { backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e1e8ed' },
-    tableResponsive: { width: '100%', overflowX: 'auto', marginTop: '10px' },
-    table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' },
+    container: { padding: '15px', backgroundColor: '#f4f6f9', minHeight: '100vh' },
+    mainHeader: { backgroundColor: '#1b3a57', color: 'white', padding: '12px 20px', borderRadius: '6px', marginBottom: '15px' },
+    cardCabecera: { backgroundColor: 'white', padding: '15px', borderRadius: '6px', marginBottom: '15px', border: '1px solid #dee2e6' },
+    headerGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' },
+    block: { borderRight: '1px solid #eee', paddingRight: '10px' },
+    blockTitle: { margin: '0 0 8px 0', fontSize: '0.8rem', color: '#1b3a57', borderBottom: '2px solid #3498db', paddingBottom: '2px' },
+    formRow: { display: 'flex', gap: '8px' },
+    field: { display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 },
+    label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#7f8c8d' },
+    input: { padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '0.75rem' },
+    cardTable: { backgroundColor: 'white', padding: '15px', borderRadius: '6px', border: '1px solid #dee2e6' },
+    tableResponsive: { width: '100%', overflowX: 'auto' },
+    table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' },
     thRow: { backgroundColor: '#f8f9fa' },
-    th: { border: '1px solid #dee2e6', padding: '8px', color: '#1b3a57', fontWeight: 'bold', textAlign: 'center', fontSize: '0.75rem' },
-    thGroup: { border: '1px solid #dee2e6', padding: '6px', backgroundColor: '#e9ecef', color: '#495057', fontWeight: 'bold', textAlign: 'center', fontSize: '0.7rem', textTransform: 'uppercase' },
-    thSub: { border: '1px solid #dee2e6', padding: '6px', textAlign: 'center', fontSize: '0.65rem', color: '#555' },
-    tr: { borderBottom: '1px solid #dee2e6', transition: 'background-color 0.2s', ':hover': { backgroundColor: '#f8f9fa' } },
-    inputTable: { padding: '6px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.75rem', width: '90px', outline: 'none' },
-    inputTableNum: { padding: '6px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.75rem', width: '60px', outline: 'none', textAlign: 'right' },
-    inputTableDate: { padding: '5px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.7rem', width: '105px', outline: 'none' },
+    th: { border: '1px solid #dee2e6', padding: '6px', color: '#1b3a57', fontWeight: 'bold', fontSize: '0.7rem' },
+    thGroup: { border: '1px solid #dee2e6', padding: '4px', backgroundColor: '#e9ecef', fontSize: '0.7rem', fontWeight: 'bold', textAlign: 'center' },
+    thSub: { border: '1px solid #dee2e6', padding: '4px', textAlign: 'center', fontSize: '0.65rem' },
+    tr: { borderBottom: '1px solid #dee2e6' },
     
-    inputGroupTable: { display: 'flex', alignItems: 'center', gap: '2px' },
-    preInput: { fontSize: '0.6rem', color: '#7f8c8d', fontWeight: 'bold' },
-    tdCalculated: { padding: '8px', textAlign: 'right', fontWeight: '500', border: '1px solid #dee2e6' },
+    // Controles inline compactos estilo Excel
+    inputTableCompact: { padding: '4px', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.75rem', width: '75px', outline: 'none' },
+    inputTableMin: { padding: '4px', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.7rem', width: '55px', textAlign: 'center', outline: 'none' },
     
-    // Botonera
-    btnPrimario: { backgroundColor: '#1e3799', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' },
-    btnSecundario: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' },
-    btnDelete: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }
+    // Maquetación estructural de Doble Renglón Interno
+    cellFlex: { display: 'flex', alignItems: 'center', gap: '4px' },
+    selectInline: { padding: '4px 2px', borderRadius: '3px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#f0f0f0' },
+    selectUnit: { padding: '8px 2px', borderRadius: '3px', border: '1px solid #bbb', fontSize: '0.75rem', fontWeight: 'bold' },
+    doubleStack: { display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 },
+    inputStack: { padding: '2px 4px', borderRadius: '2px', border: '1px solid #ddd', fontSize: '0.7rem', width: '100%', minWidth: '65px', outline: 'none' },
+    
+    btnSecundario: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem' }
 };
 
 export default F16Page;
