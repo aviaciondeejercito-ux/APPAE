@@ -8,6 +8,9 @@ const F16Page = () => {
     const [busquedaForm, setBusquedaForm] = useState('');
     const [unidadNavegacion, setUnidadNavegacion] = useState(unidadesList[0]);
     const [unidadDestinoTraslado, setUnidadDestinoTraslado] = useState('');
+    
+    // Estado para saber si la información proviene de una búsqueda (Bloquea campos clave)
+    const [esEdicion, setEsEdicion] = useState(false);
 
     // Estado inicial limpio para resetear el formulario
     const estadoInicialCabecera = {
@@ -24,7 +27,7 @@ const F16Page = () => {
         limiteTipo: 'TBO', 
         limites: [{ valor: '', unidad: 'H' }],
         instaladoFecha: '', instaladoHoras: '', 
-        tsnCsnRenglones: [{ valor: '', unidad: 'H' }], // Nueva estructura con sub-renglones
+        tsnCsnRenglones: [{ valor: '', unidad: 'H' }], 
         tgInstalacion: '', estadoTipo: 'TSO', estadoActual: '',
         disponibilidades: [{ valor: '', unidad: 'H' }]
     });
@@ -35,6 +38,10 @@ const F16Page = () => {
     const [motores, setMotores] = useState([
         { id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }
     ]);
+    // NUEVO: Estado para hélices (sigue la misma lógica que motores)
+    const [helices, setHelices] = useState([
+        { id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }
+    ]);
 
     // ACCIONES GLOBALES DE FORMULARIO
     const limpiarFormularioParaNuevoAlta = () => {
@@ -42,7 +49,17 @@ const F16Page = () => {
             setCabecera(estadoInicialCabecera);
             setCompPlaneador([generarFilaVacia(1)]);
             setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
+            setHelices([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
             setBusquedaForm('');
+            setEsEdicion(false);
+        }
+    };
+
+    // Simulación de búsqueda (activa el bloqueo de celdas clave)
+    const handleKeyDownBusqueda = (e) => {
+        if (e.key === 'Enter' && busquedaForm.trim() !== '') {
+            setEsEdicion(true); 
+            alert(`Cargando datos de la aeronave: ${busquedaForm}. Campos críticos SdA, Matrícula y Nro Serie bloqueados.`);
         }
     };
 
@@ -64,6 +81,8 @@ const F16Page = () => {
             setCabecera(estadoInicialCabecera);
             setCompPlaneador([generarFilaVacia(1)]);
             setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
+            setHelices([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
+            setEsEdicion(false);
         }
     };
 
@@ -105,7 +124,7 @@ const F16Page = () => {
     // MANEJO DE ESTADOS: MOTORES
     const handleNombreMotorChange = (motorIdx, nuevoNombre) => {
         const nuevosMotores = [...motores];
-        nuevosMotores[motorIdx].nombre = nuevoNombre;
+        nuevesMotores[motorIdx].nombre = nuevoNombre;
         setMotores(nuevosMotores);
     };
 
@@ -151,17 +170,68 @@ const F16Page = () => {
         }
     };
 
+    // NUEVO MANEJO DE ESTADOS: HÉLICES
+    const handleNombreHeliceChange = (heliceIdx, nuevoNombre) => {
+        const nuevasHelices = [...helices];
+        nuevasHelices[heliceIdx].nombre = nuevoNombre;
+        setHelices(nuevasHelices);
+    };
+
+    const handleHeliceCompChange = (heliceIdx, compIdx, field, val) => {
+        const nuevasHelices = [...helices];
+        nuevasHelices[heliceIdx].componentes[compIdx][field] = val;
+        setHelices(nuevasHelices);
+    };
+
+    const handleHeliceSubChange = (heliceIdx, compIdx, arrayField, subIdx, subSubField, val) => {
+        const nuevasHelices = [...helices];
+        nuevasHelices[heliceIdx].componentes[compIdx][arrayField][subIdx][subSubField] = val;
+        setHelices(nuevasHelices);
+    };
+
+    const agregarFilaHelice = (heliceIdx) => {
+        const nuevasHelices = [...helices];
+        const listado = nuevasHelices[heliceIdx].componentes;
+        listado.push(generarFilaVacia(listado.length + 1));
+        setHelices(nuevasHelices);
+    };
+
+    const removerFilaHelice = (heliceIdx, compIdx) => {
+        const nuevasHelices = [...helices];
+        if (nuevasHelices[heliceIdx].componentes.length === 1) return;
+        nuevasHelices[heliceIdx].componentes = nuevasHelices[heliceIdx].componentes
+            .filter((_, idx) => idx !== compIdx)
+            .map((c, idx) => ({ ...c, nro: idx + 1 }));
+        setHelices(nuevasHelices);
+    };
+
+    const agregarSubFilaHelice = (heliceIdx, compIdx, arrayField) => {
+        const nuevasHelices = [...helices];
+        nuevasHelices[heliceIdx].componentes[compIdx][arrayField].push({ valor: '', unidad: 'H' });
+        setHelices(nuevasHelices);
+    };
+
+    const removerSubFilaHelice = (heliceIdx, compIdx, arrayField, subIdx) => {
+        const nuevasHelices = [...helices];
+        if (nuevasHelices[heliceIdx].componentes[compIdx][arrayField].length > 1) {
+            nuevasHelices[heliceIdx].componentes[compIdx][arrayField] = nuevasHelices[heliceIdx].componentes[compIdx][arrayField].filter((_, i) => i !== subIdx);
+            setHelices(nuevasHelices);
+        }
+    };
+
+    // ACTUALIZADO: Alternador Bimotor sincroniza Motores y Hélices
     const alternarSegundoMotor = () => {
         if (motores.length === 1) {
-            setMotores([...motores, { id: 2, nombre: 'MOTOR Nº 2', components: [generarFilaVacia(1)] }]);
+            setMotores([...motores, { id: 2, nombre: 'MOTOR Nº 2', componentes: [generarFilaVacia(1)] }]);
+            setHelices([...helices, { id: 2, nombre: 'HÉLICE Nº 2', componentes: [generarFilaVacia(1)] }]);
         } else {
-            if (window.confirm("¿Confirma remover el motor adicional y todos sus componentes cargados?")) {
+            if (window.confirm("¿Confirma remover la configuración adicional de Motor y Hélice Nº 2 junto a sus componentes?")) {
                 setMotores([motores[0]]);
+                setHelices([helices[0]]);
             }
         }
     };
 
-    // Color dinámico de condición operativo
     const colorEstadoOperativo = cabecera.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c';
 
     return (
@@ -181,7 +251,14 @@ const F16Page = () => {
                 <div style={styles.adminGrid}>
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>🔍 BUSCADOR POR MATRÍCULA (Ver/Controlar Historiales Existentes)</label>
-                        <input type="text" value={busquedaForm} onChange={e => setBusquedaForm(e.target.value)} style={styles.inputAdmin} placeholder="Escriba matrícula y presione Enter para buscar..." />
+                        <input 
+                            type="text" 
+                            value={busquedaForm} 
+                            onChange={e => setBusquedaForm(e.target.value)} 
+                            onKeyDown={handleKeyDownBusqueda}
+                            style={styles.inputAdmin} 
+                            placeholder="Escriba matrícula y presione Enter para buscar..." 
+                        />
                     </div>
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>🛡️ NAVEGACIÓN ENTRE UNIDADES</label>
@@ -208,8 +285,7 @@ const F16Page = () => {
                     {/* BLOQUE DATOS DE LA AERONAVE */}
                     <div style={styles.block}>
                         <div style={styles.blockTitleFlex}>
-                            <span>DATOS DE LA AERONAVE</span>
-                            {/* Selector reubicado aquí de forma compacta para pantallas chicas */}
+                            <span>DATOS DE LA AERONAVE {esEdicion && <span style={{color: '#d35400', fontSize: '0.65rem'}}>🔒 BLOQUEADO</span>}</span>
                             <select 
                                 value={cabecera.estadoOperativo} 
                                 onChange={e => handleCabeceraChange('estadoOperativo', e.target.value)} 
@@ -221,10 +297,37 @@ const F16Page = () => {
                         </div>
                         <div style={styles.formRow}>
                             <div style={styles.field}><label style={styles.label}>SdA</label>
-                                <select value={cabecera.sda} onChange={e => handleCabeceraChange('sda', e.target.value)} style={styles.input}>{sdaList.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                                <select 
+                                    value={cabecera.sda} 
+                                    onChange={e => handleCabeceraChange('sda', e.target.value)} 
+                                    disabled={esEdicion}
+                                    style={{...styles.input, backgroundColor: esEdicion ? '#e9ecef' : 'white', cursor: esEdicion ? 'not-allowed' : 'default'}}
+                                >
+                                    {sdaList.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
                             </div>
-                            <div style={styles.field}><label style={styles.label}>Matrícula</label><input type="text" value={cabecera.matricula} onChange={e => handleCabeceraChange('matricula', e.target.value)} style={styles.input} placeholder="AE-XXX" /></div>
-                            <div style={styles.field}><label style={styles.label}>Nro Serie</label><input type="text" value={cabecera.nroSerie} onChange={e => handleCabeceraChange('nroSerie', e.target.value)} style={styles.input} placeholder="N/S" /></div>
+                            <div style={styles.field}>
+                                <label style={styles.label}>Matrícula</label>
+                                <input 
+                                    type="text" 
+                                    value={cabecera.matricula} 
+                                    onChange={e => handleCabeceraChange('matricula', e.target.value)} 
+                                    disabled={esEdicion}
+                                    style={{...styles.input, backgroundColor: esEdicion ? '#e9ecef' : 'white', cursor: esEdicion ? 'not-allowed' : 'default'}}
+                                    placeholder="AE-XXX" 
+                                />
+                            </div>
+                            <div style={styles.field}>
+                                <label style={styles.label}>Nro Serie</label>
+                                <input 
+                                    type="text" 
+                                    value={cabecera.nroSerie} 
+                                    onChange={e => handleCabeceraChange('nroSerie', e.target.value)} 
+                                    disabled={esEdicion}
+                                    style={{...styles.input, backgroundColor: esEdicion ? '#e9ecef' : 'white', cursor: esEdicion ? 'not-allowed' : 'default'}}
+                                    placeholder="N/S" 
+                                />
+                            </div>
                         </div>
                     </div>
                     
@@ -270,10 +373,10 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* CONTROL DE CONFIGURACIÓN CONFIG BIMOTOR */}
+            {/* CONTROL DE CONFIGURACIÓN BIFUNCIONAL (BIMOTOR Y BIHÉLICE) */}
             <div style={{ marginBottom: '15px', textAlign: 'right' }}>
                 <button type="button" onClick={alternarSegundoMotor} style={motores.length === 1 ? styles.btnBimotorAdd : styles.btnBimotorRem}>
-                    {motores.length === 1 ? "➕ Configurar como Aeronave Bimotor" : "🗑️ Quitar Configuración Bimotor"}
+                    {motores.length === 1 ? "➕ Configurar como Aeronave Bimotor / Bihélice" : "🗑️ Quitar Configuración Bimotor / Bihélice"}
                 </button>
             </div>
 
@@ -316,6 +419,33 @@ const F16Page = () => {
                         (cIdx) => removerFilaMotor(motIdx, cIdx),
                         (cIdx, af) => agregarSubFilaMotor(motIdx, cIdx, af),
                         (cIdx, af, sIdx) => removerSubFilaMotor(motIdx, cIdx, af, sIdx)
+                    )}
+                </div>
+            ))}
+
+            {/* NUEVAS TABLAS DE HÉLICES (DINÁMICAS - MISMA LÓGICA QUE MOTOR) */}
+            {helices.map((hel, helIdx) => (
+                <div key={hel.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #2980b9'}}>
+                    <div style={styles.tableHeaderFlex}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#2980b9' }}>🌀</span>
+                            <input 
+                                type="text" 
+                                value={hel.nombre} 
+                                onChange={(e) => handleNombreHeliceChange(helIdx, e.target.value.toUpperCase())} 
+                                style={{...styles.inputNombreMotor, color: '#2980b9', borderBottom: '1px dashed #2980b9'}}
+                                placeholder="EJ: HÉLICE IZQUIERDA"
+                            />
+                        </div>
+                        <button onClick={() => agregarFilaHelice(helIdx)} style={{...styles.btnSecundario, backgroundColor: '#2980b9'}}>➕ Añadir Fila</button>
+                    </div>
+                    {renderTablaComponentes(
+                        hel.componentes,
+                        (cIdx, f, v) => handleHeliceCompChange(helIdx, cIdx, f, v),
+                        (cIdx, af, sIdx, ssf, v) => handleHeliceSubChange(helIdx, cIdx, af, sIdx, ssf, v),
+                        (cIdx) => removerFilaHelice(helIdx, cIdx),
+                        (cIdx, af) => agregarSubFilaHelice(helIdx, cIdx, af),
+                        (cIdx, af, sIdx) => removerSubFilaHelice(helIdx, cIdx, af, sIdx)
                     )}
                 </div>
             ))}
@@ -393,7 +523,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             <td style={{...styles.td, backgroundColor: '#f9f9f9'}}><input type="text" value={comp.instaladoFecha} onChange={e => onChange(compIndex, 'instaladoFecha', e.target.value)} style={styles.inputFlatMin} placeholder="M-A" /></td>
                             <td style={styles.td}><input type="number" value={comp.instaladoHoras} onChange={e => onChange(compIndex, 'instaladoHoras', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
                             
-                            {/* COLUMNA TSN/CSN AHORA CON SUB-RENGLONES DINÁMICOS H, M, C */}
+                            {/* COLUMNA TSN/CSN */}
                             <td style={styles.td}>
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '5px' }}>
