@@ -215,7 +215,7 @@ const ProgramaMantenimiento = () => {
             <div style={styles.selectorsBar}>
                 <div style={styles.selectorGroup}>
                     <label style={styles.labelTitle}>📁 SU FLOTA ASIGNADA ({unidadNavegacion})</label>
-                    <select style={styles.selectInputFlota} value={aeronaveSeleccionadaId} onChange={handleAeronChange}>
+                    <select style={styles.selectInputFlota} value={aeronaveSeleccionadaId} onChange={handleAeronaveChange}>
                         <option value="">-- Seleccione Aeronave --</option>
                         {aeronavesFiltradas.map(a => {
                             const idReal = a._id?.$oid || a._id;
