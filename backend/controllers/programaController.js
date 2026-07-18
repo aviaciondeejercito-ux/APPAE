@@ -1,15 +1,15 @@
-const ProgramaMantenimiento = require('../models/ProgramaMantenimiento');
+const ProgramaMantenimiento = require('../models/ProgramaMantenimiento'); //[cite: 6]
 
 // Guardar o Actualizar el programa de una aeronave
-exports.guardarPrograma = async (req, res) => {
-    const { aeronaveId, tgPlaneadorActual, tgMotorActual, programaPlaneador, programaMotor } = req.body;
+exports.guardarPrograma = async (req, res) => { //[cite: 6]
+    const { aeronaveId, tgPlaneadorActual, tgMotorActual, programaPlaneador, programaMotor } = req.body; //[cite: 6]
 
-    if (!aeronaveId) {
-        return res.status(400).json({ mensaje: "Falta el ID de la aeronave." });
+    if (!aeronaveId) { //[cite: 6]
+        return res.status(400).json({ mensaje: "Falta el ID de la aeronave." }); //[cite: 6]
     }
 
     try {
-        // 'upsert: true' hace que si no existe el registro para esa aeronave, lo cree. Si existe, lo actualiza.
+        // 'upsert: true' asegura consistencia atómica (Creación o Actualización)[cite: 6]
         const programaActualizado = await ProgramaMantenimiento.findOneAndUpdate(
             { aeronaveId }, 
             {
@@ -20,39 +20,45 @@ exports.guardarPrograma = async (req, res) => {
                     programaMotor
                 }
             },
-            { new: true, upsert: true, runValidators: true }
+            { new: true, upsert: true, runValidators: true } //[cite: 6]
         );
 
         res.status(200).json({
             status: "success",
             mensaje: "Programa de mantenimiento sincronizado correctamente.",
             data: programaActualizado
-        });
+        }); //[cite: 6]
 
     } catch (error) {
-        console.error("Error al guardar el programa:", error);
-        res.status(500).json({ mensaje: "Error al procesar el programa de mantenimiento." });
+        console.error("Error al guardar el programa:", error); //[cite: 6]
+        res.status(500).json({ mensaje: "Error al procesar el programa de mantenimiento." }); //[cite: 6]
     }
 };
 
-// Obtener el programa de una aeronave específica (para cuando la seleccionás en el Front)
-exports.obtenerProgramaPorAeronave = async (req, res) => {
-    const { aeronaveId } = req.params;
+// Obtener el programa de una aeronave específica
+exports.obtenerProgramaPorAeronave = async (req, res) => { //[cite: 6]
+    const { aeronaveId } = req.params; //[cite: 6]
 
     try {
-        const programa = await ProgramaMantenimiento.findOne({ aeronaveId });
+        const programa = await ProgramaMantenimiento.findOne({ aeronaveId }); //[cite: 6]
         
         if (!programa) {
-            // Si no tiene programa, respondemos con éxito pero arrays vacíos para que el front deje escribir
+            // Enviamos null en los totales para que el Front conserve el valor original del Aircraft
             return res.status(200).json({ 
+                status: "success",
                 mensaje: "Sin programa previo. Listo para asignación.",
-                data: { tgPlaneadorActual: "0,0", tgMotorActual: "0,0", programaPlaneador: [], programaMotor: [] } 
+                data: { 
+                    tgPlaneadorActual: null, 
+                    tgMotorActual: null, 
+                    programaPlaneador: [], 
+                    programaMotor: [] 
+                } 
             });
         }
 
-        res.status(200).json({ status: "success", data: programa });
+        res.status(200).json({ status: "success", data: programa }); //[cite: 6]
     } catch (error) {
-        console.error("Error al obtener el programa:", error);
-        res.status(500).json({ mensaje: "Error al recuperar registros." });
+        console.error("Error al obtener el programa:", error); //[cite: 6]
+        res.status(500).json({ mensaje: "Error al recuperar registros." }); //[cite: 6]
     }
 };
