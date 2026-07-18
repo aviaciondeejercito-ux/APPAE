@@ -15,7 +15,6 @@ const F16Page = () => {
         motorCsnCso: 1573
     });
 
-    // Adaptamos el mock de datos a la nueva estructura de doble celda e indicadores
     const [componentes, setComponentes] = useState([
         {
             nro: 1,
@@ -23,18 +22,18 @@ const F16Page = () => {
             pn: '206-011-100-107',
             componente: 'M/R HUB ASSEMBLY',
             sn: 'HB-1809',
-            limiteTipo: 'TBO', // TBO o LL
-            limiteHoras: 2400,  // Casillero Superior
-            limiteCal: '2028-11-01', // Casillero Inferior (Calendario)
-            instaladoFecha: '2021-11-01', // Fab/UI Compacto
+            limiteTipo: 'TBO', 
+            limiteHoras: 2400,  
+            limiteCal: '2028-11-01', 
+            instaladoFecha: '2021-11-01', 
             instaladoHoras: 0.0,
             instaladoTsnCsn: 2400.0,
             tgInstalacion: 2935.7,
-            estadoTipo: 'TSO', // TSO, TSHMI, TSN
+            estadoTipo: 'TSO', 
             estadoActual: 1094.4,
-            dispSuperior: 1305.6, // Disponible Arriba
-            dispInferior: 1200.0, // Disponible Abajo
-            estadoUnidad: 'H' // H, C, M
+            dispHoras: 1305.6, 
+            dispCal: 1200.0, 
+            estadoUnidad: 'H' 
         }
     ]);
 
@@ -60,7 +59,7 @@ const F16Page = () => {
                 limiteTipo: 'TBO', limiteHoras: 0, limiteCal: '',
                 instaladoFecha: '', instaladoHoras: 0, instaladoTsnCsn: 0,
                 tgInstalacion: 0, estadoTipo: 'TSO', estadoActual: 0,
-                dispSuperior: 0, dispInferior: 0, estadoUnidad: 'H'
+                dispHoras: 0, dispCal: 0, estadoUnidad: 'H'
             }
         ]);
     };
@@ -73,14 +72,14 @@ const F16Page = () => {
     return (
         <div style={styles.container}>
             <div style={styles.mainHeader}>
-                <h2 style={{ margin: 0, fontSize: '1.4rem' }}>📋 Ficha Historial de Planeador y Componentes (F-16)</h2>
+                <h2 style={{ margin: 0, fontSize: '1.2rem' }}>SISTEMA DE GESTIÓN F-16 - HISTORIAL DE COMPONENTES</h2>
             </div>
 
-            {/* CABECERA (Se mantiene idéntica) */}
+            {/* FORMULARIO DE ENCABEZADO */}
             <div style={styles.cardCabecera}>
                 <div style={styles.headerGrid}>
                     <div style={styles.block}>
-                        <h4 style={styles.blockTitle}>Aeronave</h4>
+                        <div style={styles.blockTitle}>DATOS DE LA AERONAVE</div>
                         <div style={styles.formRow}>
                             <div style={styles.field}><label style={styles.label}>SdA</label>
                                 <select value={cabecera.sda} onChange={e => handleCabeceraChange('sda', e.target.value)} style={styles.input}>{sdaList.map(s => <option key={s} value={s}>{s}</option>)}</select>
@@ -90,17 +89,17 @@ const F16Page = () => {
                         </div>
                     </div>
                     <div style={styles.block}>
-                        <h4 style={styles.blockTitle}>Historial Planeador</h4>
+                        <div style={styles.blockTitle}>TIEMPOS E HISTORIAL</div>
                         <div style={styles.formRow}>
-                            <div style={styles.field}><label style={styles.label}>Inicio AE</label><input type="date" value={cabecera.inicioAeFecha} onChange={e => handleCabeceraChange('inicioAeFecha', e.target.value)} style={styles.input} /></div>
-                            <div style={styles.field}><label style={styles.label}>Hs Iniciales</label><input type="number" value={cabecera.inicioAeHs} onChange={e => handleCabeceraChange('inicioAeHs', e.target.value)} style={styles.input} /></div>
-                            <div style={styles.field}><label style={{...styles.label, color: '#e67e22'}}>TG Plan Actual</label><input type="number" value={cabecera.tgPlaneadorActual} onChange={e => handleCabeceraChange('tgPlaneadorActual', e.target.value)} style={{...styles.input, backgroundColor: '#fdf6e2', fontWeight: 'bold'}} /></div>
+                            <div style={styles.field}><label style={styles.label}>Inicio AE (Fecha)</label><input type="date" value={cabecera.inicioAeFecha} onChange={e => handleCabeceraChange('inicioAeFecha', e.target.value)} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>Inicio AE (Hs)</label><input type="number" value={cabecera.inicioAeHs} onChange={e => handleCabeceraChange('inicioAeHs', e.target.value)} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>TG Planeador Actual</label><input type="number" value={cabecera.tgPlaneadorActual} onChange={e => handleCabeceraChange('tgPlaneadorActual', e.target.value)} style={{...styles.input, backgroundColor: '#fff9db', fontWeight: 'bold'}} /></div>
                         </div>
                     </div>
                     <div style={styles.block}>
-                        <h4 style={styles.blockTitle}>Planta Motriz</h4>
+                        <div style={styles.blockTitle}>GRUPO MOTOPROPULSOR</div>
                         <div style={styles.formRow}>
-                            <div style={styles.field}><label style={styles.label}>S/N</label><input type="text" value={cabecera.motorSn} onChange={e => handleCabeceraChange('motorSn', e.target.value)} style={styles.input} /></div>
+                            <div style={styles.field}><label style={styles.label}>Motor S/N</label><input type="text" value={cabecera.motorSn} onChange={e => handleCabeceraChange('motorSn', e.target.value)} style={styles.input} /></div>
                             <div style={styles.field}><label style={styles.label}>TSN</label><input type="number" value={cabecera.motorTsn} onChange={e => handleCabeceraChange('motorTsn', e.target.value)} style={styles.input} /></div>
                             <div style={styles.field}><label style={styles.label}>CSN/CSO</label><input type="number" value={cabecera.motorCsnCso} onChange={e => handleCabeceraChange('motorCsnCso', e.target.value)} style={styles.input} /></div>
                         </div>
@@ -108,11 +107,11 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* TABLA MEJORADA ULTRA-FIEL A LA IMAGEN */}
+            {/* TABLA FLANA - INDEPENDIENTE POR COLUMNA */}
             <div style={styles.cardTable}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1b3a57' }}>⚙️ Control de Componentes</h3>
-                    <button onClick={agregarFila} style={styles.btnSecundario}>➕ Agregar Item</button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <div style={{ fontWeight: 'bold', color: '#1b3a57' }}>TABLA DE COMPONENTES DEL PLANEADOR</div>
+                    <button onClick={agregarFila} style={styles.btnSecundario}>➕ Añadir Fila</button>
                 </div>
 
                 <div style={styles.tableResponsive}>
@@ -124,85 +123,100 @@ const F16Page = () => {
                                 <th rowSpan="2" style={styles.th}>P/N</th>
                                 <th rowSpan="2" style={styles.th}>Componente</th>
                                 <th rowSpan="2" style={styles.th}>S/N</th>
-                                <th rowSpan="2" style={{...styles.th, minWidth: '120px'}}>Límites</th>
-                                <th colSpan="3" style={styles.thGroup}>Instalado Con</th>
+                                <th colSpan="3" style={styles.thGroup}>Límites de Control</th>
+                                <th style={{...styles.thGroup, backgroundColor: '#f2f2f2'}}>FUI</th>
+                                <th colSpan="2" style={styles.thGroup}>Instalado con</th>
                                 <th colSpan="2" style={styles.thGroup}>TG Planeador</th>
-                                <th colSpan="2" style={styles.thGroup}>Estado de Componente</th>
-                                <th rowSpan="2" style={styles.th}></th>
+                                <th colSpan="2" style={styles.thGroup}>Estado Componente</th>
+                                <th colSpan="3" style={styles.thGroup}>Disponibilidad</th>
+                                <th rowSpan="2" style={styles.th}>Acción</th>
                             </tr>
                             <tr style={styles.thRow}>
-                                <th style={{...styles.thSub, width: '70px', backgroundColor: '#f5f5f5'}}>Fab/UI</th>
-                                <th style={styles.thSub}>Tiempos/Ciclos</th>
+                                {/* Límites */}
+                                <th style={styles.thSub}>Tipo</th>
+                                <th style={styles.thSub}>Lím. Horas</th>
+                                <th style={styles.thSub}>Lím. Calend.</th>
+                                {/* Fab/UI */}
+                                <th style={{...styles.thSub, backgroundColor: '#f2f2f2'}}>Fab/UI</th>
+                                {/* Instalado Con */}
+                                <th style={styles.thSub}>Hs (TSO)</th>
                                 <th style={styles.thSub}>TSN/CSN</th>
+                                {/* TG Planeador */}
                                 <th style={styles.thSub}>a Instal</th>
                                 <th style={styles.thSub}>Retiro/OH</th>
-                                <th style={styles.thSub}>Tiempos/Ciclos</th>
-                                <th style={{...styles.thSub, minWidth: '90px'}}>Disp</th>
+                                {/* Estado Componente */}
+                                <th style={styles.thSub}>Tipo</th>
+                                <th style={styles.thSub}>Valor Act.</th>
+                                {/* Disponibilidad */}
+                                <th style={styles.thSub}>Disp 1</th>
+                                <th style={styles.thSub}>Disp 2</th>
+                                <th style={styles.thSub}>Unidad</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {componentes.map((comp, index) => (
-                                <tr key={comp.nro} style={styles.tr}>
-                                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{comp.nro}</td>
-                                    <td><input type="text" value={comp.ata} onChange={e => handleComponenteChange(index, 'ata', e.target.value)} style={styles.inputTableCompact} placeholder="62-99" /></td>
-                                    <td><input type="text" value={comp.pn} onChange={e => handleComponenteChange(index, 'pn', e.target.value)} style={{...styles.inputTableCompact, width: '110px'}} placeholder="P/N" /></td>
-                                    <td><input type="text" value={comp.componente} onChange={e => handleComponenteChange(index, 'componente', e.target.value)} style={{...styles.inputTableCompact, width: '150px'}} placeholder="Descripción" /></td>
-                                    <td><input type="text" value={comp.sn} onChange={e => handleComponenteChange(index, 'sn', e.target.value)} style={styles.inputTableCompact} placeholder="S/N" /></td>
-                                    
-                                    {/* CELDA LÍMITES: Selector + Doble fila interna */}
-                                    <td>
-                                        <div style={styles.cellFlex}>
-                                            <select value={comp.limiteTipo} onChange={e => handleComponenteChange(index, 'limiteTipo', e.target.value)} style={styles.selectInline}>
+                            {componentes.map((comp, index) => {
+                                const limiteHoras = Number(comp.limiteHoras) || 0;
+                                const tgInstal = Number(comp.tgInstalacion) || 0;
+                                const retiroOhCalculado = tgInstal + limiteHoras;
+
+                                return (
+                                    <tr key={comp.nro} style={styles.tr}>
+                                        <td style={{ textAlign: 'center', fontWeight: 'bold', border: '1px solid #ccc' }}>{comp.nro}</td>
+                                        <td style={styles.td}><input type="text" value={comp.ata} onChange={e => handleComponenteChange(index, 'ata', e.target.value)} style={styles.inputFlat} placeholder="62-99" /></td>
+                                        <td style={styles.td}><input type="text" value={comp.pn} onChange={e => handleComponenteChange(index, 'pn', e.target.value)} style={{...styles.inputFlat, width: '100px'}} placeholder="P/N" /></td>
+                                        <td style={styles.td}><input type="text" value={comp.componente} onChange={e => handleComponenteChange(index, 'componente', e.target.value)} style={{...styles.inputFlat, width: '140px'}} placeholder="Descripción" /></td>
+                                        <td style={styles.td}><input type="text" value={comp.sn} onChange={e => handleComponenteChange(index, 'sn', e.target.value)} style={styles.inputFlat} placeholder="S/N" /></td>
+                                        
+                                        {/* Límites (Columnas Desglosadas) */}
+                                        <td style={styles.td}>
+                                            <select value={comp.limiteTipo} onChange={e => handleComponenteChange(index, 'limiteTipo', e.target.value)} style={styles.selectFlat}>
                                                 <option value="TBO">TBO</option>
                                                 <option value="LL">LL</option>
                                             </select>
-                                            <div style={styles.doubleStack}>
-                                                <input type="number" placeholder="Horas" value={comp.limiteHoras} onChange={e => handleComponenteChange(index, 'limiteHoras', e.target.value)} style={styles.inputStack} />
-                                                <input type="text" placeholder="Calendario" value={comp.limiteCal} onChange={e => handleComponenteChange(index, 'limiteCal', e.target.value)} style={styles.inputStack} />
-                                            </div>
-                                        </div>
-                                    </td>
+                                        </td>
+                                        <td style={styles.td}><input type="number" value={comp.limiteHoras} onChange={e => handleComponenteChange(index, 'limiteHoras', e.target.value)} style={styles.inputFlatNum} /></td>
+                                        <td style={styles.td}><input type="text" value={comp.limiteCal} onChange={e => handleComponenteChange(index, 'limiteCal', e.target.value)} style={styles.inputFlat} placeholder="AAAA-MM-DD" /></td>
+                                        
+                                        {/* Fab/UI (Compacto/Pequeño) */}
+                                        <td style={{...styles.td, backgroundColor: '#f9f9f9'}}>
+                                            <input type="text" value={comp.instaladoFecha} onChange={e => handleComponenteChange(index, 'instaladoFecha', e.target.value)} style={{...styles.inputFlat, width: '65px', textAlign: 'center'}} placeholder="-X-" />
+                                        </td>
 
-                                    {/* CELDA FAB/UI: Ultra reducida */}
-                                    <td style={{backgroundColor: '#fafafa'}}>
-                                        <input type="text" value={comp.instaladoFecha} onChange={e => handleComponenteChange(index, 'instaladoFecha', e.target.value)} style={styles.inputTableMin} placeholder="Nov-21" />
-                                    </td>
+                                        {/* Instalado Con */}
+                                        <td style={styles.td}><input type="number" value={comp.instaladoHoras} onChange={e => handleComponenteChange(index, 'instaladoHoras', e.target.value)} style={styles.inputFlatNum} /></td>
+                                        <td style={styles.td}><input type="number" value={comp.instaladoTsnCsn} onChange={e => handleComponenteChange(index, 'instaladoTsnCsn', e.target.value)} style={styles.inputFlatNum} /></td>
+                                        
+                                        {/* TG Planeador */}
+                                        <td style={styles.td}><input type="number" value={comp.tgInstalacion} onChange={e => handleComponenteChange(index, 'tgInstalacion', e.target.value)} style={styles.inputFlatNum} /></td>
+                                        <td style={styles.tdCalculated}>{retiroOhCalculado.toFixed(1)}</td>
 
-                                    <td><input type="number" value={comp.instaladoHoras} onChange={e => handleComponenteChange(index, 'instaladoHoras', e.target.value)} style={styles.inputTableCompact} /></td>
-                                    <td><input type="number" value={comp.instaladoTsnCsn} onChange={e => handleComponenteChange(index, 'instaladoTsnCsn', e.target.value)} style={styles.inputTableCompact} /></td>
-                                    <td><input type="number" value={comp.tgInstalacion} onChange={e => handleComponenteChange(index, 'tgInstalacion', e.target.value)} style={styles.inputTableCompact} /></td>
-                                    <td style={{textAlign: 'center', fontWeight: '500'}}>{(Number(comp.tgInstalacion) + Number(comp.limiteHoras)).toFixed(1)}</td>
-
-                                    {/* CELDA ESTADO COMPONENTE: Selector Tipo + Campo numérico */}
-                                    <td>
-                                        <div style={styles.cellFlex}>
-                                            <select value={comp.estadoTipo} onChange={e => handleComponenteChange(index, 'estadoTipo', e.target.value)} style={styles.selectInline}>
+                                        {/* Estado Componente */}
+                                        <td style={styles.td}>
+                                            <select value={comp.estadoTipo} onChange={e => handleComponenteChange(index, 'estadoTipo', e.target.value)} style={styles.selectFlat}>
                                                 <option value="TSO">TSO</option>
                                                 <option value="TSHMI">TSHMI</option>
                                                 <option value="TSN">TSN</option>
                                             </select>
-                                            <input type="number" value={comp.estadoActual} onChange={e => handleComponenteChange(index, 'estadoActual', e.target.value)} style={{...styles.inputTableCompact, width: '60px'}} />
-                                        </div>
-                                    </td>
+                                        </td>
+                                        <td style={styles.td}><input type="number" value={comp.estadoActual} onChange={e => handleComponenteChange(index, 'estadoActual', e.target.value)} style={styles.inputFlatNum} /></td>
 
-                                    {/* CELDA DISPONIBILIDAD: Doble renglón + Selector final H, C, M */}
-                                    <td>
-                                        <div style={styles.cellFlex}>
-                                            <div style={styles.doubleStack}>
-                                                <input type="number" placeholder="Disp 1" value={comp.dispSuperior} onChange={e => handleComponenteChange(index, 'dispSuperior', e.target.value)} style={{...styles.inputStack, backgroundColor: '#e2f0d9'}} />
-                                                <input type="number" placeholder="Disp 2" value={comp.dispInferior} onChange={e => handleComponenteChange(index, 'dispInferior', e.target.value)} style={{...styles.inputStack, backgroundColor: '#e2f0d9'}} />
-                                            </div>
-                                            <select value={comp.estadoUnidad} onChange={e => handleComponenteChange(index, 'estadoUnidad', e.target.value)} style={styles.selectUnit}>
+                                        {/* Disponibilidades */}
+                                        <td style={styles.td}><input type="number" value={comp.dispHoras} onChange={e => handleComponenteChange(index, 'dispHoras', e.target.value)} style={{...styles.inputFlatNum, backgroundColor: '#e8f8f5'}} /></td>
+                                        <td style={styles.td}><input type="number" value={comp.dispCal} onChange={e => handleComponenteChange(index, 'dispCal', e.target.value)} style={{...styles.inputFlatNum, backgroundColor: '#e8f8f5'}} /></td>
+                                        <td style={styles.td}>
+                                            <select value={comp.estadoUnidad} onChange={e => handleComponenteChange(index, 'estadoUnidad', e.target.value)} style={styles.selectFlatUnit}>
                                                 <option value="H">H</option>
                                                 <option value="C">C</option>
                                                 <option value="M">M</option>
                                             </select>
-                                        </div>
-                                    </td>
+                                        </td>
 
-                                    <td style={{ textAlign: 'center' }}><button onClick={() => removerFila(index)} style={{background:'none', border:'none', cursor:'pointer'}}>🗑️</button></td>
-                                </tr>
-                            ))}
+                                        <td style={{ textAlign: 'center', border: '1px solid #ccc' }}>
+                                            <button onClick={() => removerFila(index)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -211,38 +225,37 @@ const F16Page = () => {
     );
 };
 
+// 🏛️ ESTILOS MATRICIALES (ESTILO EXCEL / CONTROLADOR INDUSTRIAL)
 const styles = {
-    container: { padding: '15px', backgroundColor: '#f4f6f9', minHeight: '100vh' },
-    mainHeader: { backgroundColor: '#1b3a57', color: 'white', padding: '12px 20px', borderRadius: '6px', marginBottom: '15px' },
-    cardCabecera: { backgroundColor: 'white', padding: '15px', borderRadius: '6px', marginBottom: '15px', border: '1px solid #dee2e6' },
-    headerGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' },
-    block: { borderRight: '1px solid #eee', paddingRight: '10px' },
-    blockTitle: { margin: '0 0 8px 0', fontSize: '0.8rem', color: '#1b3a57', borderBottom: '2px solid #3498db', paddingBottom: '2px' },
-    formRow: { display: 'flex', gap: '8px' },
-    field: { display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 },
-    label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#7f8c8d' },
-    input: { padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '0.75rem' },
-    cardTable: { backgroundColor: 'white', padding: '15px', borderRadius: '6px', border: '1px solid #dee2e6' },
+    container: { padding: '10px', backgroundColor: '#fafafa', minHeight: '100vh', fontFamily: 'monospace' },
+    mainHeader: { backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px' },
+    cardCabecera: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', border: '1px solid #ccc' },
+    headerGrid: { display: 'flex', gap: '20px', flexWrap: 'wrap' },
+    block: { flex: 1, minWidth: '250px', borderRight: '1px solid #eee', paddingRight: '10px' },
+    blockTitle: { fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '5px', color: '#555' },
+    formRow: { display: 'flex', gap: '5px' },
+    field: { display: 'flex', flexDirection: 'column', flex: 1 },
+    label: { fontSize: '0.65rem', color: '#666', marginBottom: '2px' },
+    input: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', outline: 'none' },
+    
+    cardTable: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' },
     tableResponsive: { width: '100%', overflowX: 'auto' },
     table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' },
-    thRow: { backgroundColor: '#f8f9fa' },
-    th: { border: '1px solid #dee2e6', padding: '6px', color: '#1b3a57', fontWeight: 'bold', fontSize: '0.7rem' },
-    thGroup: { border: '1px solid #dee2e6', padding: '4px', backgroundColor: '#e9ecef', fontSize: '0.7rem', fontWeight: 'bold', textAlign: 'center' },
-    thSub: { border: '1px solid #dee2e6', padding: '4px', textAlign: 'center', fontSize: '0.65rem' },
-    tr: { borderBottom: '1px solid #dee2e6' },
+    thRow: { backgroundColor: '#eaeaea' },
+    th: { border: '1px solid #aaa', padding: '5px', fontWeight: 'bold', textAlign: 'center', color: '#111' },
+    thGroup: { border: '1px solid #aaa', padding: '4px', fontSize: '0.7rem', fontWeight: 'bold', textAlign: 'center', backgroundColor: '#ddd' },
+    thSub: { border: '1px solid #aaa', padding: '4px', textAlign: 'center', fontSize: '0.65rem', backgroundColor: '#e5e5e5' },
     
-    // Controles inline compactos estilo Excel
-    inputTableCompact: { padding: '4px', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.75rem', width: '75px', outline: 'none' },
-    inputTableMin: { padding: '4px', borderRadius: '3px', border: '1px solid #ccc', fontSize: '0.7rem', width: '55px', textAlign: 'center', outline: 'none' },
+    td: { border: '1px solid #ccc', padding: '3px' },
+    tdCalculated: { border: '1px solid #ccc', padding: '3px', textAlign: 'right', fontWeight: 'bold', backgroundColor: '#f0f0f0' },
     
-    // Maquetación estructural de Doble Renglón Interno
-    cellFlex: { display: 'flex', alignItems: 'center', gap: '4px' },
-    selectInline: { padding: '4px 2px', borderRadius: '3px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#f0f0f0' },
-    selectUnit: { padding: '8px 2px', borderRadius: '3px', border: '1px solid #bbb', fontSize: '0.75rem', fontWeight: 'bold' },
-    doubleStack: { display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 },
-    inputStack: { padding: '2px 4px', borderRadius: '2px', border: '1px solid #ddd', fontSize: '0.7rem', width: '100%', minWidth: '65px', outline: 'none' },
+    // Inputs planos sin bordes redondeados ni sombras, estilo celda pura de datos
+    inputFlat: { width: '70px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', outline: 'none' },
+    inputFlatNum: { width: '60px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', textAlign: 'right', outline: 'none' },
+    selectFlat: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold' },
+    selectFlatUnit: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#fff2cc' },
     
-    btnSecundario: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem' }
+    btnSecundario: { backgroundColor: '#27ae60', color: 'white', border: '1px solid #219653', padding: '4px 10px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' }
 };
 
 export default F16Page;
