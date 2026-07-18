@@ -4,18 +4,25 @@ const F16Page = () => {
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "B206B3"];
     const unidadesList = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
 
-    // 👤 SIMULACIÓN DE USUARIO LOGUEADO (Cambiar 'ADMIN' por 'S4UNIDAD' para probar la restricción de unidad)
-    const [usuarioSesion] = useState({
-        username: "operador1",
-        role: "ADMIN", // Puede ser: 'ADMIN', 'BOSS', 'S4UNIDAD', etc.
-        elemento: "B HELIC ASAL 601" // Su unidad de origen asignada
+    // 🔐 EXTRACCIÓN REAL DE SESIÓN DESDE LOCALSTORAGE (Configurado en tu App.jsx)
+    const token = localStorage.getItem('token');
+    const usuarioSesion = {
+        username: localStorage.getItem('username') || "Operador",
+        role: (localStorage.getItem('role') || localStorage.getItem('rol') || 'USER').toUpperCase().trim(),
+        elemento: (localStorage.getItem('elemento') || '').toUpperCase().trim()
+    };
+
+    // Encabezados globales requeridos por las políticas de CORS y el AuthMiddleware de tu backend
+    const getHeaders = () => ({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'x-auth-token': token // Doble contingencia admitida por tu server.js
     });
 
     // Estados de navegación, búsqueda y base de datos local
-    const [aeronavesBD, setAeronavesBD] = useState([]); // Almacena la flota traída del backend
+    const [aeronavesBD, setAeronavesBD] = useState([]); 
     const [aeronaveSeleccionadaId, setAeronaveSeleccionadaId] = useState('');
-    const [busquedaForm, setBusquedaForm] = useState('');
-    const [unidadNavegacion, setUnidadNavegacion] = useState(unidadesList[0]);
+    const [unidadNavegacion, setUnidadNavegacion] = useState(usuarioSesion.elemento || unidadesList[0]);
     const [unidadDestinoTraslado, setUnidadDestinoTraslado] = useState('');
     const [esEdicion, setEsEdicion] = useState(false);
 
@@ -36,49 +43,39 @@ const F16Page = () => {
         estadoTipo: 'TSO', estadoActual: '', disponibilidades: [{ valor: '', unidad: 'H' }]
     });
 
-    // Estados principales del Formulario
+    // Estados principales del Formulario matricial
     const [cabecera, setCabecera] = useState(estadoInicialCabecera);
     const [compPlaneador, setCompPlaneador] = useState([generarFilaVacia(1)]);
     const [motores, setMotores] = useState([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
     const [helices, setHelices] = useState([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
 
-    // 🔄 EFFECT: Sincronización restrictiva con el Backend (o Mock de Datos)
+    // 🔄 EFFECT: Sincronización restrictiva y en tiempo real con el Backend (aircraftController)
     useEffect(() => {
         const fetchAeronavesPermitidas = async () => {
             try {
-                // AQUÍ CONECTARÍAS CON TU CONTROLADOR DE EXPRESS:
-                // const res = await axios.get('/api/aircrafts');
-                // setAeronavesBD(res.data.data);
+                const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
+                
+                // Si es un mando estratégico y seleccionó una unidad de navegación, le pega al endpoint parametrizado
+                // De lo contrario, le pega a la raíz '/' y el controlador aísla según su token de unidad
+                const url = (esMandoEstrategico && unidadNavegacion) 
+                    ? `/api/aircraft/elemento/${unidadNavegacion}`
+                    : `/api/aircraft`;
 
-                // MOCK DE DATOS REALES EN BASE DE DATOS PARA DESARROLLO
-                const mockFlotaDB = [
-                    { _id: '101', matricula: 'AE-401', sda: 'UH-1H', unidad: 'B HELIC ASAL 601', estadoOperativo: 'E/S' },
-                    { _id: '102', matricula: 'AE-402', sda: 'BELL 212', unidad: 'B HELIC ASAL 601', estadoOperativo: 'F/S' },
-                    { _id: '103', matricula: 'AE-221', sda: 'C-212', unidad: 'SEC AE M 6', estadoOperativo: 'E/S' },
-                    { _id: '104', matricula: 'AE-501', sda: 'DA-62', unidad: 'SEC AE 11', estadoOperativo: 'E/S' }
-                ];
+                const res = await fetch(url, { method: 'GET', headers: getHeaders() });
+                const json = await res.json();
 
-                // Aplicamos la misma restricción que armaste en tu backend (getAircrafts)
-                const roleUpper = String(usuarioSesion.role).toUpperCase().trim();
-                const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper) || usuarioSesion.elemento === 'COMANDO';
-
-                if (!esMandoEstrategico) {
-                    // Restricción estricta: El usuario común solo ve lo cargado en SU unidad asignada
-                    const filtradoUnidad = mockFlotaDB.filter(a => a.unidad === usuarioSesion.elemento.toUpperCase().trim());
-                    setAeronavesBD(filtradoUnidad);
+                if (json.success) {
+                    setAeronavesBD(json.data);
                 } else {
-                    // El Administrador puede ver absolutamente TODO. 
-                    // Lo filtramos opcionalmente por la "Unidad de navegación" que elija en el panel superior
-                    const filtradoAdmin = mockFlotaDB.filter(a => a.unidad === unidadNavegacion);
-                    setAeronavesBD(filtradoAdmin);
+                    console.error("Fallo de respuesta:", json.message);
                 }
             } catch (error) {
-                console.error("Error al sincronizar flota matricial:", error);
+                console.error("Error al sincronizar flota con MongoDB:", error);
             }
         };
 
-        fetchAeronavesPermitidas();
-    }, [unidadNavegacion, usuarioSesion]);
+        if (token) fetchAeronavesPermitidas();
+    }, [unidadNavegacion, token]);
 
     // 🖲️ MANEJADOR DE SELECCIÓN DIRECTA DESDE EL SELECTOR
     const handleSelectorAeronaveChange = (id) => {
@@ -89,65 +86,154 @@ const F16Page = () => {
             return;
         }
 
-        const aeronaveTarget = aeronavesBD.find(a => a._id === id);
-        if (aeronaveTarget) {
+        const aero = aeronavesBD.find(a => a._id === id);
+        if (aero) {
             setEsEdicion(true);
-            setBusquedaForm(aeronaveTarget.matricula);
             
-            // Seteamos la cabecera con los datos básicos recuperados de la purga
+            // Inyección limpia y estructurada de los datos almacenados en el documento de Mongoose
             setCabecera({
-                ...estadoInicialCabecera,
-                sda: aeronaveTarget.sda,
-                matricula: aeronaveTarget.matricula,
-                estadoOperativo: aeronaveTarget.estadoOperativo
+                sda: aero.sda || sdaList[0],
+                matricula: aero.matricula || '',
+                nroSerie: aero.nroSerie || '',
+                estadoOperativo: aero.estadoOperativo || 'E/S',
+                inicioAeFecha: aero.inicioAeFecha ? aero.inicioAeFecha.split('T')[0] : '',
+                inicioAeHs: aero.inicioAeHs || '',
+                tgPlaneadorActual: aero.tgPlaneadorActual || '',
+                motorSn: aero.motorSn || '',
+                motorTsn: aero.motorTsn || '',
+                motorCsnCso: aero.motorCsnCso || '',
+                vencimientoElt: aero.vencimientoElt ? aero.vencimientoElt.split('T')[0] : '',
+                vencimientoPitot: aero.vencimientoPitot ? aero.vencimientoPitot.split('T')[0] : '',
+                vencimientoTransponder: aero.vencimientoTransponder ? aero.vencimientoTransponder.split('T')[0] : '',
+                vencimientoSeguro: aero.vencimientoSeguro ? aero.vencimientoSeguro.split('T')[0] : '',
+                vencimientoAvionica: aero.vencimientoAvionica ? aero.vencimientoAvionica.split('T')[0] : '',
+                observacionesPopup: aero.observacionesPopup || ''
             });
 
-            // Inyectamos las estructuras de tablas dinámicas limpias listas para trabajar
-            setCompPlaneador([generarFilaVacia(1)]);
-            setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
-            setHelices([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
-            
-            alert(`Aeronave ${aeronaveTarget.matricula} cargada al panel de edición. Se bloquearon campos estructurales.`);
+            // Si guardaste los sub-bloques relacionales en tu esquema, los inyectamos; si no, dejamos una fila base vacía
+            setCompPlaneador(aero.compPlaneador && aero.compPlaneador.length ? aero.compPlaneador : [generarFilaVacia(1)]);
+            setMotores(aero.motores && aero.motores.length ? aero.motores : [{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
+            setHelices(aero.helices && aero.helices.length ? aero.helices : [{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
         }
     };
 
-    // ACCIONES GLOBALES DE FORMULARIO
+    // 💾 OPERACIÓN: GUARDAR ALTA (POST) O ACTUALIZAR (PUT)
+    const guardarAltaAeronave = async () => {
+        if (!cabecera.matricula) {
+            alert("Por favor, ingrese al menos la Matrícula para procesar el registro.");
+            return;
+        }
+
+        // Estructura completa del Payload relacional que va a procesar Mongoose
+        const payload = {
+            ...cabecera,
+            compPlaneador,
+            motores,
+            helices
+        };
+
+        try {
+            let url = '/api/aircraft';
+            let method = 'POST';
+
+            // Si estamos editando una aeronave cargada del selector, mutamos la petición a un PUT parametrizado
+            if (esEdicion && aeronaveSeleccionadaId) {
+                url = `/api/aircraft/${aeronaveSeleccionadaId}`;
+                method = 'PUT';
+            }
+
+            const res = await fetch(url, {
+                method: method,
+                headers: getHeaders(),
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+
+            if (json.success) {
+                alert(json.message || "Operación metricial ejecutada con éxito.");
+                // Refrescamos la lista local forzando un ciclo de actualización en el dropdown
+                setUnidadNavegacion(prev => String(prev)); 
+                if(!esEdicion) limpiarFormularioParaNuevoAlta();
+            } else {
+                alert(`⚠️ Error: ${json.message}`);
+            }
+        } catch (error) {
+            console.error("Fallo de comunicación con la API:", error);
+            alert("Fallo crítico de red al intentar impactar los registros aeronáuticos.");
+        }
+    };
+
+    // 🗑️ OPERACIÓN: ELIMINAR REGISTRO PERMANENTE (DELETE)
+    const eliminarFormularioAeronave = async () => {
+        if (!esEdicion || !aeronaveSeleccionadaId) {
+            alert("Debe seleccionar una aeronave existente de la base de datos para ejecutar una baja.");
+            return;
+        }
+
+        if (window.confirm(`⚠️ AVISO CRÍTICO: ¿Está completamente seguro de eliminar permanentemente la aeronave ${cabecera.matricula}? Esta acción es irreversible.`)) {
+            try {
+                const res = await fetch(`/api/aircraft/${aeronaveSeleccionadaId}`, {
+                    method: 'DELETE',
+                    headers: getHeaders()
+                });
+                const json = await res.json();
+
+                if (json.success) {
+                    alert(json.message);
+                    limpiarFormularioParaNuevoAlta();
+                    // Forzamos recarga del set de navegación
+                    setUnidadNavegacion(prev => String(prev));
+                } else {
+                    alert(`🚫 Acceso Denegado: ${json.message}`);
+                }
+            } catch (error) {
+                console.error("Error en operación de borrado:", error);
+                alert("No se pudo conectar con el servidor central para procesar la baja.");
+            }
+        }
+    };
+
+    // ✈️ OPERACIÓN: TRASLADO INMEDIATO DE UNIDAD
+    const ejecutarTransferenciaUnidad = async () => {
+        if (!esEdicion || !aeronaveSeleccionadaId) {
+            alert("Primero seleccione una aeronave guardada para autorizar su traslado táctico.");
+            return;
+        }
+        if (!unidadDestinoTraslado) {
+            alert("Especifique un Elemento de destino válido.");
+            return;
+        }
+
+        if (window.confirm(`¿Confirma el traslado de la aeronave ${cabecera.matricula} hacia la unidad: ${unidadDestinoTraslado}?`)) {
+            try {
+                const res = await fetch(`/api/aircraft/${aeronaveSeleccionadaId}`, {
+                    method: 'PUT',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ unidad: unidadDestinoTraslado })
+                });
+                const json = await res.json();
+
+                if (json.success) {
+                    alert(json.message);
+                    setUnidadDestinoTraslado('');
+                    limpiarFormularioParaNuevoAlta();
+                    setUnidadNavegacion(prev => String(prev));
+                } else {
+                    alert(`⚠️ Restricción: ${json.message}`);
+                }
+            } catch (error) {
+                alert("Error al despachar el traslado en red.");
+            }
+        }
+    };
+
     const limpiarFormularioParaNuevoAlta = () => {
-        if (window.confirm("¿Desea limpiar la pantalla para rellenar un nuevo Formulario de Alta? Los datos no guardados se perderán.")) {
-            setCabecera(estadoInicialCabecera);
-            setCompPlaneador([generarFilaVacia(1)]);
-            setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
-            setHelices([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
-            setBusquedaForm('');
-            setAeronaveSeleccionadaId('');
-            setEsEdicion(false);
-        }
-    };
-
-    const handleKeyDownBusqueda = (e) => {
-        if (e.key === 'Enter' && busquedaForm.trim() !== '') {
-            setEsEdicion(true); 
-            alert(`Buscando por texto libre: ${busquedaForm}.`);
-        }
-    };
-
-    const guardarAltaAeronave = () => {
-        if (!cabecera.matricula) {
-            alert("Por favor, ingrese al menos la Matrícula para dar de alta la aeronave.");
-            return;
-        }
-        alert(`¡Formulario de la aeronave ${cabecera.matricula} guardado/actualizado con éxito!`);
-    };
-
-    const eliminarFormularioAeronave = () => {
-        if (!cabecera.matricula) {
-            alert("No hay ninguna aeronave cargada o identificada con matrícula para eliminar.");
-            return;
-        }
-        if (window.confirm(`⚠️ AVISO CRÍTICO: ¿Está completamente seguro de eliminar el formulario de la aeronave ${cabecera.matricula}? Esta acción es irreversible.`)) {
-            alert(`El registro de la aeronave ${cabecera.matricula} ha sido eliminado.`);
-            limpiarFormularioParaNuevoAlta();
-        }
+        setCabecera(estadoInicialCabecera);
+        setCompPlaneador([generarFilaVacia(1)]);
+        setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
+        setHelices([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
+        setAeronaveSeleccionadaId('');
+        setEsEdicion(false);
     };
 
     const handleCabeceraChange = (field, val) => {
@@ -157,7 +243,7 @@ const F16Page = () => {
         }));
     };
 
-    // MANEJO DE ESTADOS: PLANEADOR
+    // MANEJO DE ESTADOS DINÁMICOS: PLANEADOR
     const handlePlaneadorChange = (idx, field, val) => {
         const nuevos = [...compPlaneador];
         nuevos[idx][field] = val;
@@ -184,7 +270,7 @@ const F16Page = () => {
         }
     };
 
-    // MANEJO DE ESTADOS: MOTORES
+    // MANEJO DE ESTADOS DINÁMICOS: MOTORES
     const handleNombreMotorChange = (motorIdx, nuevoNombre) => {
         const nuevosMotores = [...motores];
         nuevosMotores[motorIdx].nombre = nuevoNombre;
@@ -233,7 +319,7 @@ const F16Page = () => {
         }
     };
 
-    // MANEJO DE ESTADOS: HÉLICES
+    // MANEJO DE ESTADOS DINÁMICOS: HÉLICES
     const handleNombreHeliceChange = (heliceIdx, nuevoNombre) => {
         const nuevasHelices = [...helices];
         nuevasHelices[heliceIdx].nombre = nuevoNombre;
@@ -287,7 +373,7 @@ const F16Page = () => {
             setMotores([...motores, { id: 2, nombre: 'MOTOR Nº 2', componentes: [generarFilaVacia(1)] }]);
             setHelices([...helices, { id: 2, nombre: 'HÉLICE Nº 2', componentes: [generarFilaVacia(1)] }]);
         } else {
-            if (window.confirm("¿Confirma remover la configuración adicional de Motor y Hélice Nº 2 junto a sus componentes?")) {
+            if (window.confirm("¿Confirma remover la configuración de Motor y Hélice Nº 2?")) {
                 setMotores([motores[0]]);
                 setHelices([helices[0]]);
             }
@@ -295,30 +381,28 @@ const F16Page = () => {
     };
 
     const colorEstadoOperativo = cabecera.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c';
-
-    // Verificamos si el usuario actual posee rol jerárquico
-    const esAdminGlobal = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role.toUpperCase());
+    const esAdminGlobal = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
 
     return (
         <div style={styles.container}>
             <div style={styles.mainHeaderFlex}>
-                <h2 style={{ margin: 0, fontSize: '1.1rem' }}>SISTEMA DE GESTIÓN F-16 - HISTORIAL METRICIAL</h2>
+                <h2 style={{ margin: 0, fontSize: '1.1rem' }}>SISTEMA DE GESTIÓN F-16 - SINCRO MONGOOSE</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                    <button type="button" onClick={limpiarFormularioParaNuevoAlta} style={styles.btnFormAlta}>📄 Formulario de Alta (Nuevo)</button>
-                    <button type="button" onClick={guardarAltaAeronave} style={styles.btnFormGuardar}>💾 Dar de Alta / Guardar</button>
-                    <button type="button" onClick={eliminarFormularioAeronave} style={styles.btnFormEliminar}>🗑️ Eliminar Formulario</button>
+                    <button type="button" onClick={limpiarFormularioParaNuevoAlta} style={styles.btnFormAlta}>📄 Limpiar / Nuevo</button>
+                    <button type="button" onClick={guardarAltaAeronave} style={styles.btnFormGuardar}>💾 {esEdicion ? 'Actualizar Cambios' : 'Dar de Alta / Guardar'}</button>
+                    <button type="button" onClick={eliminarFormularioAeronave} style={styles.btnFormEliminar}>🗑️ Eliminar Registro</button>
                 </div>
             </div>
 
             <div style={styles.cardAdminPanel}>
                 <div style={styles.adminGrid}>
                     
-                    {/* 🔍 SECTOR SELECTOR JERÁRQUICO INTERACTIVO */}
+                    {/* SELECTOR JERÁRQUICO CONECTADO AL ESTADO DE MONGO */}
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>
                             {esAdminGlobal 
-                                ? `📂 SELECTOR FLOTA (Vista Global Admin - Unidad: ${unidadNavegacion})` 
-                                : `📂 SELECTOR FLOTA (Restringido a tu Unidad: ${usuarioSesion.elemento})`
+                                ? `📂 SELECTOR FLOTA (Vista Global - Elemento: ${unidadNavegacion})` 
+                                : `📂 SELECTOR FLOTA (Restringido a tu Base: ${usuarioSesion.elemento || 'Unidad No Asignada'})`
                             }
                         </label>
                         <select 
@@ -326,16 +410,16 @@ const F16Page = () => {
                             onChange={e => handleSelectorAeronaveChange(e.target.value)} 
                             style={{...styles.inputAdmin, backgroundColor: '#e8f8f5', fontWeight: 'bold', border: '1px solid #27ae60'}}
                         >
-                            <option value="">-- Seleccionar Aeronave Guardada --</option>
+                            <option value="">-- {aeronavesBD.length ? 'Seleccionar Aeronave Guardada' : 'No hay aeronaves registradas'} --</option>
                             {aeronavesBD.map(aero => (
                                 <option key={aero._id} value={aero._id}>
-                                    {aero.matricula} - {aero.sda} ({aero.estadoOperativo})
+                                    {aero.matricula} - {aero.sda} [{aero.unidad || 'S/D'}] ({aero.estadoOperativo})
                                 </option>
                             ))}
                         </select>
                     </div>
 
-                    {/* CONTROL ADMIN DE FILTRADO DE UNIDADES */}
+                    {/* CONTROL FILTRADO DE UNIDADES (SOLO MANDO ESTRATÉGICO) */}
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>🛡️ NAVEGACIÓN ENTRE UNIDADES {!esAdminGlobal && '🔒 (BLOQUEADO)'}</label>
                         <select 
@@ -352,25 +436,26 @@ const F16Page = () => {
                         </select>
                     </div>
 
+                    {/* DESPACHO Y TRASLADO DE UNIDADES */}
                     <div style={styles.fieldAdmin}>
-                        <label style={styles.labelAdmin}>✈️ TRANSFERIR FORMULARIO ACTUAL</label>
+                        <label style={styles.labelAdmin}>✈️ DESPACHAR TRASLADO DE UNIDAD</label>
                         <div style={{ display: 'flex', gap: '2px' }}>
                             <select value={unidadDestinoTraslado} onChange={e => setUnidadDestinoTraslado(e.target.value)} style={{...styles.inputAdmin, flex: 1, backgroundColor: '#fff0f0'}}>
                                 <option value="">-- Destino --</option>
                                 {unidadesList.map(u => <option key={u} value={u}>{u}</option>)}
                             </select>
-                            <button type="button" onClick={() => alert("Transferencia guardada en cola.")} style={styles.btnTransfer}>Transferir</button>
+                            <button type="button" onClick={ejecutarTransferenciaUnidad} style={styles.btnTransfer}>Trasladar</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* RESTO DEL COMPONENTE INTACTO CON TUS TABLAS ESTRUCTURALES COMPLEJAS */}
+            {/* FORMULARIO ESTRUCTURAL MATRICIAL */}
             <div style={styles.cardCabecera}>
                 <div style={styles.headerGrid}>
                     <div style={styles.block}>
                         <div style={styles.blockTitleFlex}>
-                            <span>DATOS DE LA AERONAVE {esEdicion && <span style={{color: '#d35400', fontSize: '0.65rem'}}>🔒 BLOQUEADO</span>}</span>
+                            <span>DATOS DE LA AERONAVE {esEdicion && <span style={{color: '#d35400', fontSize: '0.65rem'}}>🔒 ANCLADO</span>}</span>
                             <select 
                                 value={cabecera.estadoOperativo} 
                                 onChange={e => handleCabeceraChange('estadoOperativo', e.target.value)} 
@@ -459,10 +544,11 @@ const F16Page = () => {
 
             <div style={{ marginBottom: '15px', textAlign: 'right' }}>
                 <button type="button" onClick={alternarSegundoMotor} style={motores.length === 1 ? styles.btnBimotorAdd : styles.btnBimotorRem}>
-                    {motores.length === 1 ? "➕ Configurar como Aeronave Bimotor / Bihélice" : "🗑️ Quitar Configuración Bimotor / Bihélice"}
+                    {motores.length === 1 ? "➕ Configurar como Aeronave Bimotor" : "🗑️ Quitar Configuración Bimotor"}
                 </button>
             </div>
 
+            {/* TABLA DE PLANEADOR */}
             <div style={styles.cardTable}>
                 <div style={styles.tableHeaderFlex}>
                     <div style={styles.tableTitle}>COMPONENTES DEL PLANEADOR</div>
@@ -478,6 +564,7 @@ const F16Page = () => {
                 )}
             </div>
 
+            {/* TABLAS DE MOTORES DINÁMICOS */}
             {motores.map((mot, motIdx) => (
                 <div key={mot.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #d35400'}}>
                     <div style={styles.tableHeaderFlex}>
@@ -488,7 +575,6 @@ const F16Page = () => {
                                 value={mot.nombre} 
                                 onChange={(e) => handleNombreMotorChange(motIdx, e.target.value.toUpperCase())} 
                                 style={styles.inputNombreMotor}
-                                placeholder="EJ: MOTOR IZQUIERDO"
                             />
                         </div>
                         <button onClick={() => agregarFilaMotor(motIdx)} style={{...styles.btnSecundario, backgroundColor: '#d35400'}}>➕ Añadir Fila</button>
@@ -504,6 +590,7 @@ const F16Page = () => {
                 </div>
             ))}
 
+            {/* TABLAS DE HÉLICES DINÁMICAS */}
             {helices.map((hel, helIdx) => (
                 <div key={hel.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #2980b9'}}>
                     <div style={styles.tableHeaderFlex}>
@@ -514,7 +601,6 @@ const F16Page = () => {
                                 value={hel.nombre} 
                                 onChange={(e) => handleNombreHeliceChange(helIdx, e.target.value.toUpperCase())} 
                                 style={{...styles.inputNombreMotor, color: '#2980b9', borderBottom: '1px dashed #2980b9'}}
-                                placeholder="EJ: HÉLICE IZQUIERDA"
                             />
                         </div>
                         <button onClick={() => agregarFilaHelice(helIdx)} style={{...styles.btnSecundario, backgroundColor: '#2980b9'}}>➕ Añadir Fila</button>
@@ -533,7 +619,6 @@ const F16Page = () => {
     );
 };
 
-// Se mantiene la función auxiliar renderTablaComponentes idéntica a tu código original...
 const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgregarSub, onRemoverSub) => (
     <div style={styles.tableResponsive}>
         <table style={styles.table}>
@@ -661,7 +746,6 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
     </div>
 );
 
-// Agregamos estilos bases compartidos
 const styles = {
     container: { padding: '10px', backgroundColor: '#fafafa', minHeight: '100vh', fontFamily: 'monospace' },
     mainHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' },
