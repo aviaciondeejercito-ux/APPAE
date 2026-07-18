@@ -88,7 +88,7 @@ function App() {
     const puedeVerF13 = esAdmin || esOfTecnica || esUser;
     const puedeVerReportes = esAdmin || esOfTecnica || esBoss || esDirector || esJefe || esOTO;
     const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
-const puedeVerF16 = esAdmin; 
+const puedeVerF16 = esAdmin|| esOfTecnica; 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
     const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16'].includes(view);
 
