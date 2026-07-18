@@ -63,30 +63,45 @@ const ProgramaMantenimiento = () => {
         }
     };
 
-    const handleAeronaveChange = (e) => {
-        const id = e.target.value;
-        setAeronaveSeleccionadaId(id);
-        
-        if (!id) {
-            resetVistaLocal();
-            return;
-        }
+    const handleAeronaveChange = async (e) => {
+    const id = e.target.value;
+    setAeronaveSeleccionadaId(id);
+    
+    if (!id) {
+        resetVistaLocal();
+        return;
+    }
 
-        const avion = aeronaves.find(a => a._id === id);
-        if (avion) {
-            setFormData({
-                sda: avion.sda || '',
-                matricula: avion.matricula || '',
-                nroSerie: avion.nroSerie || '',
-                tgPlaneadorActual: avion.tgPlaneadorActual ? String(avion.tgPlaneadorActual).replace('.', ',') : '0,0',
-                tgMotorActual: avion.tgMotorActual ? String(avion.tgMotorActual).replace('.', ',') : '0,0'
-            });
+    const avion = aeronaves.find(a => a._id === id);
+    if (avion) {
+        // 1. Cargamos los datos estáticos de tu modelo original de Aircraft
+        setFormData({
+            sda: avion.sda || '',
+            matricula: avion.matricula || '',
+            nroSerie: avion.nroSerie || '',
+            tgPlaneadorActual: '0,0', // se pisan abajo si existen
+            tgMotorActual: '0,0'
+        });
 
-            // Si ya existen en Mongoose se muestran, de lo contrario inicializa array vacío para empezar a escribir
-            setTablaPlaneador(avion.programaPlaneador || []);
-            setTablaMotor(avion.programaMotor || []);
+        // 2. Vamos a buscar el programa a la NUEVA API independiente
+        try {
+            const res = await fetch(`/api/programas-mantenimiento/aeronave/${id}`);
+            const resultado = await res.json();
+            
+            if (res.ok && resultado.data) {
+                setFormData(prev => ({
+                    ...prev,
+                    tgPlaneadorActual: resultado.data.tgPlaneadorActual || '0,0',
+                    tgMotorActual: resultado.data.tgMotorActual || '0,0'
+                }));
+                setTablaPlaneador(resultado.data.programaPlaneador || []);
+                setTablaMotor(resultado.data.programaMotor || []);
+            }
+        } catch (error) {
+            console.error("Error al traer el programa de mantenimiento:", error);
         }
-    };
+    }
+};
 
     const handleKpiChange = (campo, valor) => {
         setFormData({ ...formData, [campo]: valor });
@@ -151,7 +166,7 @@ const ProgramaMantenimiento = () => {
             
             {/* 🟦 BARRA DE TÍTULO SUPERIOR OSCURA */}
             <div style={styles.topHeaderBar}>
-                <h2 style={styles.mainTitle}>SISTEMA DE GESTIÓN MANTENIMIENTO - SINCRO MONGOOSE</h2>
+                <h2 style={styles.mainTitle}>SISTEMA DE GESTIÓN MANTENIMIENTO</h2>
                 <div style={styles.topButtonBar}>
                     <button style={{...styles.btnTop, backgroundColor: '#7f8c8d'}} onClick={limpiarTablasActuales} disabled={!aeronaveSeleccionadaId}>
                         🔄 Limpiar Pantalla / Reescribir
