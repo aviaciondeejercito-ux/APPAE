@@ -18,13 +18,14 @@ const F16Page = () => {
         vencimientoSeguro: '', vencimientoAvionica: '', observacionesPopup: ''
     };
 
-    // Plantilla para generar filas limpias
+    // Plantilla para generar filas limpias con sub-renglones iniciales
     const generarFilaVacia = (nro) => ({
         nro: nro, ata: '', pn: '', componente: '', sn: '',
-        limiteTipo: 'TBO', limites: [{ valor: '', unidad: 'H' }],
+        limiteTipo: 'TBO', 
+        limites: [{ valor: '', unidad: 'H' }],
         instaladoFecha: '', instaladoHoras: '', instaladoTsnCsn: '', 
         tgInstalacion: '', estadoTipo: 'TSO', estadoActual: '',
-        disponibilidades: [{ valor: '', unidad: 'H' }, { valor: '', unidad: 'H' }]
+        disponibilidades: [{ valor: '', unidad: 'H' }]
     });
 
     // Estados principales del Formulario
@@ -34,7 +35,7 @@ const F16Page = () => {
         { id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }
     ]);
 
-    // ACCIONES GLOBAL DE FORMULARIO (Alta, Limpieza, Eliminación)
+    // ACCIONES GLOBALES DE FORMULARIO
     const limpiarFormularioParaNuevoAlta = () => {
         if (window.confirm("¿Desea limpiar la pantalla para rellenar un nuevo Formulario de Alta? Los datos no guardados se perderán.")) {
             setCabecera(estadoInicialCabecera);
@@ -49,7 +50,7 @@ const F16Page = () => {
             alert("Por favor, ingrese al menos la Matrícula para dar de alta la aeronave.");
             return;
         }
-        alert(`¡Formulario de la aeronave ${cabecera.matricula} guardado/actualizado con éxito en la base de datos!`);
+        alert(`¡Formulario de la aeronave ${cabecera.matricula} guardado/actualizado con éxito!`);
     };
 
     const eliminarFormularioAeronave = () => {
@@ -65,7 +66,7 @@ const F16Page = () => {
         }
     };
 
-    // Manejadores de cambios
+    // Manejadores de cambios en Cabecera
     const handleCabeceraChange = (field, val) => {
         setCabecera(prev => ({
             ...prev,
@@ -73,6 +74,7 @@ const F16Page = () => {
         }));
     };
 
+    // MANEJO DE ESTADOS: PLANEADOR
     const handlePlaneadorChange = (idx, field, val) => {
         const nuevos = [...compPlaneador];
         nuevos[idx][field] = val;
@@ -85,6 +87,21 @@ const F16Page = () => {
         setCompPlaneador(nuevos);
     };
 
+    const agregarSubFilaPlaneador = (compIdx, arrayField) => {
+        const nuevos = [...compPlaneador];
+        nuevos[compIdx][arrayField].push({ valor: '', unidad: 'H' });
+        setCompPlaneador(nuevos);
+    };
+
+    const removerSubFilaPlaneador = (compIdx, arrayField, subIdx) => {
+        const nuevos = [...compPlaneador];
+        if (nuevos[compIdx][arrayField].length > 1) {
+            nuevos[compIdx][arrayField] = nuevos[compIdx][arrayField].filter((_, i) => i !== subIdx);
+            setCompPlaneador(nuevos);
+        }
+    };
+
+    // MANEJO DE ESTADOS: MOTORES
     const handleNombreMotorChange = (motorIdx, nuevoNombre) => {
         const nuevosMotores = [...motores];
         nuevosMotores[motorIdx].nombre = nuevoNombre;
@@ -119,6 +136,20 @@ const F16Page = () => {
         setMotores(nuevosMotores);
     };
 
+    const agregarSubFilaMotor = (motorIdx, compIdx, arrayField) => {
+        const nuevosMotores = [...motores];
+        nuevosMotores[motorIdx].componentes[compIdx][arrayField].push({ valor: '', unidad: 'H' });
+        setMotores(nuevosMotores);
+    };
+
+    const removerSubFilaMotor = (motorIdx, compIdx, arrayField, subIdx) => {
+        const nuevosMotores = [...motores];
+        if (nuevosMotores[motorIdx].componentes[compIdx][arrayField].length > 1) {
+            nuevosMotores[motorIdx].componentes[compIdx][arrayField] = nuevosMotores[motorIdx].componentes[compIdx][arrayField].filter((_, i) => i !== subIdx);
+            setMotores(nuevosMotores);
+        }
+    };
+
     const alternarSegundoMotor = () => {
         if (motores.length === 1) {
             setMotores([...motores, { id: 2, nombre: 'MOTOR Nº 2', componentes: [generarFilaVacia(1)] }]);
@@ -129,7 +160,7 @@ const F16Page = () => {
         }
     };
 
-    // Color dinámico corregido
+    // Color dinámico de condición operativo
     const colorEstadoOperativo = cabecera.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c';
 
     return (
@@ -144,7 +175,7 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* SECCIÓN SUPERIOR: CONTROL DE BÚSQUEDA */}
+            {/* SECCIÓN SUPERIOR: CONTROL DE BÚSQUEDA Y NAVEGACIÓN */}
             <div style={styles.cardAdminPanel}>
                 <div style={styles.adminGrid}>
                     <div style={styles.fieldAdmin}>
@@ -183,7 +214,6 @@ const F16Page = () => {
                             <div style={styles.field}><label style={styles.label}>Matrícula</label><input type="text" value={cabecera.matricula} onChange={e => handleCabeceraChange('matricula', e.target.value)} style={styles.input} placeholder="AE-XXX" /></div>
                             <div style={styles.field}><label style={styles.label}>Nro Serie</label><input type="text" value={cabecera.nroSerie} onChange={e => handleCabeceraChange('nroSerie', e.target.value)} style={styles.input} placeholder="N/S" /></div>
                             
-                            {/* COLOR DINÁMICO CORREGIDO AQUÍ */}
                             <div style={{...styles.field, maxWidth: '85px'}}><label style={styles.label}>Condición</label>
                                 <select 
                                     value={cabecera.estadoOperativo} 
@@ -239,7 +269,7 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* CONTROL CONFIGURACIÓN MOTORES */}
+            {/* CONTROL DE CONFIGURACIÓN CONFIG BIMOTOR */}
             <div style={{ marginBottom: '15px', textAlign: 'right' }}>
                 <button type="button" onClick={alternarSegundoMotor} style={motores.length === 1 ? styles.btnBimotorAdd : styles.btnBimotorRem}>
                     {motores.length === 1 ? "➕ Configurar como Aeronave Bimotor" : "🗑️ Quitar Configuración Bimotor"}
@@ -252,10 +282,17 @@ const F16Page = () => {
                     <div style={styles.tableTitle}>COMPONENTES DEL PLANEADOR</div>
                     <button onClick={() => setCompPlaneador([...compPlaneador, generarFilaVacia(compPlaneador.length + 1)])} style={styles.btnSecundario}>➕ Añadir Fila Planeador</button>
                 </div>
-                {renderTablaComponentes(compPlaneador, handlePlaneadorChange, handlePlaneadorSubChange, (idx) => setCompPlaneador(compPlaneador.filter((_, i) => i !== idx).map((c, i) => ({...c, nro: i+1}))))}
+                {renderTablaComponentes(
+                    compPlaneador, 
+                    handlePlaneadorChange, 
+                    handlePlaneadorSubChange, 
+                    (idx) => setCompPlaneador(compPlaneador.filter((_, i) => i !== idx).map((c, i) => ({...c, nro: i+1}))),
+                    agregarSubFilaPlaneador,
+                    removerSubFilaPlaneador
+                )}
             </div>
 
-            {/* TABLAS DE MOTORES */}
+            {/* TABLAS DE MOTORES (DINÁMICAS) */}
             {motores.map((mot, motIdx) => (
                 <div key={mot.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #d35400'}}>
                     <div style={styles.tableHeaderFlex}>
@@ -275,7 +312,9 @@ const F16Page = () => {
                         mot.componentes,
                         (cIdx, f, v) => handleMotorCompChange(motIdx, cIdx, f, v),
                         (cIdx, af, sIdx, ssf, v) => handleMotorSubChange(motIdx, cIdx, af, sIdx, ssf, v),
-                        (cIdx) => removerFilaMotor(motIdx, cIdx)
+                        (cIdx) => removerFilaMotor(motIdx, cIdx),
+                        (cIdx, af) => agregarSubFilaMotor(motIdx, cIdx, af),
+                        (cIdx, af, sIdx) => removerSubFilaMotor(motIdx, cIdx, af, sIdx)
                     )}
                 </div>
             ))}
@@ -283,8 +322,8 @@ const F16Page = () => {
     );
 };
 
-// FUNCIÓN MODULAR PARA RENDERIZAR TABLAS IDENTICAS
-const renderTablaComponentes = (lista, onChange, onSubChange, onRemover) => (
+// RENDERIZADO MODULAR DE TABLAS CON SUB-RENGLONES DINÁMICOS
+const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgregarSub, onRemoverSub) => (
     <div style={styles.tableResponsive}>
         <table style={styles.table}>
             <thead>
@@ -294,11 +333,11 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover) => (
                     <th rowSpan="2" style={styles.th}>P/N</th>
                     <th rowSpan="2" style={styles.th}>Componente</th>
                     <th rowSpan="2" style={styles.th}>S/N</th>
-                    <th rowSpan="2" style={{...styles.th, minWidth: '150px' }}>Límites</th>
+                    <th rowSpan="2" style={{...styles.th, minWidth: '170px' }}>Límites</th>
                     <th colSpan="3" style={styles.thGroup}>Instalado con</th>
                     <th colSpan="2" style={styles.thGroup}>TG Planeador</th>
                     <th colSpan="2" style={styles.thGroup}>Estado Componente</th>
-                    <th rowSpan="2" style={{...styles.th, minWidth: '130px'}}>Disp</th>
+                    <th rowSpan="2" style={{...styles.th, minWidth: '150px'}}>Disp</th>
                     <th rowSpan="2" style={styles.th}>Baja</th>
                 </tr>
                 <tr style={styles.thRow}>
@@ -325,12 +364,14 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover) => (
                             <td style={styles.td}><input type="text" value={comp.componente} onChange={e => onChange(compIndex, 'componente', e.target.value)} style={{...styles.inputFlat, width: '130px'}} placeholder="Descripción" /></td>
                             <td style={styles.td}><input type="text" value={comp.sn} onChange={e => onChange(compIndex, 'sn', e.target.value)} style={styles.inputFlat} placeholder="S/N" /></td>
                             
+                            {/* COLUMNA LÍMITES CON SUB-RENGLONES DINÁMICOS */}
                             <td style={styles.td}>
                                 <div style={styles.cellContainerVertical}>
-                                    <div style={{ display: 'flex', gap: '4px', marginBottom: '4px', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                                         <select value={comp.limiteTipo} onChange={e => onChange(compIndex, 'limiteTipo', e.target.value)} style={styles.selectFlatType}>
                                             <option value="TBO">TBO</option><option value="LL">LL</option>
                                         </select>
+                                        <button type="button" onClick={() => onAgregarSub(compIndex, 'limites')} style={styles.btnInlineAdd}>+ Renglón</button>
                                     </div>
                                     <div style={styles.stackContainer}>
                                         {comp.limites.map((lim, subIndex) => (
@@ -339,6 +380,9 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover) => (
                                                 <select value={lim.unidad} onChange={e => onSubChange(compIndex, 'limites', subIndex, 'unidad', e.target.value)} style={styles.selectStackUnit}>
                                                     <option value="H">H</option><option value="M">M</option><option value="C">C</option>
                                                 </select>
+                                                {comp.limites.length > 1 && (
+                                                    <button type="button" onClick={() => onRemoverSub(compIndex, 'limites', subIndex)} style={styles.btnInlineRem}>-</button>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -357,19 +401,28 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover) => (
                             </td>
                             <td style={styles.td}><input type="number" value={comp.estadoActual} onChange={e => onChange(compIndex, 'estadoActual', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
 
+                            {/* COLUMNA DISPONIBILIDAD CON SUB-RENGLONES DINÁMICOS */}
                             <td style={{...styles.td, backgroundColor: '#f4fbf7'}}>
-                                <div style={styles.stackContainer}>
-                                    {comp.disponibilidades.map((disp, subIndex) => (
-                                        <div key={subIndex} style={styles.rowStack}>
-                                            <input type="number" value={disp.valor} onChange={e => onSubChange(compIndex, 'disponibilidades', subIndex, 'valor', e.target.value)} style={{...styles.inputStack, backgroundColor: '#e8f8f5'}} placeholder="0.0" />
-                                            <select value={disp.unidad} onChange={e => onSubChange(compIndex, 'disponibilidades', subIndex, 'unidad', e.target.value)} style={styles.selectStackUnit}>
-                                                <option value="H">H</option><option value="M">M</option><option value="C">C</option>
-                                            </select>
-                                        </div>
-                                    ))}
+                                <div style={styles.cellContainerVertical}>
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '5px' }}>
+                                        <button type="button" onClick={() => onAgregarSub(compIndex, 'disponibilidades')} style={{...styles.btnInlineAdd, backgroundColor: '#27ae60'}}>+ Renglón</button>
+                                    </div>
+                                    <div style={styles.stackContainer}>
+                                        {comp.disponibilidades.map((disp, subIndex) => (
+                                            <div key={subIndex} style={styles.rowStack}>
+                                                <input type="number" value={disp.valor} onChange={e => onSubChange(compIndex, 'disponibilidades', subIndex, 'valor', e.target.value)} style={{...styles.inputStack, backgroundColor: '#e8f8f5'}} placeholder="0.0" />
+                                                <select value={disp.unidad} onChange={e => onSubChange(compIndex, 'disponibilidades', subIndex, 'unidad', e.target.value)} style={styles.selectStackUnit}>
+                                                    <option value="H">H</option><option value="M">M</option><option value="C">C</option>
+                                                </select>
+                                                {comp.disponibilidades.length > 1 && (
+                                                    <button type="button" onClick={() => onRemoverSub(compIndex, 'disponibilidades', subIndex)} style={styles.btnInlineRem}>-</button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </td>
-                            <td style={{ textAlign: 'center', border: '1px solid #ccc' }}><button onClick={() => onRemover(compIndex)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button></td>
+                            <td style={{ textAlign: 'center', border: '1px solid #ccc' }}><button type="button" onClick={() => onRemover(compIndex)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button></td>
                         </tr>
                     );
                 })}
@@ -378,7 +431,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover) => (
     </div>
 );
 
-// ESTILOS
+// HOJA DE ESTILOS UNIFICADA
 const styles = {
     container: { padding: '10px', backgroundColor: '#fafafa', minHeight: '100vh', fontFamily: 'monospace' },
     mainHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' },
@@ -405,7 +458,7 @@ const styles = {
     
     formRowAlign: { display: 'flex', gap: '5px', alignItems: 'stretch' },
     inputUniform: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', height: '26px', boxSizing: 'border-box', outline: 'none' },
-    btnUniformPopup: { height: '26px', padding: '0 10px', fontSize: '0.7.rem', backgroundColor: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', boxSizing: 'border-box' },
+    btnUniformPopup: { height: '26px', padding: '0 10px', fontSize: '0.7rem', backgroundColor: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', boxSizing: 'border-box' },
 
     inputNombreMotor: { fontSize: '0.8rem', fontWeight: 'bold', color: '#d35400', border: 'none', borderBottom: '1px dashed #d35400', outline: 'none', padding: '2px', backgroundColor: 'transparent', width: '180px' },
     cardTable: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' },
@@ -424,11 +477,15 @@ const styles = {
     inputFlatMin: { width: '50px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', textAlign: 'center', outline: 'none' },
     selectFlat: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem' },
     selectFlatType: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#e6f2ff' },
+    
     cellContainerVertical: { display: 'flex', flexDirection: 'column', width: '100%' },
     stackContainer: { display: 'flex', flexDirection: 'column', gap: '3px', width: '100%' },
     rowStack: { display: 'flex', alignItems: 'center', gap: '2px', width: '100%' },
-    inputStack: { flex: 1, minWidth: '55px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', outline: 'none' },
+    inputStack: { flex: 1, minWidth: '45px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', outline: 'none' },
     selectStackUnit: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#fff2cc' },
+    
+    btnInlineAdd: { backgroundColor: '#3498db', color: 'white', border: 'none', padding: '2px 5px', fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '2px' },
+    btnInlineRem: { backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '2px 5px', fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '2px', marginLeft: '2px' },
     
     btnBimotorAdd: { backgroundColor: '#2c3e50', color: '#fff', border: '1px solid #34495e', padding: '6px 12px', cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 'bold' },
     btnBimotorRem: { backgroundColor: '#e74c3c', color: '#fff', border: '1px solid #c0392b', padding: '6px 12px', cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 'bold' },
