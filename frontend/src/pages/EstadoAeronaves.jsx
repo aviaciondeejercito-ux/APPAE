@@ -23,7 +23,17 @@ const EstadoAeronaves = () => {
 
     const fetchData = async () => {
         try {
-            const { data } = await getAircrafts();
+            const respuestaApi = await getAircrafts();
+            
+            // 🛡️ NORMALIZACIÓN DE RESPUESTA: Soportamos Axios, Fetch nativo o Array directo
+            let unparsedData = [];
+            if (Array.isArray(respuestaApi)) {
+                unparsedData = respuestaApi;
+            } else if (respuestaApi && Array.isArray(respuestaApi.data)) {
+                unparsedData = respuestaApi.data;
+            } else if (respuestaApi && respuestaApi.data && Array.isArray(respuestaApi.data.data)) {
+                unparsedData = respuestaApi.data.data;
+            }
             
             // VERIFICACIÓN MULTI-CAPA (Redundancia estricta para ADMIN/admin/Admin/ADMINISTRADOR)
             const esAdminPorContenido = roleUpper.includes('ADMIN') || roleLower.includes('admin');
@@ -37,14 +47,14 @@ const EstadoAeronaves = () => {
 
             // 1. Filtrado Inicial por Jurisdicción de Unidad
             let filtrados = isMandoEstrategico 
-                ? data 
-                : data.filter(a => 
+                ? unparsedData 
+                : unparsedData.filter(a => 
                     a.unidad && 
                     userElemento && 
                     String(a.unidad).trim().toUpperCase() === userElemento
                 );
             
-            // 🌟 2. FILTRO EXCLUSIVO SOLICITADO: Solo mostrar si el estado es estrictamente E/S o F/S
+            // 2. FILTRO EXCLUSIVO: Solo mostrar si el estado es estrictamente E/S o F/S
             filtrados = filtrados.filter(a => a.estadoOperativo === 'E/S' || a.estadoOperativo === 'F/S');
             
             setAircrafts(filtrados);
