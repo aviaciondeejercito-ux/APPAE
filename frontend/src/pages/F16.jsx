@@ -137,8 +137,10 @@ const F16Page = () => {
             return;
         }
 
+        // 🌟 CORRECCIÓN CRÍTICA: Inyectamos dinámicamente la unidad correspondiente según el rol del operador
         const payload = {
             ...cabecera,
+            unidad: esAdminGlobal ? unidadNavegacion : usuarioSesion.elemento,
             compPlaneador,
             motores,
             helices
