@@ -23,7 +23,8 @@ const F16Page = () => {
         nro: nro, ata: '', pn: '', componente: '', sn: '',
         limiteTipo: 'TBO', 
         limites: [{ valor: '', unidad: 'H' }],
-        instaladoFecha: '', instaladoHoras: '', instaladoTsnCsn: '', 
+        instaladoFecha: '', instaladoHoras: '', 
+        tsnCsnRenglones: [{ valor: '', unidad: 'H' }], // Nueva estructura con sub-renglones
         tgInstalacion: '', estadoTipo: 'TSO', estadoActual: '',
         disponibilidades: [{ valor: '', unidad: 'H' }]
     });
@@ -152,7 +153,7 @@ const F16Page = () => {
 
     const alternarSegundoMotor = () => {
         if (motores.length === 1) {
-            setMotores([...motores, { id: 2, nombre: 'MOTOR Nº 2', componentes: [generarFilaVacia(1)] }]);
+            setMotores([...motores, { id: 2, nombre: 'MOTOR Nº 2', components: [generarFilaVacia(1)] }]);
         } else {
             if (window.confirm("¿Confirma remover el motor adicional y todos sus componentes cargados?")) {
                 setMotores([motores[0]]);
@@ -206,24 +207,24 @@ const F16Page = () => {
                 <div style={styles.headerGrid}>
                     {/* BLOQUE DATOS DE LA AERONAVE */}
                     <div style={styles.block}>
-                        <div style={styles.blockTitle}>DATOS DE LA AERONAVE</div>
+                        <div style={styles.blockTitleFlex}>
+                            <span>DATOS DE LA AERONAVE</span>
+                            {/* Selector reubicado aquí de forma compacta para pantallas chicas */}
+                            <select 
+                                value={cabecera.estadoOperativo} 
+                                onChange={e => handleCabeceraChange('estadoOperativo', e.target.value)} 
+                                style={{...styles.inputCondicionSelector, backgroundColor: colorEstadoOperativo}}
+                            >
+                                <option value="E/S">E/S</option>
+                                <option value="F/S">F/S</option>
+                            </select>
+                        </div>
                         <div style={styles.formRow}>
                             <div style={styles.field}><label style={styles.label}>SdA</label>
                                 <select value={cabecera.sda} onChange={e => handleCabeceraChange('sda', e.target.value)} style={styles.input}>{sdaList.map(s => <option key={s} value={s}>{s}</option>)}</select>
                             </div>
                             <div style={styles.field}><label style={styles.label}>Matrícula</label><input type="text" value={cabecera.matricula} onChange={e => handleCabeceraChange('matricula', e.target.value)} style={styles.input} placeholder="AE-XXX" /></div>
                             <div style={styles.field}><label style={styles.label}>Nro Serie</label><input type="text" value={cabecera.nroSerie} onChange={e => handleCabeceraChange('nroSerie', e.target.value)} style={styles.input} placeholder="N/S" /></div>
-                            
-                            <div style={{...styles.field, maxWidth: '85px'}}><label style={styles.label}>Condición</label>
-                                <select 
-                                    value={cabecera.estadoOperativo} 
-                                    onChange={e => handleCabeceraChange('estadoOperativo', e.target.value)} 
-                                    style={{...styles.input, backgroundColor: colorEstadoOperativo, color: 'white', fontWeight: 'bold', textAlign: 'center'}}
-                                >
-                                    <option value="E/S" style={{backgroundColor: '#2ecc71', color: 'white'}}>E/S</option>
-                                    <option value="F/S" style={{backgroundColor: '#e74c3c', color: 'white'}}>F/S</option>
-                                </select>
-                            </div>
                         </div>
                     </div>
                     
@@ -343,7 +344,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                 <tr style={styles.thRow}>
                     <th style={{...styles.thSub, width: '60px', backgroundColor: '#f2f2f2'}}>Fab/UI</th>
                     <th style={styles.thSub}>Tiempos/Ciclos</th>
-                    <th style={styles.thSub}>TSN/CSN</th>
+                    <th style={{...styles.thSub, minWidth: '140px'}}>TSN/CSN</th>
                     <th style={styles.thSub}>a Instal</th>
                     <th style={styles.thSub}>Retiro/OH</th>
                     <th style={styles.thSub}>Tipo</th>
@@ -364,7 +365,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             <td style={styles.td}><input type="text" value={comp.componente} onChange={e => onChange(compIndex, 'componente', e.target.value)} style={{...styles.inputFlat, width: '130px'}} placeholder="Descripción" /></td>
                             <td style={styles.td}><input type="text" value={comp.sn} onChange={e => onChange(compIndex, 'sn', e.target.value)} style={styles.inputFlat} placeholder="S/N" /></td>
                             
-                            {/* COLUMNA LÍMITES CON SUB-RENGLONES DINÁMICOS */}
+                            {/* COLUMNA LÍMITES */}
                             <td style={styles.td}>
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
@@ -391,7 +392,29 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             
                             <td style={{...styles.td, backgroundColor: '#f9f9f9'}}><input type="text" value={comp.instaladoFecha} onChange={e => onChange(compIndex, 'instaladoFecha', e.target.value)} style={styles.inputFlatMin} placeholder="M-A" /></td>
                             <td style={styles.td}><input type="number" value={comp.instaladoHoras} onChange={e => onChange(compIndex, 'instaladoHoras', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
-                            <td style={styles.td}><input type="number" value={comp.instaladoTsnCsn} onChange={e => onChange(compIndex, 'instaladoTsnCsn', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
+                            
+                            {/* COLUMNA TSN/CSN AHORA CON SUB-RENGLONES DINÁMICOS H, M, C */}
+                            <td style={styles.td}>
+                                <div style={styles.cellContainerVertical}>
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '5px' }}>
+                                        <button type="button" onClick={() => onAgregarSub(compIndex, 'tsnCsnRenglones')} style={{...styles.btnInlineAdd, backgroundColor: '#7f8c8d'}}>+ Renglón</button>
+                                    </div>
+                                    <div style={styles.stackContainer}>
+                                        {comp.tsnCsnRenglones.map((tc, subIndex) => (
+                                            <div key={subIndex} style={styles.rowStack}>
+                                                <input type="number" value={tc.valor} onChange={e => onSubChange(compIndex, 'tsnCsnRenglones', subIndex, 'valor', e.target.value)} style={styles.inputStack} placeholder="0.0" />
+                                                <select value={tc.unidad} onChange={e => onSubChange(compIndex, 'tsnCsnRenglones', subIndex, 'unidad', e.target.value)} style={styles.selectStackUnit}>
+                                                    <option value="H">H</option><option value="M">M</option><option value="C">C</option>
+                                                </select>
+                                                {comp.tsnCsnRenglones.length > 1 && (
+                                                    <button type="button" onClick={() => onRemoverSub(compIndex, 'tsnCsnRenglones', subIndex)} style={styles.btnInlineRem}>-</button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </td>
+
                             <td style={styles.td}><input type="number" value={comp.tgInstalacion} onChange={e => onChange(compIndex, 'tgInstalacion', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
                             <td style={styles.tdCalculated}>{retiroOhCalculado}</td>
                             <td style={styles.td}>
@@ -401,7 +424,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             </td>
                             <td style={styles.td}><input type="number" value={comp.estadoActual} onChange={e => onChange(compIndex, 'estadoActual', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
 
-                            {/* COLUMNA DISPONIBILIDAD CON SUB-RENGLONES DINÁMICOS */}
+                            {/* COLUMNA DISPONIBILIDAD */}
                             <td style={{...styles.td, backgroundColor: '#f4fbf7'}}>
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '5px' }}>
@@ -451,6 +474,10 @@ const styles = {
     headerGrid: { display: 'flex', gap: '20px', flexWrap: 'wrap' },
     block: { flex: 1, minWidth: '250px', borderRight: '1px solid #eee', paddingRight: '10px' },
     blockTitle: { fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '5px', color: '#555' },
+    blockTitleFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '5px', color: '#555' },
+    
+    inputCondicionSelector: { padding: '2px 6px', fontSize: '0.75rem', fontWeight: 'bold', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', textAlign: 'center', outline: 'none' },
+    
     formRow: { display: 'flex', gap: '5px' },
     field: { display: 'flex', flexDirection: 'column', flex: 1 },
     label: { fontSize: '0.65rem', color: '#666', marginBottom: '2px' },
