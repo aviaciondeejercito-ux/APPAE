@@ -58,8 +58,8 @@ const F16Page = () => {
                 // Si es un mando estratégico y seleccionó una unidad de navegación, le pega al endpoint parametrizado
                 // De lo contrario, le pega a la raíz '/' y el controlador aísla según su token de unidad
                 const url = (esMandoEstrategico && unidadNavegacion) 
-                    ? `/api/aircraft/elemento/${unidadNavegacion}`
-                    : `/api/aircraft`;
+    ? `/api/aircraft/elemento/${encodeURIComponent(unidadNavegacion)}` // Pasalo por encodeURIComponent por si el nombre de la unidad tiene espacios o barras
+    : `/api/aircraft`;
 
                 const res = await fetch(url, { method: 'GET', headers: getHeaders() });
                 const json = await res.json();
