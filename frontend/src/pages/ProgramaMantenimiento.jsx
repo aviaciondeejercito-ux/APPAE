@@ -64,44 +64,55 @@ const ProgramaMantenimiento = () => {
     };
 
     const handleAeronaveChange = async (e) => {
-    const id = e.target.value;
-    setAeronaveSeleccionadaId(id);
-    
-    if (!id) {
-        resetVistaLocal();
-        return;
-    }
+        const id = e.target.value;
+        setAeronaveSeleccionadaId(id);
+        
+        if (!id) {
+            resetVistaLocal();
+            return;
+        }
 
-    const avion = aeronaves.find(a => a._id === id);
-    if (avion) {
-        // 1. Cargamos los datos estáticos de tu modelo original de Aircraft
-        setFormData({
-            sda: avion.sda || '',
-            matricula: avion.matricula || '',
-            nroSerie: avion.nroSerie || '',
-            tgPlaneadorActual: '0,0', // se pisan abajo si existen
-            tgMotorActual: '0,0'
+        // Búsqueda tolerante al formato nativo de MongoDB (_id o _id.$oid)
+        const avion = aeronaves.find(a => {
+            const avionId = a._id?.$oid || a._id;
+            return String(avionId) === String(id);
         });
 
-        // 2. Vamos a buscar el programa a la NUEVA API independiente
-        try {
-            const res = await fetch(`/api/programas-mantenimiento/aeronave/${id}`);
-            const resultado = await res.json();
-            
-            if (res.ok && resultado.data) {
-                setFormData(prev => ({
-                    ...prev,
-                    tgPlaneadorActual: resultado.data.tgPlaneadorActual || '0,0',
-                    tgMotorActual: resultado.data.tgMotorActual || '0,0'
-                }));
-                setTablaPlaneador(resultado.data.programaPlaneador || []);
-                setTablaMotor(resultado.data.programaMotor || []);
+        if (avion) {
+            // 1. Cargamos los datos estáticos controlando los valores null o vacíos de tu JSON real
+            setFormData({
+                sda: avion.sda || 'N/D',
+                matricula: avion.matricula || 'N/D',
+                nroSerie: avion.nroSerie || 'S/N', 
+                tgPlaneadorActual: avion.tgPlaneadorActual ? String(avion.tgPlaneadorActual).replace('.', ',') : '0,0', 
+                tgMotorActual: '0,0'
+            });
+
+            // 2. Vamos a buscar el programa a la NUEVA API independiente
+            try {
+                const res = await fetch(`/api/programas-mantenimiento/aeronave/${id}`);
+                const resultado = await res.json();
+                
+                if (res.ok && resultado.data) {
+                    setFormData(prev => ({
+                        ...prev,
+                        tgPlaneadorActual: resultado.data.tgPlaneadorActual || (avion.tgPlaneadorActual ? String(avion.tgPlaneadorActual).replace('.', ',') : '0,0'),
+                        tgMotorActual: resultado.data.tgMotorActual || '0,0'
+                    }));
+                    setTablaPlaneador(resultado.data.programaPlaneador || []);
+                    setTablaMotor(resultado.data.programaMotor || []);
+                } else {
+                    // Si el backend responde sin datos previos, dejamos las tablas listas para escribir
+                    setTablaPlaneador([]);
+                    setTablaMotor([]);
+                }
+            } catch (error) {
+                console.error("Error al traer el programa de mantenimiento:", error);
+                setTablaPlaneador([]);
+                setTablaMotor([]);
             }
-        } catch (error) {
-            console.error("Error al traer el programa de mantenimiento:", error);
         }
-    }
-};
+    };
 
     const handleKpiChange = (campo, valor) => {
         setFormData({ ...formData, [campo]: valor });
@@ -145,20 +156,38 @@ const ProgramaMantenimiento = () => {
         }
     };
 
-    const guardarMantenimiento = () => {
+    const guardarMantenimiento = async () => {
         if (!aeronaveSeleccionadaId) {
             alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
             return;
         }
 
-        alert(`Enviando actualización de inspecciones para la aeronave ${formData.matricula}.`);
-        console.log("Payload de actualización para Mongoose (findOneAndModify / $set):", {
+        const payload = {
             aeronaveId: aeronaveSeleccionadaId,
             tgPlaneadorActual: formData.tgPlaneadorActual,
             tgMotorActual: formData.tgMotorActual,
             programaPlaneador: tablaPlaneador,
             programaMotor: tablaMotor
-        });
+        };
+
+        try {
+            const respuesta = await fetch('/api/programas-mantenimiento/guardar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const resultado = await respuesta.json();
+            
+            if (respuesta.ok) {
+                alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} guardado con éxito!`);
+            } else {
+                alert(`Error del servidor: ${resultado.mensaje}`);
+            }
+        } catch (error) {
+            console.error("Error al guardar el programa:", error);
+            alert("Error de conexión con el servidor backend.");
+        }
     };
 
     return (
@@ -183,7 +212,14 @@ const ProgramaMantenimiento = () => {
                     <label style={styles.labelTitle}>📁 SELECCIONAR AERONAVE DE LA FLOTA ({userElemento || 'N/D'})</label>
                     <select style={styles.selectInputFlota} value={aeronaveSeleccionadaId} onChange={handleAeronaveChange}>
                         <option value="">-- Seleccione una aeronave registrada para gestionar su programa --</option>
-                        {aeronaves.map(a => <option key={a._id} value={a._id}>{a.matricula} - {a.sda}</option>)}
+                        {aeronaves.map(a => {
+                            const idReal = a._id?.$oid || a._id;
+                            return (
+                                <option key={idReal} value={idReal}>
+                                    {a.matricula} - {a.sda}
+                                </option>
+                            );
+                        })}
                     </select>
                 </div>
                 <div style={styles.selectorGroup}>
@@ -325,7 +361,6 @@ const ProgramaMantenimiento = () => {
     );
 };
 
-// Estilos de Estructura Robótica de Alta Densidad F-16 (Clean White Edition)
 const styles = {
     container: { padding: '10px 20px', maxWidth: '100%', margin: '0 auto', fontFamily: 'monospace, sans-serif' },
     topHeaderBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1b2a4a', padding: '10px 20px', border: '1px solid #111a30' },

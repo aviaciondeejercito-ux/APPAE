@@ -31,7 +31,7 @@ const ComponentSchema = new mongoose.Schema({
     tsnCsnRenglones: [MetricValueSchema],
     disponibilidades: [MetricValueSchema],
     
-    instaladoFecha: { type: String, default: '' }, // Soporta formato "M-A" del panel
+    instaladoFecha: { type: String, default: '' }, 
     instaladoHoras: { type: Number, default: 0 },
     tgInstalacion: { type: Number, default: 0 },
     estadoTipo: { type: String, enum: ['TSO', 'TSHMI', 'TSN'], default: 'TSO' },
@@ -43,7 +43,7 @@ const ComponentSchema = new mongoose.Schema({
  */
 const PropulsionGroupSchema = new mongoose.Schema({
     id: { type: Number, required: true },
-    nombre: { type: String, required: true, uppercase: true, trim: true }, // "MOTOR Nº 1", "HÉLICE IZQUIERDA"
+    nombre: { type: String, required: true, uppercase: true, trim: true }, 
     componentes: [ComponentSchema]
 }, { _id: false });
 
@@ -82,6 +82,11 @@ const AircraftSchema = new mongoose.Schema({
     inicioAeFecha: { type: String, default: '' },
     inicioAeHs: { type: Number, default: 0 },
     tgPlaneadorActual: { type: Number, default: 0 },
+
+    // 🛠️ GRUPO MOTOPROPULSOR (CAMPOS DE CABECERA AGREGADOS PARA SINCRONIZACIÓN)
+    motorSn: { type: String, default: '', trim: true },
+    motorTsn: { type: Number, default: 0 },
+    motorCsnCso: { type: Number, default: 0 },
 
     // REQUISITOS LEGALES & VENCIMIENTOS
     vencimientoElt: { type: Date },
