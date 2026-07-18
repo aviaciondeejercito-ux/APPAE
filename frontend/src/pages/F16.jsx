@@ -420,7 +420,7 @@ const F16Page = () => {
     return (
         <div style={styles.container}>
             <div style={styles.mainHeaderFlex}>
-                <h2 style={{ margin: 0, fontSize: '1.1rem' }}>SISTEMA DE GESTIÓN F-16 - SINCRO MONGOOSE</h2>
+                <h2 style={{ margin: 0, fontSize: '1.1rem' }}>SISTEMA FORMULARIO -16</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button type="button" onClick={limpiarFormularioParaNuevoAlta} style={styles.btnFormAlta}>📄 Limpiar / Nuevo</button>
                     <button type="button" onClick={guardarAltaAeronave} style={styles.btnFormGuardar}>💾 {esEdicion ? 'Actualizar Cambios' : 'Dar de Alta / Guardar'}</button>
