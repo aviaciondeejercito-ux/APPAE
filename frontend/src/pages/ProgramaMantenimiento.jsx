@@ -78,11 +78,9 @@ const ProgramaMantenimiento = () => {
         });
 
         if (avion) {
-            // Sincronización con el JSON real de la aeronave
             const horasPlaneadorInicial = avion.tgPlaneadorActual ? String(avion.tgPlaneadorActual).replace('.', ',') : '0,0';
             const horasMotorInicial = avion.motorTsn ? String(avion.motorTsn).replace('.', ',') : '0,0';
 
-            // 1. Carga inicial con datos del modelo Aircraft
             setFormData({
                 sda: avion.sda || 'N/D',
                 matricula: avion.matricula || 'N/D',
@@ -91,7 +89,6 @@ const ProgramaMantenimiento = () => {
                 tgMotorActual: horasMotorInicial
             });
 
-            // 2. Consulta al programa independiente
             try {
                 const res = await fetch(`/api/programas-mantenimiento/aeronave/${id}`);
                 const resultado = await res.json();
@@ -190,7 +187,8 @@ const ProgramaMantenimiento = () => {
 
     return (
         <div style={styles.container}>
-            {/* BARRA DE TÍTULO SUPERIOR */}
+            
+            {/* 🟦 BARRA DE TÍTULO SUPERIOR OSCURA */}
             <div style={styles.topHeaderBar}>
                 <h2 style={styles.mainTitle}>SISTEMA DE GESTIÓN MANTENIMIENTO</h2>
                 <div style={styles.topButtonBar}>
@@ -203,7 +201,7 @@ const ProgramaMantenimiento = () => {
                 </div>
             </div>
 
-            {/* BARRA DE SELECTORES */}
+            {/* 📁 BARRA GRIS DE SELECTORES */}
             <div style={styles.selectorsBar}>
                 <div style={styles.selectorGroup}>
                     <label style={styles.labelTitle}>📁 SELECCIONAR AERONAVE DE LA FLOTA ({userElemento || 'N/D'})</label>
@@ -227,7 +225,7 @@ const ProgramaMantenimiento = () => {
                 </div>
             </div>
 
-            {/* PANEL DE INFORMACIÓN CABECERA */}
+            {/* 📝 PANEL DE INFORMACIÓN CABECERA */}
             <div style={styles.cardForm}>
                 <h3 style={styles.sectionHeader}>DATOS ESTRUCTURALES DE LA AERONAVE SELECCIONADA</h3>
                 <div style={styles.formRow}>
@@ -246,7 +244,9 @@ const ProgramaMantenimiento = () => {
                 </div>
             </div>
 
-            {/* SECCIÓN 1: PLANEADOR */}
+            {/* ========================================================================= */}
+            {/* 🛡️ SECCIÓN 1: HOJA DE SEGUIMIENTO DEL PLANEADOR */}
+            {/* ========================================================================= */}
             <div style={styles.sectionDivider}>
                 <div style={styles.miniKpiExcel}>
                     <span style={styles.kpiLabel}>TOTAL GRAL PLANEADOR:</span>
@@ -283,7 +283,7 @@ const ProgramaMantenimiento = () => {
                             tablaPlaneador.map((row) => (
                                 <tr key={row.id} style={styles.tr}>
                                     <td style={styles.td}><input type="text" style={styles.inputInCellBold} value={row.descripcion} onChange={(e) => handleCellChangePlaneador(row.id, 'descripcion', e.target.value)} placeholder="Escribir descripción..." /></td>
-                                    <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.gridHs || row.ultHs} onChange={(e) => handleCellChangePlaneador(row.id, 'ultHs', e.target.value)} /></td>
+                                    <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.ultHs} onChange={(e) => handleCellChangePlaneador(row.id, 'ultHs', e.target.value)} /></td>
                                     <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.ultFecha} onChange={(e) => handleCellChangePlaneador(row.id, 'ultFecha', e.target.value)} /></td>
                                     <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.ultOt} onChange={(e) => handleCellChangePlaneador(row.id, 'ultOt', e.target.value)} /></td>
                                     <td style={styles.td}><input type="text" style={styles.inputInCell} value={row.proxHs} onChange={(e) => handleCellChangePlaneador(row.id, 'proxHs', e.target.value)} /></td>
@@ -298,7 +298,9 @@ const ProgramaMantenimiento = () => {
                 </table>
             </div>
 
-            {/* SECCIÓN 2: MOTOR */}
+            {/* ========================================================================= */}
+            {/* ⚙️ SECCIÓN 2: HOJA DE SEGUIMIENTO DEL MOTOR */}
+            {/* ========================================================================= */}
             <div style={{...styles.sectionDivider, marginTop: '25px'}}>
                 <div style={{...styles.miniKpiExcel, backgroundColor: '#00a8ff'}}>
                     <span style={styles.kpiLabel}>TOTAL GRAL MOTOR:</span>
@@ -349,11 +351,50 @@ const ProgramaMantenimiento = () => {
                     </tbody>
                 </table>
             </div>
+
         </div>
     );
 };
 
-// Se mantienen intactos tus estilos CSS en la constante 'styles'
-const styles = { /* ... */ };
+// Objeto de estilos exactamente igual al de tu diseño original en CSS-in-JS
+const styles = {
+    container: { padding: '10px 20px', maxWidth: '100%', margin: '0 auto', fontFamily: 'monospace, sans-serif' },
+    topHeaderBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1b2a4a', padding: '10px 20px', border: '1px solid #111a30' },
+    mainTitle: { color: '#ffffff', margin: 0, fontSize: '0.95rem', fontWeight: 'bold' },
+    topButtonBar: { display: 'flex', gap: '5px' },
+    btnTop: { color: '#fff', border: 'none', padding: '6px 12px', fontSize: '0.78rem', fontWeight: 'bold', cursor: 'pointer' },
+    
+    selectorsBar: { display: 'flex', gap: '15px', background: '#eef2f5', padding: '8px 15px', border: '1px solid #ccc' },
+    selectorGroup: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' },
+    labelTitle: { fontSize: '0.7rem', fontWeight: 'bold', color: '#444' },
+    selectInputFlota: { padding: '5px 10px', border: '1px solid #3498db', backgroundColor: '#fff', fontSize: '0.85rem', fontWeight: 'bold', outline: 'none' },
+    selectInputNav: { padding: '5px 10px', border: '1px solid #ccc', backgroundColor: '#e9ecef', fontSize: '0.85rem', color: '#495057' },
+    
+    cardForm: { background: '#fff', border: '1px solid #ccc', padding: '10px 15px', marginTop: '10px' },
+    sectionHeader: { margin: '0 0 6px 0', fontSize: '0.75rem', color: '#7f8c8d', fontWeight: 'bold' },
+    formRow: { display: 'flex', gap: '15px' },
+    inputField: { flex: 1, display: 'flex', flexDirection: 'column' },
+    fieldLabel: { fontSize: '0.68rem', color: '#555', fontWeight: 'bold' },
+    textInput: { padding: '5px 8px', border: '1px solid #ccc', fontSize: '0.85rem', backgroundColor: '#e9ecef', color: '#2c3e50', fontWeight: 'bold', outline: 'none' },
+    
+    sectionDivider: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', marginBottom: '5px' },
+    miniKpiExcel: { backgroundColor: '#00a8ff', color: '#000', padding: '2px 8px', border: '1px solid #000', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 'bold' },
+    kpiLabel: { color: '#000' },
+    kpiInputInline: { width: '70px', background: '#fff', border: '1px solid #000', padding: '2px 4px', fontSize: '0.75rem', fontFamily: 'monospace', textAlign: 'center', fontWeight: 'bold' },
+    btnAddRow: { backgroundColor: '#2c3e50', color: '#fff', border: 'none', padding: '5px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' },
+
+    tableWrapper: { overflowX: 'auto', border: '1px solid #000' },
+    mantoTable: { width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' },
+    th: { backgroundColor: '#00a8ff', color: '#000', border: '1px solid #000', padding: '6px 4px', textAlign: 'center', fontWeight: 'bold', lineHeight: '1.1' },
+    thSub: { fontSize: '0.68rem', color: '#111', fontWeight: 'normal' },
+    tr: { backgroundColor: '#ffffff' }, 
+    td: { border: '1px solid #000', padding: '0px' },
+    tdAction: { border: '1px solid #000', padding: '0px', backgroundColor: '#f8f9fa', textAlign: 'center' },
+    tdEmpty: { border: '1px solid #000', padding: '15px', textAlign: 'center', color: '#7f8c8d', backgroundColor: '#ffffff', fontStyle: 'italic' },
+    
+    inputInCell: { width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', padding: '6px 4px', fontSize: '0.78rem', fontFamily: 'monospace', textAlign: 'center', color: '#000', outline: 'none' },
+    inputInCellBold: { width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', padding: '6px 6px', fontSize: '0.78rem', fontFamily: 'monospace', textAlign: 'left', fontWeight: 'bold', color: '#000', outline: 'none' },
+    btnDeleteRow: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }
+};
 
 export default ProgramaMantenimiento;
