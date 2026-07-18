@@ -59,7 +59,6 @@ const F16Page = () => {
         }
         if (window.confirm(`⚠️ AVISO CRÍTICO: ¿Está completamente seguro de eliminar el formulario de la aeronave ${cabecera.matricula}? Esta acción es irreversible.`)) {
             alert(`El registro de la aeronave ${cabecera.matricula} ha sido eliminado.`);
-            // Reset automático post-eliminación
             setCabecera(estadoInicialCabecera);
             setCompPlaneador([generarFilaVacia(1)]);
             setMotores([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
@@ -130,7 +129,7 @@ const F16Page = () => {
         }
     };
 
-    // Color dinámico para el selector E/S - F/S
+    // Color dinámico corregido
     const colorEstadoOperativo = cabecera.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c';
 
     return (
@@ -145,7 +144,7 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* SECCIÓN SUPERIOR: CONTROL DE BÚSQUEDA / CONTROL REMOTO */}
+            {/* SECCIÓN SUPERIOR: CONTROL DE BÚSQUEDA */}
             <div style={styles.cardAdminPanel}>
                 <div style={styles.adminGrid}>
                     <div style={styles.fieldAdmin}>
@@ -184,12 +183,12 @@ const F16Page = () => {
                             <div style={styles.field}><label style={styles.label}>Matrícula</label><input type="text" value={cabecera.matricula} onChange={e => handleCabeceraChange('matricula', e.target.value)} style={styles.input} placeholder="AE-XXX" /></div>
                             <div style={styles.field}><label style={styles.label}>Nro Serie</label><input type="text" value={cabecera.nroSerie} onChange={e => handleCabeceraChange('nroSerie', e.target.value)} style={styles.input} placeholder="N/S" /></div>
                             
-                            {/* SELECTOR E/S - F/S CON COLOR DINÁMICO */}
+                            {/* COLOR DINÁMICO CORREGIDO AQUÍ */}
                             <div style={{...styles.field, maxWidth: '85px'}}><label style={styles.label}>Condición</label>
                                 <select 
                                     value={cabecera.estadoOperativo} 
                                     onChange={e => handleCabeceraChange('estadoOperativo', e.target.value)} 
-                                    style={{...styles.input, backgroundColor: colorEstadoOperative, color: 'white', fontWeight: 'bold', textAlign: 'center'}}
+                                    style={{...styles.input, backgroundColor: colorEstadoOperativo, color: 'white', fontWeight: 'bold', textAlign: 'center'}}
                                 >
                                     <option value="E/S" style={{backgroundColor: '#2ecc71', color: 'white'}}>E/S</option>
                                     <option value="F/S" style={{backgroundColor: '#e74c3c', color: 'white'}}>F/S</option>
@@ -384,7 +383,6 @@ const styles = {
     container: { padding: '10px', backgroundColor: '#fafafa', minHeight: '100vh', fontFamily: 'monospace' },
     mainHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' },
     
-    // Botones Globales del Header
     btnFormAlta: { backgroundColor: '#3498db', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
     btnFormGuardar: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
     btnFormEliminar: { backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
@@ -407,7 +405,7 @@ const styles = {
     
     formRowAlign: { display: 'flex', gap: '5px', alignItems: 'stretch' },
     inputUniform: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', height: '26px', boxSizing: 'border-box', outline: 'none' },
-    btnUniformPopup: { height: '26px', padding: '0 10px', fontSize: '0.7rem', backgroundColor: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', boxSizing: 'border-box' },
+    btnUniformPopup: { height: '26px', padding: '0 10px', fontSize: '0.7.rem', backgroundColor: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', boxSizing: 'border-box' },
 
     inputNombreMotor: { fontSize: '0.8rem', fontWeight: 'bold', color: '#d35400', border: 'none', borderBottom: '1px dashed #d35400', outline: 'none', padding: '2px', backgroundColor: 'transparent', width: '180px' },
     cardTable: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' },
