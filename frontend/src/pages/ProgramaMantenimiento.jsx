@@ -16,6 +16,43 @@ const ProgramaMantenimiento = () => {
         nroSerie: ''
     });
 
+    // 📊 REGISTROS DE MUESTRA (Basados exactamente en tu planilla Excel)
+    const [tablaMantenimiento, setTablaMantenimiento] = useState([
+        {
+            id: 1,
+            descripcion: "INSP DE 100HS DE AERONAVE PROGRESIVA EVENTOS (1,2,3,4) y CORROSION",
+            ultHsPlaneador: "2355,9",
+            ultFecha: "5-Nov-25",
+            ultOt: "231/25",
+            proxHsPlaneador: "2380,9",
+            proxFecha: "X ACT DE VLO",
+            responsable: "Ec AE",
+            disp: "20,0"
+        },
+        {
+            id: 2,
+            descripcion: "WEEKLY INSPECCION",
+            ultHsPlaneador: "2355,9",
+            ultFecha: "6-Nov-25",
+            ultOt: "231/25",
+            proxHsPlaneador: "N/A",
+            proxFecha: "X ACT DE VLO",
+            responsable: "Ec AE",
+            disp: "N/A"
+        },
+        {
+            id: 3,
+            descripcion: "12 MESES DE INSP",
+            ultHsPlaneador: "2106,9",
+            ultFecha: "21-Mar-25",
+            ultOt: "B232/24",
+            proxHsPlaneador: "N/A",
+            proxFecha: "21-Mar-26",
+            responsable: "Ec AE",
+            disp: "N/A"
+        }
+    ]);
+
     // Seguridad e Institucional (RBAC)
     const rawRole = localStorage.getItem('role') || 'user';
     const roleUpper = String(rawRole).trim().toUpperCase().replace(/[\s_]/g, '');
@@ -92,6 +129,17 @@ const ProgramaMantenimiento = () => {
         }
     };
 
+    // Helper para formatear celdas de alerta/N/A con estilos planos
+    const getDispStyle = (val) => {
+        if (val === 'N/A') return { backgroundColor: '#e74c3c', color: '#fff', fontWeight: 'bold' };
+        return { backgroundColor: '#2ecc71', color: '#000', fontWeight: 'bold' };
+    };
+
+    const getProxStyle = (val) => {
+        if (val === 'N/A') return { backgroundColor: '#e74c3c', color: '#fff' };
+        return {};
+    };
+
     return (
         <div style={styles.container}>
             
@@ -112,7 +160,7 @@ const ProgramaMantenimiento = () => {
                 </div>
             </div>
 
-            {/* 📁 BARRA GRIS DE SELECTORES (Solo los dos selectores puros) */}
+            {/* 📁 BARRA GRIS DE SELECTORES */}
             <div style={styles.selectorsBar}>
                 <div style={styles.selectorGroup}>
                     <label style={styles.labelTitle}>📁 SELECTOR FLOTA (Restringido a tu Base: {userElemento || 'N/D'})</label>
@@ -136,6 +184,10 @@ const ProgramaMantenimiento = () => {
             <div style={styles.cardForm}>
                 <div style={styles.cardHeaderRow}>
                     <h3 style={styles.sectionHeader}>DATOS DE LA AERONAVE</h3>
+                    <div style={styles.miniKpiExcel}>
+                        <span style={styles.kpiLabel}>TOTAL GRAL PLANEADOR:</span>
+                        <span style={styles.kpiValue}>2360,9</span>
+                    </div>
                 </div>
                 
                 <div style={styles.formRow}>
@@ -154,41 +206,76 @@ const ProgramaMantenimiento = () => {
                 </div>
             </div>
 
-            {/* 📊 ESPACIO RESERVADO PARA LA FUTURA TABLA */}
-            <div style={styles.tablePlaceholder}>
-                <p style={{ margin: 0, color: '#7f8c8d' }}>📊 Área lista para inyectar las columnas de control F13 / Horas de Vuelo...</p>
+            {/* 🤖 TABLA CON FORMATO ROBÓTICO / ALTA DENSIDAD EXCEL */}
+            <div style={styles.tableWrapper}>
+                <table style={styles.mantoTable}>
+                    <thead>
+                        <tr>
+                            <th style={{...styles.th, width: '40%'}}>DESCRIPCION</th>
+                            <th style={styles.th}>ULTIMA INTERVENCIÓN<br/><span style={styles.thSub}>HS PLANEADOR</span></th>
+                            <th style={styles.th}>ULTIMA INTERVENCIÓN<br/><span style={styles.thSub}>FECHA</span></th>
+                            <th style={styles.th}>OT</th>
+                            <th style={styles.th}>PROXIMA INTERVENCIÓN<br/><span style={styles.thSub}>HS PLANEADOR</span></th>
+                            <th style={styles.th}>PROXIMA INTERVENCIÓN<br/><span style={styles.thSub}>FECHA</span></th>
+                            <th style={styles.th}>RESPONSABLE</th>
+                            <th style={{...styles.th, width: '8%'}}>DISP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tablaMantenimiento.map((row) => (
+                            <tr key={row.id} style={styles.tr}>
+                                <td style={{...styles.td, textAlign: 'left', fontWeight: 'bold'}}>{row.descripcion}</td>
+                                <td style={styles.td}>{row.ultHsPlaneador}</td>
+                                <td style={styles.td}>{row.ultFecha}</td>
+                                <td style={styles.td}>{row.ultOt}</td>
+                                <td style={{...styles.td, ...getProxStyle(row.proxHsPlaneador)}}>{row.proxHsPlaneador}</td>
+                                <td style={styles.td}>{row.proxFecha}</td>
+                                <td style={styles.td}>{row.responsable}</td>
+                                <td style={{...styles.td, ...getDispStyle(row.disp)}}>{row.disp}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
 };
 
-// Estilos de Estructura de Alta Densidad F-16
+// Estilos Planos, Cuadrados y de Alta Densidad (Tipo Terminal Operativa)
 const styles = {
-    container: { padding: '10px 20px', maxWidth: '100%', margin: '0 auto', fontFamily: 'sans-serif' },
+    container: { padding: '10px 20px', maxWidth: '100%', margin: '0 auto', fontFamily: 'monospace, sans-serif' },
     
-    // Nueva cabecera unificada oscura
-    topHeaderBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1b2a4a', padding: '10px 20px', borderRadius: '4px', marginBottom: '12px', border: '1px solid #111a30' },
-    mainTitle: { color: '#ffffff', margin: 0, fontSize: '1rem', fontWeight: 'bold', letterSpacing: '0.5px' },
-    topButtonBar: { display: 'flex', gap: '8px' },
-    btnTop: { color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 4px rgba(0,0,0,0.15)' },
+    topHeaderBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1b2a4a', padding: '10px 20px', borderRadius: '0px', marginBottom: '10px', border: '1px solid #111a30' },
+    mainTitle: { color: '#ffffff', margin: 0, fontSize: '0.95rem', fontWeight: 'bold', letterSpacing: '0.5px' },
+    topButtonBar: { display: 'flex', gap: '5px' },
+    btnTop: { color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '0px', fontSize: '0.78rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' },
     
-    // Selectores limpios abajo de la barra azul
-    selectorsBar: { display: 'flex', gap: '15px', background: '#eef2f5', padding: '10px 15px', borderRadius: '4px', marginBottom: '12px', border: '1px solid #dcdcdc' },
-    selectorGroup: { flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' },
-    labelTitle: { fontSize: '0.72rem', fontWeight: 'bold', color: '#555', letterSpacing: '0.3px', textTransform: 'uppercase' },
-    selectInputFlota: { padding: '6px 10px', borderRadius: '4px', border: '1px solid #2ecc71', backgroundColor: '#fff', fontSize: '0.85rem', fontWeight: 'bold', outline: 'none' },
-    selectInputNav: { padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#e9ecef', fontSize: '0.85rem', color: '#495057' },
+    selectorsBar: { display: 'flex', gap: '15px', background: '#eef2f5', padding: '8px 15px', borderRadius: '0px', marginBottom: '10px', border: '1px solid #ccc' },
+    selectorGroup: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' },
+    labelTitle: { fontSize: '0.7rem', fontWeight: 'bold', color: '#444', letterSpacing: '0.3px' },
+    selectInputFlota: { padding: '5px 10px', borderRadius: '0px', border: '1px solid #2ecc71', backgroundColor: '#fff', fontSize: '0.85rem', fontWeight: 'bold', outline: 'none' },
+    selectInputNav: { padding: '5px 10px', borderRadius: '0px', border: '1px solid #ccc', backgroundColor: '#e9ecef', fontSize: '0.85rem', color: '#495057' },
     
-    cardForm: { background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', padding: '10px 15px', marginBottom: '12px' },
-    cardHeaderRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #f1f2f6', paddingBottom: '4px' },
-    sectionHeader: { margin: 0, fontSize: '0.75rem', color: '#444', fontWeight: 'bold', letterSpacing: '0.5px' },
+    cardForm: { background: '#fff', border: '1px solid #ccc', borderRadius: '0px', padding: '10px 15px', marginBottom: '10px' },
+    cardHeaderRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', borderBottom: '1px solid #ccc', paddingBottom: '4px' },
+    sectionHeader: { margin: 0, fontSize: '0.75rem', color: '#000', fontWeight: 'bold' },
     
+    miniKpiExcel: { backgroundColor: '#00a8ff', color: '#000', padding: '3px 8px', border: '1px solid #0097e6', display: 'flex', gap: '10px', fontSize: '0.75rem', fontWeight: 'bold' },
+    kpiLabel: { color: '#000' },
+    kpiValue: { color: '#000', underline: 'true' },
+
     formRow: { display: 'flex', gap: '15px' },
-    inputField: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' },
-    fieldLabel: { fontSize: '0.7rem', color: '#777', fontWeight: '500' },
-    textInput: { padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.85rem', backgroundColor: '#fafafa', outline: 'none' },
+    inputField: { flex: 1, display: 'flex', flexDirection: 'column', gap: '1px' },
+    fieldLabel: { fontSize: '0.68rem', color: '#555', fontWeight: 'bold' },
+    textInput: { padding: '5px 8px', borderRadius: '0px', border: '1px solid #ccc', fontSize: '0.85rem', backgroundColor: '#fafafa', outline: 'none' },
     
-    tablePlaceholder: { marginTop: '10px', padding: '40px', textAlign: 'center', background: '#fff', border: '2px dashed #bdc3c7', borderRadius: '4px' }
+    // 🤖 Estilos de la Tabla Mantenimiento Estilo Excel Duro
+    tableWrapper: { overflowX: 'auto', marginTop: '10px', border: '1px solid #000' },
+    mantoTable: { width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', backgroundColor: '#95afc0' },
+    th: { backgroundColor: '#00a8ff', color: '#000', border: '1px solid #000', padding: '6px 4px', textAlign: 'center', fontWeight: 'bold', lineHeight: '1.1' },
+    thSub: { fontSize: '0.68rem', color: '#111', fontWeight: 'normal' },
+    tr: { backgroundColor: '#badc58' }, // Color verde base de fondo idéntico al Excel enviado
+    td: { border: '1px solid #000', padding: '6px 8px', textAlign: 'center', color: '#000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
 };
 
 export default ProgramaMantenimiento;
