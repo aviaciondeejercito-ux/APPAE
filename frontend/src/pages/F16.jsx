@@ -146,18 +146,22 @@ const F16Page = () => {
             body: JSON.stringify(payload)
         });
 
-        // ⚠️ PRIMERO VALIDAMOS SI LA RESPUESTA ES CORRECTA
-        if (!res.ok) {
-            const textoError = await res.text(); // Leemos el error como texto (evita el "Unexpected token N")
-            throw new Error(`Error ${res.status}: ${textoError || 'Ruta no encontrada en el Servidor.'}`);
+        const textoCompleto = await res.text();
+        let json;
+        
+        try {
+            json = JSON.parse(textoCompleto);
+        } catch (e) {
+            throw new Error(`El servidor no devolvió un JSON válido. Respuesta: "${textoCompleto}"`);
         }
 
-        // Si el servidor responde un 200/201 pero viene vacío, evitamos el "Unexpected end of JSON input"
-        const textoCompleto = await res.text();
-        const json = textoCompleto ? JSON.parse(textoCompleto) : { success: true, message: "Operación ejecutada." };
+        if (!res.ok) {
+            throw new Error(`Error ${res.status}: ${json.message || 'Error desconocido en el servidor.'}`);
+        }
 
         if (json.success) {
             alert(json.message || "Operación matricial ejecutada con éxito.");
+            // Forzar refresco cambiando el estado de navegación
             setUnidadNavegacion(prev => String(prev)); 
             if(!esEdicion) limpiarFormularioParaNuevoAlta();
         } else {
@@ -165,7 +169,7 @@ const F16Page = () => {
         }
     } catch (error) {
         console.error("❌ Fallo de comunicación con la API:", error);
-        alert(error.message); // Te va a decir exactamente qué ruta falló y por qué
+        alert(error.message); 
     }
 };
 
