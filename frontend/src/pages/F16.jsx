@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 
 const F16Page = () => {
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "B206B3"];
-    const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
+    // CORREGIDO: Renombrado a unidadesList para evitar el ReferenceError abajo
+    const unidadesList = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
 
     // Estados de navegación y búsqueda
     const [busquedaForm, setBusquedaForm] = useState('');
@@ -38,7 +39,6 @@ const F16Page = () => {
     const [motores, setMotores] = useState([
         { id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }
     ]);
-    // NUEVO: Estado para hélices (sigue la misma lógica que motores)
     const [helices, setHelices] = useState([
         { id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }
     ]);
@@ -55,7 +55,6 @@ const F16Page = () => {
         }
     };
 
-    // Simulación de búsqueda (activa el bloqueo de celdas clave)
     const handleKeyDownBusqueda = (e) => {
         if (e.key === 'Enter' && busquedaForm.trim() !== '') {
             setEsEdicion(true); 
@@ -124,7 +123,7 @@ const F16Page = () => {
     // MANEJO DE ESTADOS: MOTORES
     const handleNombreMotorChange = (motorIdx, nuevoNombre) => {
         const nuevosMotores = [...motores];
-        nuevesMotores[motorIdx].nombre = nuevoNombre;
+        nuevosMotores[motorIdx].nombre = nuevoNombre;
         setMotores(nuevosMotores);
     };
 
@@ -170,7 +169,7 @@ const F16Page = () => {
         }
     };
 
-    // NUEVO MANEJO DE ESTADOS: HÉLICES
+    // MANEJO DE ESTADOS: HÉLICES
     const handleNombreHeliceChange = (heliceIdx, nuevoNombre) => {
         const nuevasHelices = [...helices];
         nuevasHelices[heliceIdx].nombre = nuevoNombre;
@@ -219,7 +218,6 @@ const F16Page = () => {
         }
     };
 
-    // ACTUALIZADO: Alternador Bimotor sincroniza Motores y Hélices
     const alternarSegundoMotor = () => {
         if (motores.length === 1) {
             setMotores([...motores, { id: 2, nombre: 'MOTOR Nº 2', componentes: [generarFilaVacia(1)] }]);
@@ -236,7 +234,6 @@ const F16Page = () => {
 
     return (
         <div style={styles.container}>
-            {/* ENCABEZADO PRINCIPAL Y BOTONES DE ACCIÓN GLOBAL */}
             <div style={styles.mainHeaderFlex}>
                 <h2 style={{ margin: 0, fontSize: '1.1rem' }}>SISTEMA DE GESTIÓN F-16 - HISTORIAL METRICIAL</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -246,7 +243,6 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* SECCIÓN SUPERIOR: CONTROL DE BÚSQUEDA Y NAVEGACIÓN */}
             <div style={styles.cardAdminPanel}>
                 <div style={styles.adminGrid}>
                     <div style={styles.fieldAdmin}>
@@ -279,10 +275,8 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* CABECERA SIMÉTRICA */}
             <div style={styles.cardCabecera}>
                 <div style={styles.headerGrid}>
-                    {/* BLOQUE DATOS DE LA AERONAVE */}
                     <div style={styles.block}>
                         <div style={styles.blockTitleFlex}>
                             <span>DATOS DE LA AERONAVE {esEdicion && <span style={{color: '#d35400', fontSize: '0.65rem'}}>🔒 BLOQUEADO</span>}</span>
@@ -351,7 +345,6 @@ const F16Page = () => {
 
                 <hr style={{ border: 'none', borderTop: '1px solid #ddd', margin: '12px 0' }} />
 
-                {/* FILA DE VENCIMIENTOS LEGALES */}
                 <div style={styles.headerGrid}>
                     <div style={{...styles.block, flex: 3}}>
                         <div style={styles.blockTitle}>REQUISITOS LEGALES & VENCIMIENTOS HABILITACIONES</div>
@@ -373,14 +366,12 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* CONTROL DE CONFIGURACIÓN BIFUNCIONAL (BIMOTOR Y BIHÉLICE) */}
             <div style={{ marginBottom: '15px', textAlign: 'right' }}>
                 <button type="button" onClick={alternarSegundoMotor} style={motores.length === 1 ? styles.btnBimotorAdd : styles.btnBimotorRem}>
                     {motores.length === 1 ? "➕ Configurar como Aeronave Bimotor / Bihélice" : "🗑️ Quitar Configuración Bimotor / Bihélice"}
                 </button>
             </div>
 
-            {/* TABLA PLANEADOR */}
             <div style={styles.cardTable}>
                 <div style={styles.tableHeaderFlex}>
                     <div style={styles.tableTitle}>COMPONENTES DEL PLANEADOR</div>
@@ -396,7 +387,6 @@ const F16Page = () => {
                 )}
             </div>
 
-            {/* TABLAS DE MOTORES (DINÁMICAS) */}
             {motores.map((mot, motIdx) => (
                 <div key={mot.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #d35400'}}>
                     <div style={styles.tableHeaderFlex}>
@@ -423,7 +413,6 @@ const F16Page = () => {
                 </div>
             ))}
 
-            {/* NUEVAS TABLAS DE HÉLICES (DINÁMICAS - MISMA LÓGICA QUE MOTOR) */}
             {helices.map((hel, helIdx) => (
                 <div key={hel.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #2980b9'}}>
                     <div style={styles.tableHeaderFlex}>
@@ -453,7 +442,6 @@ const F16Page = () => {
     );
 };
 
-// RENDERIZADO MODULAR DE TABLAS CON SUB-RENGLONES DINÁMICOS
 const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgregarSub, onRemoverSub) => (
     <div style={styles.tableResponsive}>
         <table style={styles.table}>
@@ -495,7 +483,6 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             <td style={styles.td}><input type="text" value={comp.componente} onChange={e => onChange(compIndex, 'componente', e.target.value)} style={{...styles.inputFlat, width: '130px'}} placeholder="Descripción" /></td>
                             <td style={styles.td}><input type="text" value={comp.sn} onChange={e => onChange(compIndex, 'sn', e.target.value)} style={styles.inputFlat} placeholder="S/N" /></td>
                             
-                            {/* COLUMNA LÍMITES */}
                             <td style={styles.td}>
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
@@ -523,7 +510,6 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             <td style={{...styles.td, backgroundColor: '#f9f9f9'}}><input type="text" value={comp.instaladoFecha} onChange={e => onChange(compIndex, 'instaladoFecha', e.target.value)} style={styles.inputFlatMin} placeholder="M-A" /></td>
                             <td style={styles.td}><input type="number" value={comp.instaladoHoras} onChange={e => onChange(compIndex, 'instaladoHoras', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
                             
-                            {/* COLUMNA TSN/CSN */}
                             <td style={styles.td}>
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '5px' }}>
@@ -554,7 +540,6 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             </td>
                             <td style={styles.td}><input type="number" value={comp.estadoActual} onChange={e => onChange(compIndex, 'estadoActual', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
 
-                            {/* COLUMNA DISPONIBILIDAD */}
                             <td style={{...styles.td, backgroundColor: '#f4fbf7'}}>
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '5px' }}>
@@ -584,39 +569,31 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
     </div>
 );
 
-// HOJA DE ESTILOS UNIFICADA
 const styles = {
     container: { padding: '10px', backgroundColor: '#fafafa', minHeight: '100vh', fontFamily: 'monospace' },
     mainHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' },
-    
     btnFormAlta: { backgroundColor: '#3498db', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
     btnFormGuardar: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
     btnFormEliminar: { backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
-
     cardAdminPanel: { backgroundColor: '#e9ecef', padding: '10px', borderRadius: '4px', marginBottom: '10px', border: '1px solid #ced4da' },
     adminGrid: { display: 'flex', gap: '15px', flexWrap: 'wrap' },
     fieldAdmin: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: '280px' },
     labelAdmin: { fontSize: '0.7rem', fontWeight: 'bold', color: '#495057', marginBottom: '4px' },
     inputAdmin: { padding: '5px', border: '1px solid #adb5bd', fontSize: '0.75rem', outline: 'none' },
     btnTransfer: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '0 10px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' },
-    
     cardCabecera: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', border: '1px solid #ccc' },
     headerGrid: { display: 'flex', gap: '20px', flexWrap: 'wrap' },
     block: { flex: 1, minWidth: '250px', borderRight: '1px solid #eee', paddingRight: '10px' },
     blockTitle: { fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '5px', color: '#555' },
     blockTitleFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '5px', color: '#555' },
-    
     inputCondicionSelector: { padding: '2px 6px', fontSize: '0.75rem', fontWeight: 'bold', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', textAlign: 'center', outline: 'none' },
-    
     formRow: { display: 'flex', gap: '5px' },
     field: { display: 'flex', flexDirection: 'column', flex: 1 },
     label: { fontSize: '0.65rem', color: '#666', marginBottom: '2px' },
     input: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', outline: 'none' },
-    
     formRowAlign: { display: 'flex', gap: '5px', alignItems: 'stretch' },
     inputUniform: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', height: '26px', boxSizing: 'border-box', outline: 'none' },
     btnUniformPopup: { height: '26px', padding: '0 10px', fontSize: '0.7rem', backgroundColor: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', boxSizing: 'border-box' },
-
     inputNombreMotor: { fontSize: '0.8rem', fontWeight: 'bold', color: '#d35400', border: 'none', borderBottom: '1px dashed #d35400', outline: 'none', padding: '2px', backgroundColor: 'transparent', width: '180px' },
     cardTable: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' },
     tableHeaderFlex: { display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center' },
@@ -634,16 +611,13 @@ const styles = {
     inputFlatMin: { width: '50px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', textAlign: 'center', outline: 'none' },
     selectFlat: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem' },
     selectFlatType: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#e6f2ff' },
-    
     cellContainerVertical: { display: 'flex', flexDirection: 'column', width: '100%' },
     stackContainer: { display: 'flex', flexDirection: 'column', gap: '3px', width: '100%' },
     rowStack: { display: 'flex', alignItems: 'center', gap: '2px', width: '100%' },
     inputStack: { flex: 1, minWidth: '45px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', outline: 'none' },
     selectStackUnit: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#fff2cc' },
-    
     btnInlineAdd: { backgroundColor: '#3498db', color: 'white', border: 'none', padding: '2px 5px', fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '2px' },
     btnInlineRem: { backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '2px 5px', fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '2px', marginLeft: '2px' },
-    
     btnBimotorAdd: { backgroundColor: '#2c3e50', color: '#fff', border: '1px solid #34495e', padding: '6px 12px', cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 'bold' },
     btnBimotorRem: { backgroundColor: '#e74c3c', color: '#fff', border: '1px solid #c0392b', padding: '6px 12px', cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 'bold' },
     btnSecundario: { backgroundColor: '#27ae60', color: 'white', border: '1px solid #219653', padding: '4px 10px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' }

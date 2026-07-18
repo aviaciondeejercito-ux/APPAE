@@ -10,7 +10,6 @@ import AdminPanel from './pages/AdminPanel';
 import Estadisticas from './pages/Estadisticas';
 import Operaciones from './pages/Operaciones'; 
 import EstadoAeronaves from './pages/EstadoAeronaves';
-import Material from './pages/Material'; 
 import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
@@ -91,7 +90,7 @@ function App() {
     const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
 const puedeVerF16 = esAdmin; 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'material', 'ebm', 'f13', 'reportes', 'f16'].includes(view);
+    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16'].includes(view);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -186,12 +185,6 @@ const puedeVerF16 = esAdmin;
                                 >🦅 Estado Aeronaves</button>
                             )}
 
-                            {puedeVerOficinaTecnica && (
-                                <button 
-                                    onClick={() => setView('material')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'material' ? '#27ae60' : '#4a69bd'}}
-                                >🔧 Oficina Técnica</button>
-                            )}
 
                             {puedeVerStats && (
                                 <button 
@@ -243,7 +236,6 @@ const puedeVerF16 = esAdmin;
                             case 'despacho': return puedeVerOpEnDesarrollo ? <CargaTactica /> : <CalendarPage />;
                             case 'operaciones': return puedeVerCarga ? <Operaciones /> : <CalendarPage />;
                             case 'estado': return puedeVerEstadoAeronaves ? <EstadoAeronaves /> : <CalendarPage />;
-                            case 'material': return puedeVerOficinaTecnica ? <Material /> : <CalendarPage />;
                             case 'f16': return puedeVerF16 ? <F16Page /> : <CalendarPage />;
                             default: return <CalendarPage />;
                         }

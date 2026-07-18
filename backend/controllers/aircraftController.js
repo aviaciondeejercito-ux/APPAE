@@ -23,14 +23,22 @@ const obtenerPrivilegios = (user) => {
 };
 
 /**
- * 1. OBTENER FLOTA (FILTRADO RESTRICTIVO)
+ * 1. OBTENER FLOTA (FILTRADO RESTRICTIVO Y CAPTURA POR PARÁMETRO)
  */
 exports.getAircrafts = async (req, res) => {
     try {
         const { isMandoEstrategico, userElemento } = obtenerPrivilegios(req.user);
+        const { elemento } = req.params; // Sincronizado: Captura el parámetro de la ruta si existe
 
-        // Si es mando estratégico ve todo. Si es local, se fuerza el filtro de su elemento.
-        const query = isMandoEstrategico ? {} : { unidad: userElemento };
+        let query = {};
+        
+        if (!isMandoEstrategico) {
+            // Un usuario de unidad queda enclaustrado a ver solo lo de su base
+            query.unidad = userElemento;
+        } else if (elemento) {
+            // Un mando global puede usar las rutas parametrizadas para ver una unidad específica
+            query.unidad = elemento.toUpperCase().trim();
+        }
         
         const data = await Aircraft.find(query).sort({ matricula: 1 });
         return res.status(200).json({ success: true, data });
@@ -52,7 +60,6 @@ exports.createAircraft = async (req, res) => {
 
         const payload = { ...req.body };
 
-        // REGLA DE NEGOCIO: Si no tiene rango para cambiar unidad, el sistema le auto-asigna su base nativa
         if (!canChangeUnit) {
             payload.unidad = userElemento;
         } else if (!payload.unidad) {
@@ -91,16 +98,14 @@ exports.updateAircraftStatus = async (req, res) => {
             return res.status(404).json({ success: false, message: "Aeronave no localizada." });
         }
 
-        // SEGURIDAD PERIMETRAL: Si no es mando global, solo puede editar aeronaves que estén físicamente en su base actual
         if (!isMandoEstrategico && aeronaveExistente.unidad !== userElemento) {
             return res.status(403).json({ success: false, message: "Acceso denegado. El recurso pertenece a otro Elemento Operativo." });
         }
 
         const camposAActualizar = { ...req.body };
 
-        // Proteger el cambio de unidad si carece del permiso de transferencia
         if (!canChangeUnit) {
-            delete camposAActualizar.unidad; // Ignora intentos de alteración de base
+            delete camposAActualizar.unidad;
         }
 
         camposAActualizar.actualizadoPor = `${req.user.username || 'Usuario'} (${req.user.role})`;
@@ -129,7 +134,6 @@ exports.deleteAircraft = async (req, res) => {
         const { id } = req.params;
         const { isMandoEstrategico } = obtenerPrivilegios(req.user);
 
-        // REGLA CRÍTICA DE NEGOCIO: Ninguna unidad local (Oficina Técnica o S4) puede eliminar aeronaves de la base de datos global.
         if (!isMandoEstrategico) {
             return res.status(403).json({ success: false, message: "Acceso denegado. Solo los Mandos Estratégicos del Comando pueden destruir registros aeronáuticos." });
         }
