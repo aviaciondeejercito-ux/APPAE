@@ -2,8 +2,8 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
-const http = require('http'); 
-const { Server } = require('socket.io'); 
+const http = require('http');
+const { Server } = require('socket.io');
 const conectarDB = require('./config/db');
 
 /**
@@ -23,7 +23,7 @@ const server = http.createServer(app);
 
 // --- 3. MIDDLEWARES DE SEGURIDAD ---
 app.use(helmet({
-    contentSecurityPolicy: false, 
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
 }));
 
@@ -50,7 +50,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '500kb' })); 
+app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 
 // --- 4. INICIALIZACIÓN DE SOCKET.IO ---
@@ -73,21 +73,24 @@ io.on('connection', (socket) => {
 
 // --- 5. IMPORTACIÓN DE MÓDULOS OPERATIVOS ---
 const authRoutes = require('./routes/auth');
-const eventRoutes = require('./routes/events'); 
-const adminRoutes = require('./routes/admin'); 
-const weatherRoutes = require('./routes/metar'); 
+const eventRoutes = require('./routes/events');
+const adminRoutes = require('./routes/admin');
+const weatherRoutes = require('./routes/metar');
 const astronomyRoutes = require('./routes/astronomy');
-const tripulanteRoutes = require('./routes/tripulantesRoutes'); 
+const tripulanteRoutes = require('./routes/tripulantesRoutes');
 const vueloRoutes = require('./routes/vueloRoutes');
-const ebmRoutes = require('./routes/ebmRoutes'); 
+const ebmRoutes = require('./routes/ebmRoutes');
 const alertRoutes = require('./routes/alertRoutes');
-const f13Routes = require('./routes/f13'); 
-const dashboardRoutes = require('./routes/dashboard'); 
+const f13Routes = require('./routes/f13');
+const dashboardRoutes = require('./routes/dashboard');
 const aircraftRoutes = require('./routes/aircraftRoutes');
+// 🛠️ Nuevo módulo: Programas de Mantenimiento Independientes
+const programaRoutes = require('./routes/programaRoutes');
+
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
 app.get('/api/health', (req, res) => {
-    res.status(200).json({ 
+    res.status(200).json({
         status: 'online',
         server: 'Aviación de Ejército Argentina',
         version: '1.5.0-OPERATIONAL-TRIP'
@@ -96,17 +99,19 @@ app.get('/api/health', (req, res) => {
 
 // Registro de Rutas
 app.use('/api/auth', authRoutes);
-app.use('/api/events', eventRoutes); 
-app.use('/api/admin', adminRoutes); 
-app.use('/api/aircraft', aircraftRoutes); 
-app.use('/api/weather', weatherRoutes); 
-app.use('/api/astronomy', astronomyRoutes); 
-app.use('/api/tripulantes', tripulanteRoutes); 
+app.use('/api/events', eventRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/aircraft', aircraftRoutes);
+app.use('/api/weather', weatherRoutes);
+app.use('/api/astronomy', astronomyRoutes);
+app.use('/api/tripulantes', tripulanteRoutes);
 app.use('/api/vuelos', vueloRoutes);
 app.use('/api/ebm', ebmRoutes);
-app.use('/api/alerts', alertRoutes); 
-app.use('/api/f13', f13Routes); 
+app.use('/api/alerts', alertRoutes);
+app.use('/api/f13', f13Routes);
 app.use('/api/dashboard', dashboardRoutes);
+// Inyección de la nueva ruta operativa
+app.use('/api/programas-mantenimiento', programaRoutes);
 
 // --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
 app.use((req, res) => {
@@ -143,6 +148,13 @@ server.listen(PORT, () => {
         console.log("✅ Módulo F-13 (Libretas Históricas) cargado correctamente.");
     } else {
         console.warn("⚠️ Advertencia: El módulo F-13 no pudo cargarse.");
+    }
+
+    // Verificación de carga de rutas del Programa de Mantenimiento
+    if (programaRoutes) {
+        console.log("✅ Módulo de Programas de Mantenimiento verificado e integrado.");
+    } else {
+        console.warn("⚠️ Advertencia: El módulo de Programas de Mantenimiento falló al inicializarse.");
     }
 });
 
