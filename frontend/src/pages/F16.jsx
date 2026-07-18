@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 const F16Page = () => {
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "B206B3"];
-    const unidadesList = ["Aviación de Ejército 601", "Aviación de Ejército 602", "Sección de Aviación de Ejército 2", "Sección de Aviación de Ejército 3"];
+    const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
 
     // Estados de navegación y búsqueda
     const [busquedaForm, setBusquedaForm] = useState('');

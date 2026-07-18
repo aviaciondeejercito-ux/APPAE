@@ -1,147 +1,146 @@
 const Aircraft = require('../models/Aircraft');
 
 /**
- * CONTROLADOR DE AERONAVES - SEGURIDAD JERÁRQUICA
- * Lectura: Mando Global (ADMIN, BOSS, DIRECTOR, OTO) ve TODO. Resto ve su unidad.
- * Escritura: Solo ADMIN y OFICINA_TECNICA pueden editar/transferir/borrar.
+ * FUNCIÓN AUXILIAR UTILITARIA PARA PROCESAR ROLES Y PRIVILEGIOS DE SESIÓN
  */
+const obtenerPrivilegios = (user) => {
+    const rawRole = user?.role || "";
+    const roleUpper = String(rawRole).trim().toUpperCase().replace(/[\s_]/g, '');
+    const userElemento = user?.elemento?.toUpperCase().trim() || "";
 
-const verificarRol = (req) => {
-    const rawRole = req.user && req.user.role ? String(req.user.role).trim().toUpperCase() : '';
-    const userElemento = req.user && req.user.elemento ? String(req.user.elemento).trim().toUpperCase() : '';
+    const esAdminPorContenido = roleUpper.includes('ADMIN');
+    const esMandoPorLista = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper);
     
-    const mandosGlobales = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'];
+    const isMandoEstrategico = esAdminPorContenido || esMandoPorLista || userElemento === 'COMANDO';
+    const esOficinaTecnica = roleUpper === 'OFICINATECNICA';
     
     return {
-        role: rawRole,
-        userElemento: userElemento,
-        esMandoSuperior: mandosGlobales.includes(rawRole) || rawRole.includes('ADMIN'),
-        esTecnicoAutorizado: ['OFICINA_TECNICA', 'OFICINA_CE_TECNICA', 'S4', 'S4_UNIDAD'].includes(rawRole)
+        isMandoEstrategico, // Puede ver toda la flota global y borrar registros
+        canChangeUnit: isMandoEstrategico || esOficinaTecnica, // Puede realizar transferencias
+        hasEditPrivileges: isMandoEstrategico || esOficinaTecnica || roleUpper === 'S4UNIDAD', // Puede editar campos
+        userElemento
     };
 };
 
-// 1. Obtener todas las aeronaves (Filtro jerárquico)
+/**
+ * 1. OBTENER FLOTA (FILTRADO RESTRICTIVO)
+ */
 exports.getAircrafts = async (req, res) => {
     try {
-        const control = verificarRol(req);
-        let query = {};
+        const { isMandoEstrategico, userElemento } = obtenerPrivilegios(req.user);
 
-        if (!control.esMandoSuperior) {
-            if (!control.userElemento) {
-                return res.status(403).json({ success: false, message: "Acceso restringido: Sin unidad asignada." });
-            }
-            query.unidad = control.userElemento;
-        }
-
-        const aircrafts = await Aircraft.find(query).sort({ unidad: 1, sda: 1, matricula: 1 });
-        res.json(aircrafts);
+        // Si es mando estratégico ve todo. Si es local, se fuerza el filtro de su elemento.
+        const query = isMandoEstrategico ? {} : { unidad: userElemento };
+        
+        const data = await Aircraft.find(query).sort({ matricula: 1 });
+        return res.status(200).json({ success: true, data });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Error al acceder al registro", error: error.message });
+        return res.status(500).json({ success: false, message: "Fallo de sincronización metricial.", error: error.message });
     }
 };
 
-// 2. Obtener aeronaves por Elemento
-exports.getAircraftsByElemento = async (req, res) => {
-    try {
-        const { elemento } = req.params;
-        const control = verificarRol(req);
-        let query = {};
-
-        if (!control.esMandoSuperior) {
-            query.unidad = control.userElemento;
-        } else if (elemento && elemento !== 'all') {
-            query.unidad = decodeURIComponent(elemento).trim().toUpperCase();
-        }
-
-        const aircrafts = await Aircraft.find(query).sort({ sda: 1, matricula: 1 });
-        res.json(aircrafts);
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Error al filtrar", error: error.message });
-    }
-};
-
-// 3. Crear una nueva aeronave
+/**
+ * 2. ALTA DE NUEVA AERONAVE
+ */
 exports.createAircraft = async (req, res) => {
     try {
-        const control = verificarRol(req);
-        // Validamos permiso de escritura: Solo Admin o Técnica
-        if (!control.esMandoSuperior && !control.esTecnicoAutorizado) {
-            return res.status(403).json({ message: "Acceso denegado: No posee permisos de alta." });
+        const { hasEditPrivileges, canChangeUnit, userElemento } = obtenerPrivilegios(req.user);
+
+        if (!hasEditPrivileges) {
+            return res.status(403).json({ success: false, message: "Acceso denegado. Privilegios de edición insuficientes." });
         }
 
-        let { unidad } = req.body;
-        if (control.esMandoSuperior) {
-            if (!unidad) return res.status(400).json({ message: "El Mando debe especificar unidad." });
-        } else {
-            unidad = control.userElemento; // Técnica solo alta en su unidad
+        const payload = { ...req.body };
+
+        // REGLA DE NEGOCIO: Si no tiene rango para cambiar unidad, el sistema le auto-asigna su base nativa
+        if (!canChangeUnit) {
+            payload.unidad = userElemento;
+        } else if (!payload.unidad) {
+            return res.status(400).json({ success: false, message: "Debe especificar una unidad de destino válida." });
         }
 
-        const newAircraft = new Aircraft({
-            ...req.body,
-            matricula: String(req.body.matricula || "").toUpperCase().trim(),
-            sda: String(req.body.sda || "").toUpperCase().trim(),
-            unidad: String(unidad).trim().toUpperCase(),
-            creadoPor: `${req.user.username || 'SISTEMA'} (${control.role})`
-        });
+        payload.creadoPor = `${req.user.username || 'Usuario'} (${req.user.role})`;
+        payload.actualizadoPor = payload.creadoPor;
 
-        await newAircraft.save();
-        res.status(201).json(newAircraft);
+        const nuevaAeronave = new Aircraft(payload);
+        await nuevaAeronave.save();
+
+        return res.status(201).json({ success: true, data: nuevaAeronave, message: "Alta de aeronave metricial exitosa." });
     } catch (error) {
-        res.status(400).json({ message: "Error al incorporar aeronave", error: error.message });
+        if (error.code === 11000) {
+            return res.status(400).json({ success: false, message: "La matrícula ingresada ya se encuentra registrada en el sistema." });
+        }
+        return res.status(500).json({ success: false, message: "Error al registrar aeronave.", error: error.message });
     }
 };
 
-// 4. Actualizar Estado, Horas y Transferencias (SOLO ADMIN/TECNICA)
+/**
+ * 3. ACTUALIZACIÓN / TRASLADO DE AERONAVE
+ */
 exports.updateAircraftStatus = async (req, res) => {
     try {
-        const control = verificarRol(req);
-        
-        // Validación de permisos de escritura
-        if (!control.esMandoSuperior && !control.esTecnicoAutorizado) {
-            return res.status(403).json({ message: "Acceso denegado: No posee permisos de edición." });
+        const { id } = req.params;
+        const { hasEditPrivileges, canChangeUnit, isMandoEstrategico, userElemento } = obtenerPrivilegios(req.user);
+
+        if (!hasEditPrivileges) {
+            return res.status(403).json({ success: false, message: "Acceso denegado. No posee credenciales de modificación." });
         }
 
-        const aircraft = await Aircraft.findById(req.params.id);
-        if (!aircraft) return res.status(404).json({ message: "Aeronave no localizada." });
-
-        // Validación de unidad para Técnico
-        if (!control.esMandoSuperior && control.userElemento !== String(aircraft.unidad).trim().toUpperCase()) {
-            return res.status(403).json({ message: "No tiene autoridad sobre el material de otra unidad." });
+        const aeronaveExistente = await Aircraft.findById(id);
+        if (!aeronaveExistente) {
+            return res.status(404).json({ success: false, message: "Aeronave no localizada." });
         }
 
-        const updates = req.body;
-        // Aplicar actualizaciones...
-        Object.assign(aircraft, updates);
-        
-        aircraft.ultimaActualizacion = Date.now();
-        aircraft.actualizadoPor = `${req.user.username || 'SISTEMA'} (${control.role})`;
+        // SEGURIDAD PERIMETRAL: Si no es mando global, solo puede editar aeronaves que estén físicamente en su base actual
+        if (!isMandoEstrategico && aeronaveExistente.unidad !== userElemento) {
+            return res.status(403).json({ success: false, message: "Acceso denegado. El recurso pertenece a otro Elemento Operativo." });
+        }
 
-        await aircraft.save();
-        res.json({ success: true, message: "Registro actualizado", aircraft });
+        const camposAActualizar = { ...req.body };
+
+        // Proteger el cambio de unidad si carece del permiso de transferencia
+        if (!canChangeUnit) {
+            delete camposAActualizar.unidad; // Ignora intentos de alteración de base
+        }
+
+        camposAActualizar.actualizadoPor = `${req.user.username || 'Usuario'} (${req.user.role})`;
+
+        const aeronaveActualizada = await Aircraft.findByIdAndUpdate(
+            id,
+            { $set: camposAActualizar },
+            { new: true, runValidators: true }
+        );
+
+        return res.status(200).json({ 
+            success: true, 
+            data: aeronaveActualizada, 
+            message: "Aeronave procesada / transferida correctamente." 
+        });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Error técnico", error: error.message });
+        return res.status(500).json({ success: false, message: "Error en la operación de actualización.", error: error.message });
     }
 };
 
-// 5. Eliminar aeronave (SOLO ADMIN/TECNICA)
+/**
+ * 4. BAJA DEFINITIVA DE MATRÍCULA
+ */
 exports.deleteAircraft = async (req, res) => {
     try {
-        const control = verificarRol(req);
-        
-        if (!control.esMandoSuperior && !control.esTecnicoAutorizado) {
-            return res.status(403).json({ message: "No posee permisos para esta operación." });
+        const { id } = req.params;
+        const { isMandoEstrategico } = obtenerPrivilegios(req.user);
+
+        // REGLA CRÍTICA DE NEGOCIO: Ninguna unidad local (Oficina Técnica o S4) puede eliminar aeronaves de la base de datos global.
+        if (!isMandoEstrategico) {
+            return res.status(403).json({ success: false, message: "Acceso denegado. Solo los Mandos Estratégicos del Comando pueden destruir registros aeronáuticos." });
         }
 
-        const aircraft = await Aircraft.findById(req.params.id);
-        if (!aircraft) return res.status(404).json({ message: "Aeronave no encontrada." });
-
-        if (!control.esMandoSuperior && control.userElemento !== String(aircraft.unidad).trim().toUpperCase()) {
-            return res.status(403).json({ message: "No tiene autoridad sobre este material." });
+        const aeronaveEliminada = await Aircraft.findByIdAndDelete(id);
+        if (!aeronaveEliminada) {
+            return res.status(404).json({ success: false, message: "No se encontró la aeronave solicitada para eliminación." });
         }
 
-        await Aircraft.findByIdAndDelete(req.params.id);
-        res.json({ message: "Aeronave dada de baja." });
+        return res.status(200).json({ success: true, message: `El registro de la aeronave ${aeronaveEliminada.matricula} ha sido eliminado permanentemente.` });
     } catch (error) {
-        res.status(500).json({ message: "Error al procesar baja", error: error.message });
+        return res.status(500).json({ success: false, message: "Error al ejecutar la baja.", error: error.message });
     }
 };

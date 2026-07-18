@@ -1,119 +1,122 @@
 const mongoose = require('mongoose');
 
 /**
- * ESQUEMA DE MATERIAL AERONÁUTICO - SISTEMA AE
- * Define la estructura crítica para el seguimiento de horas y estado de flota.
+ * ESQUEMA PARA SUB-RENGLONES DE MÉTRICAS (Horas, Meses, Ciclos)
+ */
+const MetricValueSchema = new mongoose.Schema({
+    valor: { 
+        type: String, 
+        default: '' 
+    },
+    unidad: { 
+        type: String, 
+        enum: ['H', 'M', 'C'], 
+        default: 'H' 
+    }
+}, { _id: false });
+
+/**
+ * ESQUEMA REUTILIZABLE PARA COMPONENTES DE ALTA TRAZABILIDAD
+ */
+const ComponentSchema = new mongoose.Schema({
+    nro: { type: Number, required: true },
+    ata: { type: String, default: '', trim: true },
+    pn: { type: String, default: '', trim: true },
+    componente: { type: String, default: '', trim: true },
+    sn: { type: String, default: '', trim: true },
+    limiteTipo: { type: String, enum: ['TBO', 'LL'], default: 'TBO' },
+    
+    // Sub-renglones dinámicos del panel nuevo
+    limites: [MetricValueSchema],
+    tsnCsnRenglones: [MetricValueSchema],
+    disponibilidades: [MetricValueSchema],
+    
+    instaladoFecha: { type: String, default: '' }, // Soporta formato "M-A" del panel
+    instaladoHoras: { type: Number, default: 0 },
+    tgInstalacion: { type: Number, default: 0 },
+    estadoTipo: { type: String, enum: ['TSO', 'TSHMI', 'TSN'], default: 'TSO' },
+    estadoActual: { type: Number, default: 0 }
+}, { _id: false });
+
+/**
+ * ESQUEMA PARA NODOS DE PROPULSIÓN DINÁMICOS (Motores y Hélices)
+ */
+const PropulsionGroupSchema = new mongoose.Schema({
+    id: { type: Number, required: true },
+    nombre: { type: String, required: true, uppercase: true, trim: true }, // "MOTOR Nº 1", "HÉLICE IZQUIERDA"
+    componentes: [ComponentSchema]
+}, { _id: false });
+
+/**
+ * ESQUEMA PRINCIPAL DE AERONAVE (Estructura Unificada de Cabecera y Tablas)
  */
 const AircraftSchema = new mongoose.Schema({
+    // DATOS DE CABECERA
     matricula: { 
         type: String, 
-        required: [true, 'La matrícula es obligatoria para el registro'], 
+        required: [true, 'La matrícula es obligatoria'], 
         unique: true,
         uppercase: true,
         trim: true 
     },
     sda: { 
         type: String, 
-        required: [true, 'Debe especificar el Sistema de Armas (Ej: UH-1H)'],
+        required: [true, 'El Sistema de Armas es obligatorio'],
         uppercase: true,
         trim: true
     },
+    nroSerie: { type: String, default: '', trim: true },
     unidad: { 
         type: String, 
         required: [true, 'La asignación a una Unidad/Elemento es obligatoria'],
         uppercase: true,
         trim: true 
     },
-    estado: { 
+    estadoOperativo: { 
         type: String, 
-        required: [true, 'El estado operativo es obligatorio'],
-        enum: {
-            values: ['E/S', 'F/S'],
-            message: '{VALUE} no es un estado válido (Usar E/S para En Servicio o F/S para Fuera de Servicio)'
-        },
+        enum: ['E/S', 'F/S'],
         default: 'E/S' 
     },
-    horasRemanentes: { 
-        type: Number, 
-        required: [true, 'Las horas remanentes son críticas para el cálculo de inspecciones'],
-        min: [0, 'Las horas remanentes no pueden ser negativas'],
-        default: 0
-    },
-    // Seguimiento de horas de planeador
-    horasPlaneador: {
-        type: Number,
-        default: 0,
-        min: 0
-    },
-    // Estructuras dinámicas para Motores y Hélices
-    motores: [{
-        horas: { type: Number, default: 0 },
-        fecha: { type: Date }
-    }],
-    helices: [{
-        horas: { type: Number, default: 0 },
-        fecha: { type: Date }
-    }],
-    // Vencimientos técnicos y legales (Actualizado 91.207)
+    
+    // TIEMPOS E HISTORIAL
+    inicioAeFecha: { type: String, default: '' },
+    inicioAeHs: { type: Number, default: 0 },
+    tgPlaneadorActual: { type: Number, default: 0 },
+
+    // REQUISITOS LEGALES & VENCIMIENTOS
+    vencimientoElt: { type: Date },
+    vencimientoPitot: { type: Date },
+    vencimientoTransponder: { type: Date },
     vencimientoSeguro: { type: Date },
     vencimientoAvionica: { type: Date },
-    vencimientoRAAC91207: { type: Date },
-    vencimientoRAAC91411: { type: Date },
-    vencimientoRAAC91413: { type: Date },
+    observacionesPopup: { type: String, default: '', trim: true },
 
-    novedades: { 
-        type: String, 
-        default: '', 
-        trim: true
-    },
+    // ESTRUCTURAS DE COMPONENTES ASOCIADOS (TABLAS DINÁMICAS)
+    compPlaneador: [ComponentSchema],
+    motores: [PropulsionGroupSchema],
+    helices: [PropulsionGroupSchema],
+
+    // AUDITORÍA INTERNA
     tipoIcono: {
         type: String,
-        enum: {
-            values: ['ala_rotativa', 'ala_fija'],
-            message: '{VALUE} no es un tipo de ícono válido'
-        },
+        enum: ['ala_rotativa', 'ala_fija'],
         default: 'ala_rotativa'
     },
-    ultimaActualizacion: { 
-        type: Date, 
-        default: Date.now 
-    },
-    actualizadoPor: { 
-        type: String,
-        default: 'Sistema (Carga Inicial)' 
-    },
-    creadoPor: {
-        type: String,
-        required: [true, 'El registro de autoría es obligatorio para auditoría']
-    }
+    creadoPor: { type: String, required: true },
+    actualizadoPor: { type: String }
 }, { 
     timestamps: true 
 });
 
-/**
- * MIDDLEWARE DE PRE-GUARDADO (INYECCIÓN DE SEGURIDAD)
- */
+// Middleware de normalización pre-guardado
 AircraftSchema.pre('save', function(next) {
     if (this.matricula) this.matricula = this.matricula.toUpperCase().trim();
     if (this.sda) this.sda = this.sda.toUpperCase().trim();
     if (this.unidad) this.unidad = this.unidad.toUpperCase().trim();
-    
-    if (this.novedades === null || this.novedades === undefined) {
-        this.novedades = '';
-    }
-
-    if (this.tipoIcono) {
-        this.tipoIcono = this.tipoIcono.toLowerCase().trim();
-    }
-
-    this.ultimaActualizacion = Date.now();
     next();
 });
 
-/**
- * ÍNDICES DE RENDIMIENTO Y SEGURIDAD
- * Se mantiene el índice de unidad. El de matrícula se maneja con 'unique: true' en la definición del campo.
- */
 AircraftSchema.index({ unidad: 1 });
+AircraftSchema.index({ sda: 1 });
 
 module.exports = mongoose.model('Aircraft', AircraftSchema);

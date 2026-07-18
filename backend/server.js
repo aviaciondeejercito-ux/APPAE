@@ -75,16 +75,15 @@ io.on('connection', (socket) => {
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events'); 
 const adminRoutes = require('./routes/admin'); 
-const aircraftRoutes = require('./routes/aircraft'); 
 const weatherRoutes = require('./routes/metar'); 
 const astronomyRoutes = require('./routes/astronomy');
 const tripulanteRoutes = require('./routes/tripulantesRoutes'); 
 const vueloRoutes = require('./routes/vueloRoutes');
 const ebmRoutes = require('./routes/ebmRoutes'); 
 const alertRoutes = require('./routes/alertRoutes');
-const f13Routes = require('./routes/f13'); // ◀️ Única importación consolidada de F-13
-const dashboardRoutes = require('./routes/dashboard'); // ◀️ Ruta del dashboard de novedades
-
+const f13Routes = require('./routes/f13'); 
+const dashboardRoutes = require('./routes/dashboard'); 
+const aircraftRoutes = require('./routes/aircraftRoutes');
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
 app.get('/api/health', (req, res) => {
