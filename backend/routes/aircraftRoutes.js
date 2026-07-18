@@ -4,11 +4,6 @@ const aircraftController = require('../controllers/aircraftController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/rolecheck');
 
-/**
- * RUTAS DE MATERIAL AERONÁUTICO MODULARIZADO - SISTEMA AE
- * Seguridad en capas: Autenticación de Token -> Middleware de Rol -> Filtro de Contexto de Unidad en Controlador.
- */
-
 // 1. Capa de Aislamiento y Protección Global (JWT/Session)
 const protect = authMiddleware.protect || authMiddleware.verifyToken || authMiddleware;
 router.use(protect);
@@ -17,41 +12,38 @@ router.use(protect);
  * 2. RUTAS ESTÁTICAS PRINCIPALES
  */
 
-// GET '/' -> Obtiene la flota. El controlador decide si devuelve la Flota Global o solo la Unidad según credenciales.
+// GET '/' -> Obtiene la flota filtrada por la unidad del token (o global si es mando)
 router.get('/', aircraftController.getAircrafts);
 
-// POST '/' -> Carga inicial de aeronaves con estructuras relacionales complejas (motores, hélices y planeador).
+// POST '/' -> Alta de aeronaves (Asigna unidad automáticamente si es un usuario enclaustrado)
 router.post(
     '/', 
     authorize(
         'admin', 'ADMIN', 
         'BOSS', 'DIRECTOR', 'OTO', 
         'OFICINA_TECNICA', 'OFICINATECNICA', 
-        'S4_UNIDAD', 'S4UNIDAD', 'S4', 
-        'OFICINA_CE_TECNICA', 'OFICINACETECNICA'
+        'S4_UNIDAD', 'S4UNIDAD', 'S4'
     ), 
     aircraftController.createAircraft
 );
 
 /**
- * 3. RUTAS CRÍTICAS POR ID 
- * Posicionadas estratégicamente arriba para interceptar las peticiones antes que los comodines de texto.
+ * 3. RUTAS CRÍTICAS POR ID
  */
 
-// PUT '/:id' -> Modificación de tablas dinámicas de inspección, carga de novedades o transferencia/traslado de unidad.
+// PUT '/:id' -> Edición de componentes, novedades o transferencia
 router.put(
     '/:id', 
     authorize(
         'admin', 'ADMIN', 
         'BOSS', 'DIRECTOR', 'OTO', 
         'OFICINA_TECNICA', 'OFICINATECNICA', 
-        'S4_UNIDAD', 'S4UNIDAD', 'S4',
-        'OFICINA_CE_TECNICA', 'OFICINACETECNICA'
+        'S4_UNIDAD', 'S4UNIDAD', 'S4'
     ), 
     aircraftController.updateAircraftStatus
 );
 
-// DELETE '/:id' -> Destrucción de registros. El controlador valida que solo rangos de Comando Estratégico procedan.
+// DELETE '/:id' -> Eliminación física (El controlador restringe internamente a Mandos Estratégicos)
 router.delete(
     '/:id', 
     authorize(
@@ -64,43 +56,17 @@ router.delete(
 );
 
 /**
- * 4. RUTAS DE COMPATIBILIDAD Y CONSULTA DIRIGIDA POR PARÁMETRO
- * Permiten buscar de manera explícita el material de un elemento ajeno (sujeto a las restricciones del controlador).
+ * 4. CONSULTA DIRIGIDA POR PARÁMETRO (Sincronizada con req.params.elemento)
+ * Corregida para permitir que roles de Unidad puedan consultar su propio endpoint parametrizado sin rebotar en el Middleware.
  */
-
-// Si tu controlador maneja una función específica para búsquedas explícitas por elemento
-if (typeof aircraftController.getAircraftsByElemento === 'function') {
-    router.get(
-        '/elemento/:elemento', 
-        authorize(
-            'user', 'USER', 
-            'S4_UNIDAD', 'S4UNIDAD', 'S4', 
-            'OFICINA_TECNICA', 'OFICINATECNICA', 
-            'OFICINA_CE_TECNICA', 'OFICINACETECNICA', 
-            'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin', 'ADMIN'
-        ), 
-        aircraftController.getAircraftsByElemento
-    );
-
-    // Comodín genérico de resguardo al final del archivo
-    router.get(
-        '/:elemento', 
-        authorize(
-            'user', 'USER', 
-            'S4_UNIDAD', 'S4UNIDAD', 'S4', 
-            'OFICINA_TECNICA', 'OFICINATECNICA', 
-            'OFICINA_CE_TECNICA', 'OFICINACETECNICA', 
-            'OTO', 'OTOAE', 'DIRECTOR', 'BOSS', 'admin', 'ADMIN'
-        ), 
-        aircraftController.getAircraftsByElemento
-    );
-} else {
-    // Si centralizaste todo en getAircrafts pasándole filtros por query query string (?unidad=...)
-    router.get(
-        '/elemento/:elemento',
-        authorize('admin', 'ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'OFICINATECNICA'),
-        aircraftController.getAircrafts
-    );
-}
+router.get(
+    '/elemento/:elemento',
+    authorize(
+        'admin', 'ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 
+        'OFICINA_TECNICA', 'OFICINATECNICA', 
+        'S4_UNIDAD', 'S4UNIDAD', 'S4', 'USER', 'user'
+    ),
+    aircraftController.getAircrafts
+);
 
 module.exports = router;
