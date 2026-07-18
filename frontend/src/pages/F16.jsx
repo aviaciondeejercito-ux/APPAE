@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 
+// 🌐 URL DEL BACKEND CENTRALIZADA (Conectada a Render en prod o local en dev)
+const API_BASE_URL = window.location.hostname === 'localhost' 
+    ? '' 
+    : 'https://appae.onrender.com';
+
 const F16Page = () => {
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "B206B3"];
     const unidadesList = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
 
-    // 🔐 EXTRACCIÓN REAL DE SESIÓN DESDE LOCALSTORAGE (Configurado en tu App.jsx)
+    // 🔐 EXTRACCIÓN REAL DE SESIÓN DESDE LOCALSTORAGE
     const token = localStorage.getItem('token');
     const usuarioSesion = {
         username: localStorage.getItem('username') || "Operador",
@@ -55,14 +60,24 @@ const F16Page = () => {
             try {
                 const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
                 
-                // Si es un mando estratégico y seleccionó una unidad de navegación, le pega al endpoint parametrizado
-                // De lo contrario, le pega a la raíz '/' y el controlador aísla según su token de unidad
+                // Incorporamos el API_BASE_URL para que impacte en tu instancia de Render
                 const url = (esMandoEstrategico && unidadNavegacion) 
-    ? `/api/aircraft/elemento/${encodeURIComponent(unidadNavegacion)}` // Pasalo por encodeURIComponent por si el nombre de la unidad tiene espacios o barras
-    : `/api/aircraft`;
+                    ? `${API_BASE_URL}/api/aircraft/elemento/${encodeURIComponent(unidadNavegacion)}` 
+                    : `${API_BASE_URL}/api/aircraft`;
 
                 const res = await fetch(url, { method: 'GET', headers: getHeaders() });
-                const json = await res.json();
+                
+                const textoCompleto = await res.text();
+                let json;
+                try {
+                    json = JSON.parse(textoCompleto);
+                } catch (e) {
+                    throw new Error(`Error parsing JSON en lectura. Respuesta del servidor: "${textoCompleto}"`);
+                }
+
+                if (!res.ok) {
+                    throw new Error(`Error de lectura ${res.status}: ${json.message || 'Error no especificado'}`);
+                }
 
                 if (json.success) {
                     setAeronavesBD(json.data);
@@ -70,7 +85,7 @@ const F16Page = () => {
                     console.error("Fallo de respuesta:", json.message);
                 }
             } catch (error) {
-                console.error("Error al sincronizar flota con MongoDB:", error);
+                console.error("❌ Error al sincronizar flota con MongoDB:", error);
             }
         };
 
@@ -90,7 +105,6 @@ const F16Page = () => {
         if (aero) {
             setEsEdicion(true);
             
-            // Inyección limpia y estructurada de los datos almacenados en el documento de Mongoose
             setCabecera({
                 sda: aero.sda || sdaList[0],
                 matricula: aero.matricula || '',
@@ -110,7 +124,6 @@ const F16Page = () => {
                 observacionesPopup: aero.observacionesPopup || ''
             });
 
-            // Si guardaste los sub-bloques relacionales en tu esquema, los inyectamos; si no, dejamos una fila base vacía
             setCompPlaneador(aero.compPlaneador && aero.compPlaneador.length ? aero.compPlaneador : [generarFilaVacia(1)]);
             setMotores(aero.motores && aero.motores.length ? aero.motores : [{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
             setHelices(aero.helices && aero.helices.length ? aero.helices : [{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
@@ -119,59 +132,58 @@ const F16Page = () => {
 
     // 💾 OPERACIÓN: GUARDAR ALTA (POST) O ACTUALIZAR (PUT)
     const guardarAltaAeronave = async () => {
-    if (!cabecera.matricula) {
-        alert("Por favor, ingrese al menos la Matrícula para procesar el registro.");
-        return;
-    }
-
-    const payload = {
-        ...cabecera,
-        compPlaneador,
-        motores,
-        helices
-    };
-
-    try {
-        let url = '/api/aircraft';
-        let method = 'POST';
-
-        if (esEdicion && aeronaveSeleccionadaId) {
-            url = `/api/aircraft/${aeronaveSeleccionadaId}`;
-            method = 'PUT';
+        if (!cabecera.matricula) {
+            alert("Por favor, ingrese al menos la Matrícula para procesar el registro.");
+            return;
         }
 
-        const res = await fetch(url, {
-            method: method,
-            headers: getHeaders(),
-            body: JSON.stringify(payload)
-        });
+        const payload = {
+            ...cabecera,
+            compPlaneador,
+            motores,
+            helices
+        };
 
-        const textoCompleto = await res.text();
-        let json;
-        
         try {
-            json = JSON.parse(textoCompleto);
-        } catch (e) {
-            throw new Error(`El servidor no devolvió un JSON válido. Respuesta: "${textoCompleto}"`);
-        }
+            let url = `${API_BASE_URL}/api/aircraft`;
+            let method = 'POST';
 
-        if (!res.ok) {
-            throw new Error(`Error ${res.status}: ${json.message || 'Error desconocido en el servidor.'}`);
-        }
+            if (esEdicion && aeronaveSeleccionadaId) {
+                url = `${API_BASE_URL}/api/aircraft/${aeronaveSeleccionadaId}`;
+                method = 'PUT';
+            }
 
-        if (json.success) {
-            alert(json.message || "Operación matricial ejecutada con éxito.");
-            // Forzar refresco cambiando el estado de navegación
-            setUnidadNavegacion(prev => String(prev)); 
-            if(!esEdicion) limpiarFormularioParaNuevoAlta();
-        } else {
-            alert(`⚠️ Error: ${json.message}`);
+            const res = await fetch(url, {
+                method: method,
+                headers: getHeaders(),
+                body: JSON.stringify(payload)
+            });
+
+            const textoCompleto = await res.text();
+            let json;
+            
+            try {
+                json = JSON.parse(textoCompleto);
+            } catch (e) {
+                throw new Error(`El servidor no devolvió un JSON válido. Respuesta: "${textoCompleto}"`);
+            }
+
+            if (!res.ok) {
+                throw new Error(`Error ${res.status}: ${json.message || 'Error desconocido en el servidor.'}`);
+            }
+
+            if (json.success) {
+                alert(json.message || "Operación matricial ejecutada con éxito.");
+                setUnidadNavegacion(prev => String(prev)); 
+                if(!esEdicion) limpiarFormularioParaNuevoAlta();
+            } else {
+                alert(`⚠️ Error: ${json.message}`);
+            }
+        } catch (error) {
+            console.error("❌ Fallo de comunicación con la API:", error);
+            alert(error.message); 
         }
-    } catch (error) {
-        console.error("❌ Fallo de comunicación con la API:", error);
-        alert(error.message); 
-    }
-};
+    };
 
     // 🗑️ OPERACIÓN: ELIMINAR REGISTRO PERMANENTE (DELETE)
     const eliminarFormularioAeronave = async () => {
@@ -182,23 +194,33 @@ const F16Page = () => {
 
         if (window.confirm(`⚠️ AVISO CRÍTICO: ¿Está completamente seguro de eliminar permanentemente la aeronave ${cabecera.matricula}? Esta acción es irreversible.`)) {
             try {
-                const res = await fetch(`/api/aircraft/${aeronaveSeleccionadaId}`, {
+                const res = await fetch(`${API_BASE_URL}/api/aircraft/${aeronaveSeleccionadaId}`, {
                     method: 'DELETE',
                     headers: getHeaders()
                 });
-                const json = await res.json();
+                
+                const textoCompleto = await res.text();
+                let json;
+                try {
+                    json = JSON.parse(textoCompleto);
+                } catch(e) {
+                    throw new Error(`Respuesta no procesable del servidor: "${textoCompleto}"`);
+                }
+
+                if (!res.ok) {
+                    throw new Error(`Error ${res.status}: ${json.message || 'Fallo de eliminación'}`);
+                }
 
                 if (json.success) {
                     alert(json.message);
                     limpiarFormularioParaNuevoAlta();
-                    // Forzamos recarga del set de navegación
                     setUnidadNavegacion(prev => String(prev));
                 } else {
                     alert(`🚫 Acceso Denegado: ${json.message}`);
                 }
             } catch (error) {
                 console.error("Error en operación de borrado:", error);
-                alert("No se pudo conectar con el servidor central para procesar la baja.");
+                alert(error.message || "No se pudo conectar con el servidor central para procesar la baja.");
             }
         }
     };
@@ -216,7 +238,7 @@ const F16Page = () => {
 
         if (window.confirm(`¿Confirma el traslado de la aeronave ${cabecera.matricula} hacia la unidad: ${unidadDestinoTraslado}?`)) {
             try {
-                const res = await fetch(`/api/aircraft/${aeronaveSeleccionadaId}`, {
+                const res = await fetch(`${API_BASE_URL}/api/aircraft/${aeronaveSeleccionadaId}`, {
                     method: 'PUT',
                     headers: getHeaders(),
                     body: JSON.stringify({ unidad: unidadDestinoTraslado })
@@ -407,7 +429,6 @@ const F16Page = () => {
             <div style={styles.cardAdminPanel}>
                 <div style={styles.adminGrid}>
                     
-                    {/* SELECTOR JERÁRQUICO CONECTADO AL ESTADO DE MONGO */}
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>
                             {esAdminGlobal 
@@ -429,7 +450,6 @@ const F16Page = () => {
                         </select>
                     </div>
 
-                    {/* CONTROL FILTRADO DE UNIDADES (SOLO MANDO ESTRATÉGICO) */}
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>🛡️ NAVEGACIÓN ENTRE UNIDADES {!esAdminGlobal && '🔒 (BLOQUEADO)'}</label>
                         <select 
@@ -446,7 +466,6 @@ const F16Page = () => {
                         </select>
                     </div>
 
-                    {/* DESPACHO Y TRASLADO DE UNIDADES */}
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>✈️ DESPACHAR TRASLADO DE UNIDAD</label>
                         <div style={{ display: 'flex', gap: '2px' }}>
@@ -460,7 +479,6 @@ const F16Page = () => {
                 </div>
             </div>
 
-            {/* FORMULARIO ESTRUCTURAL MATRICIAL */}
             <div style={styles.cardCabecera}>
                 <div style={styles.headerGrid}>
                     <div style={styles.block}>
