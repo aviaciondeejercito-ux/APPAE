@@ -32,12 +32,11 @@ const EstadoAeronaves = () => {
             
             const isMandoPorRol = esAdminPorContenido || esMandoPorLista;
             
-            // REGRESIÓN DE SEGURIDAD / LIBERACIÓN INSTITUCIONAL: 
-            // Si el elemento es "COMANDO", por definición institucional es Mando Estratégico y ve TODO.
+            // REGRESIÓN DE SEGURIDAD / LIBERACIÓN INSTITUCIONAL
             const isMandoEstrategico = isMandoPorRol || userElemento === 'COMANDO';
 
-            // Si es mando estratégico, desactiva el filtro y consume TODO el array (data)
-            const filtrados = isMandoEstrategico 
+            // 1. Filtrado Inicial por Jurisdicción de Unidad
+            let filtrados = isMandoEstrategico 
                 ? data 
                 : data.filter(a => 
                     a.unidad && 
@@ -45,12 +44,22 @@ const EstadoAeronaves = () => {
                     String(a.unidad).trim().toUpperCase() === userElemento
                 );
             
+            // 🌟 2. FILTRO EXCLUSIVO SOLICITADO: Solo mostrar si el estado es estrictamente E/S o F/S
+            filtrados = filtrados.filter(a => a.estadoOperativo === 'E/S' || a.estadoOperativo === 'F/S');
+            
             setAircrafts(filtrados);
             setLoading(false);
         } catch (error) {
             console.error("Error AE: Fallo al obtener estado de flota", error);
             setLoading(false);
         }
+    };
+
+    // 🛠️ FUNCIÓN AUXILIAR: Extrae las horas de disponibilidad del planeador principal (TBO/Inspección)
+    const obtenerHorasRemanentesPlaneador = (air) => {
+        if (!air?.compPlaneador || air.compPlaneador.length === 0) return 0;
+        const disp = air.compPlaneador[0].disponibilidades?.[0]?.valor;
+        return disp ? Number(disp) : 0;
     };
 
     const unidades = [...new Set(aircrafts.filter(a => a.unidad).map(a => String(a.unidad).trim().toUpperCase()))].sort();
@@ -69,15 +78,15 @@ const EstadoAeronaves = () => {
                 <div style={styles.statusRow}>
                     <div style={styles.summaryItem}>
                         <span style={{...styles.dot, backgroundColor: '#2ecc71'}}></span> 
-                        Total E/S: {aircrafts.filter(a => a.estado === 'E/S').length}
+                        Total E/S: {aircrafts.filter(a => a.estadoOperativo === 'E/S').length}
                     </div>
                     <div style={styles.summaryItem}>
                         <span style={{...styles.dot, backgroundColor: '#e74c3c'}}></span> 
-                        Total F/S: {aircrafts.filter(a => a.estado === 'F/S').length}
+                        Total F/S: {aircrafts.filter(a => a.estadoOperativo === 'F/S').length}
                     </div>
                     <div style={styles.summaryItem}>
                         <span style={{...styles.dot, backgroundColor: '#f1c40f'}}></span> 
-                        Críticos {"<"}10hs: {aircrafts.filter(a => Number(a.horasRemanentes) <= 10).length}
+                        Críticos {"<"}10hs: {aircrafts.filter(a => obtenerHorasRemanentesPlaneador(a) <= 10).length}
                     </div>
                 </div>
             </header>
@@ -85,7 +94,7 @@ const EstadoAeronaves = () => {
             <div style={styles.grid}>
                 {unidades.length === 0 ? (
                     <div style={styles.noData}>
-                        <p>No hay aeronaves registradas bajo su jurisdicción o elemento operativo ({userElemento}).</p>
+                        <p>No hay aeronaves registradas bajo su jurisdicción o elemento operativo ({userElemento}) con estado E/S o F/S.</p>
                     </div>
                 ) : (
                     unidades.map(unidad => (
@@ -96,7 +105,7 @@ const EstadoAeronaves = () => {
                                     <div style={{fontSize: '0.7rem', opacity: 0.8, letterSpacing: '1px'}}>ELEMENTO OPERATIVO</div>
                                 </div>
                                 <div style={styles.badgeCount}>
-                                    {aircrafts.filter(a => String(a.unidad).trim().toUpperCase() === unidad && a.estado === 'E/S').length} DISPONIBLES
+                                    {aircrafts.filter(a => String(a.unidad).trim().toUpperCase() === unidad && a.estadoOperativo === 'E/S').length} DISPONIBLES
                                 </div>
                             </div>
                             
@@ -112,43 +121,46 @@ const EstadoAeronaves = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {aircrafts.filter(a => String(a.unidad).trim().toUpperCase() === unidad).map(air => (
-                                            <tr key={air._id} style={{
-                                                ...styles.tr,
-                                                backgroundColor: air.estado === 'F/S' ? '#fff5f5' : 'transparent',
-                                                borderLeft: Number(air.horasRemanentes) <= 10 ? '4px solid #e74c3c' : 'none'
-                                            }}>
-                                                <td style={styles.td}>{air.sda || "S/D"}</td>
-                                                <td style={{...styles.td, fontWeight: 'bold'}}>{air.matricula || "S/M"}</td>
-                                                <td style={styles.td}>
-                                                    <span style={{
-                                                        ...styles.statusBadge,
-                                                        backgroundColor: air.estado === 'E/S' ? '#2ecc71' : '#e74c3c'
-                                                    }}>
-                                                        {air.estado || "N/A"}
-                                                    </span>
-                                                </td>
-                                                <td style={{
-                                                    ...styles.td, 
-                                                    color: Number(air.horasRemanentes) <= 10 ? '#e74c3c' : '#2c3e50',
-                                                    fontWeight: Number(air.horasRemanentes) <= 10 ? 'bold' : 'normal'
+                                        {aircrafts.filter(a => String(a.unidad).trim().toUpperCase() === unidad).map(air => {
+                                            const hsRemanentes = obtenerHorasRemanentesPlaneador(air);
+                                            return (
+                                                <tr key={air._id} style={{
+                                                    ...styles.tr,
+                                                    backgroundColor: air.estadoOperativo === 'F/S' ? '#fff5f5' : 'transparent',
+                                                    borderLeft: hsRemanentes <= 10 ? '4px solid #e74c3c' : 'none'
                                                 }}>
-                                                    {air.horasRemanentes ?? 0} {Number(air.horasRemanentes) <= 10 && '⚠️'}
-                                                </td>
-                                                <td style={styles.td}>
-                                                    <button 
-                                                        onClick={() => setSelectedNote(air)}
-                                                        style={{
-                                                            ...styles.btnNote,
-                                                            background: '#3498db',
-                                                            color: 'white'
-                                                        }}
-                                                    >
-                                                        👁️ Ver
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    <td style={styles.td}>{air.sda || "S/D"}</td>
+                                                    <td style={{...styles.td, fontWeight: 'bold'}}>{air.matricula || "S/M"}</td>
+                                                    <td style={styles.td}>
+                                                        <span style={{
+                                                            ...styles.statusBadge,
+                                                            backgroundColor: air.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c'
+                                                        }}>
+                                                            {air.estadoOperativo || "N/A"}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{
+                                                        ...styles.td, 
+                                                        color: hsRemanentes <= 10 ? '#e74c3c' : '#2c3e50',
+                                                        fontWeight: hsRemanentes <= 10 ? 'bold' : 'normal'
+                                                    }}>
+                                                        {hsRemanentes} {hsRemanentes <= 10 && '⚠️'}
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        <button 
+                                                            onClick={() => setSelectedNote(air)}
+                                                            style={{
+                                                                ...styles.btnNote,
+                                                                background: '#3498db',
+                                                                color: 'white'
+                                                            }}
+                                                        >
+                                                            👁️ Ver
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -169,38 +181,49 @@ const EstadoAeronaves = () => {
                             <div style={styles.infoSection}>
                                 <h5 style={styles.sectionTitle}>⏳ Tracking de Horas</h5>
                                 <div style={styles.infoGrid}>
-                                    <div><strong>Planeador:</strong> {selectedNote.horasPlaneador || 0} hs</div>
-                                    <div><strong>Remanentes:</strong> {selectedNote.horasRemanentes || 0} hs</div>
+                                    <div><strong>Totales Iniciales:</strong> {selectedNote.inicioAeHs || 0} hs</div>
+                                    <div><strong>Tiempo General Planeador:</strong> {selectedNote.tgPlaneadorActual || 0} hs</div>
+                                    <div><strong>Remanentes Plan.:</strong> {obtenerHorasRemanentesPlaneador(selectedNote)} hs</div>
                                 </div>
                             </div>
 
                             <div style={styles.infoSection}>
-                                <h5 style={styles.sectionTitle}>⚙️ Componentes</h5>
+                                <h5 style={styles.sectionTitle}>⚙️ Planta Motriz y Palas</h5>
                                 {selectedNote.motores?.map((m, i) => (
-                                    <div key={i} style={styles.subInfo}>Motor {i+1}: {m.horas || 0} hs | {formatDate(m.fecha)}</div>
+                                    <div key={i} style={styles.subInfo}>
+                                        <strong>{m.nombre || `Motor ${i+1}`}:</strong> 
+                                        {m.componentes?.[0] 
+                                            ? ` Componente: ${m.componentes[0].componentes || 'N/D'} | S/N: ${m.componentes[0].sn || 'S/S'} | Disp: ${m.componentes[0].disponibilidades?.[0]?.valor || 0} hs`
+                                            : ' Sin componentes mapeados.'}
+                                    </div>
                                 ))}
                                 {selectedNote.helices?.map((h, i) => (
-                                    <div key={i} style={styles.subInfo}>Hélice {i+1}: {h.horas || 0} hs | {formatDate(h.fecha)}</div>
+                                    <div key={i} style={styles.subInfo}>
+                                        <strong>{h.nombre || `Hélice ${i+1}`}:</strong> 
+                                        {h.componentes?.[0] 
+                                            ? ` Componente: ${h.componentes[0].componentes || 'N/D'} | S/N: ${h.componentes[0].sn || 'S/S'} | Disp: ${h.componentes[0].disponibilidades?.[0]?.valor || 0} hs`
+                                            : ' Sin componentes mapeados.'}
+                                    </div>
                                 ))}
                             </div>
 
                             <div style={styles.infoSection}>
-                                <h5 style={styles.sectionTitle}>📅 Vencimientos e Inspecciones</h5>
+                                <h5 style={styles.sectionTitle}>📅 Vencimientos de Ley / Aviónica</h5>
                                 <div style={styles.infoGrid}>
                                     <div><strong>Seguro:</strong> {formatDate(selectedNote.vencimientoSeguro)}</div>
-                                    <div><strong>Aviónica:</strong> {formatDate(selectedNote.vencimientoAvionica)}</div>
-                                    <div style={{color: '#856404'}}><strong>91.207 (ELT):</strong> {formatDate(selectedNote.vencimientoRAAC91207)}</div>
-                                    <div style={{color: '#856404'}}><strong>91.411:</strong> {formatDate(selectedNote.vencimientoRAAC91411)}</div>
-                                    <div style={{color: '#856404'}}><strong>91.413:</strong> {formatDate(selectedNote.vencimientoRAAC91413)}</div>
+                                    <div><strong>Habilitación Aviónica:</strong> {formatDate(selectedNote.vencimientoAvionica)}</div>
+                                    <div style={{color: '#856404'}}><strong>Vencimiento ELT:</strong> {formatDate(selectedNote.vencimientoElt)}</div>
+                                    <div style={{color: '#856404'}}><strong>Sistema Pitot (91.411):</strong> {formatDate(selectedNote.vencimientoPitot)}</div>
+                                    <div style={{color: '#856404'}}><strong>Transponder (91.413):</strong> {formatDate(selectedNote.vencimientoTransponder)}</div>
                                 </div>
                             </div>
 
                             <div style={styles.infoSection}>
-                                <h5 style={styles.sectionTitle}>📝 Novedades de Mantenimiento</h5>
-                                {selectedNote.novedades ? (
-                                    <div style={styles.noteBox}>{selectedNote.novedades}</div>
+                                <h5 style={styles.sectionTitle}>📝 Observaciones Emergentes</h5>
+                                {selectedNote.observacionesPopup ? (
+                                    <div style={styles.noteBox}>{selectedNote.observacionesPopup}</div>
                                 ) : (
-                                    <div style={styles.emptyNote}>Sin novedades registradas.</div>
+                                    <div style={styles.emptyNote}>Sin novedades ni observaciones críticas registradas en popup.</div>
                                 )}
                             </div>
                         </div>
@@ -214,7 +237,6 @@ const EstadoAeronaves = () => {
     );
 };
 
-// Mantenemos los mismos estilos intactos debajo...
 const styles = {
     container: { padding: '30px', maxWidth: '1600px', margin: '0 auto', fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
     header: { marginBottom: '40px', textAlign: 'center' },
