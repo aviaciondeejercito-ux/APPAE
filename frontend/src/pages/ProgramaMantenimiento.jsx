@@ -164,33 +164,67 @@ const ProgramaMantenimiento = () => {
     };
 
     const guardarMantenimiento = async () => {
-        if (!aeronaveSeleccionadaId) {
-            alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
-            return;
-        }
+    if (!aeronaveSeleccionadaId) {
+        alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
+        return;
+    }
 
-        const payload = {
-            aeronaveId: aeronaveSeleccionadaId,
-            tgPlaneadorActual: formData.tgPlaneadorActual,
-            tgMotorActual: formData.tgMotorActual,
-            programaPlaneador: tablaPlaneador,
-            programaMotor: tablaMotor,
-            actualizadoPor: usuarioSesion.username
-        };
-
-        try {
-            const respuesta = await guardarProgramaMantenimiento(payload);
+    // 🧼 FUNCIÓN DEFENSIVA: Elimina cadenas vacías o campos id temporales 
+    // para evitar que el validador estricto de Mongoose lance un Error 500
+    const limpiarParaBackend = (lista) => {
+        if (!Array.isArray(lista)) return [];
+        return lista.map(renglon => {
+            const copia = { ...renglon };
             
-            if (respuesta && (respuesta.status === 200 || respuesta.data?.status === "success")) {
-                alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
-            } else {
-                alert(`Error devuelto por el servidor.`);
+            // Eliminamos el ID numérico del Front
+            if (copia.id) delete copia.id;
+
+            // Si un campo es un string vacío, lo pasamos a null o lo removemos 
+            // para que no rompa validaciones de tipo Date o Number en el Servidor
+            Object.keys(copia).forEach(key => {
+                if (copia[key] === "") {
+                    copia[key] = null; 
+                }
+            });
+
+            // Mapeo seguro si tu backend espera 'ultHs' pero en la grilla se usó 'gridHs'
+            if (copia.gridHs !== undefined) {
+                copia.ultHs = copia.gridHs;
+                delete copia.gridHs;
             }
-        } catch (error) {
-            console.error("Error al guardar el programa:", error);
-            alert(error.response?.data?.mensaje || "Error de red/permisos al intentar guardar cambios.");
-        }
+
+            return copia;
+        });
     };
+
+    const payload = {
+        aeronaveId: aeronaveSeleccionadaId,
+        tgPlaneadorActual: formData.tgPlaneadorActual,
+        tgMotorActual: formData.tgMotorActual,
+        programaPlaneador: limpiarParaBackend(tablaPlaneador),
+        programaMotor: limpiarParaBackend(tablaMotor),
+        actualizadoPor: usuarioSesion.username
+    };
+
+    try {
+        const respuesta = await guardarProgramaMantenimiento(payload);
+        
+        if (respuesta && (respuesta.status === 200 || respuesta.data?.status === "success")) {
+            alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
+        } else {
+            alert(`Error devuelto por el servidor.`);
+        }
+    } catch (error) {
+        console.error("Error al guardar el programa:", error);
+        
+        // 🔬 Muestra la respuesta exacta del error del servidor en la alerta
+        const mensajeErrorServidor = error.response?.data?.mensaje || error.response?.data?.error;
+        alert(mensajeErrorServidor 
+            ? `Error 500 del Servidor: ${mensajeErrorServidor}` 
+            : "Error de red/permisos al intentar guardar cambios. Revisar consola del Backend."
+        );
+    }
+};
 
     if (loading) {
         return <div style={{padding: '20px', color: '#fff', background: '#1b2a4a', fontFamily: 'monospace'}}>📡 CONECTANDO CON EL REGISTRO MATRICIAL DE LA FLOTA...</div>;
