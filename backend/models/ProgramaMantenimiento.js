@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
 const RenglonInspeccionSchema = new mongoose.Schema({
-    id: { type: Number, required: true }, 
     descripcion: { type: String, required: true, trim: true },
     ultHs: { type: String, default: "" },
     ultFecha: { type: String, default: "" },
@@ -10,7 +9,7 @@ const RenglonInspeccionSchema = new mongoose.Schema({
     proxFecha: { type: String, default: "" },
     responsable: { type: String, default: "Ec AE", trim: true },
     disp: { type: String, default: "" }
-}, { _id: false });
+}); // Al quitar {_id: false}, Mongoose genera automáticamente el _id para cada renglón
 
 const ProgramaMantenimientoSchema = new mongoose.Schema({
     aeronaveId: { 

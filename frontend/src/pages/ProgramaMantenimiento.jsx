@@ -32,7 +32,7 @@ const ProgramaMantenimiento = () => {
 
     const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
 
-    // 🔄 CARGA INICIAL CON DESEMPAQUETADO CORRECTO (AXIOS DATA PROXY LAYER)
+    // Carga inicial y configuración de unidades
     useEffect(() => {
         const inicializarPanel = async () => {
             setLoading(true);
@@ -40,7 +40,6 @@ const ProgramaMantenimiento = () => {
                 const respuesta = await getAircrafts();
                 let listaAviones = [];
                 
-                // 🔍 CORRECCIÓN DEL PARSEO CRÍTICO DE AXIOS
                 if (respuesta && respuesta.data && Array.isArray(respuesta.data.data)) {
                     listaAviones = respuesta.data.data; 
                 } else if (respuesta && Array.isArray(respuesta.data)) {
@@ -106,13 +105,22 @@ const ProgramaMantenimiento = () => {
                 
                 if (res && res.data && res.data.data) {
                     const prog = res.data.data;
+                    
+                    // Asignamos el _id de MongoDB al id del front para interactuar fluidamente
+                    const planeadorMapeado = (prog.programaPlaneador || []).map(r => ({
+                        ...r, id: r._id || r.id || Date.now() + Math.random()
+                    }));
+                    const motorMapeado = (prog.programaMotor || []).map(r => ({
+                        ...r, id: r._id || r.id || Date.now() + Math.random()
+                    }));
+
                     setFormData(prev => ({
                         ...prev,
                         tgPlaneadorActual: prog.tgPlaneadorActual || horasPlaneadorInicial,
                         tgMotorActual: prog.tgMotorActual || horasMotorInicial
                     }));
-                    setTablaPlaneador(prog.programaPlaneador || []);
-                    setTablaMotor(prog.programaMotor || []);
+                    setTablaPlaneador(planeadorMapeado);
+                    setTablaMotor(motorMapeado);
                 } else {
                     setTablaPlaneador([]);
                     setTablaMotor([]);
@@ -131,7 +139,7 @@ const ProgramaMantenimiento = () => {
 
     const agregarRenglonPlaneador = () => {
         setTablaPlaneador([...tablaPlaneador, {
-            id: Date.now(), descripcion: "", ultHs: "", ultFecha: "", ultOt: "", proxHs: "", proxFecha: "", responsable: "Ec AE", disp: ""
+            id: 'temp-' + Date.now() + Math.random(), descripcion: "", ultHs: "", ultFecha: "", ultOt: "", proxHs: "", proxFecha: "", responsable: "Ec AE", disp: ""
         }]);
     };
 
@@ -141,7 +149,7 @@ const ProgramaMantenimiento = () => {
 
     const agregarRenglonMotor = () => {
         setTablaMotor([...tablaMotor, {
-            id: Date.now(), descripcion: "", ultHs: "", ultFecha: "", ultOt: "", proxHs: "", proxFecha: "", responsable: "Ec AE", disp: ""
+            id: 'temp-' + Date.now() + Math.random(), descripcion: "", ultHs: "", ultFecha: "", ultOt: "", proxHs: "", proxFecha: "", responsable: "Ec AE", disp: ""
         }]);
     };
 
@@ -164,67 +172,62 @@ const ProgramaMantenimiento = () => {
     };
 
     const guardarMantenimiento = async () => {
-    if (!aeronaveSeleccionadaId) {
-        alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
-        return;
-    }
-
-    // 🧼 FUNCIÓN DEFENSIVA: Elimina cadenas vacías o campos id temporales 
-    // para evitar que el validador estricto de Mongoose lance un Error 500
-    const limpiarParaBackend = (lista) => {
-        if (!Array.isArray(lista)) return [];
-        return lista.map(renglon => {
-            const copia = { ...renglon };
-            
-            // Eliminamos el ID numérico del Front
-            if (copia.id) delete copia.id;
-
-            // Si un campo es un string vacío, lo pasamos a null o lo removemos 
-            // para que no rompa validaciones de tipo Date o Number en el Servidor
-            Object.keys(copia).forEach(key => {
-                if (copia[key] === "") {
-                    copia[key] = null; 
-                }
-            });
-
-            // Mapeo seguro si tu backend espera 'ultHs' pero en la grilla se usó 'gridHs'
-            if (copia.gridHs !== undefined) {
-                copia.ultHs = copia.gridHs;
-                delete copia.gridHs;
-            }
-
-            return copia;
-        });
-    };
-
-    const payload = {
-        aeronaveId: aeronaveSeleccionadaId,
-        tgPlaneadorActual: formData.tgPlaneadorActual,
-        tgMotorActual: formData.tgMotorActual,
-        programaPlaneador: limpiarParaBackend(tablaPlaneador),
-        programaMotor: limpiarParaBackend(tablaMotor),
-        actualizadoPor: usuarioSesion.username
-    };
-
-    try {
-        const respuesta = await guardarProgramaMantenimiento(payload);
-        
-        if (respuesta && (respuesta.status === 200 || respuesta.data?.status === "success")) {
-            alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
-        } else {
-            alert(`Error devuelto por el servidor.`);
+        if (!aeronaveSeleccionadaId) {
+            alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
+            return;
         }
-    } catch (error) {
-        console.error("Error al guardar el programa:", error);
-        
-        // 🔬 Muestra la respuesta exacta del error del servidor en la alerta
-        const mensajeErrorServidor = error.response?.data?.mensaje || error.response?.data?.error;
-        alert(mensajeErrorServidor 
-            ? `Error 500 del Servidor: ${mensajeErrorServidor}` 
-            : "Error de red/permisos al intentar guardar cambios. Revisar consola del Backend."
-        );
-    }
-};
+
+        // Estructura limpia para enviar al Backend
+        const limpiarParaBackend = (lista) => {
+            if (!Array.isArray(lista)) return [];
+            return lista.map(renglon => {
+                const copia = { ...renglon };
+                
+                // Si el id es temporal del front, lo removemos. Si es un ObjectId válido de MongoDB, lo conservamos.
+                if (copia.id && String(copia.id).startsWith('temp-')) {
+                    delete copia.id;
+                } else if (copia.id) {
+                    copia._id = copia.id;
+                    delete copia.id;
+                }
+
+                if (copia.gridHs !== undefined) {
+                    copia.ultHs = copia.gridHs;
+                    delete copia.gridHs;
+                }
+
+                return copia;
+            });
+        };
+
+        const payload = {
+            aeronaveId: aeronaveSeleccionadaId,
+            tgPlaneadorActual: formData.tgPlaneadorActual,
+            tgMotorActual: formData.tgMotorActual,
+            programaPlaneador: limpiarParaBackend(tablaPlaneador),
+            programaMotor: limpiarParaBackend(tablaMotor),
+            actualizadoPor: usuarioSesion.username
+        };
+
+        try {
+            const respuesta = await guardarProgramaMantenimiento(payload);
+            
+            if (respuesta && (respuesta.status === 200 || respuesta.data?.status === "success")) {
+                alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
+                // Forzamos recarga para actualizar los IDs reales del backend en la vista
+                handleAeronaveChange({ target: { value: aeronaveSeleccionadaId } });
+            } else {
+                alert(`Error devuelto por el servidor.`);
+            }
+        } catch (error) {
+            console.error("Error al guardar el programa:", error);
+            const mensajeErrorServidor = error.response?.data?.mensaje || error.response?.data?.error;
+            alert(mensajeErrorServidor 
+                ? `Error del Servidor: ${mensajeErrorServidor}` 
+                : "Error al intentar guardar cambios. Por favor, verifique que todas las descripciones estén completas."
+            );
+        }
+    };
 
     if (loading) {
         return <div style={{padding: '20px', color: '#fff', background: '#1b2a4a', fontFamily: 'monospace'}}>📡 CONECTANDO CON EL REGISTRO MATRICIAL DE LA FLOTA...</div>;
