@@ -1,10 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAircrafts } from '../services/api'; 
-
-// 🌐 URL DEL BACKEND CENTRALIZADA (Conectada a Render en prod o local en dev)
-const API_BASE_URL = window.location.hostname === 'localhost' 
-    ? '' 
-    : 'https://appae.onrender.com';
+import { getAircrafts, getProgramaPorAeronave, guardarProgramaMantenimiento } from '../services/api'; 
 
 const ProgramaMantenimiento = () => {
     // Estados de Datos de la API
@@ -24,36 +19,35 @@ const ProgramaMantenimiento = () => {
         tgMotorActual: '0,0'
     });
 
-    // 📊 MATRICES DINÁMICAS (PLANEADOR Y MOTOR)
+    // Matrices dinámicas para renderizado de celdas
     const [tablaPlaneador, setTablaPlaneador] = useState([]);
     const [tablaMotor, setTablaMotor] = useState([]);
 
-    // 🔐 EXTRACCIÓN REAL DE SESIÓN DESDE LOCALSTORAGE
-    const token = localStorage.getItem('token');
+    // Datos persistidos de sesión
     const usuarioSesion = {
         username: localStorage.getItem('username') || "Operador",
         role: (localStorage.getItem('role') || localStorage.getItem('rol') || 'USER').toUpperCase().trim(),
         elemento: (localStorage.getItem('elemento') || '').toUpperCase().trim()
     };
 
-    const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
+    const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
 
-    // Encabezados globales requeridos por las políticas de CORS y el AuthMiddleware
-    const getHeaders = () => ({
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'x-auth-token': token 
-    });
-
-    // 🔄 CARGA INICIAL Y CONFIGURACIÓN DE FILTROS SEGÚN ROL
+    // 🔄 CARGA INICIAL CON DESEMPAQUETADO CORRECTO (AXIOS DATA PROXY LAYER)
     useEffect(() => {
         const inicializarPanel = async () => {
             setLoading(true);
             try {
                 const respuesta = await getAircrafts();
                 let listaAviones = [];
-                if (Array.isArray(respuesta)) listaAviones = respuesta;
-                else if (respuesta && Array.isArray(respuesta.data)) listaAviones = respuesta.data;
+                
+                // 🔍 CORRECCIÓN DEL PARSEO CRÍTICO DE AXIOS
+                if (respuesta && respuesta.data && Array.isArray(respuesta.data.data)) {
+                    listaAviones = respuesta.data.data; 
+                } else if (respuesta && Array.isArray(respuesta.data)) {
+                    listaAviones = respuesta.data;
+                } else if (Array.isArray(respuesta)) {
+                    listaAviones = respuesta;
+                }
                 
                 setAeronaves(listaAviones);
 
@@ -69,7 +63,7 @@ const ProgramaMantenimiento = () => {
                 
                 setLoading(false);
             } catch (error) {
-                console.error("❌ Error al inicializar flota:", error);
+                console.error("❌ Error al inicializar flota en el selector:", error);
                 setLoading(false);
             }
         };
@@ -108,33 +102,23 @@ const ProgramaMantenimiento = () => {
             });
 
             try {
-                const res = await fetch(`${API_BASE_URL}/api/programas-mantenimiento/aeronave/${id}`, {
-                    method: 'GET',
-                    headers: getHeaders()
-                });
+                const res = await getProgramaPorAeronave(id);
                 
-                const textoCompleto = await res.text();
-                let resultado;
-                try {
-                    resultado = JSON.parse(textoCompleto);
-                } catch (e) {
-                    throw new Error(`Error parsing JSON en lectura. Respuesta del servidor: "${textoCompleto}"`);
-                }
-
-                if (res.ok && resultado.data) {
+                if (res && res.data && res.data.data) {
+                    const prog = res.data.data;
                     setFormData(prev => ({
                         ...prev,
-                        tgPlaneadorActual: resultado.data.tgPlaneadorActual || horasPlaneadorInicial,
-                        tgMotorActual: resultado.data.tgMotorActual || horasMotorInicial
+                        tgPlaneadorActual: prog.tgPlaneadorActual || horasPlaneadorInicial,
+                        tgMotorActual: prog.tgMotorActual || horasMotorInicial
                     }));
-                    setTablaPlaneador(resultado.data.programaPlaneador || []);
-                    setTablaMotor(resultado.data.programaMotor || []);
+                    setTablaPlaneador(prog.programaPlaneador || []);
+                    setTablaMotor(prog.programaMotor || []);
                 } else {
                     setTablaPlaneador([]);
                     setTablaMotor([]);
                 }
             } catch (error) {
-                console.error("Error al traer el programa de mantenimiento:", error);
+                console.error("Error al traer el programa de mantenimiento via Axios:", error);
                 setTablaPlaneador([]);
                 setTablaMotor([]);
             }
@@ -173,7 +157,7 @@ const ProgramaMantenimiento = () => {
     };
 
     const limpiarTablasActuales = () => {
-        if (window.confirm("¿Desea limpiar los renglones de la pantalla para volver a escribir? (No alterará los datos guardados hasta que presione Guardar)")) {
+        if (window.confirm("¿Desea limpiar los renglones de la pantalla para volver a escribir? (No alterará la Base de Datos hasta guardar)")) {
             setTablaPlaneador([]);
             setTablaMotor([]);
         }
@@ -195,30 +179,22 @@ const ProgramaMantenimiento = () => {
         };
 
         try {
-            const respuesta = await fetch(`${API_BASE_URL}/api/programas-mantenimiento/guardar`, {
-                method: 'POST',
-                headers: getHeaders(),
-                body: JSON.stringify(payload)
-            });
+            const respuesta = await guardarProgramaMantenimiento(payload);
             
-            const textoCompleto = await respuesta.text();
-            let resultado;
-            try {
-                resultado = JSON.parse(textoCompleto);
-            } catch (e) {
-                throw new Error(`El servidor no devolvió un JSON válido. Respuesta: "${textoCompleto}"`);
-            }
-
-            if (respuesta.ok) {
-                alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} guardado con éxito!`);
+            if (respuesta && (respuesta.status === 200 || respuesta.data?.status === "success")) {
+                alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
             } else {
-                alert(`Error del servidor: ${resultado.mensaje || resultado.message}`);
+                alert(`Error devuelto por el servidor.`);
             }
         } catch (error) {
             console.error("Error al guardar el programa:", error);
-            alert(error.message || "Error de conexión con el servidor backend.");
+            alert(error.response?.data?.mensaje || "Error de red/permisos al intentar guardar cambios.");
         }
     };
+
+    if (loading) {
+        return <div style={{padding: '20px', color: '#fff', background: '#1b2a4a', fontFamily: 'monospace'}}>📡 CONECTANDO CON EL REGISTRO MATRICIAL DE LA FLOTA...</div>;
+    }
 
     return (
         <div style={styles.container}>

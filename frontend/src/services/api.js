@@ -275,6 +275,13 @@ export const updateAircraftStatus = (id, aircraftData) => {
 export const deleteAircraft = (id) => API.delete(`/aircraft/${id}`);
 
 /**
+ * 🌟 NUEVOS SERVICIOS ASOCIADOS AL PROGRAMA DE MANTENIMIENTO
+ * Vinculados directamente con la instancia global segura de Axios
+ */
+export const getProgramaPorAeronave = (aeronaveId) => API.get(`/programas-mantenimiento/aeronave/${aeronaveId}`);
+export const guardarProgramaMantenimiento = (payload) => API.post('/programas-mantenimiento/guardar', payload);
+
+/**
  * SERVICIOS DE ADMINISTRACIÓN
  */
 export const getUsers = () => API.get('/admin/users');
@@ -330,7 +337,10 @@ const EventService = {
     getAeronavesF13,
     getF13s,
     registrarF13,
-    deleteF13
+    deleteF13,
+    getAircrafts,
+    getProgramaPorAeronave,
+    guardarProgramaMantenimiento
 };
 
 export { EventService };
