@@ -172,62 +172,74 @@ const ProgramaMantenimiento = () => {
     };
 
     const guardarMantenimiento = async () => {
-        if (!aeronaveSeleccionadaId) {
-            alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
-            return;
-        }
+    if (!aeronaveSeleccionadaId) {
+        alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
+        return;
+    }
 
-        // Estructura limpia para enviar al Backend
-        const limpiarParaBackend = (lista) => {
-            if (!Array.isArray(lista)) return [];
-            return lista.map(renglon => {
-                const copia = { ...renglon };
-                
-                // Si el id es temporal del front, lo removemos. Si es un ObjectId válido de MongoDB, lo conservamos.
-                if (copia.id && String(copia.id).startsWith('temp-')) {
-                    delete copia.id;
-                } else if (copia.id) {
-                    copia._id = copia.id;
-                    delete copia.id;
-                }
-
-                if (copia.gridHs !== undefined) {
-                    copia.ultHs = copia.gridHs;
-                    delete copia.gridHs;
-                }
-
-                return copia;
-            });
-        };
-
-        const payload = {
-            aeronaveId: aeronaveSeleccionadaId,
-            tgPlaneadorActual: formData.tgPlaneadorActual,
-            tgMotorActual: formData.tgMotorActual,
-            programaPlaneador: limpiarParaBackend(tablaPlaneador),
-            programaMotor: limpiarParaBackend(tablaMotor),
-            actualizadoPor: usuarioSesion.username
-        };
-
-        try {
-            const respuesta = await guardarProgramaMantenimiento(payload);
+    const limpiarParaBackend = (lista) => {
+        if (!Array.isArray(lista)) return [];
+        return lista.map(renglon => {
+            const copia = { ...renglon };
             
-            if (respuesta && (respuesta.status === 200 || respuesta.data?.status === "success")) {
-                alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
-                // Forzamos recarga para actualizar los IDs reales del backend en la vista
-                handleAeronaveChange({ target: { value: aeronaveSeleccionadaId } });
-            } else {
-                alert(`Error devuelto por el servidor.`);
+            if (copia.id && String(copia.id).startsWith('temp-')) {
+                delete copia.id;
+            } else if (copia.id) {
+                copia._id = copia.id;
+                delete copia.id;
             }
-        } catch (error) {
-            console.error("Error al guardar el programa:", error);
-            const mensajeErrorServidor = error.response?.data?.mensaje || error.response?.data?.error;
-            alert(mensajeErrorServidor 
-                ? `Error del Servidor: ${mensajeErrorServidor}` 
-                : "Error al intentar guardar cambios. Por favor, verifique que todas las descripciones estén completas."
-            );
-        }
+
+            if (copia.gridHs !== undefined) {
+                copia.ultHs = copia.gridHs;
+                delete copia.gridHs;
+            }
+
+            return copia;
+        });
     };
+
+    const payload = {
+        aeronaveId: aeronaveSeleccionadaId,
+        tgPlaneadorActual: formData.tgPlaneadorActual,
+        tgMotorActual: formData.tgMotorActual,
+        programaPlaneador: limpiarParaBackend(tablaPlaneador),
+        programaMotor: limpiarParaBackend(tablaMotor),
+        actualizadoPor: usuarioSesion.username
+    };
+
+    try {
+        const respuesta = await guardarProgramaMantenimiento(payload);
+        
+        // CORRECCIÓN AQUÍ: Validamos la respuesta del backend de forma segura
+        const datosServidor = respuesta?.data?.data || respuesta?.data;
+
+        if (datosServidor && (respuesta.status === 200 || respuesta.data?.status === "success")) {
+            alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
+            
+            // 🛡️ ACTUALIZACIÓN LOCAL SEGURA SIN TOCAR LOS TOTALES
+            // Mapeamos los nuevos renglones con los _id reales que generó MongoDB
+            const planeadorMapeado = (datosServidor.programaPlaneador || []).map(r => ({
+                ...r, id: r._id || r.id
+            }));
+            const motorMapeado = (datosServidor.programaMotor || []).map(r => ({
+                ...r, id: r._id || r.id
+            }));
+
+            setTablaPlaneador(planeadorMapeado);
+            setTablaMotor(motorMapeado);
+
+        } else {
+            alert(`Error devuelto por el servidor.`);
+        }
+    } catch (error) {
+        console.error("Error al guardar el programa:", error);
+        const mensajeErrorServidor = error.response?.data?.mensaje || error.response?.data?.error;
+        alert(mensajeErrorServidor 
+            ? `Error del Servidor: ${mensajeErrorServidor}` 
+            : "Error al intentar guardar cambios. Por favor, verifique los datos ingresados."
+        );
+    }
+};
 
     if (loading) {
         return <div style={{padding: '20px', color: '#fff', background: '#1b2a4a', fontFamily: 'monospace'}}>📡 CONECTANDO CON EL REGISTRO MATRICIAL DE LA FLOTA...</div>;
