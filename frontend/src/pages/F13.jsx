@@ -68,7 +68,6 @@ const F13Component = () => {
         try {
             const res = await getAircrafts();
             
-            // 🛡️ Extraemos el array de forma segura sin importar cómo lo mande el backend
             let todasLasAeronaves = [];
             if (Array.isArray(res.data)) {
                 todasLasAeronaves = res.data;
@@ -78,13 +77,26 @@ const F13Component = () => {
                 todasLasAeronaves = res.data.aeronaves;
             }
 
-            // 🛡️ Filtramos de forma segura sabiendo que 'todasLasAeronaves' ahora sí es un array puro
-            const operativasDeMiUnidad = todasLasAeronaves.filter(a => 
-                a &&
-                a.estadoOperativo === 'E/S' && 
-                a.unidad && a.unidad.trim().toUpperCase() === userUnidad.toUpperCase()
-            );
+            // 🔍 Log de depuración para ver qué datos están llegando realmente
+            console.log("Aeronaves crudas del backend:", todasLasAeronaves);
+            console.log("Unidad del usuario en LocalStorage:", userUnidad);
+
+            // Filtramos asegurando que existan los campos
+            const operativasDeMiUnidad = todasLasAeronaves.filter(a => {
+                if (!a) return false;
+                
+                const cumpleEstado = a.estadoOperativo === 'E/S';
+                
+                // Normalizamos quitando espacios extras por si acaso
+                const unidadAeronave = a.unidad ? a.unidad.replace(/\s+/g, ' ').trim().toUpperCase() : '';
+                const unidadUsuarioNormalizada = userUnidad.replace(/\s+/g, ' ').trim().toUpperCase();
+                
+                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada;
+                
+                return cumpleEstado && cumpleUnidad;
+            });
             
+            console.log("Aeronaves filtradas listas para el selector:", operativasDeMiUnidad);
             setAeronavesDisponibles(operativasDeMiUnidad);
         } catch (error) {
             console.error("Error cargando aeronaves del elemento", error);

@@ -25,10 +25,10 @@ const getF13s = async (req, res) => {
  */
 const getAeronavesDisponibles = async (req, res) => {
     try {
-        // Adaptado al campo de tu modelo 'estadoOperativo' (ej: "E/S")
+        // 🚨 AGREGAMOS 'unidad' AL SELECT
         const aeronaves = await Aeronave.find({ 
             estadoOperativo: 'E/S' 
-        }).select('matricula modelo sda tgPlaneadorActual motorTsn'); 
+        }).select('matricula modelo sda tgPlaneadorActual motorTsn unidad'); 
 
         return res.status(200).json({
             ok: true,
