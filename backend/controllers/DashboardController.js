@@ -24,7 +24,6 @@ const getNovedadesElemento = async (req, res) => {
 
         if (!tieneAccesoTotal) {
             // USUARIO COMÚN: Bloqueo estricto por su unidad/elemento asignado
-            // (Si viene vacío por query, intentamos rescatarlo del propio token del usuario)
             const unidadAFiltrar = unidad || req.user?.elemento || req.user?.unidad;
 
             if (!unidadAFiltrar) {
@@ -36,8 +35,6 @@ const getNovedadesElemento = async (req, res) => {
             filtroAeronave.unidad = { $regex: new RegExp(`^${unidadAFiltrar}$`, 'i') };
         } else {
             // ROLES PRIVILEGIADOS (ADMIN, BOSS, DIRECTOR): 
-            // Si en el panel seleccionaron una unidad específica, filtramos por ella.
-            // Si eligieron "TODAS" (o no viene parámetro), filtroAeronave queda vacío {} y trae TODO.
             if (unidad && unidad !== 'TODAS') {
                 filtroAeronave.unidad = { $regex: new RegExp(`^${unidad}$`, 'i') };
             }
@@ -47,10 +44,17 @@ const getNovedadesElemento = async (req, res) => {
             filtroAeronave.sda = sda;
         }
 
-        // --- 2. OBTENER FLOTA ---
-        const aeronaves = await Aircraft.find(filtroAeronave)
-            .select('matricula modelo sda horasTotales estado enServicio unidad')
+        // --- 2. OBTENER FLOTA Y NORMALIZAR ESTADOS ---
+        // Se añade 'estadoOperativo' al select para que MongoDB traiga el dato real
+        const aeronavesRaw = await Aircraft.find(filtroAeronave)
+            .select('matricula modelo sda horasTotales estado enServicio unidad estadoOperativo')
             .lean();
+
+        // Mapeamos para garantizar la propiedad 'estado' unificada para el Frontend
+        const aeronaves = aeronavesRaw.map(nave => ({
+            ...nave,
+            estado: nave.estado || nave.estadoOperativo
+        }));
 
         const chequearOperativo = (a) => {
             return a.estado === 'E/S' || a.estado === 'En Servicio' || a.enServicio === true;
@@ -63,7 +67,6 @@ const getNovedadesElemento = async (req, res) => {
         // --- 3. CONSULTAR HISTORIAL DE VUELOS (F13) ---
         const idsAeronavesUnidad = aeronaves.map(a => a._id);
         
-        // Historial limitado a las aeronaves obtenidas en el paso anterior (filtradas o totales)
         filtroF13.aeronave = { $in: idsAeronavesUnidad };
 
         if (fechaInicio || fechaFin) {
