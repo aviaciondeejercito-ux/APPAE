@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Plane, Users, Clock, Save, Trash2 } from 'lucide-react';
-// 🛠️ Cambiado 'getAeronavesF13' por el endpoint comprobado 'getAircrafts'
 import { getF13s, registrarF13, deleteF13, getAircrafts } from '../services/api'; 
 
 const F13Component = () => {
     const [registrosF13, setRegistrosF13] = useState([]);
-    const [aeronaves, setAeronaves] = useState([]); // Matriz idéntica a ProgramaMantenimiento
+    const [aeronaves, setAeronaves] = useState([]); 
     const [unidadesDisponibles, setUnidadesDisponibles] = useState([]); 
     const [unidadNavegacion, setUnidadNavegacion] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // --- DATOS PERSISTIDOS DE SESIÓN (Clonado exacto de Mantenimiento) ---
+    // --- DATOS PERSISTIDOS DE SESIÓN ---
     const usuarioSesion = {
         username: localStorage.getItem('username') || "Operador",
         role: (localStorage.getItem('role') || localStorage.getItem('rol') || 'USER').toUpperCase().trim(),
@@ -20,9 +19,9 @@ const F13Component = () => {
     const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
     const roleNormalizado = usuarioSesion.role;
 
-    // Permisos basados en el rol normalizado
-    const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'USER'].includes(roleNormalizado); 
-    const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado); 
+    // 🛡️ CORREGIDO: Se incluyó 'OFICINA_TECNICA' con guión bajo para coincidir con la sesión real
+    const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINA_TECNICA', 'OFICINATECNICA', 'USER'].includes(roleNormalizado); 
+    const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINA_TECNICA', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado); 
 
     // --- ESTADO DEL FORMULARIO ---
     const [formData, setFormData] = useState({
@@ -59,7 +58,6 @@ const F13Component = () => {
             const res = await getF13s();
             const todosLosF13 = res.data || [];
             
-            // Filtramos el historial usando la unidad de navegación activa
             const filtradosPorUnidad = todosLosF13.filter(r => {
                 if (!r.aeronave) return false;
                 const unidadAeronave = typeof r.aeronave === 'object' ? r.aeronave.unidad : '';
@@ -72,13 +70,11 @@ const F13Component = () => {
         }
     };
 
-    // ⚡ CARGA ASÍNCRONA MATRICIAL (Espejo exacto de ProgramaMantenimiento)
     const fetchAeronaves = async () => {
         try {
             const respuesta = await getAircrafts();
             let listaAviones = [];
             
-            // Desempaquetado defensivo multinivel
             if (respuesta && respuesta.data && Array.isArray(respuesta.data.data)) {
                 listaAviones = respuesta.data.data; 
             } else if (respuesta && Array.isArray(respuesta.data)) {
@@ -89,11 +85,9 @@ const F13Component = () => {
             
             setAeronaves(listaAviones);
 
-            // Extraer unidades únicas de la base de datos real
             const unidadesUnicas = [...new Set(listaAviones.map(a => a.unidad?.trim().toUpperCase()).filter(Boolean))];
             setUnidadesDisponibles(unidadesUnicas);
 
-            // Regla de asignación inicial de Unidad de Navegación
             if (!unidadNavegacion) {
                 if (isMandoEstrategico) {
                     const unidadInicialAdmin = unidadesUnicas.includes(usuarioSesion.elemento) ? usuarioSesion.elemento : (unidadesUnicas[0] || 'EC AE');
@@ -107,13 +101,10 @@ const F13Component = () => {
         }
     };
 
-    // --- FILTRADO DINÁMICO DE AERONAVES EN TIEMPO DE RENDER ---
     const aeronavesFiltradas = aeronaves.filter(a => 
         a.unidad && String(a.unidad).trim().toUpperCase() === unidadNavegacion.toUpperCase()
     );
 
-    // Filtro secundario opcional (Por buenas prácticas aeronáuticas se listan las que están En Servicio 'E/S')
-    // CONTROL DEFENSIVO: Si por error de carga no hay ninguna como 'E/S', muestra toda la flota de la unidad para no bloquear el componente
     const aeronavesDisponibles = aeronavesFiltradas.filter(a => a.estadoOperativo === 'E/S').length > 0
         ? aeronavesFiltradas.filter(a => a.estadoOperativo === 'E/S')
         : aeronavesFiltradas;
@@ -197,7 +188,6 @@ const F13Component = () => {
                     <span style={styles.subtitle}>Unidad: {unidadNavegacion || "SIN UNIDAD"} | Acceso: {roleNormalizado}</span>
                 </div>
                 
-                {/* 🛡️ SE INYECTA EL SELECTOR GLOBAL DE UNIDADES SI EL USUARIO ES ADMIN (Igual que en Mantenimiento) */}
                 {isMandoEstrategico && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#eef2f5', padding: '6px 12px', border: '1px solid #ccc', borderRadius: '4px' }}>
                         <label style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#444' }}>🛡️ UNIDAD GLOBAL:</label>
@@ -215,7 +205,7 @@ const F13Component = () => {
             </div>
 
             <div style={styles.mainGrid}>
-                {/* FORMULARIO DE CARGA (IZQUIERDA) */}
+                {/* FORMULARIO DE CARGA (IZQUIERDA) - Ahora visible para OFICINA_TECNICA */}
                 <div style={{ ...styles.card, display: puedeCargarF13 ? 'block' : 'none' }}>
                     <h2 style={styles.cardTitle}><Save size={18} /> Llenado de Formulario F-13</h2>
                     <form onSubmit={handleSubmit} style={styles.form}>
@@ -273,32 +263,18 @@ const F13Component = () => {
                             </div>
                             <div style={styles.group}>
                                 <label style={styles.label}>APU</label>
-                                <input type="number" step="0.1" min="0" style={styles.input} value={formData.apu} onChange={e => setFormData({ ...formData, apu: e.target.value })} />
+                                <input type="number" step="0.1" min="0" style={styles.input} value={formData.apu} onChange={e => setFormData({ ...formData, api: e.target.value })} />
                             </div>
                         </div>
 
                         <div style={styles.row}>
                             <div style={styles.group}>
                                 <label style={styles.label}>Comandante de Aeronave</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Ej: Cap. Pérez" 
-                                    style={styles.input} 
-                                    value={formData.comandante} 
-                                    onChange={e => setFormData({ ...formData, comandante: e.target.value })} 
-                                    required 
-                                />
+                                <input type="text" placeholder="Ej: Cap. Pérez" style={styles.input} value={formData.comandante} onChange={e => setFormData({ ...formData, comandante: e.target.value })} required />
                             </div>
                             <div style={styles.group}>
                                 <label style={styles.label}>Mecánico de a bordo</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Ej: Subof. Prado" 
-                                    style={styles.input} 
-                                    value={formData.mecanico} 
-                                    onChange={e => setFormData({ ...formData, mecanico: e.target.value })} 
-                                    required 
-                                />
+                                <input type="text" placeholder="Ej: Subof. Prado" style={styles.input} value={formData.mecanico} onChange={e => setFormData({ ...formData, mecanico: e.target.value })} required />
                             </div>
                         </div>
 
@@ -307,33 +283,15 @@ const F13Component = () => {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <div style={styles.group}>
                                     <label style={{ ...styles.label, fontSize: '0.6rem', color: '#555' }}>Inspección Pre-vuelo</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Ingrese firma o novedades pre-vuelo" 
-                                        style={styles.inputSmall} 
-                                        value={formData.inspeccionPrevuelo} 
-                                        onChange={e => setFormData({ ...formData, inspeccionPrevuelo: e.target.value })} 
-                                    />
+                                    <input type="text" placeholder="Ingrese firma o novedades pre-vuelo" style={styles.inputSmall} value={formData.inspeccionPrevuelo} onChange={e => setFormData({ ...formData, inspeccionPrevuelo: e.target.value })} />
                                 </div>
                                 <div style={styles.group}>
                                     <label style={{ ...styles.label, fontSize: '0.6rem', color: '#555' }}>Inspección Diaria</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Ingrese firma o novedades diarias" 
-                                        style={styles.inputSmall} 
-                                        value={formData.inspeccionDiaria} 
-                                        onChange={e => setFormData({ ...formData, inspeccionDiaria: e.target.value })} 
-                                    />
+                                    <input type="text" placeholder="Ingrese firma o novedades diarias" style={styles.inputSmall} value={formData.inspeccionDiaria} onChange={e => setFormData({ ...formData, inspeccionDiaria: e.target.value })} />
                                 </div>
                                 <div style={styles.group}>
                                     <label style={{ ...styles.label, fontSize: '0.6rem', color: '#555' }}>Inspección Post-vuelo</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Ingrese firma o novedades post-vuelo" 
-                                        style={styles.inputSmall} 
-                                        value={formData.inspeccionPostvuelo} 
-                                        onChange={e => setFormData({ ...formData, inspeccionPostvuelo: e.target.value })} 
-                                    />
+                                    <input type="text" placeholder="Ingrese firma o novedades post-vuelo" style={styles.inputSmall} value={formData.inspeccionPostvuelo} onChange={e => setFormData({ ...formData, inspeccionPostvuelo: e.target.value })} />
                                 </div>
                             </div>
                         </div>
@@ -376,7 +334,7 @@ const F13Component = () => {
                                             <div style={{ fontSize: '0.75rem', color: '#004a99' }}>{r.aeronave?.matricula || 'S/D'}</div>
                                         </td>
                                         <td style={styles.td}>
-                                            <div style={styles.hsBadge}>{r.horasDelDia} hs (Día)</div>
+                                            <div style={styles.hsBadge}>{r.horasDelDia} hs</div>
                                             <div style={{ fontSize: '0.7rem', color: '#555', marginTop: '3px' }}>
                                                 Total: {r.horasTotales} hs <br />
                                                 Ciclos: {r.ciclos || 0} | APU: {r.apu || 0} hs
@@ -426,7 +384,6 @@ const F13Component = () => {
     );
 };
 
-// Estructura de estilos estática idéntica a la original
 const styles = {
     container: { padding: '20px', backgroundColor: '#f4f7f6', minHeight: 'calc(100vh - 65px)' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
@@ -441,12 +398,12 @@ const styles = {
     label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' },
     input: { padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.85rem', outline: 'none' },
     inputSmall: { padding: '6px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.75rem', outline: 'none' },
-    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px', transition: '0.2s' },
+    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
     tableContainer: { overflowX: 'auto' },
     table: { width: '100%', borderCollapse: 'collapse' },
     thead: { backgroundColor: '#f9fafb' },
     th: { padding: '12px 8px', textAlign: 'left', fontSize: '0.65rem', color: '#4b5563', borderBottom: '2px solid #e5e7eb', textTransform: 'uppercase' },
-    tr: { borderBottom: '1px solid #f3f4f6', transition: '0.2s' },
+    tr: { borderBottom: '1px solid #f3f4f6' },
     td: { padding: '10px 8px', fontSize: '0.8rem', verticalAlign: 'top' },
     hsBadge: { backgroundColor: '#1b3a57', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', display: 'inline-block', fontWeight: 'bold' },
     tripuList: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.75rem' },
@@ -455,7 +412,7 @@ const styles = {
     btnDel: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' },
     noData: { textAlign: 'center', padding: '40px', color: '#9ca3af', fontSize: '0.9rem' },
     inspeccionContainer: { border: '1px solid #e5e7eb', padding: '10px', borderRadius: '6px', backgroundColor: '#fafafa', marginTop: '5px' },
-    inspeccionOk: { fontSize: '0.68rem', fontWeight: 'bold', color: '#166534', backgroundColor: '#dcfce7', padding: '2px 6px', borderRadius: '3px', width: 'fit-content', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' },
+    inspeccionOk: { fontSize: '0.68rem', fontWeight: 'bold', color: '#166534', backgroundColor: '#dcfce7', padding: '2px 6px', borderRadius: '3px' },
     inspeccionNo: { fontSize: '0.68rem', color: '#9ca3af', fontStyle: 'italic' }
 };
 
