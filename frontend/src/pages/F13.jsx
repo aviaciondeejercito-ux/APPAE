@@ -66,38 +66,43 @@ const F13Component = () => {
 
     const fetchAeronaves = async () => {
         try {
-            const res = await getAircrafts();
+            // 🚨 Usamos el token de autenticación que ya maneja tu app para pegarle directo al endpoint correcto
+            const token = localStorage.getItem('token'); 
             
-            let todasLasAeronaves = [];
-            if (Array.isArray(res.data)) {
-                todasLasAeronaves = res.data;
-            } else if (res.data && Array.isArray(res.data.aircrafts)) {
-                todasLasAeronaves = res.data.aircrafts;
-            } else if (res.data && Array.isArray(res.data.aeronaves)) {
-                todasLasAeronaves = res.data.aeronaves;
-            }
+            // Si usás una url base cambiala acá, ej: http://localhost:5000/api/f13/aeronaves-disponibles
+            const respuesta = await fetch('/api/f13/aeronaves-disponibles', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-token': token, // Cambiá por 'Authorization': `Bearer ${token}` si tu backend usa Bearer tokens
+                    'Authorization': token 
+                }
+            });
 
-            // 🔍 Log de depuración para ver qué datos están llegando realmente
-            console.log("Aeronaves crudas del backend:", todasLasAeronaves);
-            console.log("Unidad del usuario en LocalStorage:", userUnidad);
+            const dataJson = await respuesta.json();
+            
+            // Extraemos las aeronaves basándonos en el { ok: true, aeronaves: [...] } del controlador
+            const todasLasAeronaves = dataJson.aeronaves || [];
 
-            // Filtramos asegurando que existan los campos
+            console.log("Aeronaves directo del endpoint correcto:", todasLasAeronaves);
+            console.log("Unidad actual en LocalStorage:", userUnidad);
+
+            // Filtramos estrictamente por unidad sanitizando espacios
             const operativasDeMiUnidad = todasLasAeronaves.filter(a => {
                 if (!a) return false;
                 
-                const cumpleEstado = a.estadoOperativo === 'E/S';
+                // Si el backend ya filtra por 'E/S', esto es un doble seguro
+                const cumpleEstado = a.estadoOperativo === 'E/S'; 
                 
-                // Normalizamos quitando espacios extras por si acaso
                 const unidadAeronave = a.unidad ? a.unidad.replace(/\s+/g, ' ').trim().toUpperCase() : '';
                 const unidadUsuarioNormalizada = userUnidad.replace(/\s+/g, ' ').trim().toUpperCase();
                 
-                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada;
-                
-                return cumpleEstado && cumpleUnidad;
+                return cumpleEstado && (unidadAeronave === unidadUsuarioNormalizada);
             });
             
-            console.log("Aeronaves filtradas listas para el selector:", operativasDeMiUnidad);
+            console.log("Resultado final del filtro:", operativasDeMiUnidad);
             setAeronavesDisponibles(operativasDeMiUnidad);
+
         } catch (error) {
             console.error("Error cargando aeronaves del elemento", error);
         }
