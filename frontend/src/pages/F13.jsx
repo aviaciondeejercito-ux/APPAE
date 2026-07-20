@@ -1,19 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { Plane, Users, Clock, Save, Trash2 } from 'lucide-react';
-// 🛠️ Cambiado 'getAircrafts' por 'getAeronavesF13' según tu archivo api.js
-import { getF13s, registrarF13, deleteF13, getAeronavesF13 } from '../services/api'; 
+// 🛠️ Cambiado 'getAeronavesF13' por el endpoint comprobado 'getAircrafts'
+import { getF13s, registrarF13, deleteF13, getAircrafts } from '../services/api'; 
 
 const F13Component = () => {
     const [registrosF13, setRegistrosF13] = useState([]);
-    const [aeronavesDisponibles, setAeronavesDisponibles] = useState([]);
+    const [aeronaves, setAeronaves] = useState([]); // Matriz idéntica a ProgramaMantenimiento
+    const [unidadesDisponibles, setUnidadesDisponibles] = useState([]); 
+    const [unidadNavegacion, setUnidadNavegacion] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // --- NORMALIZACIÓN DE ROLES ---
-    const rawRole = localStorage.getItem('role') || 'user';
-    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, ''); 
-    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
+    // --- DATOS PERSISTIDOS DE SESIÓN (Clonado exacto de Mantenimiento) ---
+    const usuarioSesion = {
+        username: localStorage.getItem('username') || "Operador",
+        role: (localStorage.getItem('role') || localStorage.getItem('rol') || 'USER').toUpperCase().trim(),
+        elemento: (localStorage.getItem('elemento') || '').toUpperCase().trim()
+    };
 
-    // Oficina Técnica ("OFICINATECNICA") ahora cuenta con todos los permisos habilitados
+    const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
+    const roleNormalizado = usuarioSesion.role;
+
+    // Permisos basados en el rol normalizado
     const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'USER'].includes(roleNormalizado); 
     const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado); 
 
@@ -45,18 +52,18 @@ const F13Component = () => {
     useEffect(() => {
         fetchF13s();
         fetchAeronaves();
-    }, [userUnidad]);
+    }, [unidadNavegacion]);
 
     const fetchF13s = async () => {
         try {
             const res = await getF13s();
             const todosLosF13 = res.data || [];
             
-            // 🛡️ Filtramos el historial: Solo se muestran si la aeronave pertenece a tu unidad
+            // Filtramos el historial usando la unidad de navegación activa
             const filtradosPorUnidad = todosLosF13.filter(r => {
                 if (!r.aeronave) return false;
                 const unidadAeronave = typeof r.aeronave === 'object' ? r.aeronave.unidad : '';
-                return unidadAeronave && unidadAeronave.trim().toUpperCase() === userUnidad.toUpperCase();
+                return unidadAeronave && unidadAeronave.trim().toUpperCase() === unidadNavegacion.toUpperCase();
             });
 
             setRegistrosF13(filtradosPorUnidad);
@@ -65,56 +72,51 @@ const F13Component = () => {
         }
     };
 
+    // ⚡ CARGA ASÍNCRONA MATRICIAL (Espejo exacto de ProgramaMantenimiento)
     const fetchAeronaves = async () => {
         try {
-            // ⚡ Llamada directa al servicio exclusivo del submódulo F-13
-            const res = await getAeronavesF13();
+            const respuesta = await getAircrafts();
+            let listaAviones = [];
             
-            console.log("🔍 [F13] Respuesta cruda del servidor:", res.data);
-
-            // Absorbe el formato tanto si el backend responde con un objeto { aeronaves: [...] } o la lista directa
-            let todasLasAeronaves = [];
-            if (Array.isArray(res.data)) {
-                todasLasAeronaves = res.data;
-            } else if (res.data && Array.isArray(res.data.aeronaves)) {
-                todasLasAeronaves = res.data.aeronaves;
+            // Desempaquetado defensivo multinivel
+            if (respuesta && respuesta.data && Array.isArray(respuesta.data.data)) {
+                listaAviones = respuesta.data.data; 
+            } else if (respuesta && Array.isArray(respuesta.data)) {
+                listaAviones = respuesta.data;
+            } else if (Array.isArray(respuesta)) {
+                listaAviones = respuesta;
             }
-
-            const unidadUsuarioNormalizada = userUnidad.trim().toUpperCase();
-            console.log("🔍 [F13] Unidad del usuario logueado actualmente:", unidadUsuarioNormalizada);
-
-            // 1. Intentamos el filtrado inteligente e inclusivo
-            let operativasDeMiUnidad = todasLasAeronaves.filter(a => {
-                if (!a) return false;
-                
-                // Mapeo riguroso de estado ("E/S")
-                const cumpleEstado = a.estadoOperativo === 'E/S';
-                
-                // Mapeo flexible de unidad (Soporta coincidencias exactas, parciales o cruzadas)
-                const unidadAeronave = a.unidad ? a.unidad.trim().toUpperCase() : '';
-                
-                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada || 
-                                     (unidadAeronave && unidadUsuarioNormalizada && 
-                                      (unidadAeronave.includes(unidadUsuarioNormalizada) || 
-                                       unidadUsuarioNormalizada.includes(unidadAeronave)));
-                
-                return cumpleEstado && cumpleUnidad;
-            });
             
-            // 🚨 2. MECANISMO DE ACCIÓN CONTROLADO (FALLBACK): 
-            // Si el filtro por unidad dio vacío pero la base de datos SÍ devolvió aeronaves en servicio,
-            // las cargamos de todas formas para no bloquear la operación de carga y advertimos en la consola.
-            if (operativasDeMiUnidad.length === 0 && todasLasAeronaves.length > 0) {
-                console.warn(`⚠️ Mismatch de Unidad: No se hallaron aeronaves específicas para '${unidadUsuarioNormalizada}'. Cargando todas las disponibles en servicio para evitar selector vacío.`);
-                operativasDeMiUnidad = todasLasAeronaves.filter(a => a && a.estadoOperativo === 'E/S');
-            }
+            setAeronaves(listaAviones);
 
-            console.log("🔍 [F13] Aeronaves enviadas al selector:", operativasDeMiUnidad);
-            setAeronavesDisponibles(operativasDeMiUnidad);
+            // Extraer unidades únicas de la base de datos real
+            const unidadesUnicas = [...new Set(listaAviones.map(a => a.unidad?.trim().toUpperCase()).filter(Boolean))];
+            setUnidadesDisponibles(unidadesUnicas);
+
+            // Regla de asignación inicial de Unidad de Navegación
+            if (!unidadNavegacion) {
+                if (isMandoEstrategico) {
+                    const unidadInicialAdmin = unidadesUnicas.includes(usuarioSesion.elemento) ? usuarioSesion.elemento : (unidadesUnicas[0] || 'EC AE');
+                    setUnidadNavegacion(unidadInicialAdmin);
+                } else {
+                    setUnidadNavegacion(usuarioSesion.elemento);
+                }
+            }
         } catch (error) {
-            console.error("Error cargando aeronaves en módulo F-13", error);
+            console.error("❌ Error al inicializar flota en módulo F-13:", error);
         }
     };
+
+    // --- FILTRADO DINÁMICO DE AERONAVES EN TIEMPO DE RENDER ---
+    const aeronavesFiltradas = aeronaves.filter(a => 
+        a.unidad && String(a.unidad).trim().toUpperCase() === unidadNavegacion.toUpperCase()
+    );
+
+    // Filtro secundario opcional (Por buenas prácticas aeronáuticas se listan las que están En Servicio 'E/S')
+    // CONTROL DEFENSIVO: Si por error de carga no hay ninguna como 'E/S', muestra toda la flota de la unidad para no bloquear el componente
+    const aeronavesDisponibles = aeronavesFiltradas.filter(a => a.estadoOperativo === 'E/S').length > 0
+        ? aeronavesFiltradas.filter(a => a.estadoOperativo === 'E/S')
+        : aeronavesFiltradas;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -192,8 +194,24 @@ const F13Component = () => {
             <div style={styles.header}>
                 <div>
                     <h1 style={styles.title}>Registro Histórico F-13 - Historial de Aeronaves</h1>
-                    <span style={styles.subtitle}>Unidad: {userUnidad || "SIN UNIDAD"} | Acceso: {roleNormalizado}</span>
+                    <span style={styles.subtitle}>Unidad: {unidadNavegacion || "SIN UNIDAD"} | Acceso: {roleNormalizado}</span>
                 </div>
+                
+                {/* 🛡️ SE INYECTA EL SELECTOR GLOBAL DE UNIDADES SI EL USUARIO ES ADMIN (Igual que en Mantenimiento) */}
+                {isMandoEstrategico && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#eef2f5', padding: '6px 12px', border: '1px solid #ccc', borderRadius: '4px' }}>
+                        <label style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#444' }}>🛡️ UNIDAD GLOBAL:</label>
+                        <select 
+                            style={{ padding: '4px 8px', fontSize: '0.8rem', fontWeight: 'bold', outline: 'none', border: '1px solid #ccc', backgroundColor: '#fff' }}
+                            value={unidadNavegacion}
+                            onChange={(e) => setUnidadNavegacion(e.target.value)}
+                        >
+                            {unidadesDisponibles.map(un => (
+                                <option key={un} value={un}>{un}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
             </div>
 
             <div style={styles.mainGrid}>
@@ -208,15 +226,14 @@ const F13Component = () => {
                                 <input type="date" style={styles.input} value={formData.fecha} onChange={e => setFormData({ ...formData, fecha: e.target.value })} required />
                             </div>
                             <div style={styles.group}>
-                                <label style={styles.label}>Aeronave en Servicio (E/S)</label>
+                                <label style={styles.label}>Aeronave en la Unidad</label>
                                 <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({ ...formData, aeronave: e.target.value })} required>
                                     <option value="">Seleccionar aeronave...</option>
                                     {aeronavesDisponibles.map(a => {
-                                        // Extrae el ID de forma segura si viene mapeado como un objectID de Mongo ($oid) o plano
                                         const idAeronave = a._id?.$oid || a._id;
                                         return (
                                             <option key={idAeronave} value={idAeronave}>
-                                                {a.sda} ({a.matricula})
+                                                {a.matricula} - {a.sda} ({a.estadoOperativo})
                                             </option>
                                         );
                                     })}
@@ -401,7 +418,7 @@ const F13Component = () => {
                                 ))}
                             </tbody>
                         </table>
-                        {registrosF13.length === 0 && <div style={styles.noData}>No hay formularios F-13 cargados aún para su unidad.</div>}
+                        {registrosF13.length === 0 && <div style={styles.noData}>No hay formularios F-13 cargados aún para esta unidad.</div>}
                     </div>
                 </div>
             </div>
