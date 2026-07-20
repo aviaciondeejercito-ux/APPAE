@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plane, Users, Clock, Save, Trash2 } from 'lucide-react';
-import { getF13s, registrarF13, deleteF13, getAircrafts } from '../services/api'; 
+// 🛠️ Cambiado 'getAircrafts' por 'getAeronavesF13' según tu archivo api.js
+import { getF13s, registrarF13, deleteF13, getAeronavesF13 } from '../services/api'; 
 
 const F13Component = () => {
     const [registrosF13, setRegistrosF13] = useState([]);
@@ -66,45 +67,34 @@ const F13Component = () => {
 
     const fetchAeronaves = async () => {
         try {
-            // 🚨 Usamos el token de autenticación que ya maneja tu app para pegarle directo al endpoint correcto
-            const token = localStorage.getItem('token'); 
+            // ⚡ Llamada directa al servicio exclusivo del submódulo F-13 mapeado en api.js[cite: 7]
+            const res = await getAeronavesF13(); //[cite: 7]
             
-            // Si usás una url base cambiala acá, ej: http://localhost:5000/api/f13/aeronaves-disponibles
-            const respuesta = await fetch('/api/f13/aeronaves-disponibles', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-token': token, // Cambiá por 'Authorization': `Bearer ${token}` si tu backend usa Bearer tokens
-                    'Authorization': token 
-                }
-            });
+            // Extraemos la colección basándonos en el retorno estructurado { ok: true, aeronaves: [...] } de tu backend[cite: 7]
+            const todasLasAeronaves = res.data?.aeronaves || []; //[cite: 7]
 
-            const dataJson = await respuesta.json();
-            
-            // Extraemos las aeronaves basándonos en el { ok: true, aeronaves: [...] } del controlador
-            const todasLasAeronaves = dataJson.aeronaves || [];
+            // 🔍 Logs de depuración en consola[cite: 7]
+            console.log("Aeronaves crudas del backend (F-13):", todasLasAeronaves); //[cite: 7]
+            console.log("Unidad del usuario en LocalStorage:", userUnidad); //[cite: 7]
 
-            console.log("Aeronaves directo del endpoint correcto:", todasLasAeronaves);
-            console.log("Unidad actual en LocalStorage:", userUnidad);
-
-            // Filtramos estrictamente por unidad sanitizando espacios
+            // Filtramos asegurando consistencia de datos y limpiando espacios extras[cite: 7]
             const operativasDeMiUnidad = todasLasAeronaves.filter(a => {
-                if (!a) return false;
+                if (!a) return false; //[cite: 7]
                 
-                // Si el backend ya filtra por 'E/S', esto es un doble seguro
-                const cumpleEstado = a.estadoOperativo === 'E/S'; 
+                const cumpleEstado = a.estadoOperativo === 'E/S'; //[cite: 7]
                 
-                const unidadAeronave = a.unidad ? a.unidad.replace(/\s+/g, ' ').trim().toUpperCase() : '';
-                const unidadUsuarioNormalizada = userUnidad.replace(/\s+/g, ' ').trim().toUpperCase();
+                const unidadAeronave = a.unidad ? a.unidad.replace(/\s+/g, ' ').trim().toUpperCase() : ''; //[cite: 7]
+                const unidadUsuarioNormalizada = userUnidad.replace(/\s+/g, ' ').trim().toUpperCase(); //[cite: 7]
                 
-                return cumpleEstado && (unidadAeronave === unidadUsuarioNormalizada);
+                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada; //[cite: 7]
+                
+                return cumpleEstado && cumpleUnidad; //[cite: 7]
             });
             
-            console.log("Resultado final del filtro:", operativasDeMiUnidad);
-            setAeronavesDisponibles(operativasDeMiUnidad);
-
+            console.log("Aeronaves filtradas listas para el selector:", operativasDeMiUnidad); //[cite: 7]
+            setAeronavesDisponibles(operativasDeMiUnidad); //[cite: 7]
         } catch (error) {
-            console.error("Error cargando aeronaves del elemento", error);
+            console.error("Error cargando aeronaves del elemento en módulo F-13", error); //[cite: 7]
         }
     };
 
@@ -112,6 +102,8 @@ const F13Component = () => {
         e.preventDefault();
         setLoading(true);
 
+        // 🛠️ CORRECCIÓN AQUÍ: Si el usuario no escribe nada en las inspecciones, mandamos la estructura
+        // que espera recibir el backend (realizada: false), en lugar de campos de texto crudos.
         const payload = {
             ...formData,
             horasALaFecha: Number(formData.horasALaFecha),
@@ -119,9 +111,21 @@ const F13Component = () => {
             ciclos: Number(formData.ciclos),
             apu: Number(formData.apu),
             aterrizajes: Number(formData.aterrizajes),
-            inspeccionDiaria: { realizada: !!formData.inspeccionDiaria, firmaResponsable: formData.inspeccionDiaria, fechaHora: new Date() },
-            inspeccionPrevuelo: { realizada: !!formData.inspeccionPrevuelo, firmaResponsable: formData.inspeccionPrevuelo, fechaHora: new Date() },
-            inspeccionPostvuelo: { realizada: !!formData.inspeccionPostvuelo, firmaResponsable: formData.inspeccionPostvuelo, fechaHora: new Date() }
+            inspeccionDiaria: { 
+                realizada: !!formData.inspeccionDiaria?.trim(), 
+                firmaResponsable: formData.inspeccionDiaria?.trim() || "N/C", 
+                fechaHora: new Date() 
+            },
+            inspeccionPrevuelo: { 
+                realizada: !!formData.inspeccionPrevuelo?.trim(), 
+                firmaResponsable: formData.inspeccionPrevuelo?.trim() || "N/C", 
+                fechaHora: new Date() 
+            },
+            inspeccionPostvuelo: { 
+                realizada: !!formData.inspeccionPostvuelo?.trim(), 
+                firmaResponsable: formData.inspeccionPostvuelo?.trim() || "N/C", 
+                fechaHora: new Date() 
+            }
         };
 
         try {
@@ -328,13 +332,14 @@ const F13Component = () => {
                                                 </div>
                                             )}
                                         </td>
+                                        {/* 🛡️ Agregamos encadenamiento opcional (?.) para evitar que rompa la vista si r.aeronave viene nulo del backend */}
                                         <td style={styles.td}>
                                             <div style={{ fontWeight: 'bold' }}>{r.aeronave?.modelo || r.aeronave?.sda || 'S/D'}</div>
                                             <div style={{ fontSize: '0.75rem', color: '#004a99' }}>{r.aeronave?.matricula || 'S/D'}</div>
                                         </td>
                                         <td style={styles.td}>
                                             <div style={styles.hsBadge}>{r.horasDelDia} hs (Día)</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#555', marginTop: '3px' }}>
+                                            <div style={{ fontSize: '0.70rem', color: '#555', marginTop: '3px' }}>
                                                 Total: {r.horasTotales} hs <br />
                                                 Ciclos: {r.ciclos || 0} | APU: {r.apu || 0} hs
                                             </div>
@@ -346,18 +351,21 @@ const F13Component = () => {
                                                 <span style={{ fontSize: '0.7rem', color: '#666' }}>Aterrizajes: {r.aterrizajes}</span>
                                             </div>
                                         </td>
+                                        {/* 🛡️ Sanitizado de lectura de inspecciones directamente desde objetos anidados */}
                                         <td style={styles.td}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                {r.inspeccionPrevuelo?.firmaResponsable && (
+                                                {r.inspeccionPrevuelo?.realizada && r.inspeccionPrevuelo?.firmaResponsable !== "N/C" && (
                                                     <span style={styles.inspeccionOk}>Pre: {r.inspeccionPrevuelo.firmaResponsable}</span>
                                                 )}
-                                                {r.inspeccionDiaria?.firmaResponsable && (
+                                                {r.inspeccionDiaria?.realizada && r.inspeccionDiaria?.firmaResponsable !== "N/C" && (
                                                     <span style={styles.inspeccionOk}>Diaria: {r.inspeccionDiaria.firmaResponsable}</span>
                                                 )}
-                                                {r.inspeccionPostvuelo?.firmaResponsable && (
+                                                {r.inspeccionPostvuelo?.realizada && r.inspeccionPostvuelo?.firmaResponsable !== "N/C" && (
                                                     <span style={styles.inspeccionOk}>Post: {r.inspeccionPostvuelo.firmaResponsable}</span>
                                                 )}
-                                                {!r.inspeccionPrevuelo?.firmaResponsable && !r.inspeccionDiaria?.firmaResponsable && !r.inspeccionPostvuelo?.firmaResponsable && (
+                                                {(!r.inspeccionPrevuelo?.realizada || r.inspeccionPrevuelo?.firmaResponsable === "N/C") && 
+                                                 (!r.inspeccionDiaria?.realizada || r.inspeccionDiaria?.firmaResponsable === "N/C") && 
+                                                 (!r.inspeccionPostvuelo?.realizada || r.inspeccionPostvuelo?.firmaResponsable === "N/C") && (
                                                     <span style={styles.inspeccionNo}>Sin Inspecciones</span>
                                                 )}
                                             </div>
@@ -381,6 +389,7 @@ const F13Component = () => {
     );
 };
 
+// Estructura de estilos estática idéntica a la original
 const styles = {
     container: { padding: '20px', backgroundColor: '#f4f7f6', minHeight: 'calc(100vh - 65px)' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
