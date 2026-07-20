@@ -6,9 +6,8 @@ const Aeronave = require('../models/Aircraft');
  */
 const getF13s = async (req, res) => {
     try {
-        // Solo populamos 'aeronave' y 'creadoPor' que sí son ObjectIds reales en la base de datos
         const registros = await F13.find()
-            .populate('aeronave', 'matricula modelo sda')
+            .populate('aeronave', 'matricula modelo sda tgPlaneadorActual motorTsn')
             .populate('creadoPor', 'nombre apellido rango'); 
 
         return res.status(200).json(registros);
@@ -26,10 +25,10 @@ const getF13s = async (req, res) => {
  */
 const getAeronavesDisponibles = async (req, res) => {
     try {
-        // Buscamos aeronaves operativas en la base de datos
+        // Adaptado al campo de tu modelo 'estadoOperativo' (ej: "E/S")
         const aeronaves = await Aeronave.find({ 
-            estado: 'En Servicio' 
-        }).select('matricula modelo sda'); 
+            estadoOperativo: 'E/S' 
+        }).select('matricula modelo sda tgPlaneadorActual motorTsn'); 
 
         return res.status(200).json({
             ok: true,
@@ -45,13 +44,13 @@ const getAeronavesDisponibles = async (req, res) => {
 };
 
 /**
- * 3. Crear y guardar un nuevo formulario F-13
+ * 3. Crear y guardar un nuevo formulario F-13 (Suma automática al F-16)
  */
 const crearF13 = async (req, res) => {
     try {
-        const { aeronave, horasDelDia, horasALaFecha } = req.body;
+        const { aeronave, horasDelDia } = req.body;
 
-        // Validamos que la aeronave exista
+        // 1. Validamos que la aeronave exista
         const aeronaveExiste = await Aeronave.findById(aeronave);
         if (!aeronaveExiste) {
             return res.status(404).json({
@@ -60,9 +59,8 @@ const crearF13 = async (req, res) => {
             });
         }
 
-        // Extraemos de forma segura el ID del usuario autenticado (soporta req.usuarioId y req.user._id)
+        // 2. Extraemos de forma segura el ID del usuario autenticado
         const creadorId = req.usuarioId || (req.user && req.user._id);
-
         if (!creadorId) {
             return res.status(401).json({
                 ok: false,
@@ -70,29 +68,40 @@ const crearF13 = async (req, res) => {
             });
         }
 
-        // Creamos el registro F-13 asociando el ID del creador
+        // 3. Forzamos que horasDelDia sea un número puro antes de impactar la BD
+        const hsAIncrementar = Number(horasDelDia);
+        if (isNaN(hsAIncrementar) || hsAIncrementar <= 0) {
+            return res.status(400).json({
+                ok: false,
+                msg: 'Las horas del día deben ser un número mayor a 0.'
+            });
+        }
+
+        // 4. Creamos el registro F-13
         const nuevoF13 = new F13({
             ...req.body,
+            horasDelDia: hsAIncrementar,
             creadoPor: creadorId 
         });
 
         const f13Guardado = await nuevoF13.save();
 
-        // ⚡ Sincronización de horas de la aeronave (aislada para evitar rebotes del formulario)
+        // ⚡ 5. Sincronización Atómica de Horas en la Aeronave (Afecta directamente al F-16)
         try {
-            const totalHorasActualizadas = Number((horasALaFecha + horasDelDia).toFixed(2));
-            
             await Aeronave.findByIdAndUpdate(aeronave, {
-                $set: { horasTotales: totalHorasActualizadas } 
+                $inc: { 
+                    tgPlaneadorActual: hsAIncrementar, // Suma al total general de planeador
+                    motorTsn: hsAIncrementar           // Suma al tiempo total en servicio del motor
+                } 
             });
-            console.log(`✅ Horas de la aeronave ${aeronave} actualizadas con éxito.`);
+            console.log(`✅ Horas del F-13 sumadas con éxito a los totales de la aeronave ${aeronave}.`);
         } catch (updateError) {
-            console.error('⚠️ Advertencia: No se pudieron sincronizar las horas en la colección de aeronaves:', updateError.message);
+            console.error('⚠️ Advertencia: No se pudieron incrementar las horas en la colección de aeronaves:', updateError.message);
         }
 
         return res.status(201).json({
             ok: true,
-            msg: 'Formulario F-13 registrado exitosamente.',
+            msg: 'Formulario F-13 registrado exitosamente y horas impactadas en los totales generales.',
             f13: f13Guardado
         });
 
@@ -107,7 +116,7 @@ const crearF13 = async (req, res) => {
 };
 
 /**
- * 4. Eliminar un registro de F-13 (con rollback de horas de la aeronave)
+ * 4. Eliminar un registro de F-13 (con rollback exacto de horas)
  */
 const eliminarF13 = async (req, res) => {
     try {
@@ -122,24 +131,29 @@ const eliminarF13 = async (req, res) => {
         }
 
         const idAeronave = f13AEliminar.aeronave;
-        const horasARestar = f13AEliminar.horasDelDia;
+        const horasARestar = Number(f13AEliminar.horasDelDia) || 0;
 
         // Borramos el documento físico
         await F13.findByIdAndDelete(id);
 
-        // ⚡ Rollback de horas (con salvaguarda por si falla)
-        try {
-            await Aeronave.findByIdAndUpdate(idAeronave, {
-                $inc: { horasTotales: -horasARestar } 
-            });
-            console.log(`✅ Horas de la aeronave reajustadas tras eliminación (-${horasARestar} hs).`);
-        } catch (updateError) {
-            console.error('⚠️ Advertencia: No se pudo realizar el rollback de horas de la aeronave:', updateError.message);
+        // ⚡ Sincronización Atómica de Resta (Rollback)
+        if (horasARestar > 0) {
+            try {
+                await Aeronave.findByIdAndUpdate(idAeronave, {
+                    $inc: { 
+                        tgPlaneadorActual: -horasARestar, // Resta del planeador
+                        motorTsn: -horasARestar           // Resta del motor
+                    } 
+                });
+                console.log(`✅ Horas de la aeronave reajustadas tras eliminación (-${horasARestar} hs).`);
+            } catch (updateError) {
+                console.error('⚠️ Advertencia: No se pudo realizar el rollback de horas de la aeronave:', updateError.message);
+            }
         }
 
         return res.status(200).json({
             ok: true,
-            msg: 'Formulario F-13 eliminado con éxito y horas de la aeronave reajustadas.'
+            msg: 'Formulario F-13 eliminado con éxito y horas descontadas de los totales generales.'
         });
 
     } catch (error) {
