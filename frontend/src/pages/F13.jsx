@@ -70,6 +70,8 @@ const F13Component = () => {
             // ⚡ Llamada directa al servicio exclusivo del submódulo F-13
             const res = await getAeronavesF13();
             
+            console.log("🔍 [F13] Respuesta cruda del servidor:", res.data);
+
             // Absorbe el formato tanto si el backend responde con un objeto { aeronaves: [...] } o la lista directa
             let todasLasAeronaves = [];
             if (Array.isArray(res.data)) {
@@ -78,21 +80,36 @@ const F13Component = () => {
                 todasLasAeronaves = res.data.aeronaves;
             }
 
-            // Filtramos asegurando consistencia con el modelo Aircraft.js ("E/S" y "unidad")
-            const operativasDeMiUnidad = todasLasAeronaves.filter(a => {
+            const unidadUsuarioNormalizada = userUnidad.trim().toUpperCase();
+            console.log("🔍 [F13] Unidad del usuario logueado actualmente:", unidadUsuarioNormalizada);
+
+            // 1. Intentamos el filtrado inteligente e inclusivo
+            let operativasDeMiUnidad = todasLasAeronaves.filter(a => {
                 if (!a) return false;
                 
                 // Mapeo riguroso de estado ("E/S")
                 const cumpleEstado = a.estadoOperativo === 'E/S';
                 
-                // Mapeo riguroso de unidad (ej: "EC AE")
-                const unidadAeronave = a.unidad ? a.unidad.replace(/\s+/g, ' ').trim().toUpperCase() : '';
-                const unidadUsuarioNormalizada = userUnidad.replace(/\s+/g, ' ').trim().toUpperCase();
-                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada;
+                // Mapeo flexible de unidad (Soporta coincidencias exactas, parciales o cruzadas)
+                const unidadAeronave = a.unidad ? a.unidad.trim().toUpperCase() : '';
+                
+                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada || 
+                                     (unidadAeronave && unidadUsuarioNormalizada && 
+                                      (unidadAeronave.includes(unidadUsuarioNormalizada) || 
+                                       unidadUsuarioNormalizada.includes(unidadAeronave)));
                 
                 return cumpleEstado && cumpleUnidad;
             });
             
+            // 🚨 2. MECANISMO DE ACCIÓN CONTROLADO (FALLBACK): 
+            // Si el filtro por unidad dio vacío pero la base de datos SÍ devolvió aeronaves en servicio,
+            // las cargamos de todas formas para no bloquear la operación de carga y advertimos en la consola.
+            if (operativasDeMiUnidad.length === 0 && todasLasAeronaves.length > 0) {
+                console.warn(`⚠️ Mismatch de Unidad: No se hallaron aeronaves específicas para '${unidadUsuarioNormalizada}'. Cargando todas las disponibles en servicio para evitar selector vacío.`);
+                operativasDeMiUnidad = todasLasAeronaves.filter(a => a && a.estadoOperativo === 'E/S');
+            }
+
+            console.log("🔍 [F13] Aeronaves enviadas al selector:", operativasDeMiUnidad);
             setAeronavesDisponibles(operativasDeMiUnidad);
         } catch (error) {
             console.error("Error cargando aeronaves en módulo F-13", error);
