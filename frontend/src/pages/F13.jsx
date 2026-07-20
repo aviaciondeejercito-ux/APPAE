@@ -67,10 +67,20 @@ const F13Component = () => {
     const fetchAeronaves = async () => {
         try {
             const res = await getAircrafts();
-            const todasLasAeronaves = res.data || [];
+            
+            // 🛡️ Extraemos el array de forma segura sin importar cómo lo mande el backend
+            let todasLasAeronaves = [];
+            if (Array.isArray(res.data)) {
+                todasLasAeronaves = res.data;
+            } else if (res.data && Array.isArray(res.data.aircrafts)) {
+                todasLasAeronaves = res.data.aircrafts;
+            } else if (res.data && Array.isArray(res.data.aeronaves)) {
+                todasLasAeronaves = res.data.aeronaves;
+            }
 
-            // 🛡️ Filtramos por el campo real 'estadoOperativo' ("E/S") y por la unidad del usuario logueado
+            // 🛡️ Filtramos de forma segura sabiendo que 'todasLasAeronaves' ahora sí es un array puro
             const operativasDeMiUnidad = todasLasAeronaves.filter(a => 
+                a &&
                 a.estadoOperativo === 'E/S' && 
                 a.unidad && a.unidad.trim().toUpperCase() === userUnidad.toUpperCase()
             );
