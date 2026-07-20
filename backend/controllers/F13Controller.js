@@ -7,8 +7,8 @@ const Aeronave = require('../models/Aircraft');
 const getF13s = async (req, res) => {
     try {
         const registros = await F13.find()
-            .populate('aeronave', 'matricula modelo sda tgPlaneadorActual motorTsn')
-            .populate('creadoPor', 'nombre apellido rango'); 
+    .populate('aeronave', 'matricula modelo sda tgPlaneadorActual motorTsn unidad') // 👈 Agregamos 'unidad' acá
+    .populate('creadoPor', 'nombre apellido rango'); 
 
         return res.status(200).json(registros);
     } catch (error) {

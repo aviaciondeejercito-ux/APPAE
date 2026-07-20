@@ -49,25 +49,37 @@ const F13Component = () => {
     const fetchF13s = async () => {
         try {
             const res = await getF13s();
-            setRegistrosF13(res.data || []);
+            const todosLosF13 = res.data || [];
+            
+            // 🛡️ Filtramos el historial: Solo se muestran si la aeronave pertenece a tu unidad
+            const filtradosPorUnidad = todosLosF13.filter(r => {
+                if (!r.aeronave) return false;
+                const unidadAeronave = typeof r.aeronave === 'object' ? r.aeronave.unidad : '';
+                return unidadAeronave && unidadAeronave.trim().toUpperCase() === userUnidad.toUpperCase();
+            });
+
+            setRegistrosF13(filtradosPorUnidad);
         } catch (error) {
             console.error("Error cargando historial de F-13", error);
         }
     };
 
     const fetchAeronaves = async () => {
-    try {
-        // Usamos la ruta de flota general que ya sabemos que funciona y no da 404
-        const res = await getAircrafts();
-        const todasLasAeronaves = res.data || [];
+        try {
+            const res = await getAircrafts();
+            const todasLasAeronaves = res.data || [];
 
-        // Filtramos para mostrar únicamente las que están En Servicio ("E/S")
-        const operativas = todasLasAeronaves.filter(a => a.estado === 'E/S');
-        setAeronavesDisponibles(operativas);
-    } catch (error) {
-        console.error("Error cargando aeronaves del elemento", error);
-    }
-};
+            // 🛡️ Filtramos por el campo real 'estadoOperativo' ("E/S") y por la unidad del usuario logueado
+            const operativasDeMiUnidad = todasLasAeronaves.filter(a => 
+                a.estadoOperativo === 'E/S' && 
+                a.unidad && a.unidad.trim().toUpperCase() === userUnidad.toUpperCase()
+            );
+            
+            setAeronavesDisponibles(operativasDeMiUnidad);
+        } catch (error) {
+            console.error("Error cargando aeronaves del elemento", error);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -334,7 +346,7 @@ const F13Component = () => {
                                 ))}
                             </tbody>
                         </table>
-                        {registrosF13.length === 0 && <div style={styles.noData}>No hay formularios F-13 cargados aún.</div>}
+                        {registrosF13.length === 0 && <div style={styles.noData}>No hay formularios F-13 cargados aún para su unidad.</div>}
                     </div>
                 </div>
             </div>
