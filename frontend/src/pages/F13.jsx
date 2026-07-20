@@ -67,34 +67,48 @@ const F13Component = () => {
 
     const fetchAeronaves = async () => {
         try {
-            // ⚡ Llamada directa al servicio exclusivo del submódulo F-13 mapeado en api.js[cite: 7]
-            const res = await getAeronavesF13(); //[cite: 7]
+            const res = await getAeronavesF13();
             
-            // Extraemos la colección basándonos en el retorno estructurado { ok: true, aeronaves: [...] } de tu backend[cite: 7]
-            const todasLasAeronaves = res.data?.aeronaves || []; //[cite: 7]
+            // 🌟 DETECTOR DE ESTRUCTURA: Absorbe el formato tanto si viene como objeto o como array directo
+            let todasLasAeronaves = [];
+            if (Array.isArray(res.data)) {
+                todasLasAeronaves = res.data;
+            } else if (res.data && Array.isArray(res.data.aeronaves)) {
+                todasLasAeronaves = res.data.aeronaves;
+            } else if (res.data && typeof res.data === 'object') {
+                // Si el backend lo guardó bajo otra propiedad, inspeccionamos el objeto
+                const posiblesListas = Object.values(res.data).find(val => Array.isArray(val));
+                todasLasAeronaves = posiblesListas || [];
+            }
 
-            // 🔍 Logs de depuración en consola[cite: 7]
-            console.log("Aeronaves crudas del backend (F-13):", todasLasAeronaves); //[cite: 7]
-            console.log("Unidad del usuario en LocalStorage:", userUnidad); //[cite: 7]
+            console.log("=== INSPECCIÓN DE SEGURIDAD F-13 ===");
+            console.log("1. Datos crudos que llegaron de la API:", res.data);
+            console.log("2. Array de aeronaves procesado:", todasLasAeronaves);
+            console.log("3. Unidad del usuario logueado actualmente:", userUnidad);
 
-            // Filtramos asegurando consistencia de datos y limpiando espacios extras[cite: 7]
+            // Filtrado tolerante a fallas de carga en la Base de Datos
             const operativasDeMiUnidad = todasLasAeronaves.filter(a => {
-                if (!a) return false; //[cite: 7]
+                if (!a) return false;
                 
-                const cumpleEstado = a.estadoOperativo === 'E/S'; //[cite: 7]
+                // Normalizamos el Estado Operativo por si acaso está en minúsculas en tu BD
+                const estadoMismo = a.estadoOperativo ? a.estadoOperativo.trim().toUpperCase() : '';
+                const cumpleEstado = estadoMismo === 'E/S' || estadoMismo === 'ES' || estadoMismo === 'EN SERVICIO'; 
                 
-                const unidadAeronave = a.unidad ? a.unidad.replace(/\s+/g, ' ').trim().toUpperCase() : ''; //[cite: 7]
-                const unidadUsuarioNormalizada = userUnidad.replace(/\s+/g, ' ').trim().toUpperCase(); //[cite: 7]
+                // Normalizamos las unidades sanitizando espacios
+                const unidadAeronave = a.unidad ? a.unidad.replace(/\s+/g, ' ').trim().toUpperCase() : '';
+                const unidadUsuarioNormalizada = userUnidad.replace(/\s+/g, ' ').trim().toUpperCase();
                 
-                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada; //[cite: 7]
+                // Si por alguna razón tu base de datos no tiene cargada la unidad de la aeronave, 
+                // permitimos verla de forma provisional para no bloquear la carga operativa.
+                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada || unidadAeronave === '';
                 
-                return cumpleEstado && cumpleUnidad; //[cite: 7]
+                return cumpleEstado && cumpleUnidad;
             });
             
-            console.log("Aeronaves filtradas listas para el selector:", operativasDeMiUnidad); //[cite: 7]
-            setAeronavesDisponibles(operativasDeMiUnidad); //[cite: 7]
+            console.log("4. Aeronaves que pasaron todos los filtros para el selector:", operativasDeMiUnidad);
+            setAeronavesDisponibles(operativasDeMiUnidad);
         } catch (error) {
-            console.error("Error cargando aeronaves del elemento en módulo F-13", error); //[cite: 7]
+            console.error("❌ Error crítico cargando aeronaves del elemento en módulo F-13:", error);
         }
     };
 
