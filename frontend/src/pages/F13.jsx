@@ -67,48 +67,35 @@ const F13Component = () => {
 
     const fetchAeronaves = async () => {
         try {
+            // ⚡ Llamada directa al servicio exclusivo del submódulo F-13
             const res = await getAeronavesF13();
             
-            // 🌟 DETECTOR DE ESTRUCTURA: Absorbe el formato tanto si viene como objeto o como array directo
+            // Absorbe el formato tanto si el backend responde con un objeto { aeronaves: [...] } o la lista directa
             let todasLasAeronaves = [];
             if (Array.isArray(res.data)) {
                 todasLasAeronaves = res.data;
             } else if (res.data && Array.isArray(res.data.aeronaves)) {
                 todasLasAeronaves = res.data.aeronaves;
-            } else if (res.data && typeof res.data === 'object') {
-                // Si el backend lo guardó bajo otra propiedad, inspeccionamos el objeto
-                const posiblesListas = Object.values(res.data).find(val => Array.isArray(val));
-                todasLasAeronaves = posiblesListas || [];
             }
 
-            console.log("=== INSPECCIÓN DE SEGURIDAD F-13 ===");
-            console.log("1. Datos crudos que llegaron de la API:", res.data);
-            console.log("2. Array de aeronaves procesado:", todasLasAeronaves);
-            console.log("3. Unidad del usuario logueado actualmente:", userUnidad);
-
-            // Filtrado tolerante a fallas de carga en la Base de Datos
+            // Filtramos asegurando consistencia con el modelo Aircraft.js ("E/S" y "unidad")
             const operativasDeMiUnidad = todasLasAeronaves.filter(a => {
                 if (!a) return false;
                 
-                // Normalizamos el Estado Operativo por si acaso está en minúsculas en tu BD
-                const estadoMismo = a.estadoOperativo ? a.estadoOperativo.trim().toUpperCase() : '';
-                const cumpleEstado = estadoMismo === 'E/S' || estadoMismo === 'ES' || estadoMismo === 'EN SERVICIO'; 
+                // Mapeo riguroso de estado ("E/S")
+                const cumpleEstado = a.estadoOperativo === 'E/S';
                 
-                // Normalizamos las unidades sanitizando espacios
+                // Mapeo riguroso de unidad (ej: "EC AE")
                 const unidadAeronave = a.unidad ? a.unidad.replace(/\s+/g, ' ').trim().toUpperCase() : '';
                 const unidadUsuarioNormalizada = userUnidad.replace(/\s+/g, ' ').trim().toUpperCase();
-                
-                // Si por alguna razón tu base de datos no tiene cargada la unidad de la aeronave, 
-                // permitimos verla de forma provisional para no bloquear la carga operativa.
-                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada || unidadAeronave === '';
+                const cumpleUnidad = unidadAeronave === unidadUsuarioNormalizada;
                 
                 return cumpleEstado && cumpleUnidad;
             });
             
-            console.log("4. Aeronaves que pasaron todos los filtros para el selector:", operativasDeMiUnidad);
             setAeronavesDisponibles(operativasDeMiUnidad);
         } catch (error) {
-            console.error("❌ Error crítico cargando aeronaves del elemento en módulo F-13:", error);
+            console.error("Error cargando aeronaves en módulo F-13", error);
         }
     };
 
@@ -116,8 +103,6 @@ const F13Component = () => {
         e.preventDefault();
         setLoading(true);
 
-        // 🛠️ CORRECCIÓN AQUÍ: Si el usuario no escribe nada en las inspecciones, mandamos la estructura
-        // que espera recibir el backend (realizada: false), en lugar de campos de texto crudos.
         const payload = {
             ...formData,
             horasALaFecha: Number(formData.horasALaFecha),
@@ -209,9 +194,15 @@ const F13Component = () => {
                                 <label style={styles.label}>Aeronave en Servicio (E/S)</label>
                                 <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({ ...formData, aeronave: e.target.value })} required>
                                     <option value="">Seleccionar aeronave...</option>
-                                    {aeronavesDisponibles.map(a => (
-                                        <option key={a._id} value={a._id}>{a.modelo || a.sda} ({a.matricula})</option>
-                                    ))}
+                                    {aeronavesDisponibles.map(a => {
+                                        // Extrae el ID de forma segura si viene mapeado como un objectID de Mongo ($oid) o plano
+                                        const idAeronave = a._id?.$oid || a._id;
+                                        return (
+                                            <option key={idAeronave} value={idAeronave}>
+                                                {a.sda} ({a.matricula})
+                                            </option>
+                                        );
+                                    })}
                                 </select>
                             </div>
                         </div>
@@ -336,7 +327,7 @@ const F13Component = () => {
                             </thead>
                             <tbody>
                                 {registrosF13.map(r => (
-                                    <tr key={r._id} style={styles.tr}>
+                                    <tr key={r._id?.$oid || r._id} style={styles.tr}>
                                         <td style={styles.td}>
                                             <div style={{ fontWeight: 'bold' }}>{formatearFechaLocal(r.fecha)}</div>
                                             <span style={styles.misionTag}>{r.misionVuelo}</span>
@@ -346,14 +337,13 @@ const F13Component = () => {
                                                 </div>
                                             )}
                                         </td>
-                                        {/* 🛡️ Agregamos encadenamiento opcional (?.) para evitar que rompa la vista si r.aeronave viene nulo del backend */}
                                         <td style={styles.td}>
-                                            <div style={{ fontWeight: 'bold' }}>{r.aeronave?.modelo || r.aeronave?.sda || 'S/D'}</div>
+                                            <div style={{ fontWeight: 'bold' }}>{r.aeronave?.sda || 'S/D'}</div>
                                             <div style={{ fontSize: '0.75rem', color: '#004a99' }}>{r.aeronave?.matricula || 'S/D'}</div>
                                         </td>
                                         <td style={styles.td}>
                                             <div style={styles.hsBadge}>{r.horasDelDia} hs (Día)</div>
-                                            <div style={{ fontSize: '0.70rem', color: '#555', marginTop: '3px' }}>
+                                            <div style={{ fontSize: '0.7rem', color: '#555', marginTop: '3px' }}>
                                                 Total: {r.horasTotales} hs <br />
                                                 Ciclos: {r.ciclos || 0} | APU: {r.apu || 0} hs
                                             </div>
@@ -365,7 +355,6 @@ const F13Component = () => {
                                                 <span style={{ fontSize: '0.7rem', color: '#666' }}>Aterrizajes: {r.aterrizajes}</span>
                                             </div>
                                         </td>
-                                        {/* 🛡️ Sanitizado de lectura de inspecciones directamente desde objetos anidados */}
                                         <td style={styles.td}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                 {r.inspeccionPrevuelo?.realizada && r.inspeccionPrevuelo?.firmaResponsable !== "N/C" && (
@@ -386,7 +375,7 @@ const F13Component = () => {
                                         </td>
                                         <td style={styles.td}>
                                             {puedeEliminarF13 && (
-                                                <button onClick={() => eliminarRegistro(r._id)} style={styles.btnDel}>
+                                                <button onClick={() => eliminarRegistro(r._id?.$oid || r._id)} style={styles.btnDel}>
                                                     <Trash2 size={16} />
                                                 </button>
                                             )}
