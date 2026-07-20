@@ -92,6 +92,7 @@ const ProgramaMantenimiento = () => {
             const horasPlaneadorInicial = avion.tgPlaneadorActual ? String(avion.tgPlaneadorActual).replace('.', ',') : '0,0';
             const horasMotorInicial = avion.motorTsn ? String(avion.motorTsn).replace('.', ',') : '0,0';
 
+            // Seteo preventivo inicial con los datos en memoria de la aeronave
             setFormData({
                 sda: avion.sda || 'N/D',
                 matricula: avion.matricula || 'N/D',
@@ -114,11 +115,22 @@ const ProgramaMantenimiento = () => {
                         ...r, id: r._id || r.id || Date.now() + Math.random()
                     }));
 
+                    // 🛡️ CONTROL DEFENSIVO: Si el programa de la BD trae "0,0" o viene nulo (upsert genérico),
+                    // preservamos el valor real de la aeronave para que no parpadee ni se sobreescriba en cero.
+                    const planeadorFinal = (prog.tgPlaneadorActual === "0,0" || !prog.tgPlaneadorActual) 
+                        ? horasPlaneadorInicial 
+                        : prog.tgPlaneadorActual;
+
+                    const motorFinal = (prog.tgMotorActual === "0,0" || !prog.tgMotorActual) 
+                        ? horasMotorInicial 
+                        : prog.tgMotorActual;
+
                     setFormData(prev => ({
                         ...prev,
-                        tgPlaneadorActual: prog.tgPlaneadorActual || horasPlaneadorInicial,
-                        tgMotorActual: prog.tgMotorActual || horasMotorInicial
+                        tgPlaneadorActual: planeadorFinal,
+                        tgMotorActual: motorFinal
                     }));
+
                     setTablaPlaneador(planeadorMapeado);
                     setTablaMotor(motorMapeado);
                 } else {
@@ -172,74 +184,70 @@ const ProgramaMantenimiento = () => {
     };
 
     const guardarMantenimiento = async () => {
-    if (!aeronaveSeleccionadaId) {
-        alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
-        return;
-    }
-
-    const limpiarParaBackend = (lista) => {
-        if (!Array.isArray(lista)) return [];
-        return lista.map(renglon => {
-            const copia = { ...renglon };
-            
-            if (copia.id && String(copia.id).startsWith('temp-')) {
-                delete copia.id;
-            } else if (copia.id) {
-                copia._id = copia.id;
-                delete copia.id;
-            }
-
-            if (copia.gridHs !== undefined) {
-                copia.ultHs = copia.gridHs;
-                delete copia.gridHs;
-            }
-
-            return copia;
-        });
-    };
-
-    const payload = {
-        aeronaveId: aeronaveSeleccionadaId,
-        tgPlaneadorActual: formData.tgPlaneadorActual,
-        tgMotorActual: formData.tgMotorActual,
-        programaPlaneador: limpiarParaBackend(tablaPlaneador),
-        programaMotor: limpiarParaBackend(tablaMotor),
-        actualizadoPor: usuarioSesion.username
-    };
-
-    try {
-        const respuesta = await guardarProgramaMantenimiento(payload);
-        
-        // CORRECCIÓN AQUÍ: Validamos la respuesta del backend de forma segura
-        const datosServidor = respuesta?.data?.data || respuesta?.data;
-
-        if (datosServidor && (respuesta.status === 200 || respuesta.data?.status === "success")) {
-            alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
-            
-            // 🛡️ ACTUALIZACIÓN LOCAL SEGURA SIN TOCAR LOS TOTALES
-            // Mapeamos los nuevos renglones con los _id reales que generó MongoDB
-            const planeadorMapeado = (datosServidor.programaPlaneador || []).map(r => ({
-                ...r, id: r._id || r.id
-            }));
-            const motorMapeado = (datosServidor.programaMotor || []).map(r => ({
-                ...r, id: r._id || r.id
-            }));
-
-            setTablaPlaneador(planeadorMapeado);
-            setTablaMotor(motorMapeado);
-
-        } else {
-            alert(`Error devuelto por el servidor.`);
+        if (!aeronaveSeleccionadaId) {
+            alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
+            return;
         }
-    } catch (error) {
-        console.error("Error al guardar el programa:", error);
-        const mensajeErrorServidor = error.response?.data?.mensaje || error.response?.data?.error;
-        alert(mensajeErrorServidor 
-            ? `Error del Servidor: ${mensajeErrorServidor}` 
-            : "Error al intentar guardar cambios. Por favor, verifique los datos ingresados."
-        );
-    }
-};
+
+        const limpiarParaBackend = (lista) => {
+            if (!Array.isArray(lista)) return [];
+            return lista.map(renglon => {
+                const copia = { ...renglon };
+                
+                if (copia.id && String(copia.id).startsWith('temp-')) {
+                    delete copia.id;
+                } else if (copia.id) {
+                    copia._id = copia.id;
+                    delete copia.id;
+                }
+
+                if (copia.gridHs !== undefined) {
+                    copia.ultHs = copia.gridHs;
+                    delete copia.gridHs;
+                }
+
+                return copia;
+            });
+        };
+
+        const payload = {
+            aeronaveId: aeronaveSeleccionadaId,
+            tgPlaneadorActual: formData.tgPlaneadorActual,
+            tgMotorActual: formData.tgMotorActual,
+            programaPlaneador: limpiarParaBackend(tablaPlaneador),
+            programaMotor: limpiarParaBackend(tablaMotor),
+            actualizadoPor: usuarioSesion.username
+        };
+
+        try {
+            const respuesta = await guardarProgramaMantenimiento(payload);
+            const datosServidor = respuesta?.data?.data || respuesta?.data;
+
+            if (datosServidor && (respuesta.status === 200 || respuesta.data?.status === "success")) {
+                alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
+                
+                const planeadorMapeado = (datosServidor.programaPlaneador || []).map(r => ({
+                    ...r, id: r._id || r.id
+                }));
+                const motorMapeado = (datosServidor.programaMotor || []).map(r => ({
+                    ...r, id: r._id || r.id
+                }));
+
+                setTablaPlaneador(planeadorMapeado);
+                setTablaMotor(motorMapeado);
+
+            } else {
+                alert(`Error devuelto por el servidor.`);
+            }
+        } catch (error) {
+            console.error("Error al guardar el programa:", error);
+            const mensajeErrorServidor = error.response?.data?.mensaje || error.response?.data?.error;
+            alert(mensajeErrorServidor 
+                ? `Error del Servidor: ${mensajeErrorServidor}` 
+                : "Error al intentar guardar cambios. Por favor, verifique los datos ingresados."
+            );
+        }
+    };
 
     if (loading) {
         return <div style={{padding: '20px', color: '#fff', background: '#1b2a4a', fontFamily: 'monospace'}}>📡 CONECTANDO CON EL REGISTRO MATRICIAL DE LA FLOTA...</div>;
