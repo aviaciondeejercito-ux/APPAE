@@ -15,28 +15,36 @@ const obtenerPrivilegios = (user) => {
     const esOficinaTecnica = roleUpper === 'OFICINATECNICA';
     
     return {
-        isMandoEstrategico, // Puede ver toda la flota global y borrar registros
-        canChangeUnit: isMandoEstrategico || esOficinaTecnica, // Puede realizar transferencias
-        hasEditPrivileges: isMandoEstrategico || esOficinaTecnica || roleUpper === 'S4UNIDAD', // Puede editar campos
+        isMandoEstrategico,
+        canChangeUnit: isMandoEstrategico || esOficinaTecnica,
+        hasEditPrivileges: isMandoEstrategico || esOficinaTecnica || roleUpper === 'S4UNIDAD',
         userElemento
     };
 };
 
 /**
- * 1. OBTENER FLOTA (FILTRADO RESTRICTIVO Y CAPTURA POR PARÁMETRO)
+ * Helper para asegurar parseo numérico estricto
+ */
+const parsearHs = (val) => {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const num = parseFloat(String(val).replace(',', '.').trim());
+    return isNaN(num) ? 0 : num;
+};
+
+/**
+ * 1. OBTENER FLOTA
  */
 exports.getAircrafts = async (req, res) => {
     try {
         const { isMandoEstrategico, userElemento } = obtenerPrivilegios(req.user);
-        const { elemento } = req.params; // Sincronizado: Captura el parámetro de la ruta si existe
+        const { elemento } = req.params;
 
         let query = {};
         
         if (!isMandoEstrategico) {
-            // Un usuario de unidad queda enclaustrado a ver solo lo de su base
             query.unidad = userElemento;
         } else if (elemento) {
-            // Un mando global puede usar las rutas parametrizadas para ver una unidad específica
             query.unidad = elemento.toUpperCase().trim();
         }
         
@@ -66,7 +74,11 @@ exports.createAircraft = async (req, res) => {
             return res.status(400).json({ success: false, message: "Debe especificar una unidad de destino válida." });
         }
 
-        payload.creadoPor = `${req.user.username || 'Usuario'} (${req.user.role})`;
+        // Sanitización de números en cabecera
+        payload.tgPlaneadorActual = parsearHs(payload.tgPlaneadorActual);
+        payload.motorTsn = parsearHs(payload.motorTsn);
+
+        payload.creadoPor = `${req.user?.username || 'Usuario'} (${req.user?.role || 'USER'})`;
         payload.actualizadoPor = payload.creadoPor;
 
         const nuevaAeronave = new Aircraft(payload);
@@ -82,7 +94,7 @@ exports.createAircraft = async (req, res) => {
 };
 
 /**
- * 3. ACTUALIZACIÓN / TRASLADO DE AERONAVE
+ * 3. ACTUALIZACIÓN / TRASLADO DE AERONAVE (USANDO .save() PARA DISPARAR MARKMODIFIED)
  */
 exports.updateAircraftStatus = async (req, res) => {
     try {
@@ -93,35 +105,50 @@ exports.updateAircraftStatus = async (req, res) => {
             return res.status(403).json({ success: false, message: "Acceso denegado. No posee credenciales de modificación." });
         }
 
-        const aeronaveExistente = await Aircraft.findById(id);
-        if (!aeronaveExistente) {
+        const aeronaveDoc = await Aircraft.findById(id);
+        if (!aeronaveDoc) {
             return res.status(404).json({ success: false, message: "Aeronave no localizada." });
         }
 
-        if (!isMandoEstrategico && aeronaveExistente.unidad !== userElemento) {
+        if (!isMandoEstrategico && aeronaveDoc.unidad !== userElemento) {
             return res.status(403).json({ success: false, message: "Acceso denegado. El recurso pertenece a otro Elemento Operativo." });
         }
 
-        const camposAActualizar = { ...req.body };
+        const campos = { ...req.body };
 
         if (!canChangeUnit) {
-            delete camposAActualizar.unidad;
+            delete campos.unidad;
         }
 
-        camposAActualizar.actualizadoPor = `${req.user.username || 'Usuario'} (${req.user.role})`;
+        // Asignación de campos directos
+        Object.keys(campos).forEach(key => {
+            if (key !== '_id' && key !== '__v') {
+                aeronaveDoc[key] = campos[key];
+            }
+        });
 
-        const aeronaveActualizada = await Aircraft.findByIdAndUpdate(
-            id,
-            { $set: camposAActualizar },
-            { new: true, runValidators: true }
-        );
+        // Parseo seguro de números principales
+        if (campos.tgPlaneadorActual !== undefined) aeronaveDoc.tgPlaneadorActual = parsearHs(campos.tgPlaneadorActual);
+        if (campos.motorTsn !== undefined) aeronaveDoc.motorTsn = parsearHs(campos.motorTsn);
+
+        // Notificar a Mongoose las modificaciones en estructuras complejas
+        aeronaveDoc.markModified('tgPlaneadorActual');
+        aeronaveDoc.markModified('motorTsn');
+        if (campos.compPlaneador) aeronaveDoc.markModified('compPlaneador');
+        if (campos.motores) aeronaveDoc.markModified('motores');
+        if (campos.helices) aeronaveDoc.markModified('helices');
+
+        aeronaveDoc.actualizadoPor = `${req.user?.username || 'Usuario'} (${req.user?.role || 'USER'})`;
+
+        const aeronaveGuardada = await aeronaveDoc.save();
 
         return res.status(200).json({ 
             success: true, 
-            data: aeronaveActualizada, 
-            message: "Aeronave procesada / transferida correctamente." 
+            data: aeronaveGuardada, 
+            message: "Aeronave y sus componentes actualizados correctamente." 
         });
     } catch (error) {
+        console.error("❌ Error en updateAircraftStatus:", error);
         return res.status(500).json({ success: false, message: "Error en la operación de actualización.", error: error.message });
     }
 };

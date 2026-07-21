@@ -139,13 +139,15 @@ const F16Page = () => {
 
         // Inyección de auditoría de usuario requerida por el esquema Mongoose
         const payload = {
-            ...cabecera,
-            unidad: esAdminGlobal ? unidadNavegacion : usuarioSesion.elemento,
-            compPlaneador,
-            motores,
-            helices,
-            creadoPor: usuarioSesion.username,
-            actualizadoPor: usuarioSesion.username
+    ...cabecera,
+    tgPlaneadorActual: cabecera.tgPlaneadorActual === '' ? 0 : Number(cabecera.tgPlaneadorActual),
+    motorTsn: cabecera.motorTsn === '' ? 0 : Number(cabecera.motorTsn),
+    unidad: esAdminGlobal ? unidadNavegacion : usuarioSesion.elemento,
+    compPlaneador,
+    motores,
+    helices,
+    creadoPor: usuarioSesion.username,
+    actualizadoPor: usuarioSesion.username
         };
 
         try {
