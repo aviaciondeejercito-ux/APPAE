@@ -89,16 +89,22 @@ const ProgramaMantenimiento = () => {
         });
 
         if (avion) {
-            const horasPlaneadorInicial = avion.tgPlaneadorActual ? String(avion.tgPlaneadorActual).replace('.', ',') : '0,0';
-            const horasMotorInicial = avion.motorTsn ? String(avion.motorTsn).replace('.', ',') : '0,0';
+            // 🎯 EXTRAEMOS LOS TOTALES EXCLUSIVAMENTE DEL PANEL DE LA F-16 (MODELO AIRCRAFT)
+            const horasPlaneadorF16 = (avion.tgPlaneadorActual !== undefined && avion.tgPlaneadorActual !== null) 
+                ? String(avion.tgPlaneadorActual).replace('.', ',') 
+                : '0,0';
+                
+            const horasMotorF16 = (avion.motorTsn !== undefined && avion.motorTsn !== null) 
+                ? String(avion.motorTsn).replace('.', ',') 
+                : '0,0';
 
-            // Seteo preventivo inicial con los datos en memoria de la aeronave
+            // Fijamos los datos estructurales provenientes del objeto `avion`
             setFormData({
                 sda: avion.sda || 'N/D',
                 matricula: avion.matricula || 'N/D',
                 nroSerie: avion.nroSerie || 'S/N', 
-                tgPlaneadorActual: horasPlaneadorInicial, 
-                tgMotorActual: horasMotorInicial
+                tgPlaneadorActual: horasPlaneadorF16, 
+                tgMotorActual: horasMotorF16
             });
 
             try {
@@ -107,7 +113,7 @@ const ProgramaMantenimiento = () => {
                 if (res && res.data && res.data.data) {
                     const prog = res.data.data;
                     
-                    // Asignamos el _id de MongoDB al id del front para interactuar fluidamente
+                    // Solo mapeamos los renglones de inspecciones (tablas)
                     const planeadorMapeado = (prog.programaPlaneador || []).map(r => ({
                         ...r, id: r._id || r.id || Date.now() + Math.random()
                     }));
@@ -115,24 +121,9 @@ const ProgramaMantenimiento = () => {
                         ...r, id: r._id || r.id || Date.now() + Math.random()
                     }));
 
-                    // 🛡️ CONTROL DEFENSIVO: Si el programa de la BD trae "0,0" o viene nulo (upsert genérico),
-                    // preservamos el valor real de la aeronave para que no parpadee ni se sobreescriba en cero.
-                    const planeadorFinal = (prog.tgPlaneadorActual === "0,0" || !prog.tgPlaneadorActual) 
-                        ? horasPlaneadorInicial 
-                        : prog.tgPlaneadorActual;
-
-                    const motorFinal = (prog.tgMotorActual === "0,0" || !prog.tgMotorActual) 
-                        ? horasMotorInicial 
-                        : prog.tgMotorActual;
-
-                    setFormData(prev => ({
-                        ...prev,
-                        tgPlaneadorActual: planeadorFinal,
-                        tgMotorActual: motorFinal
-                    }));
-
                     setTablaPlaneador(planeadorMapeado);
                     setTablaMotor(motorMapeado);
+                    // ⚠️ NOTA: Se eliminó la sobreescritura que modificaba `formData` con las horas de `prog`.
                 } else {
                     setTablaPlaneador([]);
                     setTablaMotor([]);
@@ -143,10 +134,6 @@ const ProgramaMantenimiento = () => {
                 setTablaMotor([]);
             }
         }
-    };
-
-    const handleKpiChange = (campo, valor) => {
-        setFormData({ ...formData, [campo]: valor });
     };
 
     const agregarRenglonPlaneador = () => {
@@ -334,8 +321,8 @@ const ProgramaMantenimiento = () => {
                         type="text" 
                         style={styles.kpiInputInline} 
                         value={formData.tgPlaneadorActual} 
-                        disabled={!aeronaveSeleccionadaId}
-                        onChange={(e) => handleKpiChange('tgPlaneadorActual', e.target.value)}
+                        disabled
+                        readOnly
                     />
                 </div>
                 <button style={styles.btnAddRow} onClick={agregarRenglonPlaneador} disabled={!aeronaveSeleccionadaId}>➕ Agregar Renglón Planeador</button>
@@ -386,8 +373,8 @@ const ProgramaMantenimiento = () => {
                         type="text" 
                         style={styles.kpiInputInline} 
                         value={formData.tgMotorActual} 
-                        disabled={!aeronaveSeleccionadaId}
-                        onChange={(e) => handleKpiChange('tgMotorActual', e.target.value)}
+                        disabled
+                        readOnly
                     />
                 </div>
                 <button style={{...styles.btnAddRow, backgroundColor: '#d35400'}} onClick={agregarRenglonMotor} disabled={!aeronaveSeleccionadaId}>➕ Agregar Renglón Motor</button>
@@ -453,7 +440,7 @@ const styles = {
     sectionDivider: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', marginBottom: '5px' },
     miniKpiExcel: { backgroundColor: '#00a8ff', color: '#000', padding: '2px 8px', border: '1px solid #000', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 'bold' },
     kpiLabel: { color: '#000' },
-    kpiInputInline: { width: '70px', background: '#fff', border: '1px solid #000', padding: '2px 4px', fontSize: '0.75rem', fontFamily: 'monospace', textAlign: 'center', fontWeight: 'bold' },
+    kpiInputInline: { width: '80px', background: '#f5f5f5', border: '1px solid #000', padding: '2px 4px', fontSize: '0.75rem', fontFamily: 'monospace', textAlign: 'center', fontWeight: 'bold', cursor: 'not-allowed' },
     btnAddRow: { backgroundColor: '#2c3e50', color: '#fff', border: 'none', padding: '5px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' },
     tableWrapper: { overflowX: 'auto', border: '1px solid #000' },
     mantoTable: { width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' },
