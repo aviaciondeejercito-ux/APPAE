@@ -23,10 +23,10 @@ const formatearHs = (val) => {
 const actualizarHorasComponente = (comp, hs, esRollback = false) => {
     const factor = esRollback ? -1 : 1;
     
-    // 1. Horas del estado actual del componente
+    // 1. Horas del estado actual del componente (TSO/TSHMI/TSN)
     comp.estadoActual = Number(Math.max(0, (comp.estadoActual || 0) + (hs * factor)).toFixed(2));
 
-    // 2. Sub-renglones TSN / CSN (Horas voladas)
+    // 2. Sub-renglones TSN / CSN (Suma horas voladas)
     if (Array.isArray(comp.tsnCsnRenglones)) {
         comp.tsnCsnRenglones.forEach(r => {
             if (r.unidad === 'H') {
@@ -36,7 +36,7 @@ const actualizarHorasComponente = (comp, hs, esRollback = false) => {
         });
     }
 
-    // 3. Sub-renglones de Disponibilidades (Restan al volar, suman al hacer rollback)
+    // 3. Sub-renglones de Disponibilidades (Restan al volar, suman en rollback)
     if (Array.isArray(comp.disponibilidades)) {
         comp.disponibilidades.forEach(d => {
             if (d.unidad === 'H') {
@@ -48,13 +48,13 @@ const actualizarHorasComponente = (comp, hs, esRollback = false) => {
 };
 
 /**
- * 1. Obtener todos los registros de F-13 (con Populate adaptado)
+ * 1. Obtener todos los registros de F-13
  */
 const getF13s = async (req, res) => {
     try {
         const registros = await F13.find()
             .populate('aeronave', 'matricula modelo sda tgPlaneadorActual motorTsn unidad')
-            .populate('creadoPor', 'nombre apellido rango'); 
+            .populate('creadoPor', 'nombre apellido rango username'); 
 
         return res.status(200).json(registros);
     } catch (error) {
@@ -67,7 +67,7 @@ const getF13s = async (req, res) => {
 };
 
 /**
- * 2. Obtener aeronaves disponibles para el desplegable
+ * 2. Obtener aeronaves disponibles para el desplegable de vuelo
  */
 const getAeronavesDisponibles = async (req, res) => {
     try {
@@ -89,7 +89,7 @@ const getAeronavesDisponibles = async (req, res) => {
 };
 
 /**
- * 3. Crear y guardar un nuevo formulario F-13 (Impacto en Aircraft F-16 y Programa)
+ * 3. Crear y guardar un nuevo formulario F-13 (Impacto directo en Aircraft F-16 y Programa)
  */
 const crearF13 = async (req, res) => {
     try {
@@ -103,7 +103,8 @@ const crearF13 = async (req, res) => {
             });
         }
 
-        const creadorId = req.usuarioId || (req.user && req.user._id);
+        // Extracción flexible del ID de usuario autenticado
+        const creadorId = req.usuarioId || (req.user && req.user._id) || (req.usuario && req.usuario._id);
         if (!creadorId) {
             return res.status(401).json({
                 ok: false,
@@ -128,7 +129,7 @@ const crearF13 = async (req, res) => {
         const f13Guardado = await nuevoF13.save();
 
         // B. ACTUALIZAR MODELO AIRCRAFT (F-16)
-        // 1. Totales generales de cabecera (se parsean previamente para evitar sumas como texto)
+        // 1. Totales generales de cabecera
         const tgPlaneadorPrevio = parsearHs(aeronaveDoc.tgPlaneadorActual);
         const motorTsnPrevio = parsearHs(aeronaveDoc.motorTsn);
 
@@ -186,7 +187,7 @@ const crearF13 = async (req, res) => {
 
         return res.status(201).json({
             ok: true,
-            msg: 'Formulario F-13 registrado exitosamente y horas impactadas en los componentes de la F-16.',
+            msg: 'Formulario F-13 registrado exitosamente y horas impactadas en la F-16.',
             f13: f13Guardado
         });
 

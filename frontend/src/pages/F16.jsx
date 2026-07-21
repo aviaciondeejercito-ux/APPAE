@@ -544,7 +544,26 @@ const F16Page = () => {
                         <div style={styles.formRow}>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Fecha)</label><input type="date" value={cabecera.inicioAeFecha} onChange={e => handleCabeceraChange('inicioAeFecha', e.target.value)} style={styles.input} /></div>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Hs)</label><input type="number" value={cabecera.inicioAeHs} onChange={e => handleCabeceraChange('inicioAeHs', e.target.value)} style={styles.input} placeholder="0.0" /></div>
-                            <div style={styles.field}><label style={styles.label}>TG Planeador Actual</label><input type="number" value={cabecera.tgPlaneadorActual} onChange={e => handleCabeceraChange('tgPlaneadorActual', e.target.value)} style={{...styles.input, backgroundColor: '#fff9db', fontWeight: 'bold'}} placeholder="0.0" /></div>
+                            
+                            {/* 🔒 TG Planeador Actual: bloqueado en edición (acumulado por F-13) */}
+                            <div style={styles.field}>
+                                <label style={styles.label}>
+                                    TG Planeador {esEdicion ? '🤖 (Acumulado)' : 'Base'}
+                                </label>
+                                <input 
+                                    type="number" 
+                                    value={cabecera.tgPlaneadorActual} 
+                                    onChange={e => handleCabeceraChange('tgPlaneadorActual', e.target.value)} 
+                                    disabled={esEdicion}
+                                    style={{
+                                        ...styles.input, 
+                                        backgroundColor: esEdicion ? '#e9ecef' : '#fff9db', 
+                                        fontWeight: 'bold',
+                                        cursor: esEdicion ? 'not-allowed' : 'text'
+                                    }} 
+                                    placeholder="0.0" 
+                                />
+                            </div>
                         </div>
                     </div>
                     
@@ -552,7 +571,26 @@ const F16Page = () => {
                         <div style={styles.blockTitle}>GRUPO MOTOPROPULSOR</div>
                         <div style={styles.formRow}>
                             <div style={styles.field}><label style={styles.label}>Motor S/N</label><input type="text" value={cabecera.motorSn} onChange={e => handleCabeceraChange('motorSn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
-                            <div style={styles.field}><label style={styles.label}>TSN</label><input type="number" value={cabecera.motorTsn} onChange={e => handleCabeceraChange('motorTsn', e.target.value)} style={styles.input} placeholder="0.0" /></div>
+                            
+                            {/* 🔒 TSN Motor: bloqueado en edición (acumulado por F-13) */}
+                            <div style={styles.field}>
+                                <label style={styles.label}>
+                                    TSN Motor {esEdicion ? '🤖 (Acumulado)' : 'Base'}
+                                </label>
+                                <input 
+                                    type="number" 
+                                    value={cabecera.motorTsn} 
+                                    onChange={e => handleCabeceraChange('motorTsn', e.target.value)} 
+                                    disabled={esEdicion}
+                                    style={{
+                                        ...styles.input, 
+                                        backgroundColor: esEdicion ? '#e9ecef' : 'white', 
+                                        cursor: esEdicion ? 'not-allowed' : 'text'
+                                    }} 
+                                    placeholder="0.0" 
+                                />
+                            </div>
+                            
                             <div style={styles.field}><label style={styles.label}>CSN/CSO</label><input type="number" value={cabecera.motorCsnCso} onChange={e => handleCabeceraChange('motorCsnCso', e.target.value)} style={styles.input} placeholder="0" /></div>
                         </div>
                     </div>

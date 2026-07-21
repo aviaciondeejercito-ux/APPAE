@@ -26,7 +26,7 @@ const ComponentSchema = new mongoose.Schema({
     sn: { type: String, default: '', trim: true },
     limiteTipo: { type: String, enum: ['TBO', 'LL'], default: 'TBO' },
     
-    // Sub-renglones dinámicos del panel nuevo
+    // Sub-renglones dinámicos del panel de F-16
     limites: [MetricValueSchema],
     tsnCsnRenglones: [MetricValueSchema],
     disponibilidades: [MetricValueSchema],
@@ -83,7 +83,7 @@ const AircraftSchema = new mongoose.Schema({
     inicioAeHs: { type: Number, default: 0 },
     tgPlaneadorActual: { type: Number, default: 0 },
 
-    // 🛠️ GRUPO MOTOPROPULSOR (CAMPOS DE CABECERA AGREGADOS PARA SINCRONIZACIÓN)
+    // GRUPO MOTOPROPULSOR (CABECERA Y TIEMPOS ACUMULADOS)
     motorSn: { type: String, default: '', trim: true },
     motorTsn: { type: Number, default: 0 },
     motorCsnCso: { type: Number, default: 0 },
