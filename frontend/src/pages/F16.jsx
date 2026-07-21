@@ -17,24 +17,20 @@ const F16Page = () => {
         elemento: (localStorage.getItem('elemento') || '').toUpperCase().trim()
     };
 
-    // Permisos globales ubicados al inicio para evitar errores de referencia limpia
     const esAdminGlobal = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
 
-    // Encabezados globales requeridos por las políticas de CORS y el AuthMiddleware
     const getHeaders = () => ({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
         'x-auth-token': token 
     });
 
-    // Estados de navegación, búsqueda y base de datos local
     const [aeronavesBD, setAeronavesBD] = useState([]); 
     const [aeronaveSeleccionadaId, setAeronaveSeleccionadaId] = useState('');
     const [unidadNavegacion, setUnidadNavegacion] = useState(usuarioSesion.elemento || unidadesList[0]);
     const [unidadDestinoTraslado, setUnidadDestinoTraslado] = useState('');
     const [esEdicion, setEsEdicion] = useState(false);
 
-    // Estado inicial limpio para resetear el formulario
     const estadoInicialCabecera = {
         sda: sdaList[0], matricula: '', nroSerie: '', estadoOperativo: 'E/S',
         inicioAeFecha: '', inicioAeHs: '', tgPlaneadorActual: '',
@@ -51,53 +47,65 @@ const F16Page = () => {
         estadoTipo: 'TSO', estadoActual: '', disponibilidades: [{ valor: '', unidad: 'H' }]
     });
 
-    // Estados principales del Formulario matricial
+    // Helper para garantizar que los arrays del componente no lleguen undefined al frontend
+    const sanitizarComponenteCargado = (comp, index) => ({
+        nro: comp.nro || index + 1,
+        ata: comp.ata || '',
+        pn: comp.pn || '',
+        componente: comp.componente || '',
+        sn: comp.sn || '',
+        limiteTipo: comp.limiteTipo || 'TBO',
+        limites: Array.isArray(comp.limites) && comp.limites.length ? comp.limites : [{ valor: '', unidad: 'H' }],
+        instaladoFecha: comp.instaladoFecha || '',
+        instaladoHoras: comp.instaladoHoras ?? '',
+        tsnCsnRenglones: Array.isArray(comp.tsnCsnRenglones) && comp.tsnCsnRenglones.length ? comp.tsnCsnRenglones : [{ valor: '', unidad: 'H' }],
+        tgInstalacion: comp.tgInstalacion ?? '',
+        estadoTipo: comp.estadoTipo || 'TSO',
+        estadoActual: comp.estadoActual ?? '',
+        disponibilidades: Array.isArray(comp.disponibilidades) && comp.disponibilidades.length ? comp.disponibilidades : [{ valor: '', unidad: 'H' }]
+    });
+
     const [cabecera, setCabecera] = useState(estadoInicialCabecera);
     const [compPlaneador, setCompPlaneador] = useState([generarFilaVacia(1)]);
     const [motores, setMotores] = useState([{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
     const [helices, setHelices] = useState([{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
 
-    // 🔄 EFFECT: Sincronización restrictiva y en tiempo real con el Backend
-    useEffect(() => {
-        const fetchAeronavesPermitidas = async () => {
-            try {
-                const url = (esAdminGlobal && unidadNavegacion) 
-                    ? `${API_BASE_URL}/api/aircraft/elemento/${encodeURIComponent(unidadNavegacion)}` 
-                    : `${API_BASE_URL}/api/aircraft`;
+    const formatearFechaHtml = (f) => {
+        if (!f) return '';
+        try {
+            return String(f).split('T')[0];
+        } catch (e) {
+            return '';
+        }
+    };
 
-                const res = await fetch(url, { method: 'GET', headers: getHeaders() });
-                const textoCompleto = await res.text();
-                
-                let json;
-                try {
-                    json = JSON.parse(textoCompleto);
-                } catch (e) {
-                    throw new Error(`Error parsing JSON en lectura. Respuesta del servidor: "${textoCompleto}"`);
-                }
+    // 🔄 Sincronización con el Backend
+    const fetchAeronavesPermitidas = async () => {
+        try {
+            const url = (esAdminGlobal && unidadNavegacion) 
+                ? `${API_BASE_URL}/api/aircraft/elemento/${encodeURIComponent(unidadNavegacion)}` 
+                : `${API_BASE_URL}/api/aircraft`;
 
-                if (!res.ok) {
-                    throw new Error(`Error de lectura ${res.status}: ${json.message || 'Error no especificado'}`);
-                }
+            const res = await fetch(url, { method: 'GET', headers: getHeaders() });
+            const json = await res.json();
 
-                if (json.success) {
-                    setAeronavesBD(json.data);
-                } else {
-                    console.error("Fallo de respuesta:", json.message);
-                }
-            } catch (error) {
-                console.error("❌ Error al sincronizar flota con MongoDB:", error);
+            if (res.ok && json.success) {
+                setAeronavesBD(json.data);
             }
-        };
+        } catch (error) {
+            console.error("❌ Error al sincronizar flota con MongoDB:", error);
+        }
+    };
 
+    useEffect(() => {
         if (token) fetchAeronavesPermitidas();
     }, [unidadNavegacion, token]);
 
-    // 🖲️ MANEJADOR DE SELECCIÓN DIRECTA DESDE EL SELECTOR
+    // 🖲️ MANEJADOR DE SELECCIÓN DIRECTA
     const handleSelectorAeronaveChange = (id) => {
         setAeronaveSeleccionadaId(id);
         if (!id) {
-            setEsEdicion(false);
-            setCabecera(estadoInicialCabecera);
+            limpiarFormularioParaNuevoAlta();
             return;
         }
 
@@ -110,44 +118,66 @@ const F16Page = () => {
                 matricula: aero.matricula || '',
                 nroSerie: aero.nroSerie || '',
                 estadoOperativo: aero.estadoOperativo || 'E/S',
-                inicioAeFecha: aero.inicioAeFecha ? aero.inicioAeFecha.split('T')[0] : '',
-                inicioAeHs: aero.inicioAeHs || '',
-                tgPlaneadorActual: aero.tgPlaneadorActual || '',
+                inicioAeFecha: formatearFechaHtml(aero.inicioAeFecha),
+                inicioAeHs: aero.inicioAeHs ?? '',
+                tgPlaneadorActual: aero.tgPlaneadorActual ?? '',
                 motorSn: aero.motorSn || '',
-                motorTsn: aero.motorTsn || '',
-                motorCsnCso: aero.motorCsnCso || '',
-                vencimientoElt: aero.vencimientoElt ? aero.vencimientoElt.split('T')[0] : '',
-                vencimientoPitot: aero.vencimientoPitot ? aero.vencimientoPitot.split('T')[0] : '',
-                vencimientoTransponder: aero.vencimientoTransponder ? aero.vencimientoTransponder.split('T')[0] : '',
-                vencimientoSeguro: aero.vencimientoSeguro ? aero.vencimientoSeguro.split('T')[0] : '',
-                vencimientoAvionica: aero.vencimientoAvionica ? aero.vencimientoAvionica.split('T')[0] : '',
+                motorTsn: aero.motorTsn ?? '',
+                motorCsnCso: aero.motorCsnCso ?? '',
+                vencimientoElt: formatearFechaHtml(aero.vencimientoElt),
+                vencimientoPitot: formatearFechaHtml(aero.vencimientoPitot),
+                vencimientoTransponder: formatearFechaHtml(aero.vencimientoTransponder),
+                vencimientoSeguro: formatearFechaHtml(aero.vencimientoSeguro),
+                vencimientoAvionica: formatearFechaHtml(aero.vencimientoAvionica),
                 observacionesPopup: aero.observacionesPopup || ''
             });
 
-            setCompPlaneador(aero.compPlaneador && aero.compPlaneador.length ? aero.compPlaneador : [generarFilaVacia(1)]);
-            setMotores(aero.motores && aero.motores.length ? aero.motores : [{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]);
-            setHelices(aero.helices && aero.helices.length ? aero.helices : [{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]);
+            // Reconstrucción limpia de componentes
+            setCompPlaneador(
+                Array.isArray(aero.compPlaneador) && aero.compPlaneador.length 
+                    ? aero.compPlaneador.map(sanitizarComponenteCargado)
+                    : [generarFilaVacia(1)]
+            );
+
+            setMotores(
+                Array.isArray(aero.motores) && aero.motores.length 
+                    ? aero.motores.map(m => ({
+                        ...m,
+                        componentes: m.componentes.map(sanitizarComponenteCargado)
+                    }))
+                    : [{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]
+            );
+
+            setHelices(
+                Array.isArray(aero.helices) && aero.helices.length 
+                    ? aero.helices.map(h => ({
+                        ...h,
+                        componentes: h.componentes.map(sanitizarComponenteCargado)
+                    }))
+                    : [{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]
+            );
         }
     };
 
-    // 💾 OPERACIÓN: GUARDAR ALTA (POST) O ACTUALIZAR (PUT)
+    // 💾 OPERACIÓN: GUARDAR / ACTUALIZAR
     const guardarAltaAeronave = async () => {
         if (!cabecera.matricula) {
             alert("Por favor, ingrese al menos la Matrícula para procesar el registro.");
             return;
         }
 
-        // Inyección de auditoría de usuario requerida por el esquema Mongoose
         const payload = {
-    ...cabecera,
-    tgPlaneadorActual: cabecera.tgPlaneadorActual === '' ? 0 : Number(cabecera.tgPlaneadorActual),
-    motorTsn: cabecera.motorTsn === '' ? 0 : Number(cabecera.motorTsn),
-    unidad: esAdminGlobal ? unidadNavegacion : usuarioSesion.elemento,
-    compPlaneador,
-    motores,
-    helices,
-    creadoPor: usuarioSesion.username,
-    actualizadoPor: usuarioSesion.username
+            ...cabecera,
+            inicioAeHs: cabecera.inicioAeHs === '' ? 0 : Number(cabecera.inicioAeHs),
+            tgPlaneadorActual: cabecera.tgPlaneadorActual === '' ? 0 : Number(cabecera.tgPlaneadorActual),
+            motorTsn: cabecera.motorTsn === '' ? 0 : Number(cabecera.motorTsn),
+            motorCsnCso: cabecera.motorCsnCso === '' ? 0 : Number(cabecera.motorCsnCso),
+            unidad: esAdminGlobal ? unidadNavegacion : usuarioSesion.elemento,
+            compPlaneador,
+            motores,
+            helices,
+            creadoPor: usuarioSesion.username,
+            actualizadoPor: usuarioSesion.username
         };
 
         try {
@@ -165,22 +195,15 @@ const F16Page = () => {
                 body: JSON.stringify(payload)
             });
 
-            const textoCompleto = await res.text();
-            let json;
-            
-            try {
-                json = JSON.parse(textoCompleto);
-            } catch (e) {
-                throw new Error(`El servidor no devolvió un JSON válido. Respuesta: "${textoCompleto}"`);
-            }
+            const json = await res.json();
 
             if (!res.ok) {
-                throw new Error(`Error ${res.status}: ${json.message || 'Error desconocido en el servidor.'}`);
+                throw new Error(json.message || 'Error en el servidor.');
             }
 
             if (json.success) {
                 alert(json.message || "Operación matricial ejecutada con éxito.");
-                setUnidadNavegacion(prev => String(prev)); 
+                await fetchAeronavesPermitidas();
                 if(!esEdicion) limpiarFormularioParaNuevoAlta();
             } else {
                 alert(`⚠️ Error: ${json.message}`);
@@ -191,50 +214,36 @@ const F16Page = () => {
         }
     };
 
-    // 🗑️ OPERACIÓN: ELIMINAR REGISTRO PERMANENTE (DELETE)
     const eliminarFormularioAeronave = async () => {
         if (!esEdicion || !aeronaveSeleccionadaId) {
-            alert("Debe seleccionar una aeronave existente de la base de datos para ejecutar una baja.");
+            alert("Debe seleccionar una aeronave existente para ejecutar una baja.");
             return;
         }
 
-        if (window.confirm(`⚠️ AVISO CRÍTICO: ¿Está completamente seguro de eliminar permanentemente la aeronave ${cabecera.matricula}? Esta acción es irreversible.`)) {
+        if (window.confirm(`⚠️ ¿Confirma la eliminación permanente de la aeronave ${cabecera.matricula}?`)) {
             try {
                 const res = await fetch(`${API_BASE_URL}/api/aircraft/${aeronaveSeleccionadaId}`, {
                     method: 'DELETE',
                     headers: getHeaders()
                 });
-                
-                const textoCompleto = await res.text();
-                let json;
-                try {
-                    json = JSON.parse(textoCompleto);
-                } catch(e) {
-                    throw new Error(`Respuesta no procesable del servidor: "${textoCompleto}"`);
-                }
+                const json = await res.json();
 
-                if (!res.ok) {
-                    throw new Error(`Error ${res.status}: ${json.message || 'Fallo de eliminación'}`);
-                }
-
-                if (json.success) {
+                if (res.ok && json.success) {
                     alert(json.message);
                     limpiarFormularioParaNuevoAlta();
-                    setUnidadNavegacion(prev => String(prev));
+                    await fetchAeronavesPermitidas();
                 } else {
-                    alert(`🚫 Acceso Denegado: ${json.message}`);
+                    alert(`🚫 Error: ${json.message}`);
                 }
             } catch (error) {
-                console.error("Error en operation de borrado:", error);
-                alert(error.message || "No se pudo conectar con el servidor central.");
+                alert(error.message || "Error al conectar con el servidor.");
             }
         }
     };
 
-    // ✈️ OPERACIÓN: TRASLADO INMEDIATO DE UNIDAD
     const ejecutarTransferenciaUnidad = async () => {
         if (!esEdicion || !aeronaveSeleccionadaId) {
-            alert("Primero seleccione una aeronave guardada para autorizar su traslado táctico.");
+            alert("Primero seleccione una aeronave guardada.");
             return;
         }
         if (!unidadDestinoTraslado) {
@@ -242,7 +251,7 @@ const F16Page = () => {
             return;
         }
 
-        if (window.confirm(`¿Confirma el traslado de la aeronave ${cabecera.matricula} hacia la unidad: ${unidadDestinoTraslado}?`)) {
+        if (window.confirm(`¿Confirma el traslado de la aeronave ${cabecera.matricula} hacia: ${unidadDestinoTraslado}?`)) {
             try {
                 const res = await fetch(`${API_BASE_URL}/api/aircraft/${aeronaveSeleccionadaId}`, {
                     method: 'PUT',
@@ -251,16 +260,16 @@ const F16Page = () => {
                 });
                 const json = await res.json();
 
-                if (json.success) {
+                if (res.ok && json.success) {
                     alert(json.message);
                     setUnidadDestinoTraslado('');
                     limpiarFormularioParaNuevoAlta();
-                    setUnidadNavegacion(prev => String(prev));
+                    await fetchAeronavesPermitidas();
                 } else {
                     alert(`⚠️ Restricción: ${json.message}`);
                 }
             } catch (error) {
-                alert("Error al despachar el traslado en red.");
+                alert("Error al procesar el traslado.");
             }
         }
     };
@@ -275,13 +284,10 @@ const F16Page = () => {
     };
 
     const handleCabeceraChange = (field, val) => {
-        setCabecera(prev => ({
-            ...prev,
-            [field]: field.includes('Hs') || field.includes('Actual') || field.includes('Tsn') || field.includes('CsnCso') ? (val === '' ? '' : Number(val)) : val
-        }));
+        setCabecera(prev => ({ ...prev, [field]: val }));
     };
 
-    // MANEJO DE ESTADOS DINÁMICOS: PLANEADOR
+    // PLANEADOR HANDLERS
     const handlePlaneadorChange = (idx, field, val) => {
         const nuevos = [...compPlaneador];
         nuevos[idx][field] = val;
@@ -308,7 +314,7 @@ const F16Page = () => {
         }
     };
 
-    // MANEJO DE ESTADOS DINÁMICOS: MOTORES
+    // MOTORES HANDLERS
     const handleNombreMotorChange = (motorIdx, nuevoNombre) => {
         const nuevosMotores = [...motores];
         nuevosMotores[motorIdx].nombre = nuevoNombre;
@@ -357,7 +363,7 @@ const F16Page = () => {
         }
     };
 
-    // MANEJO DE ESTADOS DINÁMICOS: HÉLICES
+    // HÉLICES HANDLERS
     const handleNombreHeliceChange = (heliceIdx, nuevoNombre) => {
         const nuevasHelices = [...helices];
         nuevasHelices[heliceIdx].nombre = nuevoNombre;
@@ -411,7 +417,7 @@ const F16Page = () => {
             setMotores([...motores, { id: 2, nombre: 'MOTOR Nº 2', componentes: [generarFilaVacia(1)] }]);
             setHelices([...helices, { id: 2, nombre: 'HÉLICE Nº 2', componentes: [generarFilaVacia(1)] }]);
         } else {
-            if (window.confirm("¿Confirma remover la configuración de Motor y Hélice Nº 2?")) {
+            if (window.confirm("¿Confirma remover la configuración del Motor Nº 2 y Hélice Nº 2?")) {
                 setMotores([motores[0]]);
                 setHelices([helices[0]]);
             }
@@ -542,7 +548,6 @@ const F16Page = () => {
                         </div>
                     </div>
                     
-                    {/* ⚙️ BLOQUE DE GRUPO MOTOPROPULSOR SIRCUNIZADO AL MODELO MONGOOSE */}
                     <div style={styles.block}>
                         <div style={styles.blockTitle}>GRUPO MOTOPROPULSOR</div>
                         <div style={styles.formRow}>
@@ -582,7 +587,7 @@ const F16Page = () => {
                 </button>
             </div>
 
-            {/* TABLA DE PLANEADOR */}
+            {/* PLANEADOR */}
             <div style={styles.cardTable}>
                 <div style={styles.tableHeaderFlex}>
                     <div style={styles.tableTitle}>COMPONENTES DEL PLANEADOR</div>
@@ -598,7 +603,7 @@ const F16Page = () => {
                 )}
             </div>
 
-            {/* TABLAS DE MOTORES DINÁMICOS */}
+            {/* MOTORES */}
             {motores.map((mot, motIdx) => (
                 <div key={mot.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #d35400'}}>
                     <div style={styles.tableHeaderFlex}>
@@ -624,7 +629,7 @@ const F16Page = () => {
                 </div>
             ))}
 
-            {/* TABLAS DE HÉLICES DINÁMICAS */}
+            {/* HÉLICES */}
             {helices.map((hel, helIdx) => (
                 <div key={hel.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #2980b9'}}>
                     <div style={styles.tableHeaderFlex}>
