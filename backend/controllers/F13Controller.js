@@ -128,13 +128,20 @@ const crearF13 = async (req, res) => {
         const f13Guardado = await nuevoF13.save();
 
         // B. ACTUALIZAR MODELO AIRCRAFT (F-16)
-        // 1. Totales generales
-        aeronaveDoc.tgPlaneadorActual = Number(((aeronaveDoc.tgPlaneadorActual || 0) + hsAIncrementar).toFixed(2));
-        aeronaveDoc.motorTsn = Number(((aeronaveDoc.motorTsn || 0) + hsAIncrementar).toFixed(2));
+        // 1. Totales generales de cabecera (se parsean previamente para evitar sumas como texto)
+        const tgPlaneadorPrevio = parsearHs(aeronaveDoc.tgPlaneadorActual);
+        const motorTsnPrevio = parsearHs(aeronaveDoc.motorTsn);
+
+        aeronaveDoc.tgPlaneadorActual = Number((tgPlaneadorPrevio + hsAIncrementar).toFixed(2));
+        aeronaveDoc.motorTsn = Number((motorTsnPrevio + hsAIncrementar).toFixed(2));
+
+        aeronaveDoc.markModified('tgPlaneadorActual');
+        aeronaveDoc.markModified('motorTsn');
 
         // 2. Componentes del Planeador
         if (Array.isArray(aeronaveDoc.compPlaneador)) {
             aeronaveDoc.compPlaneador.forEach(comp => actualizarHorasComponente(comp, hsAIncrementar));
+            aeronaveDoc.markModified('compPlaneador');
         }
 
         // 3. Componentes del Grupo Motopropulsor (Motores y Hélices)
@@ -145,6 +152,7 @@ const crearF13 = async (req, res) => {
                         item.componentes.forEach(comp => actualizarHorasComponente(comp, hsAIncrementar));
                     }
                 });
+                aeronaveDoc.markModified(grupo);
             }
         });
 
@@ -216,11 +224,18 @@ const eliminarF13 = async (req, res) => {
             // Rollback en Aircraft (F-16)
             const aeronaveDoc = await Aeronave.findById(idAeronave);
             if (aeronaveDoc) {
-                aeronaveDoc.tgPlaneadorActual = Number(Math.max(0, (aeronaveDoc.tgPlaneadorActual || 0) - horasARestar).toFixed(2));
-                aeronaveDoc.motorTsn = Number(Math.max(0, (aeronaveDoc.motorTsn || 0) - horasARestar).toFixed(2));
+                const tgPlaneadorPrevio = parsearHs(aeronaveDoc.tgPlaneadorActual);
+                const motorTsnPrevio = parsearHs(aeronaveDoc.motorTsn);
+
+                aeronaveDoc.tgPlaneadorActual = Number(Math.max(0, tgPlaneadorPrevio - horasARestar).toFixed(2));
+                aeronaveDoc.motorTsn = Number(Math.max(0, motorTsnPrevio - horasARestar).toFixed(2));
+
+                aeronaveDoc.markModified('tgPlaneadorActual');
+                aeronaveDoc.markModified('motorTsn');
 
                 if (Array.isArray(aeronaveDoc.compPlaneador)) {
                     aeronaveDoc.compPlaneador.forEach(comp => actualizarHorasComponente(comp, horasARestar, true));
+                    aeronaveDoc.markModified('compPlaneador');
                 }
 
                 ['motores', 'helices'].forEach(grupo => {
@@ -230,6 +245,7 @@ const eliminarF13 = async (req, res) => {
                                 item.componentes.forEach(comp => actualizarHorasComponente(comp, horasARestar, true));
                             }
                         });
+                        aeronaveDoc.markModified(grupo);
                     }
                 });
 
