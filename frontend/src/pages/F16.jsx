@@ -32,7 +32,7 @@ const F16Page = () => {
 
     const estadoInicialCabecera = {
         sda: sdaList[0], matricula: '', nroSerie: '', estadoOperativo: 'E/S',
-        inicioAeFecha: '', inicioAeHs: '', tgPlaneadorActual: '', tgPlaneadorLandings: '', // 👈 Añadido Landings
+        inicioAeFecha: '', inicioAeHs: '', tgPlaneadorActual: '', tgPlaneadorLandings: '',
         motorSn: '', motorTsn: '', motorCsnCso: '',
         motor2Sn: '', motor2Tsn: '', motor2CsnCso: '',
         helice1Sn: '', helice1Tsn: '',
@@ -95,11 +95,11 @@ const F16Page = () => {
     }, [unidadNavegacion, token]);
 
     /**
-     * 🧮 CÁLCULO DINÁMICO DE DISPONIBILIDAD DE RENGLÓN
+     * 🧮 CÁLCULO DINÁMICO DE DISPONIBILIDAD DE RENGLÓN (CORREGIDO PARA COINCIDIR FECHAS)
      */
     const calcularDisponibilidadRenglon = (comp, limItem, tgActualMatriz) => {
         const limiteVal = parseFloat(limItem.valor) || 0;
-        if (!limiteVal) return '-';
+        if (!limiteVal && limItem.unidad !== 'C') return '-';
 
         const unidad = limItem.unidad || 'H';
         const tgInstal = parseFloat(comp.tgInstalacion) || 0;
@@ -113,10 +113,11 @@ const F16Page = () => {
 
         const deltaTG = Math.max(0, tgActual - tgInstal);
 
-        const tsnCsnCoincidente = comp.tsnCsnRenglones?.find(r => r.unidad === unidad);
-        const valInstalado = parseFloat(tsnCsnCoincidente?.valor) || 0;
-
+        // 1. Horas, Landings y Ciclos
         if (['H', 'LDG', 'CC'].includes(unidad)) {
+            const tsnCsnCoincidente = comp.tsnCsnRenglones?.find(r => r.unidad === unidad);
+            const valInstalado = parseFloat(tsnCsnCoincidente?.valor) || 0;
+
             let disp = 0;
             if (comp.limiteTipo === 'LL') {
                 disp = limiteVal - (valInstalado + deltaTG);
@@ -126,18 +127,29 @@ const F16Page = () => {
             return disp.toFixed(1);
         }
 
+        // 2. Meses (M)
         if (unidad === 'M') {
-            if (!comp.instaladoFecha) return 'Sin Fecha';
-            const fechaInst = new Date(comp.instaladoFecha);
-            if (isNaN(fechaInst.getTime())) return '-';
+            // Busca fecha en instaladoFecha O en TSN/CSN si cargaron C (Fecha)
+            let fechaBaseStr = comp.instaladoFecha;
+            if (!fechaBaseStr) {
+                const renglonFecha = comp.tsnCsnRenglones?.find(r => r.unidad === 'C' && r.valor);
+                if (renglonFecha) fechaBaseStr = renglonFecha.valor;
+            }
+
+            let fechaInst = fechaBaseStr ? new Date(fechaBaseStr) : new Date();
+            if (isNaN(fechaInst.getTime())) fechaInst = new Date();
 
             fechaInst.setMonth(fechaInst.getMonth() + parseInt(limiteVal, 10));
             const hoy = new Date();
             const diffDias = Math.ceil((fechaInst - hoy) / (1000 * 60 * 60 * 24));
 
-            return diffDias > 0 ? `${diffDias} d` : `VENCIDO`;
+            if (diffDias <= 0) return 'VENCIDO';
+
+            const fechaFormateada = fechaInst.toISOString().split('T')[0];
+            return `${fechaFormateada} (${diffDias} d)`;
         }
 
+        // 3. Fecha Fija (C)
         if (unidad === 'C') {
             if (!limItem.valor) return '-';
             const fechaLimite = new Date(limItem.valor);
@@ -167,7 +179,7 @@ const F16Page = () => {
                 inicioAeFecha: formatearFechaHtml(aero.inicioAeFecha),
                 inicioAeHs: aero.inicioAeHs ?? '',
                 tgPlaneadorActual: aero.tgPlaneadorActual ?? '',
-                tgPlaneadorLandings: aero.tgPlaneadorLandings ?? '', // 👈 Mapeo desde BD
+                tgPlaneadorLandings: aero.tgPlaneadorLandings ?? '',
                 motorSn: aero.motorSn || '',
                 motorTsn: aero.motorTsn ?? '',
                 motorCsnCso: aero.motorCsnCso ?? '',
@@ -216,7 +228,7 @@ const F16Page = () => {
             ...cabecera,
             inicioAeHs: cabecera.inicioAeHs === '' ? 0 : Number(cabecera.inicioAeHs),
             tgPlaneadorActual: cabecera.tgPlaneadorActual === '' ? 0 : Number(cabecera.tgPlaneadorActual),
-            tgPlaneadorLandings: cabecera.tgPlaneadorLandings === '' ? 0 : Number(cabecera.tgPlaneadorLandings), // 👈 Envío a BD
+            tgPlaneadorLandings: cabecera.tgPlaneadorLandings === '' ? 0 : Number(cabecera.tgPlaneadorLandings),
             motorTsn: cabecera.motorTsn === '' ? 0 : Number(cabecera.motorTsn),
             motorCsnCso: cabecera.motorCsnCso === '' ? 0 : Number(cabecera.motorCsnCso),
             motor2Tsn: cabecera.motor2Tsn === '' ? 0 : Number(cabecera.motor2Tsn),
@@ -457,7 +469,6 @@ const F16Page = () => {
 
     return (
         <div style={styles.container}>
-            {/* Inyección CSS para Reset Box-Sizing Global */}
             <style>{`
                 * { box-sizing: border-box; }
                 input[type="date"] { min-width: 0; }
@@ -526,7 +537,6 @@ const F16Page = () => {
 
             <div style={styles.cardCabecera}>
                 <div style={styles.headerGrid}>
-                    {/* BLOQUE 1: DATOS AERONAVE */}
                     <div style={styles.block}>
                         <div style={styles.blockTitleFlex}>
                             <span>DATOS DE LA AERONAVE {esEdicion && <span style={{color: '#d35400', fontSize: '0.65rem'}}>🔒 ANCLADO</span>}</span>
@@ -575,14 +585,12 @@ const F16Page = () => {
                         </div>
                     </div>
                     
-                    {/* BLOQUE 2: HISTORIAL PLANEADOR */}
                     <div style={styles.block}>
                         <div style={styles.blockTitle}>TIEMPOS E HISTORIAL PLANEADOR</div>
                         <div style={styles.formGridCompact}>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Fecha)</label><input type="date" value={cabecera.inicioAeFecha} onChange={e => handleCabeceraChange('inicioAeFecha', e.target.value)} style={styles.input} /></div>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Hs)</label><input type="number" value={cabecera.inicioAeHs} onChange={e => handleCabeceraChange('inicioAeHs', e.target.value)} style={styles.input} placeholder="0.0" /></div>
                             
-                            {/* 🛬 CAMPO DE LANDINGS */}
                             <div style={styles.field}>
                                 <label style={styles.label}>Landings (LDG)</label>
                                 <input 
@@ -615,7 +623,6 @@ const F16Page = () => {
                         </div>
                     </div>
                     
-                    {/* BLOQUE 3: MOTOPROPULSOR */}
                     <div style={{...styles.block, gridColumn: 'span 1 / -1'}}>
                         <div style={styles.blockTitle}>GRUPO MOTOPROPULSOR (TOTALES GENERALES)</div>
                         
@@ -765,15 +772,24 @@ const F16Page = () => {
 };
 
 // Helper Meses
-const calcularFechaLimiteMeses = (mesesNum, fechaInicioStr) => {
+const calcularFechaLimiteMeses = (mesesNum, comp) => {
     if (!mesesNum || isNaN(mesesNum) || Number(mesesNum) <= 0) return '';
-    let baseDate = fechaInicioStr ? new Date(fechaInicioStr) : new Date();
+
+    // Intenta usar la fecha de instaladoFecha O la fecha ingresada en el renglón TSN/CSN C
+    let fechaBaseStr = comp?.instaladoFecha;
+    if (!fechaBaseStr && comp?.tsnCsnRenglones) {
+        const renglonFecha = comp.tsnCsnRenglones.find(r => r.unidad === 'C' && r.valor);
+        if (renglonFecha) fechaBaseStr = renglonFecha.valor;
+    }
+
+    let baseDate = fechaBaseStr ? new Date(fechaBaseStr) : new Date();
     if (isNaN(baseDate.getTime())) baseDate = new Date();
+
     baseDate.setMonth(baseDate.getMonth() + parseInt(mesesNum, 10));
     return baseDate.toISOString().split('T')[0];
 };
 
-const renderSubRenglonValueInput = (item, compIndex, arrayField, subIndex, onSubChange, fechaInstalado) => {
+const renderSubRenglonValueInput = (item, compIndex, arrayField, subIndex, onSubChange, comp) => {
     const unidad = item.unidad || 'H';
 
     if (unidad === 'C') {
@@ -788,7 +804,7 @@ const renderSubRenglonValueInput = (item, compIndex, arrayField, subIndex, onSub
     }
 
     if (unidad === 'M') {
-        const fechaLimiteCalculada = calcularFechaLimiteMeses(item.valor, fechaInstalado);
+        const fechaLimiteCalculada = calcularFechaLimiteMeses(item.valor, comp);
         return (
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                 <input 
@@ -876,7 +892,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                                     <div style={styles.stackContainer}>
                                         {comp.limites.map((lim, subIndex) => (
                                             <div key={subIndex} style={styles.rowStack}>
-                                                {renderSubRenglonValueInput(lim, compIndex, 'limites', subIndex, onSubChange, comp.instaladoFecha)}
+                                                {renderSubRenglonValueInput(lim, compIndex, 'limites', subIndex, onSubChange, comp)}
                                                 <select value={lim.unidad} onChange={e => onSubChange(compIndex, 'limites', subIndex, 'unidad', e.target.value)} style={styles.selectStackUnit}>
                                                     <option value="H">H (Hs)</option>
                                                     <option value="M">M (Meses)</option>
@@ -904,7 +920,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                                     <div style={styles.stackContainer}>
                                         {comp.tsnCsnRenglones.map((tc, subIndex) => (
                                             <div key={subIndex} style={styles.rowStack}>
-                                                {renderSubRenglonValueInput(tc, compIndex, 'tsnCsnRenglones', subIndex, onSubChange, comp.instaladoFecha)}
+                                                {renderSubRenglonValueInput(tc, compIndex, 'tsnCsnRenglones', subIndex, onSubChange, comp)}
                                                 <select value={tc.unidad} onChange={e => onSubChange(compIndex, 'tsnCsnRenglones', subIndex, 'unidad', e.target.value)} style={styles.selectStackUnit}>
                                                     <option value="H">H (Hs)</option>
                                                     <option value="M">M (Meses)</option>
@@ -959,7 +975,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
     </div>
 );
 
-// 🎨 ESTILOS REDISEÑADOS Y ADAPTATIVOS
+// 🎨 ESTILOS
 const styles = {
     container: { padding: '10px', backgroundColor: '#fafafa', minHeight: '100vh', fontFamily: 'monospace' },
     mainHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' },
@@ -973,23 +989,17 @@ const styles = {
     inputAdmin: { padding: '5px', border: '1px solid #adb5bd', fontSize: '0.75rem', outline: 'none', width: '100%', boxSizing: 'border-box' },
     btnTransfer: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '0 10px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' },
     cardCabecera: { backgroundColor: 'white', padding: '12px', borderRadius: '4px', marginBottom: '10px', border: '1px solid #ccc' },
-    
-    // Grillas fluidas responsivas
     headerGrid: { display: 'flex', flexWrap: 'wrap', gap: '12px', width: '100%' },
     block: { flex: '1 1 280px', minWidth: 0, padding: '10px', border: '1px solid #eee', borderRadius: '4px', backgroundColor: '#fafafa' },
     blockTitle: { fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '8px', color: '#555' },
     blockTitleFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '8px', color: '#555' },
     inputCondicionSelector: { padding: '2px 6px', fontSize: '0.75rem', fontWeight: 'bold', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', textAlign: 'center', outline: 'none' },
-    
-    // Grillas de inputs internos
     formGridCompact: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(85px, 1fr))', gap: '6px', width: '100%' },
     formGridEngine: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '6px', width: '100%' },
     formGridLegal: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '6px', width: '100%' },
-
     field: { display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%' },
     label: { fontSize: '0.65rem', color: '#666', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     input: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', outline: 'none', width: '100%', boxSizing: 'border-box', minWidth: 0 },
-    
     inputUniform: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', height: '28px', boxSizing: 'border-box', outline: 'none', width: '100%', minWidth: 0 },
     btnUniformPopup: { height: '28px', padding: '0 10px', fontSize: '0.7rem', backgroundColor: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', boxSizing: 'border-box' },
     inputNombreMotor: { fontSize: '0.8rem', fontWeight: 'bold', color: '#d35400', border: 'none', borderBottom: '1px dashed #d35400', outline: 'none', padding: '2px', backgroundColor: 'transparent', width: '180px' },

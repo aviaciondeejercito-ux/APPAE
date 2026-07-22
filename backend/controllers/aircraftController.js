@@ -37,19 +37,31 @@ const sanitizarComponentes = (comps = []) => {
     }));
 };
 
-// 1. OBTENER TODAS LAS AERONAVES / ELEMENTO
+// 1. OBTENER TODAS LAS AERONAVES CON FILTRADO POR UNIDAD / ELEMENTO
 export const getAircrafts = async (req, res) => {
     try {
         const { elemento } = req.params;
         const { unidad } = req.query;
-        
-        // Filtro por parámetro de ruta o por query string
-        const filtroUnidad = elemento || unidad;
-        const filtro = filtroUnidad ? { unidad: filtroUnidad } : {};
-        
+
+        // Roles con acceso global a toda la flota
+        const rolesEstrategicos = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'];
+        const esMandoEstrategico = rolesEstrategicos.includes(req.user?.role?.toUpperCase()) || req.user?.elemento === 'COMANDO';
+
+        let filtro = {};
+
+        if (elemento) {
+            // Filtro por parámetro de ruta /elemento/:elemento
+            filtro = { unidad: elemento };
+        } else if (unidad) {
+            // Filtro por parámetro query ?unidad=...
+            filtro = { unidad };
+        } else if (!esMandoEstrategico) {
+            // Si es un usuario de unidad sin permisos globales, forzamos el filtro por su unidad asignada
+            filtro = { unidad: req.user?.elemento || req.user?.unidad };
+        }
+
         const aircrafts = await Aircraft.find(filtro).sort({ matricula: 1 });
 
-        // ✅ FORMATO SINCRO CON FRONTEND
         res.status(200).json({
             success: true,
             count: aircrafts.length,
