@@ -1,137 +1,102 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
-/**
- * ESQUEMA PARA SUB-RENGLONES DE MÉTRICAS (Horas, Meses, Calendarial, Landings, Ciclos)
- */
-const MetricValueSchema = new mongoose.Schema({
-    valor: { 
-        type: String, 
-        default: '' 
-    },
-    unidad: { 
-        type: String, 
-        enum: ['H', 'M', 'C', 'LDG', 'CC'], 
-        default: 'H' 
-    }
+// 1. Subesquema para Límites (TBO, LL, etc.)
+const LimiteSchema = new mongoose.Schema({
+  valor: { type: String, default: '' },
+  unidad: { type: String, default: 'H' } // H, LDG, CC, M, C
 }, { _id: false });
 
-/**
- * ESQUEMA REUTILIZABLE PARA COMPONENTES DE ALTA TRAZABILIDAD
- */
-const ComponentSchema = new mongoose.Schema({
-    nro: { type: Number, required: true },
-    ata: { type: String, default: '', trim: true },
-    pn: { type: String, default: '', trim: true },
-    componente: { type: String, default: '', trim: true },
-    sn: { type: String, default: '', trim: true },
-    limiteTipo: { type: String, enum: ['TBO', 'LL'], default: 'TBO' },
-    
-    // Sub-renglones dinámicos del panel de F-16
-    limites: [MetricValueSchema],
-    tsnCsnRenglones: [MetricValueSchema],
-    disponibilidades: [MetricValueSchema],
-    
-    instaladoFecha: { type: String, default: '' }, 
-    instaladoHoras: { type: Number, default: 0 },
-    tgInstalacion: { type: Number, default: 0 },
-    estadoTipo: { type: String, enum: ['TSO', 'TSHMI', 'TSN'], default: 'TSO' },
-    estadoActual: { type: Number, default: 0 }
+// 2. Subesquema para Renglones TSN/CSN/Disponibilidades
+const ValorUnidadSchema = new mongoose.Schema({
+  valor: { type: String, default: '' },
+  unidad: { type: String, default: 'H' } // H, LDG, CC, M, C
 }, { _id: false });
 
-/**
- * ESQUEMA PARA NODOS DE PROPULSIÓN DINÁMICOS (Motores y Hélices)
- */
-const PropulsionGroupSchema = new mongoose.Schema({
-    id: { type: Number, required: true },
-    nombre: { type: String, required: true, uppercase: true, trim: true }, 
-    componentes: [ComponentSchema]
+// 3. Subesquema de Componente (Renglón de las Tablas)
+const ComponenteSchema = new mongoose.Schema({
+  nro: { type: Number, default: 1 },
+  ata: { type: String, default: '' },
+  pn: { type: String, default: '' },
+  componente: { type: String, default: '' },
+  sn: { type: String, default: '' },
+  
+  limiteTipo: { type: String, default: 'TBO' }, // TBO, LL
+  limites: [LimiteSchema],
+  
+  instaladoFecha: { type: String, default: '' },
+  instaladoHoras: { type: Schema.Types.Mixed, default: '' }, // Permite String o Number
+  
+  tsnCsnRenglones: [ValorUnidadSchema],
+  tgInstalacion: { type: Schema.Types.Mixed, default: '' },
+  
+  estadoTipo: { type: String, default: 'TSO' }, // TSO, TSHMI, TSN
+  estadoActual: { type: Schema.Types.Mixed, default: '' },
+  
+  disponibilidades: [ValorUnidadSchema]
 }, { _id: false });
 
-/**
- * ESQUEMA PRINCIPAL DE AERONAVE (Estructura Unificada de Cabecera y Tablas)
- */
+// 4. Subesquema para Grupo de Motores
+const MotorSchema = new mongoose.Schema({
+  id: { type: Number, default: 1 },
+  nombre: { type: String, default: 'MOTOR Nº 1' },
+  componentes: [ComponenteSchema]
+}, { _id: false });
+
+// 5. Subesquema para Grupo de Hélices
+const HeliceSchema = new mongoose.Schema({
+  id: { type: Number, default: 1 },
+  nombre: { type: String, default: 'HÉLICE Nº 1' },
+  componentes: [ComponenteSchema]
+}, { _id: false });
+
+// 6. Esquema Principal de la Aeronave
 const AircraftSchema = new mongoose.Schema({
-    // DATOS DE CABECERA
-    matricula: { 
-        type: String, 
-        required: [true, 'La matrícula es obligatoria'], 
-        unique: true,
-        uppercase: true,
-        trim: true 
-    },
-    sda: { 
-        type: String, 
-        required: [true, 'El Sistema de Armas es obligatorio'],
-        uppercase: true,
-        trim: true
-    },
-    nroSerie: { type: String, default: '', trim: true },
-    unidad: { 
-        type: String, 
-        required: [true, 'La asignación a una Unidad/Elemento es obligatoria'],
-        uppercase: true,
-        trim: true 
-    },
-    estadoOperativo: { 
-        type: String, 
-        enum: ['E/S', 'F/S'],
-        default: 'E/S' 
-    },
-    
-    // TIEMPOS E HISTORIAL
-    inicioAeFecha: { type: String, default: '' },
-    inicioAeHs: { type: Number, default: 0 },
-    tgPlaneadorActual: { type: Number, default: 0 },
+  // IDENTIFICACIÓN Y UNIDAD
+  sda: { type: String, required: true },
+  matricula: { type: String, required: true, unique: true, index: true },
+  nroSerie: { type: String, default: '' },
+  estadoOperativo: { type: String, default: 'E/S' }, // E/S, F/S
+  unidad: { type: String, default: '', index: true }, // Elemento/Base asignada
 
-    // GRUPO MOTOPROPULSOR - MOTOR 1 Y MOTOR 2 (SI ES BIMOTOR)
-    motorSn: { type: String, default: '', trim: true },
-    motorTsn: { type: Number, default: 0 },
-    motorCsnCso: { type: Number, default: 0 },
-    
-    motor2Sn: { type: String, default: '', trim: true },
-    motor2Tsn: { type: Number, default: 0 },
-    motor2CsnCso: { type: Number, default: 0 },
+  // TIEMPOS E HISTORIAL PLANEADOR
+  inicioAeFecha: { type: String, default: '' },
+  inicioAeHs: { type: Number, default: 0 },
+  tgPlaneadorActual: { type: Number, default: 0 },
+  tgPlaneadorLandings: { type: Number, default: 0 }, // 🛬 Landings Planeador
 
-    // GRUPO MOTOPROPULSOR - HÉLICE 1 Y HÉLICE 2 (SI ES BIMOTOR)
-    helice1Sn: { type: String, default: '', trim: true },
-    helice1Tsn: { type: Number, default: 0 },
-    helice2Sn: { type: String, default: '', trim: true },
-    helice2Tsn: { type: Number, default: 0 },
+  // MOTOPROPULSOR GENERAL
+  motorSn: { type: String, default: '' },
+  motorTsn: { type: Number, default: 0 },
+  motorCsnCso: { type: Number, default: 0 },
+  
+  motor2Sn: { type: String, default: '' },
+  motor2Tsn: { type: Number, default: 0 },
+  motor2CsnCso: { type: Number, default: 0 },
+  
+  helice1Sn: { type: String, default: '' },
+  helice1Tsn: { type: Number, default: 0 },
+  
+  helice2Sn: { type: String, default: '' },
+  helice2Tsn: { type: Number, default: 0 },
 
-    // REQUISITOS LEGALES & VENCIMIENTOS
-    vencimientoElt: { type: Date },
-    vencimientoPitot: { type: Date },
-    vencimientoTransponder: { type: Date },
-    vencimientoSeguro: { type: Date },
-    vencimientoAvionica: { type: Date },
-    observacionesPopup: { type: String, default: '', trim: true },
+  // VENCIMIENTOS Y DOCUMENTACIÓN
+  vencimientoElt: { type: String, default: '' },
+  vencimientoPitot: { type: String, default: '' },
+  vencimientoTransponder: { type: String, default: '' },
+  vencimientoSeguro: { type: String, default: '' },
+  vencimientoAvionica: { type: String, default: '' },
+  observacionesPopup: { type: String, default: '' },
 
-    // ESTRUCTURAS DE COMPONENTES ASOCIADOS (TABLAS DINÁMICAS)
-    compPlaneador: [ComponentSchema],
-    motores: [PropulsionGroupSchema],
-    helices: [PropulsionGroupSchema],
+  // ARRAYS DETALLADOS DE TABLAS
+  compPlaneador: [ComponenteSchema],
+  motores: [MotorSchema],
+  helices: [HeliceSchema],
 
-    // AUDITORÍA INTERNA
-    tipoIcono: {
-        type: String,
-        enum: ['ala_rotativa', 'ala_fija'],
-        default: 'ala_rotativa'
-    },
-    creadoPor: { type: String, required: true },
-    actualizadoPor: { type: String }
+  // CONTROLES DE AUDITORÍA
+  creadoPor: { type: String, default: 'Sistema' },
+  actualizadoPor: { type: String, default: 'Sistema' }
 }, { 
-    timestamps: true 
+  timestamps: true 
 });
 
-// Middleware de normalización pre-guardado
-AircraftSchema.pre('save', function(next) {
-    if (this.matricula) this.matricula = this.matricula.toUpperCase().trim();
-    if (this.sda) this.sda = this.sda.toUpperCase().trim();
-    if (this.unidad) this.unidad = this.unidad.toUpperCase().trim();
-    next();
-});
-
-AircraftSchema.index({ unidad: 1 });
-AircraftSchema.index({ sda: 1 });
-
-module.exports = mongoose.model('Aircraft', AircraftSchema);
+export default mongoose.models.Aircraft || mongoose.model('Aircraft', AircraftSchema);

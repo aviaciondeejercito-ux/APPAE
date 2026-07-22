@@ -1,172 +1,182 @@
-const Aircraft = require('../models/Aircraft');
+import Aircraft from '../models/Aircraft.js';
 
-const obtenerPrivilegios = (user) => {
-    const rawRole = user?.role || "";
-    const roleUpper = String(rawRole).trim().toUpperCase().replace(/[\s_]/g, '');
-    const userElemento = user?.elemento?.toUpperCase().trim() || "";
-
-    const esAdminPorContenido = roleUpper.includes('ADMIN');
-    const esMandoPorLista = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper);
-    
-    const isMandoEstrategico = esAdminPorContenido || esMandoPorLista || userElemento === 'COMANDO';
-    const esOficinaTecnica = roleUpper === 'OFICINATECNICA';
-    
-    return {
-        isMandoEstrategico,
-        canChangeUnit: isMandoEstrategico || esOficinaTecnica,
-        hasEditPrivileges: isMandoEstrategico || esOficinaTecnica || roleUpper === 'S4UNIDAD',
-        userElemento
-    };
-};
-
+// Función auxiliar para parsear números decimales con seguridad
 const parsearHs = (val) => {
     if (val === null || val === undefined || val === '') return 0;
-    if (typeof val === 'number') return isNaN(val) ? 0 : val;
-    const num = parseFloat(String(val).replace(',', '.').trim());
+    const num = parseFloat(String(val).replace(',', '.'));
     return isNaN(num) ? 0 : num;
 };
 
-exports.getAircrafts = async (req, res) => {
-    try {
-        const { isMandoEstrategico, userElemento } = obtenerPrivilegios(req.user);
-        const { elemento } = req.params;
+// Sanitizador reutilizable para arreglos de componentes (Planeador, Motores, Hélices)
+const sanitizarComponentes = (comps = []) => {
+    return comps.map(c => ({
+        ...c,
+        nro: Number(c.nro) || 1,
+        ata: String(c.ata || ''),
+        pn: String(c.pn || ''),
+        componente: String(c.componente || ''),
+        sn: String(c.sn || ''),
+        limiteTipo: String(c.limiteTipo || 'TBO'),
+        limites: (c.limites || []).map(l => ({
+            valor: String(l.valor || ''),
+            unidad: String(l.unidad || 'H')
+        })),
+        instaladoFecha: String(c.instaladoFecha || ''),
+        instaladoHoras: c.instaladoHoras !== undefined ? c.instaladoHoras : '',
+        tsnCsnRenglones: (c.tsnCsnRenglones || []).map(r => ({
+            valor: String(r.valor || ''),
+            unidad: String(r.unidad || 'H')
+        })),
+        tgInstalacion: c.tgInstalacion !== undefined ? c.tgInstalacion : '',
+        estadoTipo: String(c.estadoTipo || 'TSO'),
+        estadoActual: c.estadoActual !== undefined ? c.estadoActual : '',
+        disponibilidades: (c.disponibilidades || []).map(d => ({
+            valor: String(d.valor || ''),
+            unidad: String(d.unidad || 'H')
+        }))
+    }));
+};
 
-        let query = {};
+// 1. OBTENER TODAS LAS AERONAVES
+export const getAircrafts = async (req, res) => {
+    try {
+        const { unidad } = req.query;
+        const filtro = unidad ? { unidad } : {};
         
-        if (!isMandoEstrategico) {
-            query.unidad = userElemento;
-        } else if (elemento) {
-            query.unidad = elemento.toUpperCase().trim();
-        }
-        
-        const data = await Aircraft.find(query).sort({ matricula: 1 });
-        return res.status(200).json({ success: true, data });
+        const aircrafts = await Aircraft.find(filtro).sort({ matricula: 1 });
+        res.status(200).json(aircrafts);
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Error al recuperar flota.", error: error.message });
+        res.status(500).json({ message: 'Error al obtener aeronaves', error: error.message });
     }
 };
 
-exports.createAircraft = async (req, res) => {
+// 2. OBTENER AERONAVE POR MATRÍCULA
+export const getAircraftByMatricula = async (req, res) => {
     try {
-        const { hasEditPrivileges, canChangeUnit, userElemento } = obtenerPrivilegios(req.user);
+        const { matricula } = req.params;
+        const aircraft = await Aircraft.findOne({ matricula: matricula.toUpperCase() });
+        
+        if (!aircraft) return res.status(404).json({ message: 'Aeronave no encontrada' });
+        res.status(200).json(aircraft);
+    } catch (error) {
+        res.status(500).json({ message: 'Error al obtener la aeronave', error: error.message });
+    }
+};
 
-        if (!hasEditPrivileges) {
-            return res.status(403).json({ success: false, message: "Acceso denegado. Privilegios de edición insuficientes." });
-        }
-
+// 3. CREAR AERONAVE
+export const createAircraft = async (req, res) => {
+    try {
         const payload = { ...req.body };
 
-        if (!canChangeUnit) {
-            payload.unidad = userElemento;
-        } else if (!payload.unidad) {
-            return res.status(400).json({ success: false, message: "Debe especificar una unidad de destino válida." });
-        }
+        // Normalizar matrícula
+        if (payload.matricula) payload.matricula = payload.matricula.toUpperCase();
 
+        // Parseo de numéricos de cabecera
         payload.inicioAeHs = parsearHs(payload.inicioAeHs);
         payload.tgPlaneadorActual = parsearHs(payload.tgPlaneadorActual);
+        payload.tgPlaneadorLandings = parsearHs(payload.tgPlaneadorLandings);
+        
         payload.motorTsn = parsearHs(payload.motorTsn);
         payload.motorCsnCso = parsearHs(payload.motorCsnCso);
         payload.motor2Tsn = parsearHs(payload.motor2Tsn);
         payload.motor2CsnCso = parsearHs(payload.motor2CsnCso);
+        
         payload.helice1Tsn = parsearHs(payload.helice1Tsn);
         payload.helice2Tsn = parsearHs(payload.helice2Tsn);
 
-        payload.creadoPor = `${req.user?.username || 'Usuario'} (${req.user?.role || 'USER'})`;
-        payload.actualizadoPor = payload.creadoPor;
-
-        const nuevaAeronave = new Aircraft(payload);
-        await nuevaAeronave.save();
-
-        return res.status(201).json({ success: true, data: nuevaAeronave, message: "Alta de aeronave exitosa." });
-    } catch (error) {
-        if (error.code === 11000) {
-            return res.status(400).json({ success: false, message: "La matrícula ingresada ya existe en el sistema." });
+        // Sanitización de matrices de componentes
+        if (payload.compPlaneador) {
+            payload.compPlaneador = sanitizarComponentes(payload.compPlaneador);
         }
-        return res.status(500).json({ success: false, message: "Error al registrar aeronave.", error: error.message });
+        if (payload.motores) {
+            payload.motores = payload.motores.map(m => ({
+                ...m,
+                componentes: sanitizarComponentes(m.componentes || [])
+            }));
+        }
+        if (payload.helices) {
+            payload.helices = payload.helices.map(h => ({
+                ...h,
+                componentes: sanitizarComponentes(h.componentes || [])
+            }));
+        }
+
+        const newAircraft = new Aircraft(payload);
+        await newAircraft.save();
+
+        res.status(201).json(newAircraft);
+    } catch (error) {
+        res.status(400).json({ message: 'Error al crear la aeronave', error: error.message });
     }
 };
 
-exports.updateAircraftStatus = async (req, res) => {
+// 4. ACTUALIZAR AERONAVE O ESTADO
+export const updateAircraftStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { hasEditPrivileges, canChangeUnit, isMandoEstrategico, userElemento } = obtenerPrivilegios(req.user);
-
-        if (!hasEditPrivileges) {
-            return res.status(403).json({ success: false, message: "Acceso denegado. No posee credenciales de modificación." });
-        }
+        const campos = req.body;
 
         const aeronaveDoc = await Aircraft.findById(id);
         if (!aeronaveDoc) {
-            return res.status(404).json({ success: false, message: "Aeronave no localizada." });
+            return res.status(404).json({ message: 'Aeronave no encontrada' });
         }
 
-        if (!isMandoEstrategico && aeronaveDoc.unidad !== userElemento) {
-            return res.status(403).json({ success: false, message: "Acceso denegado. El recurso pertenece a otro Elemento Operativo." });
+        // Actualización de numéricos de cabecera
+        if (campos.tgPlaneadorActual !== undefined) aeronaveDoc.tgPlaneadorActual = parsearHs(campos.tgPlaneadorActual);
+        if (campos.tgPlaneadorLandings !== undefined) aeronaveDoc.tgPlaneadorLandings = parsearHs(campos.tgPlaneadorLandings);
+        if (campos.inicioAeHs !== undefined) aeronaveDoc.inicioAeHs = parsearHs(campos.inicioAeHs);
+        
+        if (campos.motorTsn !== undefined) aeronaveDoc.motorTsn = parsearHs(campos.motorTsn);
+        if (campos.motorCsnCso !== undefined) aeronaveDoc.motorCsnCso = parsearHs(campos.motorCsnCso);
+        if (campos.motor2Tsn !== undefined) aeronaveDoc.motor2Tsn = parsearHs(campos.motor2Tsn);
+        if (campos.motor2CsnCso !== undefined) aeronaveDoc.motor2CsnCso = parsearHs(campos.motor2CsnCso);
+        if (campos.helice1Tsn !== undefined) aeronaveDoc.helice1Tsn = parsearHs(campos.helice1Tsn);
+        if (campos.helice2Tsn !== undefined) aeronaveDoc.helice2Tsn = parsearHs(campos.helice2Tsn);
+
+        // Procesamiento de arreglos complejos
+        if (campos.compPlaneador) {
+            aeronaveDoc.compPlaneador = sanitizarComponentes(campos.compPlaneador);
+            aeronaveDoc.markModified('compPlaneador');
         }
 
-        const campos = { ...req.body };
-
-        if (!canChangeUnit) {
-            delete campos.unidad;
+        if (campos.motores) {
+            aeronaveDoc.motores = campos.motores.map(m => ({
+                ...m,
+                componentes: sanitizarComponentes(m.componentes || [])
+            }));
+            aeronaveDoc.markModified('motores');
         }
 
+        if (campos.helices) {
+            aeronaveDoc.helices = campos.helices.map(h => ({
+                ...h,
+                componentes: sanitizarComponentes(h.componentes || [])
+            }));
+            aeronaveDoc.markModified('helices');
+        }
+
+        // Asignación de campos directos (textos, flags, fechas)
+        const camposExcluidos = ['compPlaneador', 'motores', 'helices', 'tgPlaneadorLandings', 'tgPlaneadorActual', 'inicioAeHs'];
         Object.keys(campos).forEach(key => {
-            if (key !== '_id' && key !== '__v') {
+            if (!camposExcluidos.includes(key)) {
                 aeronaveDoc[key] = campos[key];
             }
         });
 
-        // Parseo seguro de números de cabecera
-        aeronaveDoc.inicioAeHs = parsearHs(campos.inicioAeHs);
-        aeronaveDoc.tgPlaneadorActual = parsearHs(campos.tgPlaneadorActual);
-        aeronaveDoc.motorTsn = parsearHs(campos.motorTsn);
-        aeronaveDoc.motorCsnCso = parsearHs(campos.motorCsnCso);
-        aeronaveDoc.motor2Tsn = parsearHs(campos.motor2Tsn);
-        aeronaveDoc.motor2CsnCso = parsearHs(campos.motor2CsnCso);
-        aeronaveDoc.helice1Tsn = parsearHs(campos.helice1Tsn);
-        aeronaveDoc.helice2Tsn = parsearHs(campos.helice2Tsn);
-
-        // Notificar cambios explícitos
-        aeronaveDoc.markModified('tgPlaneadorActual');
-        aeronaveDoc.markModified('motorTsn');
-        aeronaveDoc.markModified('motor2Tsn');
-        aeronaveDoc.markModified('helice1Tsn');
-        aeronaveDoc.markModified('helice2Tsn');
-        if (campos.compPlaneador) aeronaveDoc.markModified('compPlaneador');
-        if (campos.motores) aeronaveDoc.markModified('motores');
-        if (campos.helices) aeronaveDoc.markModified('helices');
-
-        aeronaveDoc.actualizadoPor = `${req.user?.username || 'Usuario'} (${req.user?.role || 'USER'})`;
-
         const aeronaveGuardada = await aeronaveDoc.save();
-
-        return res.status(200).json({ 
-            success: true, 
-            data: aeronaveGuardada, 
-            message: "Aeronave y sus componentes actualizados correctamente." 
-        });
+        res.status(200).json(aeronaveGuardada);
     } catch (error) {
-        console.error("❌ Error en updateAircraftStatus:", error);
-        return res.status(500).json({ success: false, message: "Error al actualizar la aeronave.", error: error.message });
+        res.status(400).json({ message: 'Error al actualizar la aeronave', error: error.message });
     }
 };
 
-exports.deleteAircraft = async (req, res) => {
+// 5. ELIMINAR AERONAVE
+export const deleteAircraft = async (req, res) => {
     try {
         const { id } = req.params;
-        const { isMandoEstrategico } = obtenerPrivilegios(req.user);
-
-        if (!isMandoEstrategico) {
-            return res.status(403).json({ success: false, message: "Acceso denegado. Solo los Mandos Estratégicos pueden eliminar aeronaves." });
-        }
-
-        const aeronaveEliminada = await Aircraft.findByIdAndDelete(id);
-        if (!aeronaveEliminada) {
-            return res.status(404).json({ success: false, message: "No se encontró la aeronave solicitada." });
-        }
-
-        return res.status(200).json({ success: true, message: `La aeronave ${aeronaveEliminada.matricula} ha sido eliminada permanentemente.` });
+        await Aircraft.findByIdAndDelete(id);
+        res.status(200).json({ message: 'Aeronave eliminada con éxito' });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Error al eliminar la aeronave.", error: error.message });
+        res.status(500).json({ message: 'Error al eliminar la aeronave', error: error.message });
     }
 };

@@ -32,7 +32,7 @@ const F16Page = () => {
 
     const estadoInicialCabecera = {
         sda: sdaList[0], matricula: '', nroSerie: '', estadoOperativo: 'E/S',
-        inicioAeFecha: '', inicioAeHs: '', tgPlaneadorActual: '',
+        inicioAeFecha: '', inicioAeHs: '', tgPlaneadorActual: '', tgPlaneadorLandings: '', // 👈 Añadido Landings
         motorSn: '', motorTsn: '', motorCsnCso: '',
         motor2Sn: '', motor2Tsn: '', motor2CsnCso: '',
         helice1Sn: '', helice1Tsn: '',
@@ -94,6 +94,61 @@ const F16Page = () => {
         if (token) fetchAeronavesPermitidas();
     }, [unidadNavegacion, token]);
 
+    /**
+     * 🧮 CÁLCULO DINÁMICO DE DISPONIBILIDAD DE RENGLÓN
+     */
+    const calcularDisponibilidadRenglon = (comp, limItem, tgActualMatriz) => {
+        const limiteVal = parseFloat(limItem.valor) || 0;
+        if (!limiteVal) return '-';
+
+        const unidad = limItem.unidad || 'H';
+        const tgInstal = parseFloat(comp.tgInstalacion) || 0;
+        
+        let tgActual = 0;
+        if (unidad === 'LDG' || unidad === 'CC') {
+            tgActual = parseFloat(tgActualMatriz.landings) || 0;
+        } else {
+            tgActual = parseFloat(tgActualMatriz.horas) || 0;
+        }
+
+        const deltaTG = Math.max(0, tgActual - tgInstal);
+
+        const tsnCsnCoincidente = comp.tsnCsnRenglones?.find(r => r.unidad === unidad);
+        const valInstalado = parseFloat(tsnCsnCoincidente?.valor) || 0;
+
+        if (['H', 'LDG', 'CC'].includes(unidad)) {
+            let disp = 0;
+            if (comp.limiteTipo === 'LL') {
+                disp = limiteVal - (valInstalado + deltaTG);
+            } else {
+                disp = limiteVal - deltaTG;
+            }
+            return disp.toFixed(1);
+        }
+
+        if (unidad === 'M') {
+            if (!comp.instaladoFecha) return 'Sin Fecha';
+            const fechaInst = new Date(comp.instaladoFecha);
+            if (isNaN(fechaInst.getTime())) return '-';
+
+            fechaInst.setMonth(fechaInst.getMonth() + parseInt(limiteVal, 10));
+            const hoy = new Date();
+            const diffDias = Math.ceil((fechaInst - hoy) / (1000 * 60 * 60 * 24));
+
+            return diffDias > 0 ? `${diffDias} d` : `VENCIDO`;
+        }
+
+        if (unidad === 'C') {
+            if (!limItem.valor) return '-';
+            const fechaLimite = new Date(limItem.valor);
+            const hoy = new Date();
+            const diffDias = Math.ceil((fechaLimite - hoy) / (1000 * 60 * 60 * 24));
+            return diffDias > 0 ? `${diffDias} d` : 'VENCIDO';
+        }
+
+        return '-';
+    };
+
     const handleSelectorAeronaveChange = (id) => {
         setAeronaveSeleccionadaId(id);
         if (!id) {
@@ -112,6 +167,7 @@ const F16Page = () => {
                 inicioAeFecha: formatearFechaHtml(aero.inicioAeFecha),
                 inicioAeHs: aero.inicioAeHs ?? '',
                 tgPlaneadorActual: aero.tgPlaneadorActual ?? '',
+                tgPlaneadorLandings: aero.tgPlaneadorLandings ?? '', // 👈 Mapeo desde BD
                 motorSn: aero.motorSn || '',
                 motorTsn: aero.motorTsn ?? '',
                 motorCsnCso: aero.motorCsnCso ?? '',
@@ -160,6 +216,7 @@ const F16Page = () => {
             ...cabecera,
             inicioAeHs: cabecera.inicioAeHs === '' ? 0 : Number(cabecera.inicioAeHs),
             tgPlaneadorActual: cabecera.tgPlaneadorActual === '' ? 0 : Number(cabecera.tgPlaneadorActual),
+            tgPlaneadorLandings: cabecera.tgPlaneadorLandings === '' ? 0 : Number(cabecera.tgPlaneadorLandings), // 👈 Envío a BD
             motorTsn: cabecera.motorTsn === '' ? 0 : Number(cabecera.motorTsn),
             motorCsnCso: cabecera.motorCsnCso === '' ? 0 : Number(cabecera.motorCsnCso),
             motor2Tsn: cabecera.motor2Tsn === '' ? 0 : Number(cabecera.motor2Tsn),
@@ -524,6 +581,19 @@ const F16Page = () => {
                         <div style={styles.formGridCompact}>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Fecha)</label><input type="date" value={cabecera.inicioAeFecha} onChange={e => handleCabeceraChange('inicioAeFecha', e.target.value)} style={styles.input} /></div>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Hs)</label><input type="number" value={cabecera.inicioAeHs} onChange={e => handleCabeceraChange('inicioAeHs', e.target.value)} style={styles.input} placeholder="0.0" /></div>
+                            
+                            {/* 🛬 CAMPO DE LANDINGS */}
+                            <div style={styles.field}>
+                                <label style={styles.label}>Landings (LDG)</label>
+                                <input 
+                                    type="number" 
+                                    value={cabecera.tgPlaneadorLandings} 
+                                    onChange={e => handleCabeceraChange('tgPlaneadorLandings', e.target.value)} 
+                                    style={{ ...styles.input, backgroundColor: '#eaf2f8', fontWeight: 'bold' }} 
+                                    placeholder="0" 
+                                />
+                            </div>
+
                             <div style={styles.field}>
                                 <label style={styles.label}>
                                     TG Planeador {esEdicion ? '🤖 (Acum)' : 'Base'}
@@ -623,7 +693,9 @@ const F16Page = () => {
                     handlePlaneadorSubChange, 
                     (idx) => setCompPlaneador(compPlaneador.filter((_, i) => i !== idx).map((c, i) => ({...c, nro: i+1}))),
                     agregarSubFilaPlaneador,
-                    removerSubFilaPlaneador
+                    removerSubFilaPlaneador,
+                    calcularDisponibilidadRenglon,
+                    { horas: cabecera.tgPlaneadorActual, landings: cabecera.tgPlaneadorLandings }
                 )}
             </div>
 
@@ -648,7 +720,12 @@ const F16Page = () => {
                         (cIdx, af, sIdx, ssf, v) => handleMotorSubChange(motIdx, cIdx, af, sIdx, ssf, v),
                         (cIdx) => removerFilaMotor(motIdx, cIdx),
                         (cIdx, af) => agregarSubFilaMotor(motIdx, cIdx, af),
-                        (cIdx, af, sIdx) => removerSubFilaMotor(motIdx, cIdx, af, sIdx)
+                        (cIdx, af, sIdx) => removerSubFilaMotor(motIdx, cIdx, af, sIdx),
+                        calcularDisponibilidadRenglon,
+                        { 
+                            horas: motIdx === 0 ? cabecera.motorTsn : cabecera.motor2Tsn, 
+                            landings: motIdx === 0 ? cabecera.motorCsnCso : cabecera.motor2CsnCso 
+                        }
                     )}
                 </div>
             ))}
@@ -674,7 +751,12 @@ const F16Page = () => {
                         (cIdx, af, sIdx, ssf, v) => handleHeliceSubChange(helIdx, cIdx, af, sIdx, ssf, v),
                         (cIdx) => removerFilaHelice(helIdx, cIdx),
                         (cIdx, af) => agregarSubFilaHelice(helIdx, cIdx, af),
-                        (cIdx, af, sIdx) => removerSubFilaHelice(helIdx, cIdx, af, sIdx)
+                        (cIdx, af, sIdx) => removerSubFilaHelice(helIdx, cIdx, af, sIdx),
+                        calcularDisponibilidadRenglon,
+                        { 
+                            horas: helIdx === 0 ? cabecera.helice1Tsn : cabecera.helice2Tsn, 
+                            landings: 0 
+                        }
                     )}
                 </div>
             ))}
@@ -742,7 +824,7 @@ const renderSubRenglonValueInput = (item, compIndex, arrayField, subIndex, onSub
     );
 };
 
-const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgregarSub, onRemoverSub) => (
+const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgregarSub, onRemoverSub, calcularDispFn, tgActualMatriz) => (
     <div style={styles.tableResponsive}>
         <table style={styles.table}>
             <thead>
@@ -756,7 +838,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                     <th colSpan="3" style={styles.thGroup}>Instalado con</th>
                     <th colSpan="2" style={styles.thGroup}>TG Planeador</th>
                     <th colSpan="2" style={styles.thGroup}>Estado Componente</th>
-                    <th rowSpan="2" style={{...styles.th, minWidth: '180px'}}>Disp</th>
+                    <th rowSpan="2" style={{...styles.th, minWidth: '180px', backgroundColor: '#16a085', color: '#fff'}}>Disp. Calculada</th>
                     <th rowSpan="2" style={styles.th}>Baja</th>
                 </tr>
                 <tr style={styles.thRow}>
@@ -848,30 +930,26 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             </td>
                             <td style={styles.td}><input type="number" value={comp.estadoActual} onChange={e => onChange(compIndex, 'estadoActual', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
 
-                            <td style={{...styles.td, backgroundColor: '#f4fbf7'}}>
-                                <div style={styles.cellContainerVertical}>
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '5px' }}>
-                                        <button type="button" onClick={() => onAgregarSub(compIndex, 'disponibilidades')} style={{...styles.btnInlineAdd, backgroundColor: '#27ae60'}}>+ Renglón</button>
-                                    </div>
-                                    <div style={styles.stackContainer}>
-                                        {comp.disponibilidades.map((disp, subIndex) => (
-                                            <div key={subIndex} style={styles.rowStack}>
-                                                {renderSubRenglonValueInput(disp, compIndex, 'disponibilidades', subIndex, onSubChange, comp.instaladoFecha)}
-                                                <select value={disp.unidad} onChange={e => onSubChange(compIndex, 'disponibilidades', subIndex, 'unidad', e.target.value)} style={styles.selectStackUnit}>
-                                                    <option value="H">H (Hs)</option>
-                                                    <option value="M">M (Meses)</option>
-                                                    <option value="C">C (Fecha)</option>
-                                                    <option value="LDG">LDG (Landings)</option>
-                                                    <option value="CC">CC (Ciclos)</option>
-                                                </select>
-                                                {comp.disponibilidades.length > 1 && (
-                                                    <button type="button" onClick={() => onRemoverSub(compIndex, 'disponibilidades', subIndex)} style={styles.btnInlineRem}>-</button>
-                                                )}
+                            {/* ⚡ COLUMNA DE DISPONIBILIDAD CALCULADA DINÁMICAMENTE */}
+                            <td style={{...styles.td, backgroundColor: '#e8f8f5'}}>
+                                <div style={styles.stackContainer}>
+                                    {comp.limites.map((lim, subIndex) => {
+                                        const dispCalculada = calcularDispFn ? calcularDispFn(comp, lim, tgActualMatriz) : '-';
+                                        const esNegativo = typeof dispCalculada === 'string' && (dispCalculada.includes('VENCIDO') || dispCalculada.startsWith('-'));
+                                        return (
+                                            <div key={subIndex} style={styles.dispBadge}>
+                                                <span style={{ fontWeight: 'bold', color: esNegativo ? '#e74c3c' : '#27ae60' }}>
+                                                    {dispCalculada}
+                                                </span>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#7f8c8d' }}>
+                                                    {lim.unidad}
+                                                </span>
                                             </div>
-                                        ))}
-                                    </div>
+                                        );
+                                    })}
                                 </div>
                             </td>
+
                             <td style={{ textAlign: 'center', border: '1px solid #ccc' }}><button type="button" onClick={() => onRemover(compIndex)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button></td>
                         </tr>
                     );
@@ -941,7 +1019,8 @@ const styles = {
     btnInlineRem: { backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '2px 5px', fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '2px', marginLeft: '2px' },
     btnBimotorAdd: { backgroundColor: '#2c3e50', color: '#fff', border: '1px solid #34495e', padding: '6px 12px', cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 'bold' },
     btnBimotorRem: { backgroundColor: '#e74c3c', color: '#fff', border: '1px solid #c0392b', padding: '6px 12px', cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 'bold' },
-    btnSecundario: { backgroundColor: '#27ae60', color: 'white', border: '1px solid #219653', padding: '4px 10px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' }
+    btnSecundario: { backgroundColor: '#27ae60', color: 'white', border: '1px solid #219653', padding: '4px 10px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' },
+    dispBadge: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 4px', backgroundColor: '#ffffff', borderRadius: '3px', border: '1px solid #a3e4d7' }
 };
 
 export default F16Page;
