@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-// 🌐 URL DEL BACKEND CENTRALIZADA (Conectada a Render en prod o local en dev)
+// 🌐 URL DEL BACKEND CENTRALIZADA
 const API_BASE_URL = window.location.hostname === 'localhost' 
     ? '' 
     : 'https://appae.onrender.com';
@@ -9,7 +9,6 @@ const F16Page = () => {
     const sdaList = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "B206B3", "T-41"];
     const unidadesList = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
 
-    // 🔐 EXTRACCIÓN REAL DE SESIÓN DESDE LOCALSTORAGE
     const token = localStorage.getItem('token');
     const usuarioSesion = {
         username: localStorage.getItem('username') || "Operador",
@@ -50,7 +49,6 @@ const F16Page = () => {
         estadoTipo: 'TSO', estadoActual: '', disponibilidades: [{ valor: '', unidad: 'H' }]
     });
 
-    // Helper para garantizar que los arrays del componente no lleguen undefined al frontend
     const sanitizarComponenteCargado = (comp, index) => ({
         nro: comp.nro || index + 1,
         ata: comp.ata || '',
@@ -75,14 +73,9 @@ const F16Page = () => {
 
     const formatearFechaHtml = (f) => {
         if (!f) return '';
-        try {
-            return String(f).split('T')[0];
-        } catch (e) {
-            return '';
-        }
+        try { return String(f).split('T')[0]; } catch (e) { return ''; }
     };
 
-    // 🔄 Sincronización con el Backend
     const fetchAeronavesPermitidas = async () => {
         try {
             const url = (esAdminGlobal && unidadNavegacion) 
@@ -91,12 +84,9 @@ const F16Page = () => {
 
             const res = await fetch(url, { method: 'GET', headers: getHeaders() });
             const json = await res.json();
-
-            if (res.ok && json.success) {
-                setAeronavesBD(json.data);
-            }
+            if (res.ok && json.success) setAeronavesBD(json.data);
         } catch (error) {
-            console.error("❌ Error al sincronizar flota con MongoDB:", error);
+            console.error("Error al sincronizar flota con MongoDB:", error);
         }
     };
 
@@ -104,7 +94,6 @@ const F16Page = () => {
         if (token) fetchAeronavesPermitidas();
     }, [unidadNavegacion, token]);
 
-    // 🖲️ MANEJADOR DE SELECCIÓN DIRECTA
     const handleSelectorAeronaveChange = (id) => {
         setAeronaveSeleccionadaId(id);
         if (!id) {
@@ -115,7 +104,6 @@ const F16Page = () => {
         const aero = aeronavesBD.find(a => a._id === id);
         if (aero) {
             setEsEdicion(true);
-            
             setCabecera({
                 sda: aero.sda || sdaList[0],
                 matricula: aero.matricula || '',
@@ -150,25 +138,18 @@ const F16Page = () => {
 
             setMotores(
                 Array.isArray(aero.motores) && aero.motores.length 
-                    ? aero.motores.map(m => ({
-                        ...m,
-                        componentes: m.componentes.map(sanitizarComponenteCargado)
-                    }))
+                    ? aero.motores.map(m => ({ ...m, componentes: m.componentes.map(sanitizarComponenteCargado) }))
                     : [{ id: 1, nombre: 'MOTOR Nº 1', componentes: [generarFilaVacia(1)] }]
             );
 
             setHelices(
                 Array.isArray(aero.helices) && aero.helices.length 
-                    ? aero.helices.map(h => ({
-                        ...h,
-                        componentes: h.componentes.map(sanitizarComponenteCargado)
-                    }))
+                    ? aero.helices.map(h => ({ ...h, componentes: h.componentes.map(sanitizarComponenteCargado) }))
                     : [{ id: 1, nombre: 'HÉLICE Nº 1', componentes: [generarFilaVacia(1)] }]
             );
         }
     };
 
-    // 💾 OPERACIÓN: GUARDAR / ACTUALIZAR
     const guardarAltaAeronave = async () => {
         if (!cabecera.matricula) {
             alert("Por favor, ingrese al menos la Matrícula para procesar el registro.");
@@ -186,11 +167,8 @@ const F16Page = () => {
             helice1Tsn: cabecera.helice1Tsn === '' ? 0 : Number(cabecera.helice1Tsn),
             helice2Tsn: cabecera.helice2Tsn === '' ? 0 : Number(cabecera.helice2Tsn),
             unidad: esAdminGlobal ? unidadNavegacion : usuarioSesion.elemento,
-            compPlaneador,
-            motores,
-            helices,
-            creadoPor: usuarioSesion.username,
-            actualizadoPor: usuarioSesion.username
+            compPlaneador, motores, helices,
+            creadoPor: usuarioSesion.username, actualizadoPor: usuarioSesion.username
         };
 
         try {
@@ -202,17 +180,10 @@ const F16Page = () => {
                 method = 'PUT';
             }
 
-            const res = await fetch(url, {
-                method: method,
-                headers: getHeaders(),
-                body: JSON.stringify(payload)
-            });
-
+            const res = await fetch(url, { method, headers: getHeaders(), body: JSON.stringify(payload) });
             const json = await res.json();
 
-            if (!res.ok) {
-                throw new Error(json.message || 'Error en el servidor.');
-            }
+            if (!res.ok) throw new Error(json.message || 'Error en el servidor.');
 
             if (json.success) {
                 alert(json.message || "Operación matricial ejecutada con éxito.");
@@ -222,7 +193,7 @@ const F16Page = () => {
                 alert(`⚠️ Error: ${json.message}`);
             }
         } catch (error) {
-            console.error("❌ Fallo de comunicación con la API:", error);
+            console.error("Error API:", error);
             alert(error.message); 
         }
     };
@@ -235,12 +206,8 @@ const F16Page = () => {
 
         if (window.confirm(`⚠️ ¿Confirma la eliminación permanente de la aeronave ${cabecera.matricula}?`)) {
             try {
-                const res = await fetch(`${API_BASE_URL}/api/aircraft/${aeronaveSeleccionadaId}`, {
-                    method: 'DELETE',
-                    headers: getHeaders()
-                });
+                const res = await fetch(`${API_BASE_URL}/api/aircraft/${aeronaveSeleccionadaId}`, { method: 'DELETE', headers: getHeaders() });
                 const json = await res.json();
-
                 if (res.ok && json.success) {
                     alert(json.message);
                     limpiarFormularioParaNuevoAlta();
@@ -255,14 +222,8 @@ const F16Page = () => {
     };
 
     const ejecutarTransferenciaUnidad = async () => {
-        if (!esEdicion || !aeronaveSeleccionadaId) {
-            alert("Primero seleccione una aeronave guardada.");
-            return;
-        }
-        if (!unidadDestinoTraslado) {
-            alert("Especifique un Elemento de destino válido.");
-            return;
-        }
+        if (!esEdicion || !aeronaveSeleccionadaId) return alert("Primero seleccione una aeronave guardada.");
+        if (!unidadDestinoTraslado) return alert("Especifique un Elemento de destino válido.");
 
         if (window.confirm(`¿Confirma el traslado de la aeronave ${cabecera.matricula} hacia: ${unidadDestinoTraslado}?`)) {
             try {
@@ -272,7 +233,6 @@ const F16Page = () => {
                     body: JSON.stringify({ unidad: unidadDestinoTraslado })
                 });
                 const json = await res.json();
-
                 if (res.ok && json.success) {
                     alert(json.message);
                     setUnidadDestinoTraslado('');
@@ -296,9 +256,7 @@ const F16Page = () => {
         setEsEdicion(false);
     };
 
-    const handleCabeceraChange = (field, val) => {
-        setCabecera(prev => ({ ...prev, [field]: val }));
-    };
+    const handleCabeceraChange = (field, val) => setCabecera(prev => ({ ...prev, [field]: val }));
 
     // PLANEADOR HANDLERS
     const handlePlaneadorChange = (idx, field, val) => {
@@ -442,9 +400,15 @@ const F16Page = () => {
 
     return (
         <div style={styles.container}>
+            {/* Inyección CSS para Reset Box-Sizing Global */}
+            <style>{`
+                * { box-sizing: border-box; }
+                input[type="date"] { min-width: 0; }
+            `}</style>
+
             <div style={styles.mainHeaderFlex}>
                 <h2 style={{ margin: 0, fontSize: '1.1rem' }}>SISTEMA FORMULARIO -16</h2>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <button type="button" onClick={limpiarFormularioParaNuevoAlta} style={styles.btnFormAlta}>📄 Limpiar / Nuevo</button>
                     <button type="button" onClick={guardarAltaAeronave} style={styles.btnFormGuardar}>💾 {esEdicion ? 'Actualizar Cambios' : 'Dar de Alta / Guardar'}</button>
                     <button type="button" onClick={eliminarFormularioAeronave} style={styles.btnFormEliminar}>🗑️ Eliminar Registro</button>
@@ -492,7 +456,7 @@ const F16Page = () => {
 
                     <div style={styles.fieldAdmin}>
                         <label style={styles.labelAdmin}>✈️ DESPACHAR TRASLADO DE UNIDAD</label>
-                        <div style={{ display: 'flex', gap: '2px' }}>
+                        <div style={{ display: 'flex', gap: '4px' }}>
                             <select value={unidadDestinoTraslado} onChange={e => setUnidadDestinoTraslado(e.target.value)} style={{...styles.inputAdmin, flex: 1, backgroundColor: '#fff0f0'}}>
                                 <option value="">-- Destino --</option>
                                 {unidadesList.map(u => <option key={u} value={u}>{u}</option>)}
@@ -505,6 +469,7 @@ const F16Page = () => {
 
             <div style={styles.cardCabecera}>
                 <div style={styles.headerGrid}>
+                    {/* BLOQUE 1: DATOS AERONAVE */}
                     <div style={styles.block}>
                         <div style={styles.blockTitleFlex}>
                             <span>DATOS DE LA AERONAVE {esEdicion && <span style={{color: '#d35400', fontSize: '0.65rem'}}>🔒 ANCLADO</span>}</span>
@@ -517,7 +482,7 @@ const F16Page = () => {
                                 <option value="F/S">F/S</option>
                             </select>
                         </div>
-                        <div style={styles.formRow}>
+                        <div style={styles.formGridCompact}>
                             <div style={styles.field}><label style={styles.label}>SdA</label>
                                 <select 
                                     value={cabecera.sda} 
@@ -553,12 +518,12 @@ const F16Page = () => {
                         </div>
                     </div>
                     
+                    {/* BLOQUE 2: HISTORIAL PLANEADOR */}
                     <div style={styles.block}>
                         <div style={styles.blockTitle}>TIEMPOS E HISTORIAL PLANEADOR</div>
-                        <div style={styles.formRow}>
+                        <div style={styles.formGridCompact}>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Fecha)</label><input type="date" value={cabecera.inicioAeFecha} onChange={e => handleCabeceraChange('inicioAeFecha', e.target.value)} style={styles.input} /></div>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Hs)</label><input type="number" value={cabecera.inicioAeHs} onChange={e => handleCabeceraChange('inicioAeHs', e.target.value)} style={styles.input} placeholder="0.0" /></div>
-                            
                             <div style={styles.field}>
                                 <label style={styles.label}>
                                     TG Planeador {esEdicion ? '🤖 (Acum)' : 'Base'}
@@ -580,16 +545,15 @@ const F16Page = () => {
                         </div>
                     </div>
                     
-                    {/* GRUPO MOTOPROPULSOR: MOTORES Y HÉLICES */}
-                    <div style={{...styles.block, flex: 1.5}}>
+                    {/* BLOQUE 3: MOTOPROPULSOR */}
+                    <div style={{...styles.block, gridColumn: 'span 1 / -1'}}>
                         <div style={styles.blockTitle}>GRUPO MOTOPROPULSOR (TOTALES GENERALES)</div>
                         
-                        {/* MOTOR 1 & HELICE 1 */}
                         <div style={{ marginBottom: '8px' }}>
                             <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#d35400' }}>
                                 {esBimotor ? '⚙️ MOTOR Nº 1 & 🌀 HÉLICE Nº 1' : '⚙️ MOTOR & 🌀 HÉLICE'}
                             </span>
-                            <div style={styles.formRow}>
+                            <div style={styles.formGridEngine}>
                                 <div style={styles.field}><label style={styles.label}>Motor S/N</label><input type="text" value={cabecera.motorSn} onChange={e => handleCabeceraChange('motorSn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
                                 <div style={styles.field}><label style={styles.label}>TG Motor 1 (TSN)</label><input type="number" value={cabecera.motorTsn} onChange={e => handleCabeceraChange('motorTsn', e.target.value)} disabled={esEdicion} style={{...styles.input, backgroundColor: esEdicion ? '#e9ecef' : 'white'}} placeholder="0.0" /></div>
                                 <div style={styles.field}><label style={styles.label}>CSN/CSO M1</label><input type="number" value={cabecera.motorCsnCso} onChange={e => handleCabeceraChange('motorCsnCso', e.target.value)} style={styles.input} placeholder="0" /></div>
@@ -598,13 +562,12 @@ const F16Page = () => {
                             </div>
                         </div>
 
-                        {/* MOTOR 2 & HELICE 2 (SI ES BIMOTOR) */}
                         {esBimotor && (
                             <div style={{ borderTop: '1px dashed #ccc', paddingTop: '6px' }}>
                                 <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#c0392b' }}>
                                     ⚙️ MOTOR Nº 2 & 🌀 HÉLICE Nº 2
                                 </span>
-                                <div style={styles.formRow}>
+                                <div style={styles.formGridEngine}>
                                     <div style={styles.field}><label style={styles.label}>Motor 2 S/N</label><input type="text" value={cabecera.motor2Sn} onChange={e => handleCabeceraChange('motor2Sn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
                                     <div style={styles.field}><label style={styles.label}>TG Motor 2 (TSN)</label><input type="number" value={cabecera.motor2Tsn} onChange={e => handleCabeceraChange('motor2Tsn', e.target.value)} disabled={esEdicion} style={{...styles.input, backgroundColor: esEdicion ? '#e9ecef' : 'white'}} placeholder="0.0" /></div>
                                     <div style={styles.field}><label style={styles.label}>CSN/CSO M2</label><input type="number" value={cabecera.motor2CsnCso} onChange={e => handleCabeceraChange('motor2CsnCso', e.target.value)} style={styles.input} placeholder="0" /></div>
@@ -619,9 +582,9 @@ const F16Page = () => {
                 <hr style={{ border: 'none', borderTop: '1px solid #ddd', margin: '12px 0' }} />
 
                 <div style={styles.headerGrid}>
-                    <div style={{...styles.block, flex: 3}}>
+                    <div style={{...styles.block, flex: '2 1 400px'}}>
                         <div style={styles.blockTitle}>REQUISITOS LEGALES & VENCIMIENTOS HABILITACIONES</div>
-                        <div style={styles.formRowAlign}>
+                        <div style={styles.formGridLegal}>
                             <div style={styles.field}><label style={styles.label}>RAAC 91.207 (ELT)</label><input type="date" value={cabecera.vencimientoElt} onChange={e => handleCabeceraChange('vencimientoElt', e.target.value)} style={styles.inputUniform} /></div>
                             <div style={styles.field}><label style={styles.label}>RAAC 91.411 (Pitot)</label><input type="date" value={cabecera.vencimientoPitot} onChange={e => handleCabeceraChange('vencimientoPitot', e.target.value)} style={styles.inputUniform} /></div>
                             <div style={styles.field}><label style={styles.label}>RAAC 91.413 (Xponder)</label><input type="date" value={cabecera.vencimientoTransponder} onChange={e => handleCabeceraChange('vencimientoTransponder', e.target.value)} style={styles.inputUniform} /></div>
@@ -629,10 +592,13 @@ const F16Page = () => {
                             <div style={styles.field}><label style={styles.label}>Venc. Aviónica</label><input type="date" value={cabecera.vencimientoAvionica} onChange={e => handleCabeceraChange('vencimientoAvionica', e.target.value)} style={styles.inputUniform} /></div>
                         </div>
                     </div>
-                    <div style={{...styles.block, flex: 1, borderRight: 'none'}}>
+                    <div style={{...styles.block, flex: '1 1 250px'}}>
                         <div style={styles.blockTitle}>OBSERVACIONES / NOVEDADES</div>
-                        <div style={styles.formRowAlign}>
-                            <input type="text" value={cabecera.observacionesPopup} onChange={e => handleCabeceraChange('observacionesPopup', e.target.value)} style={{...styles.inputUniform, flex: 1}} placeholder="Escribir novedad..." />
+                        <div style={{ display: 'flex', gap: '5px', alignItems: 'flex-end', height: '100%' }}>
+                            <div style={{...styles.field, flex: 1}}>
+                                <label style={styles.label}>Detalle</label>
+                                <input type="text" value={cabecera.observacionesPopup} onChange={e => handleCabeceraChange('observacionesPopup', e.target.value)} style={styles.inputUniform} placeholder="Escribir novedad..." />
+                            </div>
                             <button type="button" onClick={() => alert(cabecera.observacionesPopup || "Sin novedades.")} style={styles.btnUniformPopup}>👁️ Ver</button>
                         </div>
                     </div>
@@ -645,7 +611,7 @@ const F16Page = () => {
                 </button>
             </div>
 
-            {/* PLANEADOR */}
+            {/* TABLA PLANEADOR */}
             <div style={styles.cardTable}>
                 <div style={styles.tableHeaderFlex}>
                     <div style={styles.tableTitle}>COMPONENTES DEL PLANEADOR</div>
@@ -661,7 +627,7 @@ const F16Page = () => {
                 )}
             </div>
 
-            {/* MOTORES */}
+            {/* TABLAS MOTORES */}
             {motores.map((mot, motIdx) => (
                 <div key={mot.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #d35400'}}>
                     <div style={styles.tableHeaderFlex}>
@@ -687,7 +653,7 @@ const F16Page = () => {
                 </div>
             ))}
 
-            {/* HÉLICES */}
+            {/* TABLAS HÉLICES */}
             {helices.map((hel, helIdx) => (
                 <div key={hel.id} style={{...styles.cardTable, marginTop: '20px', borderTop: '3px solid #2980b9'}}>
                     <div style={styles.tableHeaderFlex}>
@@ -716,7 +682,7 @@ const F16Page = () => {
     );
 };
 
-// 📅 Helper para calcular fecha límite al ingresar la cantidad de meses
+// Helper Meses
 const calcularFechaLimiteMeses = (mesesNum, fechaInicioStr) => {
     if (!mesesNum || isNaN(mesesNum) || Number(mesesNum) <= 0) return '';
     let baseDate = fechaInicioStr ? new Date(fechaInicioStr) : new Date();
@@ -725,7 +691,6 @@ const calcularFechaLimiteMeses = (mesesNum, fechaInicioStr) => {
     return baseDate.toISOString().split('T')[0];
 };
 
-// ⚙️ RENDERIZADOR ADAPTATIVO SEGÚN LA UNIDAD SELECCIONADA (C, M, H, LDG, CC)
 const renderSubRenglonValueInput = (item, compIndex, arrayField, subIndex, onSubChange, fechaInstalado) => {
     const unidad = item.unidad || 'H';
 
@@ -743,7 +708,7 @@ const renderSubRenglonValueInput = (item, compIndex, arrayField, subIndex, onSub
     if (unidad === 'M') {
         const fechaLimiteCalculada = calcularFechaLimiteMeses(item.valor, fechaInstalado);
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                 <input 
                     type="number" 
                     value={item.valor} 
@@ -818,7 +783,6 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             <td style={styles.td}><input type="text" value={comp.componente} onChange={e => onChange(compIndex, 'componente', e.target.value)} style={{...styles.inputFlat, width: '130px'}} placeholder="Descripción" /></td>
                             <td style={styles.td}><input type="text" value={comp.sn} onChange={e => onChange(compIndex, 'sn', e.target.value)} style={styles.inputFlat} placeholder="S/N" /></td>
                             
-                            {/* LÍMITES */}
                             <td style={styles.td}>
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
@@ -850,7 +814,6 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             <td style={{...styles.td, backgroundColor: '#f9f9f9'}}><input type="date" value={comp.instaladoFecha} onChange={e => onChange(compIndex, 'instaladoFecha', e.target.value)} style={{...styles.inputFlatMin, width: '110px'}} /></td>
                             <td style={styles.td}><input type="number" value={comp.instaladoHoras} onChange={e => onChange(compIndex, 'instaladoHoras', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
                             
-                            {/* TSN / CSN RENGLONES */}
                             <td style={styles.td}>
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '5px' }}>
@@ -885,7 +848,6 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             </td>
                             <td style={styles.td}><input type="number" value={comp.estadoActual} onChange={e => onChange(compIndex, 'estadoActual', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
 
-                            {/* DISPONIBILIDADES */}
                             <td style={{...styles.td, backgroundColor: '#f4fbf7'}}>
                                 <div style={styles.cellContainerVertical}>
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '5px' }}>
@@ -919,6 +881,7 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
     </div>
 );
 
+// 🎨 ESTILOS REDISEÑADOS Y ADAPTATIVOS
 const styles = {
     container: { padding: '10px', backgroundColor: '#fafafa', minHeight: '100vh', fontFamily: 'monospace' },
     mainHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c3e50', color: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' },
@@ -926,27 +889,34 @@ const styles = {
     btnFormGuardar: { backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
     btnFormEliminar: { backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '3px' },
     cardAdminPanel: { backgroundColor: '#e9ecef', padding: '10px', borderRadius: '4px', marginBottom: '10px', border: '1px solid #ced4da' },
-    adminGrid: { display: 'flex', gap: '15px', flexWrap: 'wrap' },
-    fieldAdmin: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: '280px' },
+    adminGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' },
+    fieldAdmin: { display: 'flex', flexDirection: 'column', minWidth: 0 },
     labelAdmin: { fontSize: '0.7rem', fontWeight: 'bold', color: '#495057', marginBottom: '4px' },
-    inputAdmin: { padding: '5px', border: '1px solid #adb5bd', fontSize: '0.75rem', outline: 'none' },
+    inputAdmin: { padding: '5px', border: '1px solid #adb5bd', fontSize: '0.75rem', outline: 'none', width: '100%', boxSizing: 'border-box' },
     btnTransfer: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '0 10px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' },
-    cardCabecera: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '10px', border: '1px solid #ccc' },
-    headerGrid: { display: 'flex', gap: '20px', flexWrap: 'wrap' },
-    block: { flex: 1, minWidth: '250px', borderRight: '1px solid #eee', paddingRight: '10px' },
-    blockTitle: { fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '5px', color: '#555' },
-    blockTitleFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '5px', color: '#555' },
+    cardCabecera: { backgroundColor: 'white', padding: '12px', borderRadius: '4px', marginBottom: '10px', border: '1px solid #ccc' },
+    
+    // Grillas fluidas responsivas
+    headerGrid: { display: 'flex', flexWrap: 'wrap', gap: '12px', width: '100%' },
+    block: { flex: '1 1 280px', minWidth: 0, padding: '10px', border: '1px solid #eee', borderRadius: '4px', backgroundColor: '#fafafa' },
+    blockTitle: { fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '8px', color: '#555' },
+    blockTitleFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', fontSize: '0.75rem', marginBottom: '8px', color: '#555' },
     inputCondicionSelector: { padding: '2px 6px', fontSize: '0.75rem', fontWeight: 'bold', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', textAlign: 'center', outline: 'none' },
-    formRow: { display: 'flex', gap: '5px' },
-    field: { display: 'flex', flexDirection: 'column', flex: 1 },
-    label: { fontSize: '0.65rem', color: '#666', marginBottom: '2px' },
-    input: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', outline: 'none' },
-    formRowAlign: { display: 'flex', gap: '5px', alignItems: 'stretch' },
-    inputUniform: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', height: '26px', boxSizing: 'border-box', outline: 'none' },
-    btnUniformPopup: { height: '26px', padding: '0 10px', fontSize: '0.7rem', backgroundColor: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', boxSizing: 'border-box' },
+    
+    // Grillas de inputs internos
+    formGridCompact: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(85px, 1fr))', gap: '6px', width: '100%' },
+    formGridEngine: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '6px', width: '100%' },
+    formGridLegal: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '6px', width: '100%' },
+
+    field: { display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%' },
+    label: { fontSize: '0.65rem', color: '#666', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    input: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', outline: 'none', width: '100%', boxSizing: 'border-box', minWidth: 0 },
+    
+    inputUniform: { padding: '4px', border: '1px solid #999', fontSize: '0.75rem', height: '28px', boxSizing: 'border-box', outline: 'none', width: '100%', minWidth: 0 },
+    btnUniformPopup: { height: '28px', padding: '0 10px', fontSize: '0.7rem', backgroundColor: '#6c757d', color: 'white', border: 'none', cursor: 'pointer', boxSizing: 'border-box' },
     inputNombreMotor: { fontSize: '0.8rem', fontWeight: 'bold', color: '#d35400', border: 'none', borderBottom: '1px dashed #d35400', outline: 'none', padding: '2px', backgroundColor: 'transparent', width: '180px' },
     cardTable: { backgroundColor: 'white', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' },
-    tableHeaderFlex: { display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center' },
+    tableHeaderFlex: { display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center', flexWrap: 'wrap', gap: '6px' },
     tableTitle: { fontWeight: 'bold', color: '#1b3a57' },
     tableResponsive: { width: '100%', overflowX: 'auto' },
     table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' },
@@ -956,16 +926,16 @@ const styles = {
     thSub: { border: '1px solid #aaa', padding: '4px', textAlign: 'center', fontSize: '0.65rem', backgroundColor: '#e5e5e5' },
     td: { border: '1px solid #ccc', padding: '4px', verticalAlign: 'middle' },
     tdCalculated: { border: '1px solid #ccc', padding: '4px', textAlign: 'right', fontWeight: 'bold', backgroundColor: '#f0f0f0', verticalAlign: 'middle' },
-    inputFlat: { width: '65px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', outline: 'none' },
-    inputFlatNum: { width: '55px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', textAlign: 'right', outline: 'none' },
-    inputFlatMin: { width: '50px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', textAlign: 'center', outline: 'none' },
-    selectFlat: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem' },
+    inputFlat: { width: '100%', minWidth: '50px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', outline: 'none', boxSizing: 'border-box' },
+    inputFlatNum: { width: '100%', minWidth: '45px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', textAlign: 'right', outline: 'none', boxSizing: 'border-box' },
+    inputFlatMin: { width: '100%', minWidth: '95px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', textAlign: 'center', outline: 'none', boxSizing: 'border-box' },
+    selectFlat: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', width: '100%' },
     selectFlatType: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#e6f2ff' },
     cellContainerVertical: { display: 'flex', flexDirection: 'column', width: '100%' },
     stackContainer: { display: 'flex', flexDirection: 'column', gap: '3px', width: '100%' },
     rowStack: { display: 'flex', alignItems: 'center', gap: '2px', width: '100%' },
-    inputStack: { flex: 1, minWidth: '45px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', outline: 'none' },
-    inputStackDate: { flex: 1, minWidth: '95px', padding: '2px 4px', border: '1px solid #3498db', fontSize: '0.7rem', outline: 'none', backgroundColor: '#ebf5fb' },
+    inputStack: { flex: 1, minWidth: '40px', padding: '3px', border: '1px solid #bbb', fontSize: '0.75rem', outline: 'none', boxSizing: 'border-box' },
+    inputStackDate: { flex: 1, minWidth: '90px', padding: '2px 4px', border: '1px solid #3498db', fontSize: '0.7rem', outline: 'none', backgroundColor: '#ebf5fb', boxSizing: 'border-box' },
     selectStackUnit: { padding: '2px', border: '1px solid #bbb', fontSize: '0.7rem', fontWeight: 'bold', backgroundColor: '#fff2cc' },
     btnInlineAdd: { backgroundColor: '#3498db', color: 'white', border: 'none', padding: '2px 5px', fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '2px' },
     btnInlineRem: { backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '2px 5px', fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer', borderRadius: '2px', marginLeft: '2px' },
