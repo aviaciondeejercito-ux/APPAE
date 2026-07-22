@@ -3,17 +3,28 @@ const ProgramaMantenimiento = require('../models/ProgramaMantenimiento');
 
 // Guardar o Actualizar el programa de una aeronave
 exports.guardarPrograma = async (req, res) => {
-    const { aeronaveId, tgPlaneadorActual, tgMotorActual, programaPlaneador, programaMotor, actualizadoPor } = req.body;
+    const { 
+        aeronaveId, 
+        tgPlaneadorActual, 
+        tgMotorActual, 
+        tgMotor2Actual,
+        tgHeliceActual,
+        tgHelice2Actual,
+        programaPlaneador, 
+        programaMotor, 
+        programaMotor2,
+        programaHelice,
+        programaHelice2,
+        actualizadoPor 
+    } = req.body;
 
     if (!aeronaveId) {
         return res.status(400).json({ mensaje: "Falta el ID de la aeronave." });
     }
 
     try {
-        // Extrae el string si viene envuelto en un objeto { $oid: "..." }
         const cleanAeronaveId = typeof aeronaveId === 'object' && aeronaveId.$oid ? aeronaveId.$oid : aeronaveId;
 
-        // Validación de tipo ObjectId de MongoDB
         if (!mongoose.Types.ObjectId.isValid(cleanAeronaveId)) {
             return res.status(400).json({ 
                 status: "error", 
@@ -21,24 +32,17 @@ exports.guardarPrograma = async (req, res) => {
             });
         }
 
-        // Remueve el ID temporal local del Frontend antes de enviar a Mongoose
         const sanitizarRenglones = (lista) => {
             if (!Array.isArray(lista)) return [];
             return lista.map(renglon => {
                 const nuevoRenglon = { ...renglon };
-                if (nuevoRenglon.id) {
-                    delete nuevoRenglon.id; 
-                }
+                if (nuevoRenglon.id) delete nuevoRenglon.id; 
                 return nuevoRenglon;
             });
         };
 
-        const planeadorSanitizado = sanitizarRenglones(programaPlaneador);
-        const motorSanitizado = sanitizarRenglones(programaMotor);
-
         const operadorResponsable = req.user ? req.user.username : (actualizadoPor || "Operador Desconocido");
 
-        // Busca por aeronaveId. Si no existe, crea el documento entero (Upsert).
         const programaActualizado = await ProgramaMantenimiento.findOneAndUpdate(
             { aeronaveId: cleanAeronaveId },
             {
@@ -46,8 +50,14 @@ exports.guardarPrograma = async (req, res) => {
                     aeronaveId: cleanAeronaveId,
                     tgPlaneadorActual: tgPlaneadorActual || "0,0",
                     tgMotorActual: tgMotorActual || "0,0",
-                    programaPlaneador: planeadorSanitizado,
-                    programaMotor: motorSanitizado,
+                    tgMotor2Actual: tgMotor2Actual || "0,0",
+                    tgHeliceActual: tgHeliceActual || "0,0",
+                    tgHelice2Actual: tgHelice2Actual || "0,0",
+                    programaPlaneador: sanitizarRenglones(programaPlaneador),
+                    programaMotor: sanitizarRenglones(programaMotor),
+                    programaMotor2: sanitizarRenglones(programaMotor2),
+                    programaHelice: sanitizarRenglones(programaHelice),
+                    programaHelice2: sanitizarRenglones(programaHelice2),
                     actualizadoPor: operadorResponsable
                 }
             },
@@ -92,8 +102,14 @@ exports.obtenerProgramaPorAeronave = async (req, res) => {
                 data: { 
                     tgPlaneadorActual: "0,0", 
                     tgMotorActual: "0,0", 
+                    tgMotor2Actual: "0,0",
+                    tgHeliceActual: "0,0",
+                    tgHelice2Actual: "0,0",
                     programaPlaneador: [], 
-                    programaMotor: [] 
+                    programaMotor: [],
+                    programaMotor2: [],
+                    programaHelice: [],
+                    programaHelice2: []
                 } 
             });
         }

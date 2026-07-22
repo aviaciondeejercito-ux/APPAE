@@ -66,6 +66,10 @@ exports.createAircraft = async (req, res) => {
         payload.tgPlaneadorActual = parsearHs(payload.tgPlaneadorActual);
         payload.motorTsn = parsearHs(payload.motorTsn);
         payload.motorCsnCso = parsearHs(payload.motorCsnCso);
+        payload.motor2Tsn = parsearHs(payload.motor2Tsn);
+        payload.motor2CsnCso = parsearHs(payload.motor2CsnCso);
+        payload.helice1Tsn = parsearHs(payload.helice1Tsn);
+        payload.helice2Tsn = parsearHs(payload.helice2Tsn);
 
         payload.creadoPor = `${req.user?.username || 'Usuario'} (${req.user?.role || 'USER'})`;
         payload.actualizadoPor = payload.creadoPor;
@@ -106,7 +110,6 @@ exports.updateAircraftStatus = async (req, res) => {
             delete campos.unidad;
         }
 
-        // Asignación explícita para evitar errores de casteo Mongoose
         Object.keys(campos).forEach(key => {
             if (key !== '_id' && key !== '__v') {
                 aeronaveDoc[key] = campos[key];
@@ -118,10 +121,17 @@ exports.updateAircraftStatus = async (req, res) => {
         aeronaveDoc.tgPlaneadorActual = parsearHs(campos.tgPlaneadorActual);
         aeronaveDoc.motorTsn = parsearHs(campos.motorTsn);
         aeronaveDoc.motorCsnCso = parsearHs(campos.motorCsnCso);
+        aeronaveDoc.motor2Tsn = parsearHs(campos.motor2Tsn);
+        aeronaveDoc.motor2CsnCso = parsearHs(campos.motor2CsnCso);
+        aeronaveDoc.helice1Tsn = parsearHs(campos.helice1Tsn);
+        aeronaveDoc.helice2Tsn = parsearHs(campos.helice2Tsn);
 
-        // Notificar cambios explícitos en sub-arrays
+        // Notificar cambios explícitos
         aeronaveDoc.markModified('tgPlaneadorActual');
         aeronaveDoc.markModified('motorTsn');
+        aeronaveDoc.markModified('motor2Tsn');
+        aeronaveDoc.markModified('helice1Tsn');
+        aeronaveDoc.markModified('helice2Tsn');
         if (campos.compPlaneador) aeronaveDoc.markModified('compPlaneador');
         if (campos.motores) aeronaveDoc.markModified('motores');
         if (campos.helices) aeronaveDoc.markModified('helices');

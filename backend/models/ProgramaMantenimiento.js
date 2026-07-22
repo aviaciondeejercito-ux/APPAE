@@ -2,6 +2,12 @@ const mongoose = require('mongoose');
 
 const RenglonInspeccionSchema = new mongoose.Schema({
     descripcion: { type: String, required: true, trim: true },
+    tipoCriterio: { 
+        type: String, 
+        enum: ['HORAS', 'FECHA', 'MESES'], 
+        default: 'HORAS' 
+    },
+    intervaloMeses: { type: Number, default: 0 }, // Para cálculo automático mensual
     ultHs: { type: String, default: "" },
     ultFecha: { type: String, default: "" },
     ultOt: { type: String, default: "" },
@@ -9,7 +15,7 @@ const RenglonInspeccionSchema = new mongoose.Schema({
     proxFecha: { type: String, default: "" },
     responsable: { type: String, default: "Ec AE", trim: true },
     disp: { type: String, default: "" }
-}); // Al quitar {_id: false}, Mongoose genera automáticamente el _id para cada renglón
+});
 
 const ProgramaMantenimientoSchema = new mongoose.Schema({
     aeronaveId: { 
@@ -20,9 +26,15 @@ const ProgramaMantenimientoSchema = new mongoose.Schema({
     },
     tgPlaneadorActual: { type: String, default: "0,0" },
     tgMotorActual: { type: String, default: "0,0" },
+    tgMotor2Actual: { type: String, default: "0,0" },
+    tgHeliceActual: { type: String, default: "0,0" },
+    tgHelice2Actual: { type: String, default: "0,0" },
     
     programaPlaneador: [RenglonInspeccionSchema],
     programaMotor: [RenglonInspeccionSchema],
+    programaMotor2: [RenglonInspeccionSchema],
+    programaHelice: [RenglonInspeccionSchema],
+    programaHelice2: [RenglonInspeccionSchema],
     
     actualizadoPor: { type: String, default: "Sistema" }
 }, { timestamps: true });

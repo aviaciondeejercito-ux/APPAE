@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 /**
- * ESQUEMA PARA SUB-RENGLONES DE MÉTRICAS (Horas, Meses, Ciclos)
+ * ESQUEMA PARA SUB-RENGLONES DE MÉTRICAS (Horas, Meses, Calendarial, Landings, Ciclos)
  */
 const MetricValueSchema = new mongoose.Schema({
     valor: { 
@@ -10,7 +10,7 @@ const MetricValueSchema = new mongoose.Schema({
     },
     unidad: { 
         type: String, 
-        enum: ['H', 'M', 'C'], 
+        enum: ['H', 'M', 'C', 'LDG', 'CC'], 
         default: 'H' 
     }
 }, { _id: false });
@@ -83,10 +83,20 @@ const AircraftSchema = new mongoose.Schema({
     inicioAeHs: { type: Number, default: 0 },
     tgPlaneadorActual: { type: Number, default: 0 },
 
-    // GRUPO MOTOPROPULSOR (CABECERA Y TIEMPOS ACUMULADOS)
+    // GRUPO MOTOPROPULSOR - MOTOR 1 Y MOTOR 2 (SI ES BIMOTOR)
     motorSn: { type: String, default: '', trim: true },
     motorTsn: { type: Number, default: 0 },
     motorCsnCso: { type: Number, default: 0 },
+    
+    motor2Sn: { type: String, default: '', trim: true },
+    motor2Tsn: { type: Number, default: 0 },
+    motor2CsnCso: { type: Number, default: 0 },
+
+    // GRUPO MOTOPROPULSOR - HÉLICE 1 Y HÉLICE 2 (SI ES BIMOTOR)
+    helice1Sn: { type: String, default: '', trim: true },
+    helice1Tsn: { type: Number, default: 0 },
+    helice2Sn: { type: String, default: '', trim: true },
+    helice2Tsn: { type: Number, default: 0 },
 
     // REQUISITOS LEGALES & VENCIMIENTOS
     vencimientoElt: { type: Date },
