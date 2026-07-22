@@ -3,29 +3,24 @@ const F13 = require('../models/F13');
 
 /**
  * Obtiene el consolidado de novedades (Aeronaves + Formularios F-13)
- * Si el usuario es ADMIN, BOSS o DIRECTOR ve todo (u opcionalmente filtra). 
- * Si es usuario común, se segmenta estrictamente por su elemento asignado.
  */
 const getNovedadesElemento = async (req, res) => {
     try {
         const { sda, fechaInicio, fechaFin, unidad } = req.query;
 
-        // 🛡️ DETECTAR ROLES PRIVILEGIADOS DESDE EL TOKEN (Middleware de autenticación)
+        // 🛡️ DETECTAR ROLES PRIVILEGIADOS DESDE EL TOKEN
         const rolUsuario = (req.user?.role || req.user?.rango || '').toUpperCase();
-        
         const tieneAccesoTotal = rolUsuario === 'ADMIN' || 
                                  rolUsuario === 'BOSS' || 
                                  rolUsuario === 'DIRECTOR' || 
                                  req.user?.esAdmin === true;
 
-        // --- 1. CONSTRUCCIÓN INTELIGENTE DE FILTROS ---
+        // --- 1. FILTROS POR UNIDAD ---
         let filtroAeronave = {};
         let filtroF13 = {};
 
         if (!tieneAccesoTotal) {
-            // USUARIO COMÚN: Bloqueo estricto por su unidad/elemento asignado
             const unidadAFiltrar = unidad || req.user?.elemento || req.user?.unidad;
-
             if (!unidadAFiltrar) {
                 return res.status(400).json({
                     ok: false,
@@ -34,7 +29,6 @@ const getNovedadesElemento = async (req, res) => {
             }
             filtroAeronave.unidad = { $regex: new RegExp(`^${unidadAFiltrar}$`, 'i') };
         } else {
-            // ROLES PRIVILEGIADOS (ADMIN, BOSS, DIRECTOR): 
             if (unidad && unidad !== 'TODAS') {
                 filtroAeronave.unidad = { $regex: new RegExp(`^${unidad}$`, 'i') };
             }
@@ -44,29 +38,19 @@ const getNovedadesElemento = async (req, res) => {
             filtroAeronave.sda = sda;
         }
 
-        // --- 2. OBTENER FLOTA Y NORMALIZAR ESTADOS ---
-        // Se añade 'estadoOperativo' al select para que MongoDB traiga el dato real
-        const aeronavesRaw = await Aircraft.find(filtroAeronave)
-            .select('matricula modelo sda horasTotales estado enServicio unidad estadoOperativo')
+        // --- 2. OBTENER FLOTA Y NORMALIZAR ---
+        // Solicitamos tgPlaneadorActual y estadoOperativo según el nuevo AircraftSchema
+        const aeronaves = await Aircraft.find(filtroAeronave)
+            .select('matricula sda unidad estadoOperativo tgPlaneadorActual inicioAeHs tipoIcono')
             .lean();
 
-        // Mapeamos para garantizar la propiedad 'estado' unificada para el Frontend
-        const aeronaves = aeronavesRaw.map(nave => ({
-            ...nave,
-            estado: nave.estado || nave.estadoOperativo
-        }));
-
-        const chequearOperativo = (a) => {
-            return a.estado === 'E/S' || a.estado === 'En Servicio' || a.enServicio === true;
-        };
-
+        // Verificación basada en el enum ['E/S', 'F/S']
         const totalAeronaves = aeronaves.length;
-        const operativas = aeronaves.filter(chequearOperativo).length;
+        const operativas = aeronaves.filter(a => a.estadoOperativo === 'E/S').length;
         const enMantenimiento = totalAeronaves - operativas;
 
         // --- 3. CONSULTAR HISTORIAL DE VUELOS (F13) ---
         const idsAeronavesUnidad = aeronaves.map(a => a._id);
-        
         filtroF13.aeronave = { $in: idsAeronavesUnidad };
 
         if (fechaInicio || fechaFin) {
@@ -76,7 +60,7 @@ const getNovedadesElemento = async (req, res) => {
         }
 
         const historialVuelosRaw = await F13.find(filtroF13)
-            .populate('aeronave', 'matricula modelo sda unidad')
+            .populate('aeronave', 'matricula sda unidad')
             .populate('creadoPor', 'nombre apellido rango')
             .sort({ fecha: -1 }) 
             .lean();
@@ -91,14 +75,15 @@ const getNovedadesElemento = async (req, res) => {
             };
         });
 
-        // --- 4. PROCESAMIENTO DINÁMICO DE ODÓMETROS ---
+        // --- 4. CÁLCULO DINÁMICO DEL ODÓMETRO ESTRUCTURAL ---
         const detalleFlotaActualizado = await Promise.all(aeronaves.map(async (nave) => {
             const ultimoF13 = await F13.findOne({ aeronave: nave._id })
                 .sort({ fecha: -1, createdAt: -1 })
                 .select('horasALaFecha horasDelDia horasTotales')
                 .lean();
 
-            let horasEstructuralesReales = nave.horasTotales || 0;
+            // Prioridad de horas: Último F-13 registrado > tgPlaneadorActual > inicioAeHs > 0
+            let horasEstructuralesReales = nave.tgPlaneadorActual || nave.inicioAeHs || 0;
 
             if (ultimoF13) {
                 const acumuladoCalculado = ultimoF13.horasTotales !== undefined

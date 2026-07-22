@@ -131,13 +131,8 @@ const DashboardNovedades = () => {
         nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
       );
 
-  const chequearOperativo = (nave) => {
-    return (
-      nave.estado === 'E/S' || 
-      nave.estado === 'En Servicio' || 
-      nave.enServicio === true
-    );
-  };
+  // 🔄 VERIFICACIÓN DIRECTA SEGÚN EL NUEVO ESQUEMA (enum: ['E/S', 'F/S'])
+  const chequearOperativo = (nave) => nave.estadoOperativo === 'E/S';
 
   const cantidadOperativas = flotaFiltrada.filter(n => chequearOperativo(n)).length;
   const cantidadEnMantenimiento = flotaFiltrada.length - cantidadOperativas;
@@ -167,7 +162,8 @@ const DashboardNovedades = () => {
     if (ultimoAcumuladoF13 !== undefined && ultimoAcumuladoF13 > 0) {
       return ultimoAcumuladoF13;
     }
-    return nave.horasTotales || 0;
+    // Soporte para tgPlaneadorActual e inicioAeHs del nuevo AircraftSchema
+    return nave.horasTotales || nave.tgPlaneadorActual || nave.inicioAeHs || 0;
   };
 
   // --- CÁLCULO ESTRICTO DE HORAS DEL AÑO ---
@@ -344,9 +340,15 @@ const DashboardNovedades = () => {
                   const horasEstructurales = obtenerHorasEstructuralesSólidas(nave);
                   const tieneDatoDb = horasEstructurales > 0;
 
+                  // 🚁/✈️ ÍCONO DINÁMICO SEGÚN EL TIPO DE ICONO DEL ESQUEMA
+                  const iconoTipo = nave.tipoIcono === 'ala_fija' ? '✈️' : '🚁';
+
                   return (
                     <tr key={nave._id} style={styles.tableRow}>
-                      <td style={{...styles.td, fontWeight: 'bold'}}>{nave.matricula}</td>
+                      <td style={{...styles.td, fontWeight: 'bold'}}>
+                        <span style={{ marginRight: '6px' }}>{iconoTipo}</span>
+                        {nave.matricula}
+                      </td>
                       <td style={styles.td}>{nave.sda}</td>
                       {tieneAccesoTotal && (
                         <td style={{...styles.td, fontSize: '0.7rem', color: '#64748b', fontWeight: '600'}}>
