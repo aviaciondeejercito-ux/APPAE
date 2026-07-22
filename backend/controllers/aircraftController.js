@@ -7,7 +7,7 @@ const parsearHs = (val) => {
     return isNaN(num) ? 0 : num;
 };
 
-// Sanitizador reutilizable para arreglos de componentes (Planeador, Motores, Hélices)
+// Sanitizador reutilizable para arreglos de componentes
 const sanitizarComponentes = (comps = []) => {
     return comps.map(c => ({
         ...c,
@@ -37,16 +37,26 @@ const sanitizarComponentes = (comps = []) => {
     }));
 };
 
-// 1. OBTENER TODAS LAS AERONAVES
+// 1. OBTENER TODAS LAS AERONAVES / ELEMENTO
 export const getAircrafts = async (req, res) => {
     try {
+        const { elemento } = req.params;
         const { unidad } = req.query;
-        const filtro = unidad ? { unidad } : {};
+        
+        // Filtro por parámetro de ruta o por query string
+        const filtroUnidad = elemento || unidad;
+        const filtro = filtroUnidad ? { unidad: filtroUnidad } : {};
         
         const aircrafts = await Aircraft.find(filtro).sort({ matricula: 1 });
-        res.status(200).json(aircrafts);
+
+        // ✅ FORMATO SINCRO CON FRONTEND
+        res.status(200).json({
+            success: true,
+            count: aircrafts.length,
+            data: aircrafts
+        });
     } catch (error) {
-        res.status(500).json({ message: 'Error al obtener aeronaves', error: error.message });
+        res.status(500).json({ success: false, message: 'Error al obtener aeronaves', error: error.message });
     }
 };
 
@@ -56,10 +66,16 @@ export const getAircraftByMatricula = async (req, res) => {
         const { matricula } = req.params;
         const aircraft = await Aircraft.findOne({ matricula: matricula.toUpperCase() });
         
-        if (!aircraft) return res.status(404).json({ message: 'Aeronave no encontrada' });
-        res.status(200).json(aircraft);
+        if (!aircraft) {
+            return res.status(404).json({ success: false, message: 'Aeronave no encontrada' });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: aircraft
+        });
     } catch (error) {
-        res.status(500).json({ message: 'Error al obtener la aeronave', error: error.message });
+        res.status(500).json({ success: false, message: 'Error al obtener la aeronave', error: error.message });
     }
 };
 
@@ -68,10 +84,8 @@ export const createAircraft = async (req, res) => {
     try {
         const payload = { ...req.body };
 
-        // Normalizar matrícula
         if (payload.matricula) payload.matricula = payload.matricula.toUpperCase();
 
-        // Parseo de numéricos de cabecera
         payload.inicioAeHs = parsearHs(payload.inicioAeHs);
         payload.tgPlaneadorActual = parsearHs(payload.tgPlaneadorActual);
         payload.tgPlaneadorLandings = parsearHs(payload.tgPlaneadorLandings);
@@ -84,7 +98,6 @@ export const createAircraft = async (req, res) => {
         payload.helice1Tsn = parsearHs(payload.helice1Tsn);
         payload.helice2Tsn = parsearHs(payload.helice2Tsn);
 
-        // Sanitización de matrices de componentes
         if (payload.compPlaneador) {
             payload.compPlaneador = sanitizarComponentes(payload.compPlaneador);
         }
@@ -104,9 +117,13 @@ export const createAircraft = async (req, res) => {
         const newAircraft = new Aircraft(payload);
         await newAircraft.save();
 
-        res.status(201).json(newAircraft);
+        res.status(201).json({
+            success: true,
+            message: 'Aeronave creada exitosamente.',
+            data: newAircraft
+        });
     } catch (error) {
-        res.status(400).json({ message: 'Error al crear la aeronave', error: error.message });
+        res.status(400).json({ success: false, message: 'Error al crear la aeronave', error: error.message });
     }
 };
 
@@ -118,10 +135,9 @@ export const updateAircraftStatus = async (req, res) => {
 
         const aeronaveDoc = await Aircraft.findById(id);
         if (!aeronaveDoc) {
-            return res.status(404).json({ message: 'Aeronave no encontrada' });
+            return res.status(404).json({ success: false, message: 'Aeronave no encontrada' });
         }
 
-        // Actualización de numéricos de cabecera
         if (campos.tgPlaneadorActual !== undefined) aeronaveDoc.tgPlaneadorActual = parsearHs(campos.tgPlaneadorActual);
         if (campos.tgPlaneadorLandings !== undefined) aeronaveDoc.tgPlaneadorLandings = parsearHs(campos.tgPlaneadorLandings);
         if (campos.inicioAeHs !== undefined) aeronaveDoc.inicioAeHs = parsearHs(campos.inicioAeHs);
@@ -133,7 +149,6 @@ export const updateAircraftStatus = async (req, res) => {
         if (campos.helice1Tsn !== undefined) aeronaveDoc.helice1Tsn = parsearHs(campos.helice1Tsn);
         if (campos.helice2Tsn !== undefined) aeronaveDoc.helice2Tsn = parsearHs(campos.helice2Tsn);
 
-        // Procesamiento de arreglos complejos
         if (campos.compPlaneador) {
             aeronaveDoc.compPlaneador = sanitizarComponentes(campos.compPlaneador);
             aeronaveDoc.markModified('compPlaneador');
@@ -155,7 +170,6 @@ export const updateAircraftStatus = async (req, res) => {
             aeronaveDoc.markModified('helices');
         }
 
-        // Asignación de campos directos (textos, flags, fechas)
         const camposExcluidos = ['compPlaneador', 'motores', 'helices', 'tgPlaneadorLandings', 'tgPlaneadorActual', 'inicioAeHs'];
         Object.keys(campos).forEach(key => {
             if (!camposExcluidos.includes(key)) {
@@ -164,9 +178,14 @@ export const updateAircraftStatus = async (req, res) => {
         });
 
         const aeronaveGuardada = await aeronaveDoc.save();
-        res.status(200).json(aeronaveGuardada);
+
+        res.status(200).json({
+            success: true,
+            message: 'Aeronave actualizada exitosamente.',
+            data: aeronaveGuardada
+        });
     } catch (error) {
-        res.status(400).json({ message: 'Error al actualizar la aeronave', error: error.message });
+        res.status(400).json({ success: false, message: 'Error al actualizar la aeronave', error: error.message });
     }
 };
 
@@ -175,8 +194,8 @@ export const deleteAircraft = async (req, res) => {
     try {
         const { id } = req.params;
         await Aircraft.findByIdAndDelete(id);
-        res.status(200).json({ message: 'Aeronave eliminada con éxito' });
+        res.status(200).json({ success: true, message: 'Aeronave eliminada con éxito' });
     } catch (error) {
-        res.status(500).json({ message: 'Error al eliminar la aeronave', error: error.message });
+        res.status(500).json({ success: false, message: 'Error al eliminar la aeronave', error: error.message });
     }
 };
