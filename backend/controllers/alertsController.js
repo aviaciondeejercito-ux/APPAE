@@ -1,5 +1,9 @@
-const Aircraft = require('../models/Aircraft'); 
-const Tripulante = require('../models/Tripulante');
+// Resolvemos el modelo de forma polimórfica para soportar exportaciones nombradas o directas
+const AircraftRaw = require('../models/Aircraft');
+const Aircraft = AircraftRaw.Aircraft || AircraftRaw.default || AircraftRaw;
+
+const TripulanteRaw = require('../models/Tripulante');
+const Tripulante = TripulanteRaw.Tripulante || TripulanteRaw.default || TripulanteRaw;
 
 exports.getAlertasInternasUnidad = async (req, res) => {
     try {
@@ -55,7 +59,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             };
         }
 
-        // Consulta segura con captura individual
+        // Consulta segura
         const tripulantes = await Tripulante.find(queryTripulantes).lean().catch(() => []);
 
         (tripulantes || []).forEach(t => {
@@ -139,7 +143,7 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             queryAeronaves = { unidad: regexUnidad };
         }
 
-        // Consulta segura con captura individual
+        // Consulta segura
         const aeronaves = await Aircraft.find(queryAeronaves).lean().catch(() => []);
 
         (aeronaves || []).forEach(a => {
@@ -251,7 +255,6 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
     } catch (error) {
         console.error("❌ Fallo en getAlertasInternasUnidad:", error);
-        // Retornar respuesta limpia HTTP 200 con array vacío para no interrumpir el UI
         return res.status(200).json({
             success: true,
             jurisdiccion: "ERROR_RECUPERACION",

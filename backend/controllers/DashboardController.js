@@ -1,5 +1,9 @@
-const Aircraft = require('../models/Aircraft');
-const F13 = require('../models/F13');
+// Resolvemos los modelos de forma polimórfica para soportar exportaciones nombradas o directas
+const AircraftRaw = require('../models/Aircraft');
+const Aircraft = AircraftRaw.Aircraft || AircraftRaw.default || AircraftRaw;
+
+const F13Raw = require('../models/F13');
+const F13 = F13Raw.F13 || F13Raw.default || F13Raw;
 
 /**
  * Obtiene el consolidado de novedades (Aeronaves + Formularios F-13)
@@ -27,7 +31,6 @@ const getNovedadesElemento = async (req, res) => {
                     msg: 'El elemento del usuario es requerido para segmentar la información.'
                 });
             }
-            // Escapar caracteres especiales para evitar errores en RegExp
             const unidadEscapada = unidadAFiltrar.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             filtroAeronave.unidad = { $regex: new RegExp(`^${unidadEscapada}$`, 'i') };
         } else {
