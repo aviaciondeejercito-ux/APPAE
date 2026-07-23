@@ -1,23 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { getAircrafts } from '../services/api';
+import { getAircrafts, updateAircraftStatus } from '../services/api'; // Asegúrate de tener exportada la función PUT/update
 
 const EstadoAeronaves = () => {
     const [aircrafts, setAircrafts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [selectedNote, setSelectedNote] = useState(null); 
+    const [saving, setSaving] = useState(false);
     
-    // NORMALIZACIÓN SINCRO JOKER - REDUNDANCIA ABSOLUTA
-    const rawRole = localStorage.getItem('role') || 'user';
-    
-    // Limpiamos espacios, guiones y pasamos a Mayúsculas y Minúsculas para doble chequeo
+    // Aeronave seleccionada y copia editable para el modal
+    const [selectedNote, setSelectedNote] = useState(null);
+    const [formData, setFormData] = useState(null);
+
+    // ==========================================
+    // 🛡️ CONTROL DE ACCESOS Y ROLES
+    // ==========================================
+    const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
     const roleUpper = String(rawRole).trim().toUpperCase().replace(/[\s_]/g, '');
-    const roleLower = String(rawRole).trim().toLowerCase().replace(/[\s_]/g, '');
-    
     const userElemento = localStorage.getItem('elemento')?.trim().toUpperCase() || "";
+
+    // Verificar si es Mando Estratégico para filtrado global
+    const esAdminPorContenido = roleUpper.includes('ADMIN');
+    const esMandoPorLista = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper);
+    const isMandoEstrategico = esAdminPorContenido || esMandoPorLista || userElemento === 'COMANDO';
+
+    // 🔒 PERMISO DE EDICIÓN EXCLUSIVO: Oficina Técnica, S4 y Mando Estratégico
+    const puedeEditar = [
+        'ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 
+        'OFICINATECNICA', 'OFICINA_TECNICA', 'S4', 'S4UNIDAD', 'S4_UNIDAD'
+    ].includes(roleUpper);
 
     useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, 300000); // Refresco cada 5 min
+        const interval = setInterval(fetchData, 300000); // 5 min
         return () => clearInterval(interval);
     }, [userElemento]);
 
@@ -25,7 +38,6 @@ const EstadoAeronaves = () => {
         try {
             const respuestaApi = await getAircrafts();
             
-            // 🛡️ NORMALIZACIÓN DE RESPUESTA: Soportamos Axios, Fetch nativo o Array directo
             let unparsedData = [];
             if (Array.isArray(respuestaApi)) {
                 unparsedData = respuestaApi;
@@ -35,17 +47,6 @@ const EstadoAeronaves = () => {
                 unparsedData = respuestaApi.data.data;
             }
             
-            // VERIFICACIÓN MULTI-CAPA (Redundancia estricta para ADMIN/admin/Admin/ADMINISTRADOR)
-            const esAdminPorContenido = roleUpper.includes('ADMIN') || roleLower.includes('admin');
-            const esMandoPorLista = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper) || 
-                                    ['admin', 'boss', 'director', 'oto'].includes(roleLower);
-            
-            const isMandoPorRol = esAdminPorContenido || esMandoPorLista;
-            
-            // REGRESIÓN DE SEGURIDAD / LIBERACIÓN INSTITUCIONAL
-            const isMandoEstrategico = isMandoPorRol || userElemento === 'COMANDO';
-
-            // 1. Filtrado Inicial por Jurisdicción de Unidad
             let filtrados = isMandoEstrategico 
                 ? unparsedData 
                 : unparsedData.filter(a => 
@@ -54,7 +55,6 @@ const EstadoAeronaves = () => {
                     String(a.unidad).trim().toUpperCase() === userElemento
                 );
             
-            // 2. FILTRO EXCLUSIVO: Solo mostrar si el estado es estrictamente E/S o F/S
             filtrados = filtrados.filter(a => a.estadoOperativo === 'E/S' || a.estadoOperativo === 'F/S');
             
             setAircrafts(filtrados);
@@ -65,11 +65,64 @@ const EstadoAeronaves = () => {
         }
     };
 
-    // 🛠️ FUNCIÓN AUXILIAR: Extrae las horas de disponibilidad del planeador principal (TBO/Inspección)
+    // 🛠️ EXTRAER HORAS REMANENTES DEL PLANEADOR
     const obtenerHorasRemanentesPlaneador = (air) => {
         if (!air?.compPlaneador || air.compPlaneador.length === 0) return 0;
-        const disp = air.compPlaneador[0].disponibilidades?.[0]?.valor;
-        return disp ? Number(disp) : 0;
+        const disp = air.compPlaneador[0]?.disponibilidades?.[0]?.valor;
+        return disp !== undefined && disp !== '' ? Number(disp) : 0;
+    };
+
+    // 📖 ABRIR MODAL
+    const handleOpenModal = (air) => {
+        setSelectedNote(air);
+        // Clonamos la aeronave para editar sin mutar el estado principal
+        setFormData(JSON.parse(JSON.stringify(air)));
+    };
+
+    // 🔒 CERRAR MODAL
+    const handleCloseModal = () => {
+        setSelectedNote(null);
+        setFormData(null);
+    };
+
+    // ✏️ MANEJADOR DE CAMBIOS EN FORMULARIO
+    const handleChangeForm = (field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            [field]: value
+        }));
+    };
+
+    // ✏️ EDICIÓN DE DISPONIBILIDAD DEL COMPONENTE PRINCIPAL (PLANEADOR)
+    const handleCompPlaneadorDispChange = (val) => {
+        setFormData(prev => {
+            const copyComp = [...(prev.compPlaneador || [])];
+            if (copyComp.length === 0) {
+                copyComp.push({ disponibilidades: [{ valor: val, unidad: 'H' }] });
+            } else {
+                copyComp[0] = {
+                    ...copyComp[0],
+                    disponibilidades: [{ valor: val, unidad: 'H' }]
+                };
+            }
+            return { ...prev, compPlaneador: copyComp };
+        });
+    };
+
+    // 💾 GUARDAR CAMBIOS (SOLO OFICINA TÉCNICA)
+    const handleSaveChanges = async () => {
+        if (!puedeEditar || !formData) return;
+        setSaving(true);
+        try {
+            await updateAircraftStatus(formData._id, formData);
+            await fetchData(); // Recargar datos frescos
+            handleCloseModal();
+        } catch (err) {
+            console.error("Error al guardar aeronave:", err);
+            alert("Ocurrió un error al intentar guardar las modificaciones.");
+        } finally {
+            setSaving(false);
+        }
     };
 
     const unidades = [...new Set(aircrafts.filter(a => a.unidad).map(a => String(a.unidad).trim().toUpperCase()))].sort();
@@ -104,7 +157,7 @@ const EstadoAeronaves = () => {
             <div style={styles.grid}>
                 {unidades.length === 0 ? (
                     <div style={styles.noData}>
-                        <p>No hay aeronaves registradas bajo su jurisdicción o elemento operativo ({userElemento}) con estado E/S o F/S.</p>
+                        <p>No hay aeronaves registradas bajo su jurisdicción ({userElemento}) con estado E/S o F/S.</p>
                     </div>
                 ) : (
                     unidades.map(unidad => (
@@ -158,14 +211,14 @@ const EstadoAeronaves = () => {
                                                     </td>
                                                     <td style={styles.td}>
                                                         <button 
-                                                            onClick={() => setSelectedNote(air)}
+                                                            onClick={() => handleOpenModal(air)}
                                                             style={{
                                                                 ...styles.btnNote,
                                                                 background: '#3498db',
                                                                 color: 'white'
                                                             }}
                                                         >
-                                                            👁️ Ver
+                                                            👁️ {puedeEditar ? 'Ver / Editar' : 'Ver'}
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -179,66 +232,183 @@ const EstadoAeronaves = () => {
                 )}
             </div>
 
-            {selectedNote && (
-                <div style={styles.modalOverlay} onClick={() => setSelectedNote(null)}>
+            {/* ==========================================
+                🪟 POPUP MODAL: DETALLES Y EDICIÓN
+            ========================================== */}
+            {selectedNote && formData && (
+                <div style={styles.modalOverlay} onClick={handleCloseModal}>
                     <div style={styles.modal} onClick={e => e.stopPropagation()}>
                         <div style={styles.modalHeader}>
-                            <h4 style={{margin: 0}}>Ficha Técnica - {selectedNote.matricula}</h4>
-                            <button style={styles.btnClose} onClick={() => setSelectedNote(null)}>&times;</button>
+                            <div>
+                                <h4 style={{margin: 0}}>Ficha Técnica - {formData.matricula} ({formData.sda})</h4>
+                                <span style={{fontSize: '0.75rem', opacity: 0.9}}>Nº Serie: {formData.nroSerie || 'S/N'} | Unidad: {formData.unidad}</span>
+                            </div>
+                            <button style={styles.btnClose} onClick={handleCloseModal}>&times;</button>
                         </div>
+
                         <div style={styles.modalBody}>
                             
+                            {/* ESTADO OPERATIVO */}
                             <div style={styles.infoSection}>
-                                <h5 style={styles.sectionTitle}>⏳ Tracking de Horas</h5>
+                                <h5 style={styles.sectionTitle}>🔴 Estado Operativo</h5>
+                                {puedeEditar ? (
+                                    <div style={{display: 'flex', gap: '15px', alignItems: 'center'}}>
+                                        <label style={{fontSize: '0.85rem', fontWeight: 'bold'}}>Estado:</label>
+                                        <select 
+                                            value={formData.estadoOperativo} 
+                                            onChange={(e) => handleChangeForm('estadoOperativo', e.target.value)}
+                                            style={styles.selectInput}
+                                        >
+                                            <option value="E/S">E/S (En Servicio)</option>
+                                            <option value="F/S">F/S (Fuera de Servicio)</option>
+                                        </select>
+                                    </div>
+                                ) : (
+                                    <div style={styles.infoGrid}>
+                                        <div><strong>Estado Actual:</strong> {formData.estadoOperativo}</div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* TRACKING DE HORAS DE PLANEADOR */}
+                            <div style={styles.infoSection}>
+                                <h5 style={styles.sectionTitle}>⏳ Tracking de Horas y Planeador</h5>
                                 <div style={styles.infoGrid}>
-                                    <div><strong>Totales Iniciales:</strong> {selectedNote.inicioAeHs || 0} hs</div>
-                                    <div><strong>Tiempo General Planeador:</strong> {selectedNote.tgPlaneadorActual || 0} hs</div>
-                                    <div><strong>Remanentes Plan.:</strong> {obtenerHorasRemanentesPlaneador(selectedNote)} hs</div>
+                                    <div><strong>Totales Iniciales:</strong> {formData.inicioAeHs || 0} hs</div>
+                                    
+                                    <div>
+                                        <strong>TG Planeador Actual: </strong>
+                                        {puedeEditar ? (
+                                            <input 
+                                                type="number"
+                                                value={formData.tgPlaneadorActual ?? 0}
+                                                onChange={(e) => handleChangeForm('tgPlaneadorActual', e.target.value)}
+                                                style={styles.numberInput}
+                                            />
+                                        ) : (
+                                            `${formData.tgPlaneadorActual || 0} hs`
+                                        )}
+                                    </div>
+
+                                    <div><strong>Aterrizajes (Landings):</strong> {formData.tgPlaneadorLandings || 0}</div>
+
+                                    <div>
+                                        <strong>Hs Remanentes Disp.: </strong>
+                                        {puedeEditar ? (
+                                            <input 
+                                                type="number"
+                                                value={formData.compPlaneador?.[0]?.disponibilidades?.[0]?.valor ?? ''}
+                                                onChange={(e) => handleCompPlaneadorDispChange(e.target.value)}
+                                                style={{...styles.numberInput, borderColor: '#3498db', fontWeight: 'bold'}}
+                                                placeholder="0"
+                                            />
+                                        ) : (
+                                            <span style={{fontWeight: 'bold', color: obtenerHorasRemanentesPlaneador(formData) <= 10 ? '#e74c3c' : '#2c3e50'}}>
+                                                {obtenerHorasRemanentesPlaneador(formData)} hs
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
+                            {/* PLANTA MOTRIZ (MOTORES Y HÉLICES) */}
                             <div style={styles.infoSection}>
-                                <h5 style={styles.sectionTitle}>⚙️ Planta Motriz y Palas</h5>
-                                {selectedNote.motores?.map((m, i) => (
-                                    <div key={i} style={styles.subInfo}>
-                                        <strong>{m.nombre || `Motor ${i+1}`}:</strong> 
-                                        {m.componentes?.[0] 
-                                            ? ` Componente: ${m.componentes[0].componentes || 'N/D'} | S/N: ${m.componentes[0].sn || 'S/S'} | Disp: ${m.componentes[0].disponibilidades?.[0]?.valor || 0} hs`
-                                            : ' Sin componentes mapeados.'}
+                                <h5 style={styles.sectionTitle}>⚙️ Planta Motriz y Componentes</h5>
+                                
+                                {/* Motores */}
+                                {formData.motores && formData.motores.length > 0 ? (
+                                    formData.motores.map((m, i) => (
+                                        <div key={i} style={styles.subInfoBox}>
+                                            <strong style={{color: '#1b3a57'}}>{m.nombre || `Motor Nº ${i+1}`}:</strong>
+                                            {m.componentes && m.componentes.length > 0 ? (
+                                                m.componentes.map((c, ci) => (
+                                                    <div key={ci} style={{fontSize: '0.8rem', marginTop: '4px'}}>
+                                                        • Comp: <b>{c.componente || 'N/D'}</b> | P/N: {c.pn || 'S/P'} | S/N: {c.sn || 'S/S'} | Disp: <b>{c.disponibilidades?.[0]?.valor || 0} {c.disponibilidades?.[0]?.unidad || 'H'}</b>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <span style={{fontSize: '0.8rem'}}> Sin componentes sub-registrados.</span>
+                                            )}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div style={styles.subInfo}>
+                                        <strong>Motor 1:</strong> S/N: {formData.motorSn || 'N/D'} | TSN: {formData.motorTsn || 0} hs | CSN/CSO: {formData.motorCsnCso || 0}<br/>
+                                        {formData.motor2Sn && <><strong>Motor 2:</strong> S/N: {formData.motor2Sn} | TSN: {formData.motor2Tsn || 0} hs | CSN/CSO: {formData.motor2CsnCso || 0}</>}
                                     </div>
-                                ))}
-                                {selectedNote.helices?.map((h, i) => (
-                                    <div key={i} style={styles.subInfo}>
-                                        <strong>{h.nombre || `Hélice ${i+1}`}:</strong> 
-                                        {h.componentes?.[0] 
-                                            ? ` Componente: ${h.componentes[0].componentes || 'N/D'} | S/N: ${h.componentes[0].sn || 'S/S'} | Disp: ${h.componentes[0].disponibilidades?.[0]?.valor || 0} hs`
-                                            : ' Sin componentes mapeados.'}
+                                )}
+
+                                {/* Hélices */}
+                                {formData.helices && formData.helices.length > 0 ? (
+                                    formData.helices.map((h, i) => (
+                                        <div key={i} style={{...styles.subInfoBox, marginTop: '8px'}}>
+                                            <strong style={{color: '#1b3a57'}}>{h.nombre || `Hélice Nº ${i+1}`}:</strong>
+                                            {h.componentes && h.componentes.length > 0 ? (
+                                                h.componentes.map((c, ci) => (
+                                                    <div key={ci} style={{fontSize: '0.8rem', marginTop: '4px'}}>
+                                                        • Comp: <b>{c.componente || 'N/D'}</b> | P/N: {c.pn || 'S/P'} | S/N: {c.sn || 'S/S'} | Disp: <b>{c.disponibilidades?.[0]?.valor || 0} {c.disponibilidades?.[0]?.unidad || 'H'}</b>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <span style={{fontSize: '0.8rem'}}> Sin componentes sub-registrados.</span>
+                                            )}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div style={styles.subInfo}>
+                                        {formData.helice1Sn && <div><strong>Hélice 1:</strong> S/N: {formData.helice1Sn} | TSN: {formData.helice1Tsn || 0} hs</div>}
+                                        {formData.helice2Sn && <div><strong>Hélice 2:</strong> S/N: {formData.helice2Sn} | TSN: {formData.helice2Tsn || 0} hs</div>}
                                     </div>
-                                ))}
+                                )}
                             </div>
 
+                            {/* VENCIMIENTOS DE LEY Y AVIÓNICA */}
                             <div style={styles.infoSection}>
                                 <h5 style={styles.sectionTitle}>📅 Vencimientos de Ley / Aviónica</h5>
                                 <div style={styles.infoGrid}>
-                                    <div><strong>Seguro:</strong> {formatDate(selectedNote.vencimientoSeguro)}</div>
-                                    <div><strong>Habilitación Aviónica:</strong> {formatDate(selectedNote.vencimientoAvionica)}</div>
-                                    <div style={{color: '#856404'}}><strong>Vencimiento ELT:</strong> {formatDate(selectedNote.vencimientoElt)}</div>
-                                    <div style={{color: '#856404'}}><strong>Sistema Pitot (91.411):</strong> {formatDate(selectedNote.vencimientoPitot)}</div>
-                                    <div style={{color: '#856404'}}><strong>Transponder (91.413):</strong> {formatDate(selectedNote.vencimientoTransponder)}</div>
+                                    <div><strong>Seguro:</strong> {formatDate(formData.vencimientoSeguro)}</div>
+                                    <div><strong>Habilitación Aviónica:</strong> {formatDate(formData.vencimientoAvionica)}</div>
+                                    <div style={{color: '#856404'}}><strong>ELT:</strong> {formatDate(formData.vencimientoElt)}</div>
+                                    <div style={{color: '#856404'}}><strong>Sistema Pitot (91.411):</strong> {formatDate(formData.vencimientoPitot)}</div>
+                                    <div style={{color: '#856404'}}><strong>Transponder (91.413):</strong> {formatDate(formData.vencimientoTransponder)}</div>
                                 </div>
                             </div>
 
+                            {/* OBSERVACIONES EMERGENTES / POPUP */}
                             <div style={styles.infoSection}>
-                                <h5 style={styles.sectionTitle}>📝 Observaciones Emergentes</h5>
-                                {selectedNote.observacionesPopup ? (
-                                    <div style={styles.noteBox}>{selectedNote.observacionesPopup}</div>
+                                <h5 style={styles.sectionTitle}>📝 Observaciones Emergentes (Popup)</h5>
+                                {puedeEditar ? (
+                                    <textarea 
+                                        rows={3}
+                                        value={formData.observacionesPopup || ''}
+                                        onChange={(e) => handleChangeForm('observacionesPopup', e.target.value)}
+                                        style={styles.textArea}
+                                        placeholder="Ingrese novedades o notas de inspección críticas..."
+                                    />
                                 ) : (
-                                    <div style={styles.emptyNote}>Sin novedades ni observaciones críticas registradas en popup.</div>
+                                    formData.observacionesPopup ? (
+                                        <div style={styles.noteBox}>{formData.observacionesPopup}</div>
+                                    ) : (
+                                        <div style={styles.emptyNote}>Sin novedades ni observaciones críticas registradas.</div>
+                                    )
                                 )}
                             </div>
+
                         </div>
+
                         <div style={styles.modalFooter}>
-                            <button style={styles.btnPrimary} onClick={() => setSelectedNote(null)}>Cerrar</button>
+                            {puedeEditar && (
+                                <button 
+                                    style={{...styles.btnPrimary, backgroundColor: '#27ae60', marginRight: '10px'}} 
+                                    onClick={handleSaveChanges}
+                                    disabled={saving}
+                                >
+                                    {saving ? 'Guardando...' : '💾 Guardar Cambios'}
+                                </button>
+                            )}
+                            <button style={styles.btnSecondary} onClick={handleCloseModal}>
+                                {puedeEditar ? 'Cancelar' : 'Cerrar'}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -269,18 +439,23 @@ const styles = {
     noData: { textAlign: 'center', gridColumn: '1 / -1', opacity: 0.6, marginTop: '50px', padding: '60px', background: '#f9f9f9', borderRadius: '15px', border: '2px dashed #ccc' },
     btnNote: { padding: '5px 12px', border: 'none', borderRadius: '5px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 'bold' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, backdropFilter: 'blur(3px)' },
-    modal: { background: 'white', width: '90%', maxWidth: '600px', borderRadius: '12px', overflow: 'hidden' },
+    modal: { background: 'white', width: '90%', maxWidth: '650px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' },
     modalHeader: { background: '#1b3a57', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     modalBody: { padding: '20px', maxHeight: '70vh', overflowY: 'auto' },
-    infoSection: { marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' },
+    infoSection: { marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '12px' },
     sectionTitle: { margin: '0 0 10px 0', fontSize: '0.9rem', color: '#1b3a57', borderLeft: '3px solid #3498db', paddingLeft: '8px' },
     infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.85rem' },
     subInfo: { fontSize: '0.8rem', color: '#666', padding: '2px 0' },
+    subInfoBox: { background: '#f8fafd', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e1e8ed', fontSize: '0.85rem' },
     noteBox: { background: '#fdf3f3', padding: '12px', borderRadius: '8px', border: '1px solid #f8d7da', fontSize: '0.85rem', whiteSpace: 'pre-wrap' },
     emptyNote: { fontSize: '0.85rem', color: '#999', fontStyle: 'italic' },
     modalFooter: { padding: '15px 20px', textAlign: 'right', background: '#f8f9fa' },
     btnPrimary: { background: '#1b3a57', color: 'white', border: 'none', padding: '8px 20px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' },
-    btnClose: { background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }
+    btnSecondary: { background: '#7f8c8d', color: 'white', border: 'none', padding: '8px 18px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' },
+    btnClose: { background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' },
+    numberInput: { width: '90px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.85rem' },
+    selectInput: { padding: '6px 12px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.85rem', fontWeight: 'bold' },
+    textArea: { width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.85rem', fontFamily: 'inherit', resize: 'vertical' }
 };
 
 export default EstadoAeronaves;
