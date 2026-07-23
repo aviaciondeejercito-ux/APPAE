@@ -12,7 +12,7 @@ const F13Schema = new Schema({
   // Aeronave vinculada (Relación con la colección de Aeronaves/Material de la unidad)
   aeronave: {
     type: Schema.Types.ObjectId,
-    ref: 'Aircraft', // ◀️ Sincronizado con el nombre exacto de tu modelo de Aeronaves (Aircraft)
+    ref: 'Aircraft',
     required: [true, 'La aeronave es obligatoria.']
   },
   
@@ -40,7 +40,6 @@ const F13Schema = new Schema({
   // Horas Totales (Calculadas automáticamente en el hook pre-save)
   horasTotales: {
     type: Number,
-    // ◀️ Se quitó 'required: true' para que no falle la validación inicial de Mongoose
     min: [0, 'Las horas no pueden ser negativas.']
   },
   
@@ -65,23 +64,29 @@ const F13Schema = new Schema({
     min: [0, 'Los aterrizajes no pueden ser negativos.'],
     default: 1
   },
+
+  // 📜 Flag para indicar si es una carga retroactiva/histórica (No incrementa la F-16)
+  esHistorico: {
+    type: Boolean,
+    default: false
+  },
   
   // Comandante de Aeronave / Piloto al mando
   comandante: {
-    type: String, // ◀️ Cambiado a String para permitir el texto ingresado en el frontend
+    type: String,
     required: [true, 'El Comandante es obligatorio.']
   },
   
   // Mecánico de a bordo / Motorista
   mecanico: {
-    type: String, // ◀️ Cambiado a String para permitir el texto ingresado en el frontend
+    type: String,
     required: [true, 'El Mecánico es obligatorio.']
   },
   
   // 🌟 Auditoría: Usuario del sistema que cargó este registro
   creadoPor: {
     type: Schema.Types.ObjectId,
-    ref: 'User', // ◀️ Sincronizado con tu modelo de autenticación (User)
+    ref: 'User',
     required: [true, 'El usuario que registra el F-13 es obligatorio.']
   },
   
@@ -112,7 +117,7 @@ const F13Schema = new Schema({
 // Pre-save hook para calcular automáticamente las horas totales antes de guardar en la DB
 F13Schema.pre('save', function(next) {
   if (this.isModified('horasALaFecha') || this.isModified('horasDelDia')) {
-    this.horasTotales = Number((this.horasALaFecha + this.horasDelDia).toFixed(2)); // Evita problemas de decimales flotantes en JS
+    this.horasTotales = Number((this.horasALaFecha + this.horasDelDia).toFixed(2));
   }
   next();
 });

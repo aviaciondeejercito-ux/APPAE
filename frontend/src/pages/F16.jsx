@@ -95,7 +95,7 @@ const F16Page = () => {
     }, [unidadNavegacion, token]);
 
     /**
-     * 🧮 CÁLCULO DINÁMICO DE DISPONIBILIDAD DE RENGLÓN (CORREGIDO PARA COINCIDIR FECHAS)
+     * 🧮 CÁLCULO DINÁMICO DE DISPONIBILIDAD DE RENGLÓN
      */
     const calcularDisponibilidadRenglon = (comp, limItem, tgActualMatriz) => {
         const limiteVal = parseFloat(limItem.valor) || 0;
@@ -113,7 +113,6 @@ const F16Page = () => {
 
         const deltaTG = Math.max(0, tgActual - tgInstal);
 
-        // 1. Horas, Landings y Ciclos
         if (['H', 'LDG', 'CC'].includes(unidad)) {
             const tsnCsnCoincidente = comp.tsnCsnRenglones?.find(r => r.unidad === unidad);
             const valInstalado = parseFloat(tsnCsnCoincidente?.valor) || 0;
@@ -127,9 +126,7 @@ const F16Page = () => {
             return disp.toFixed(1);
         }
 
-        // 2. Meses (M)
         if (unidad === 'M') {
-            // Busca fecha en instaladoFecha O en TSN/CSN si cargaron C (Fecha)
             let fechaBaseStr = comp.instaladoFecha;
             if (!fechaBaseStr) {
                 const renglonFecha = comp.tsnCsnRenglones?.find(r => r.unidad === 'C' && r.valor);
@@ -149,7 +146,6 @@ const F16Page = () => {
             return `${fechaFormateada} (${diffDias} d)`;
         }
 
-        // 3. Fecha Fija (C)
         if (unidad === 'C') {
             if (!limItem.valor) return '-';
             const fechaLimite = new Date(limItem.valor);
@@ -255,7 +251,7 @@ const F16Page = () => {
             if (!res.ok) throw new Error(json.message || 'Error en el servidor.');
 
             if (json.success) {
-                alert(json.message || "Operación matricial ejecutada con éxito.");
+                alert(json.message || "Operación ejecutada con éxito.");
                 await fetchAeronavesPermitidas();
                 if(!esEdicion) limpiarFormularioParaNuevoAlta();
             } else {
@@ -467,6 +463,14 @@ const F16Page = () => {
     const colorEstadoOperativo = cabecera.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c';
     const esBimotor = motores.length > 1;
 
+    // Estilos dinámicos para los campos de Totales (Editable en Alta / Bloqueado en Edición)
+    const estiloCampoTotal = {
+        ...styles.input,
+        backgroundColor: esEdicion ? '#e9ecef' : '#fff9db',
+        fontWeight: 'bold',
+        cursor: esEdicion ? 'not-allowed' : 'text'
+    };
+
     return (
         <div style={styles.container}>
             <style>{`
@@ -586,7 +590,9 @@ const F16Page = () => {
                     </div>
                     
                     <div style={styles.block}>
-                        <div style={styles.blockTitle}>TIEMPOS E HISTORIAL PLANEADOR</div>
+                        <div style={styles.blockTitle}>
+                            TIEMPOS E HISTORIAL PLANEADOR {esEdicion && <span style={{fontSize: '0.6rem', color: '#27ae60'}}>(vía F-13)</span>}
+                        </div>
                         <div style={styles.formGridCompact}>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Fecha)</label><input type="date" value={cabecera.inicioAeFecha} onChange={e => handleCabeceraChange('inicioAeFecha', e.target.value)} style={styles.input} /></div>
                             <div style={styles.field}><label style={styles.label}>Inicio AE (Hs)</label><input type="number" value={cabecera.inicioAeHs} onChange={e => handleCabeceraChange('inicioAeHs', e.target.value)} style={styles.input} placeholder="0.0" /></div>
@@ -597,26 +603,20 @@ const F16Page = () => {
                                     type="number" 
                                     value={cabecera.tgPlaneadorLandings} 
                                     onChange={e => handleCabeceraChange('tgPlaneadorLandings', e.target.value)} 
-                                    style={{ ...styles.input, backgroundColor: '#eaf2f8', fontWeight: 'bold' }} 
+                                    disabled={esEdicion}
+                                    style={estiloCampoTotal} 
                                     placeholder="0" 
                                 />
                             </div>
 
                             <div style={styles.field}>
-                                <label style={styles.label}>
-                                    TG Planeador {esEdicion ? '🤖 (Acum)' : 'Base'}
-                                </label>
+                                <label style={styles.label}>TG Planeador Actual</label>
                                 <input 
                                     type="number" 
                                     value={cabecera.tgPlaneadorActual} 
                                     onChange={e => handleCabeceraChange('tgPlaneadorActual', e.target.value)} 
                                     disabled={esEdicion}
-                                    style={{
-                                        ...styles.input, 
-                                        backgroundColor: esEdicion ? '#e9ecef' : '#fff9db', 
-                                        fontWeight: 'bold',
-                                        cursor: esEdicion ? 'not-allowed' : 'text'
-                                    }} 
+                                    style={estiloCampoTotal} 
                                     placeholder="0.0" 
                                 />
                             </div>
@@ -624,7 +624,9 @@ const F16Page = () => {
                     </div>
                     
                     <div style={{...styles.block, gridColumn: 'span 1 / -1'}}>
-                        <div style={styles.blockTitle}>GRUPO MOTOPROPULSOR (TOTALES GENERALES)</div>
+                        <div style={styles.blockTitle}>
+                            GRUPO MOTOPROPULSOR (TOTALES GENERALES) {esEdicion && <span style={{fontSize: '0.6rem', color: '#27ae60'}}>(vía F-13)</span>}
+                        </div>
                         
                         <div style={{ marginBottom: '8px' }}>
                             <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#d35400' }}>
@@ -632,10 +634,19 @@ const F16Page = () => {
                             </span>
                             <div style={styles.formGridEngine}>
                                 <div style={styles.field}><label style={styles.label}>Motor S/N</label><input type="text" value={cabecera.motorSn} onChange={e => handleCabeceraChange('motorSn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
-                                <div style={styles.field}><label style={styles.label}>TG Motor 1 (TSN)</label><input type="number" value={cabecera.motorTsn} onChange={e => handleCabeceraChange('motorTsn', e.target.value)} disabled={esEdicion} style={{...styles.input, backgroundColor: esEdicion ? '#e9ecef' : 'white'}} placeholder="0.0" /></div>
-                                <div style={styles.field}><label style={styles.label}>CSN/CSO M1</label><input type="number" value={cabecera.motorCsnCso} onChange={e => handleCabeceraChange('motorCsnCso', e.target.value)} style={styles.input} placeholder="0" /></div>
+                                <div style={styles.field}>
+                                    <label style={styles.label}>TG Motor 1 (TSN)</label>
+                                    <input type="number" value={cabecera.motorTsn} onChange={e => handleCabeceraChange('motorTsn', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0.0" />
+                                </div>
+                                <div style={styles.field}>
+                                    <label style={styles.label}>CSN/CSO M1</label>
+                                    <input type="number" value={cabecera.motorCsnCso} onChange={e => handleCabeceraChange('motorCsnCso', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0" />
+                                </div>
                                 <div style={styles.field}><label style={styles.label}>Hélice 1 S/N</label><input type="text" value={cabecera.helice1Sn} onChange={e => handleCabeceraChange('helice1Sn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
-                                <div style={styles.field}><label style={styles.label}>TG Hélice 1 (TSN)</label><input type="number" value={cabecera.helice1Tsn} onChange={e => handleCabeceraChange('helice1Tsn', e.target.value)} disabled={esEdicion} style={{...styles.input, backgroundColor: esEdicion ? '#e9ecef' : '#eaf2f8'}} placeholder="0.0" /></div>
+                                <div style={styles.field}>
+                                    <label style={styles.label}>TG Hélice 1 (TSN)</label>
+                                    <input type="number" value={cabecera.helice1Tsn} onChange={e => handleCabeceraChange('helice1Tsn', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0.0" />
+                                </div>
                             </div>
                         </div>
 
@@ -646,10 +657,19 @@ const F16Page = () => {
                                 </span>
                                 <div style={styles.formGridEngine}>
                                     <div style={styles.field}><label style={styles.label}>Motor 2 S/N</label><input type="text" value={cabecera.motor2Sn} onChange={e => handleCabeceraChange('motor2Sn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
-                                    <div style={styles.field}><label style={styles.label}>TG Motor 2 (TSN)</label><input type="number" value={cabecera.motor2Tsn} onChange={e => handleCabeceraChange('motor2Tsn', e.target.value)} disabled={esEdicion} style={{...styles.input, backgroundColor: esEdicion ? '#e9ecef' : 'white'}} placeholder="0.0" /></div>
-                                    <div style={styles.field}><label style={styles.label}>CSN/CSO M2</label><input type="number" value={cabecera.motor2CsnCso} onChange={e => handleCabeceraChange('motor2CsnCso', e.target.value)} style={styles.input} placeholder="0" /></div>
+                                    <div style={styles.field}>
+                                        <label style={styles.label}>TG Motor 2 (TSN)</label>
+                                        <input type="number" value={cabecera.motor2Tsn} onChange={e => handleCabeceraChange('motor2Tsn', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0.0" />
+                                    </div>
+                                    <div style={styles.field}>
+                                        <label style={styles.label}>CSN/CSO M2</label>
+                                        <input type="number" value={cabecera.motor2CsnCso} onChange={e => handleCabeceraChange('motor2CsnCso', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0" />
+                                    </div>
                                     <div style={styles.field}><label style={styles.label}>Hélice 2 S/N</label><input type="text" value={cabecera.helice2Sn} onChange={e => handleCabeceraChange('helice2Sn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
-                                    <div style={styles.field}><label style={styles.label}>TG Hélice 2 (TSN)</label><input type="number" value={cabecera.helice2Tsn} onChange={e => handleCabeceraChange('helice2Tsn', e.target.value)} disabled={esEdicion} style={{...styles.input, backgroundColor: esEdicion ? '#e9ecef' : '#eaf2f8'}} placeholder="0.0" /></div>
+                                    <div style={styles.field}>
+                                        <label style={styles.label}>TG Hélice 2 (TSN)</label>
+                                        <input type="number" value={cabecera.helice2Tsn} onChange={e => handleCabeceraChange('helice2Tsn', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0.0" />
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -775,7 +795,6 @@ const F16Page = () => {
 const calcularFechaLimiteMeses = (mesesNum, comp) => {
     if (!mesesNum || isNaN(mesesNum) || Number(mesesNum) <= 0) return '';
 
-    // Intenta usar la fecha de instaladoFecha O la fecha ingresada en el renglón TSN/CSN C
     let fechaBaseStr = comp?.instaladoFecha;
     if (!fechaBaseStr && comp?.tsnCsnRenglones) {
         const renglonFecha = comp.tsnCsnRenglones.find(r => r.unidad === 'C' && r.valor);
@@ -946,7 +965,6 @@ const renderTablaComponentes = (lista, onChange, onSubChange, onRemover, onAgreg
                             </td>
                             <td style={styles.td}><input type="number" value={comp.estadoActual} onChange={e => onChange(compIndex, 'estadoActual', e.target.value)} style={styles.inputFlatNum} placeholder="0.0" /></td>
 
-                            {/* ⚡ COLUMNA DE DISPONIBILIDAD CALCULADA DINÁMICAMENTE */}
                             <td style={{...styles.td, backgroundColor: '#e8f8f5'}}>
                                 <div style={styles.stackContainer}>
                                     {comp.limites.map((lim, subIndex) => {

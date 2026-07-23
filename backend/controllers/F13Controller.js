@@ -89,11 +89,11 @@ const getAeronavesDisponibles = async (req, res) => {
 };
 
 /**
- * 3. Crear y guardar un nuevo formulario F-13 (Impacto directo en Aircraft F-16 y Programa)
+ * 3. Crear y guardar un nuevo formulario F-13 (Impacto directo en Aircraft F-16 y Programa si NO es histórico)
  */
 const crearF13 = async (req, res) => {
     try {
-        const { aeronave: idAeronave, horasDelDia } = req.body;
+        const { aeronave: idAeronave, horasDelDia, esHistorico } = req.body;
 
         const aeronaveDoc = await Aeronave.findById(idAeronave);
         if (!aeronaveDoc) {
@@ -120,15 +120,25 @@ const crearF13 = async (req, res) => {
             });
         }
 
-        // A. Guardar el nuevo registro F-13
+        // A. Guardar el nuevo registro F-13 (se guarda la marca de esHistorico)
         const nuevoF13 = new F13({
             ...req.body,
             horasDelDia: hsAIncrementar,
+            esHistorico: Boolean(esHistorico),
             creadoPor: creadorId 
         });
         const f13Guardado = await nuevoF13.save();
 
-        // B. ACTUALIZAR MODELO AIRCRAFT (F-16)
+        // 📜 SI ES HISTÓRICO: Salteamos la actualización de acumuladores en Aircraft y Programa
+        if (esHistorico) {
+            return res.status(201).json({
+                ok: true,
+                msg: 'Formulario F-13 registrado exitosamente como HISTÓRICO (sin alterar contadores actuales).',
+                f13: f13Guardado
+            });
+        }
+
+        // B. ACTUALIZAR MODELO AIRCRAFT (F-16) SOLO SI NO ES HISTÓRICO
         // 1. Totales generales de cabecera
         const tgPlaneadorPrevio = parsearHs(aeronaveDoc.tgPlaneadorActual);
         const motorTsnPrevio = parsearHs(aeronaveDoc.motorTsn);
@@ -218,8 +228,17 @@ const eliminarF13 = async (req, res) => {
 
         const idAeronave = f13AEliminar.aeronave;
         const horasARestar = Number(f13AEliminar.horasDelDia) || 0;
+        const eraHistorico = Boolean(f13AEliminar.esHistorico);
 
         await F13.findByIdAndDelete(id);
+
+        // 📜 SI ERA HISTÓRICO: Solo se elimina el F-13 sin descontar horas de los componentes
+        if (eraHistorico) {
+            return res.status(200).json({
+                ok: true,
+                msg: 'Formulario F-13 histórico eliminado con éxito (los contadores de la F-16 no sufrieron modificaciones).'
+            });
+        }
 
         if (horasARestar > 0) {
             // Rollback en Aircraft (F-16)

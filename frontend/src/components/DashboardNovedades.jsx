@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const DashboardNovedades = () => {
-  // 🛡️ REBOTAR AL LOGIN SI NO HAY TOKEN (Evita que entren PCs no autenticadas)
+  // 🛡️ REBOTAR AL LOGIN SI NO HAY TOKEN
   const token = localStorage.getItem('token');
   if (!token) {
     window.location.href = '/login';
@@ -12,7 +12,7 @@ const DashboardNovedades = () => {
   const unidadUsuario = localStorage.getItem('elemento') || localStorage.getItem('unidad') || '';
   const rolUsuario = (localStorage.getItem('role') || localStorage.getItem('rol') || 'USER').toUpperCase();
   
-  // 👑 DEFINICIÓN DE ROLES CON ACCESO TOTAL (ADMIN, BOSS, DIRECTOR)
+  // 👑 ROLES CON ACCESO TOTAL
   const tieneAccesoTotal = rolUsuario === 'ADMIN' || rolUsuario === 'BOSS' || rolUsuario === 'DIRECTOR';
 
   // --- ESTADOS ---
@@ -25,13 +25,8 @@ const DashboardNovedades = () => {
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   
-  // Si tiene acceso total empieza viendo "TODAS", si no, toma su unidad asignada de forma estricta
   const [unidadSeleccionada, setUnidadSeleccionada] = useState(tieneAccesoTotal ? 'TODAS' : unidadUsuario);
-
-  // Pestaña activa para las métricas de horas
   const [tabActiva, setTabActiva] = useState('aeronave');
-
-  // 📝 ESTADO PARA HORAS MANUALES (Por si la base de datos viene vacía/en 0)
   const [horasManuales, setHorasManuales] = useState({});
 
   // --- CONFIGURACIÓN DE URL DINÁMICA ---
@@ -44,7 +39,6 @@ const DashboardNovedades = () => {
 
   // --- FUNCIÓN PARA CONSULTAR LA API ---
   const obtenerNovedades = async () => {
-    // Si no tiene acceso total y tampoco tiene unidad asignada, mostramos error
     if (!tieneAccesoTotal && !unidadUsuario) {
       setError("No se detectó la unidad asignada a tu usuario. Contactá al administrador.");
       setLoading(false);
@@ -58,8 +52,6 @@ const DashboardNovedades = () => {
       if (sda) params.append('sda', sda);
       if (fechaInicio) params.append('fechaInicio', fechaInicio);
       if (fechaFin) params.append('fechaFin', fechaFin);
-      
-      // Enviamos el filtro seleccionado (el usuario privilegiado puede mandar "TODAS" o un elemento específico)
       params.append('unidad', unidadSeleccionada);
 
       const BASE_URL = OBTENER_BASE_URL();
@@ -93,7 +85,6 @@ const DashboardNovedades = () => {
     }
   };
 
-  // El efecto reacciona cuando el usuario cambia filtros o el selector de Unidad
   useEffect(() => {
     obtenerNovedades();
   }, [sda, fechaInicio, fechaFin, unidadSeleccionada]);
@@ -122,102 +113,115 @@ const DashboardNovedades = () => {
   }
 
   const { resumenMantenimiento, resumenVuelos } = novedades;
-  const flotaCompleta = resumenMantenimiento.detalleFlota;
+  const flotaCompleta = resumenMantenimiento?.detalleFlota || [];
+  const listaVuelos = resumenVuelos?.ultimosVuelos || [];
 
-  // Filtrado de seguridad de flota en Frontend (Solo aplica a usuarios sin acceso total)
+  // Filtrado de flota
   const flotaFiltrada = tieneAccesoTotal 
     ? flotaCompleta
     : flotaCompleta.filter(
         nave => !nave.unidad || nave.unidad.toUpperCase() === unidadUsuario.toUpperCase()
       );
 
-  // 🔄 VERIFICACIÓN DIRECTA SEGÚN EL NUEVO ESQUEMA (enum: ['E/S', 'F/S'])
   const chequearOperativo = (nave) => nave.estadoOperativo === 'E/S';
-
   const cantidadOperativas = flotaFiltrada.filter(n => chequearOperativo(n)).length;
   const cantidadEnMantenimiento = flotaFiltrada.length - cantidadOperativas;
 
-  // Extraer SDAs dinámicamente según la flota visible
   const sdaDisponibles = Array.from(new Set(flotaFiltrada.map(nave => nave.sda).filter(Boolean))).sort();
-
-  // Extraer lista única de unidades existentes para que los usuarios privilegiados puedan filtrar
   const unidadesDisponibles = Array.from(new Set(flotaCompleta.map(nave => nave.unidad).filter(Boolean))).sort();
 
-  // --- 🛠️ HORAS ESTRUCTURALES SÓLIDAS ---
+  // --- HORAS ESTRUCTURALES ---
   const mapaUltimoVueloAeronave = {};
-  const vuelosOrdenadosCronologicamente = [...resumenVuelos.ultimosVuelos].sort(
-    (a, b) => new Date(a.fecha) - new Date(b.fecha)
+  
+  // Helper para parsear la fecha de forma segura
+  const obtenerAnioVuelo = (fechaStr) => {
+    if (!fechaStr) return null;
+    const dateObj = new Date(fechaStr);
+    return isNaN(dateObj.getTime()) ? null : dateObj.getUTCFullYear();
+  };
+
+  const vuelosOrdenadosCronologicamente = [...listaVuelos].sort(
+    (a, b) => new Date(a.fecha || a.fechaVuelo) - new Date(b.fecha || b.fechaVuelo)
   );
 
   vuelosOrdenadosCronologicamente.forEach(v => {
-    const matricula = v.aeronave?.matricula;
+    const matricula = v.aeronave?.matricula || v.aeronave;
     if (matricula) {
-      const totalVuelo = v.horasTotales || 0;
-      mapaUltimoVueloAeronave[matricula] = Number(totalVuelo.toFixed(2));
+      const totalVuelo = v.horasTotales || v.horasAcumuladas || 0;
+      mapaUltimoVueloAeronave[matricula] = Number(Number(totalVuelo).toFixed(2));
     }
   });
 
-  const obtenerHorasEstructuralesSólidas = (nave) => {
+  const obtenerHorasEstructuralesSolidas = (nave) => {
     const ultimoAcumuladoF13 = mapaUltimoVueloAeronave[nave.matricula];
     if (ultimoAcumuladoF13 !== undefined && ultimoAcumuladoF13 > 0) {
       return ultimoAcumuladoF13;
     }
-    // Soporte para tgPlaneadorActual e inicioAeHs del nuevo AircraftSchema
     return nave.horasTotales || nave.tgPlaneadorActual || nave.inicioAeHs || 0;
   };
 
-  // --- CÁLCULO ESTRICTO DE HORAS DEL AÑO ---
+  // --- 📅 CÁLCULO ESTRICTO DE TODAS LAS HORAS DEL AÑO (HISTÓRICAS Y NUEVAS) ---
   const anioActual = new Date().getFullYear();
-  const totalHorasAnioActual = resumenVuelos.ultimosVuelos.reduce((sum, v) => {
-    if (!v.fecha) return sum;
-    const fechaVuelo = new Date(v.fecha);
-    if (fechaVuelo.getFullYear() === anioActual) {
-      return sum + (v.horasDelDia || 0);
+  
+  const totalHorasAnioActual = listaVuelos.reduce((sum, v) => {
+    const rawFecha = v.fecha || v.fechaVuelo;
+    if (!rawFecha) return sum;
+    
+    const anioVuelo = obtenerAnioVuelo(rawFecha);
+    if (anioVuelo === anioActual) {
+      const hs = Number(v.horasDelDia || v.horasVoladas || 0);
+      return sum + (isNaN(hs) ? 0 : hs);
     }
     return sum;
   }, 0);
 
-  // --- PROCESAMIENTO DINÁMICO DE DATOS PARA ANALÍTICA ---
+  // --- PROCESAMIENTO ANALÍTICO ---
   const horasPorAeronave = {};
-  resumenVuelos.ultimosVuelos.forEach(v => {
-    const mat = v.aeronave?.matricula || 'S/M';
-    horasPorAeronave[mat] = (horasPorAeronave[mat] || 0) + (v.horasDelDia || 0);
+  const horasPorMision = {};
+  const horasPorMes = {};
+
+  listaVuelos.forEach(v => {
+    const rawFecha = v.fecha || v.fechaVuelo;
+    const hs = Number(v.horasDelDia || v.horasVoladas || 0);
+    if (isNaN(hs) || hs <= 0) return;
+
+    // 1. Por Aeronave
+    const mat = v.aeronave?.matricula || v.aeronave || 'S/M';
+    horasPorAeronave[mat] = (horasPorAeronave[mat] || 0) + hs;
+
+    // 2. Por Misión
+    const mision = v.misionVuelo || v.mision || 'Otras Operaciones';
+    horasPorMision[mision] = (horasPorMision[mision] || 0) + hs;
+
+    // 3. Por Mes
+    if (rawFecha) {
+      const fechaObj = new Date(rawFecha);
+      if (!isNaN(fechaObj.getTime())) {
+        const nombreMes = fechaObj.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+        horasPorMes[nombreMes] = (horasPorMes[nombreMes] || 0) + hs;
+      }
+    }
   });
+
   const rankingAeronaves = Object.entries(horasPorAeronave)
     .map(([matricula, horas]) => ({ matricula, horas: Number(horas.toFixed(2)) }))
     .sort((a, b) => b.horas - a.horas);
 
-  const horasPorMision = {};
-  resumenVuelos.ultimosVuelos.forEach(v => {
-    const mision = v.misionVuelo || 'Otras Operaciones';
-    horasPorMision[mision] = (horasPorMision[mision] || 0) + (v.horasDelDia || 0);
-  });
   const rankingMisiones = Object.entries(horasPorMision)
     .map(([mision, horas]) => ({ mision, horas: Number(horas.toFixed(2)) }))
     .sort((a, b) => b.horas - a.horas);
 
-  const horasPorMes = {};
-  resumenVuelos.ultimosVuelos.forEach(v => {
-    if (!v.fecha) return;
-    const fechaObj = new Date(v.fecha);
-    const nombreMes = fechaObj.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
-    horasPorMes[nombreMes] = (horasPorMes[nombreMes] || 0) + (v.horasDelDia || 0);
-  });
   const rankingFechas = Object.entries(horasPorMes)
     .map(([mes, horas]) => ({ mes, horas: Number(horas.toFixed(2)) }));
 
-  // Manejador del cambio de input manual
   const handleCambioHorasManuales = (naveId, valor) => {
-    setHorasManuales(prev => ({
-      ...prev,
-      [naveId]: valor
-    }));
+    setHorasManuales(prev => ({ ...prev, [naveId]: valor }));
   };
 
   return (
     <div style={styles.dashboardContainer}>
       
-      {/* CABECERA REDUCIDA */}
+      {/* CABECERA */}
       <div style={styles.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <h1 style={styles.title}>Panel de Novedades de Mantenimiento</h1>
@@ -255,7 +259,7 @@ const DashboardNovedades = () => {
           <span style={{...styles.miniKpiIcon, color: '#4f46e5'}}>⏱️</span>
           <div>
             <span style={styles.miniKpiLabel}>Horas Período / Filtro</span>
-            <span style={{...styles.miniKpiValue, color: '#4f46e5'}}>{resumenVuelos.totalHorasVoladas} hs</span>
+            <span style={{...styles.miniKpiValue, color: '#4f46e5'}}>{resumenVuelos?.totalHorasVoladas || 0} hs</span>
           </div>
         </div>
         <div style={{...styles.miniKpiCard, borderLeft: '4px solid #06b6d4'}}>
@@ -269,8 +273,6 @@ const DashboardNovedades = () => {
 
       {/* FILTROS OPERATIVOS */}
       <div style={styles.filterBar}>
-        
-        {/* 🏢 FILTRO DE UNIDADES EXCLUSIVO PARA ROLES AUTORIZADOS */}
         {tieneAccesoTotal && (
           <div style={styles.filterGroup}>
             <label style={styles.filterLabel}>🏢 Unidad / Elemento</label>
@@ -317,7 +319,7 @@ const DashboardNovedades = () => {
         </button>
       </div>
 
-      {/* CUADRO PRINCIPAL DEL TABLERO */}
+      {/* TABLERO */}
       <div style={styles.tablesGrid}>
         
         {/* COLUMNA 1: ESTADO DE LA FLOTA */}
@@ -337,10 +339,8 @@ const DashboardNovedades = () => {
               <tbody>
                 {flotaFiltrada.map((nave) => {
                   const operativo = chequearOperativo(nave);
-                  const horasEstructurales = obtenerHorasEstructuralesSólidas(nave);
+                  const horasEstructurales = obtenerHorasEstructuralesSolidas(nave);
                   const tieneDatoDb = horasEstructurales > 0;
-
-                  // 🚁/✈️ ÍCONO DINÁMICO SEGÚN EL TIPO DE ICONO DEL ESQUEMA
                   const iconoTipo = nave.tipoIcono === 'ala_fija' ? '✈️' : '🚁';
 
                   return (
@@ -388,7 +388,7 @@ const DashboardNovedades = () => {
           </div>
         </div>
 
-        {/* COLUMNA 2: ANALÍTICA AVANZADA */}
+        {/* COLUMNA 2: ANALÍTICA */}
         <div style={styles.tableCard}>
           <h2 style={styles.tableTitle}>📊 Desglose Analítico de Horas</h2>
           
@@ -397,7 +397,7 @@ const DashboardNovedades = () => {
               onClick={() => setTabActiva('aeronave')} 
               style={{...styles.tabButton, ...(tabActiva === 'aeronave' ? styles.tabButtonActive : {})}}
             >
-              Por Aeronave (Año/Filtro)
+              Por Aeronave
             </button>
             <button 
               onClick={() => setTabActiva('mision')} 

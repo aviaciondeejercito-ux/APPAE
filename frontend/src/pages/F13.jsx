@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Users, Clock, Save, Trash2 } from 'lucide-react';
+import { Plane, Users, Clock, Save, Trash2, History } from 'lucide-react';
 import { getF13s, registrarF13, deleteF13, getAircrafts } from '../services/api'; 
 
 const F13Component = () => {
@@ -37,7 +37,8 @@ const F13Component = () => {
         mecanico: '',   
         inspeccionDiaria: '',   
         inspeccionPrevuelo: '', 
-        inspeccionPostvuelo: '' 
+        inspeccionPostvuelo: '',
+        esHistorico: false // 👈 Agregado para control de carga retroactiva
     });
 
     const misiones = [
@@ -120,6 +121,7 @@ const F13Component = () => {
             ciclos: Number(formData.ciclos),
             apu: Number(formData.apu),
             aterrizajes: Number(formData.aterrizajes),
+            esHistorico: Boolean(formData.esHistorico), // 👈 Se envía explícitamente en el payload
             inspeccionDiaria: { 
                 realizada: !!formData.inspeccionDiaria?.trim(), 
                 firmaResponsable: formData.inspeccionDiaria?.trim() || "N/C", 
@@ -139,13 +141,19 @@ const F13Component = () => {
 
         try {
             await registrarF13(payload);
-            alert("✅ Formulario F-13 registrado y acumuladores actualizados.");
+            
+            const msj = formData.esHistorico 
+                ? "📜 Formulario F-13 registrado como HISTÓRICO (Sin alteración de totales en aeronave/componentes)."
+                : "✅ Formulario F-13 registrado y acumuladores actualizados.";
+                
+            alert(msj);
             
             setFormData({
                 fecha: '', aeronave: '', misionVuelo: '',
                 horasALaFecha: 0, horasDelDia: 0, ciclos: 0, apu: 0, aterrizajes: 1,
                 comandante: '', mecanico: '',
-                inspeccionDiaria: '', inspeccionPrevuelo: '', inspeccionPostvuelo: ''
+                inspeccionDiaria: '', inspeccionPrevuelo: '', inspeccionPostvuelo: '',
+                esHistorico: false
             });
             fetchF13s();
         } catch (error) {
@@ -205,7 +213,7 @@ const F13Component = () => {
             </div>
 
             <div style={styles.mainGrid}>
-                {/* FORMULARIO DE CARGA (IZQUIERDA) - Ahora visible para OFICINA_TECNICA */}
+                {/* FORMULARIO DE CARGA (IZQUIERDA) */}
                 <div style={{ ...styles.card, display: puedeCargarF13 ? 'block' : 'none' }}>
                     <h2 style={styles.cardTitle}><Save size={18} /> Llenado de Formulario F-13</h2>
                     <form onSubmit={handleSubmit} style={styles.form}>
@@ -263,7 +271,7 @@ const F13Component = () => {
                             </div>
                             <div style={styles.group}>
                                 <label style={styles.label}>APU</label>
-                                <input type="number" step="0.1" min="0" style={styles.input} value={formData.apu} onChange={e => setFormData({ ...formData, api: e.target.value })} />
+                                <input type="number" step="0.1" min="0" style={styles.input} value={formData.apu} onChange={e => setFormData({ ...formData, apu: e.target.value })} />
                             </div>
                         </div>
 
@@ -296,6 +304,23 @@ const F13Component = () => {
                             </div>
                         </div>
 
+                        {/* 📜 OPCIÓN CARGA HISTÓRICA */}
+                        <div style={styles.historicoBox}>
+                            <input 
+                                type="checkbox" 
+                                id="esHistorico" 
+                                checked={formData.esHistorico} 
+                                onChange={e => setFormData({ ...formData, esHistorico: e.target.checked })}
+                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                            />
+                            <label htmlFor="esHistorico" style={styles.historicoLabel}>
+                                📜 Carga Histórica / Retroactiva 
+                                <span style={{ display: 'block', fontWeight: 'normal', color: '#856404', fontSize: '0.68rem', marginTop: '2px' }}>
+                                    Guarda la planilla pero <b>NO incrementa</b> las horas/ciclos en la aeronave ni componentes.
+                                </span>
+                            </label>
+                        </div>
+
                         <button disabled={loading} type="submit" style={styles.btnSave}>
                             {loading ? "REGISTRANDO F-13..." : "GUARDAR FORMULARIO F-13"}
                         </button>
@@ -322,7 +347,12 @@ const F13Component = () => {
                                     <tr key={r._id?.$oid || r._id} style={styles.tr}>
                                         <td style={styles.td}>
                                             <div style={{ fontWeight: 'bold' }}>{formatearFechaLocal(r.fecha)}</div>
-                                            <span style={styles.misionTag}>{r.misionVuelo}</span>
+                                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                                <span style={styles.misionTag}>{r.misionVuelo}</span>
+                                                {r.esHistorico && (
+                                                    <span style={styles.badgeHistorico}>📜 HISTÓRICO</span>
+                                                )}
+                                            </div>
                                             {r.creadoPor && (
                                                 <div style={styles.operadorTag}>
                                                     <span>Cargó: {r.creadoPor.rango || r.creadoPor.nombre || ''} {r.creadoPor.apellido}</span>
@@ -398,7 +428,7 @@ const styles = {
     label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' },
     input: { padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.85rem', outline: 'none' },
     inputSmall: { padding: '6px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.75rem', outline: 'none' },
-    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
+    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '5px' },
     tableContainer: { overflowX: 'auto' },
     table: { width: '100%', borderCollapse: 'collapse' },
     thead: { backgroundColor: '#f9fafb' },
@@ -407,13 +437,16 @@ const styles = {
     td: { padding: '10px 8px', fontSize: '0.8rem', verticalAlign: 'top' },
     hsBadge: { backgroundColor: '#1b3a57', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', display: 'inline-block', fontWeight: 'bold' },
     tripuList: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.75rem' },
-    misionTag: { backgroundColor: '#eff6ff', color: '#1e40af', padding: '3px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block', marginTop: '4px' },
+    misionTag: { backgroundColor: '#eff6ff', color: '#1e40af', padding: '3px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' },
+    badgeHistorico: { backgroundColor: '#fff3cd', color: '#856404', border: '1px solid #ffeeba', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 'bold' },
     operadorTag: { fontSize: '0.68rem', color: '#4b5563', backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '6px', border: '1px dashed #d1d5db' },
     btnDel: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' },
     noData: { textAlign: 'center', padding: '40px', color: '#9ca3af', fontSize: '0.9rem' },
     inspeccionContainer: { border: '1px solid #e5e7eb', padding: '10px', borderRadius: '6px', backgroundColor: '#fafafa', marginTop: '5px' },
     inspeccionOk: { fontSize: '0.68rem', fontWeight: 'bold', color: '#166534', backgroundColor: '#dcfce7', padding: '2px 6px', borderRadius: '3px' },
-    inspeccionNo: { fontSize: '0.68rem', color: '#9ca3af', fontStyle: 'italic' }
+    inspeccionNo: { fontSize: '0.68rem', color: '#9ca3af', fontStyle: 'italic' },
+    historicoBox: { display: 'flex', alignItems: 'flex-start', gap: '10px', backgroundColor: '#fff8e6', padding: '10px', borderRadius: '6px', border: '1px solid #ffe8a1', marginTop: '5px' },
+    historicoLabel: { fontSize: '0.75rem', fontWeight: 'bold', color: '#664d03', cursor: 'pointer' }
 };
 
 export default F13Component;

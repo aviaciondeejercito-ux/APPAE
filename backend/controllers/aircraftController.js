@@ -9,6 +9,7 @@ const parsearHs = (val) => {
 
 // Sanitizador reutilizable para arreglos de componentes
 const sanitizarComponentes = (comps = []) => {
+    if (!Array.isArray(comps)) return [];
     return comps.map(c => ({
         ...c,
         nro: Number(c.nro) || 1,
@@ -17,23 +18,23 @@ const sanitizarComponentes = (comps = []) => {
         componente: String(c.componente || ''),
         sn: String(c.sn || ''),
         limiteTipo: String(c.limiteTipo || 'TBO'),
-        limites: (c.limites || []).map(l => ({
+        limites: Array.isArray(c.limites) ? c.limites.map(l => ({
             valor: String(l.valor || ''),
             unidad: String(l.unidad || 'H')
-        })),
+        })) : [],
         instaladoFecha: String(c.instaladoFecha || ''),
         instaladoHoras: c.instaladoHoras !== undefined ? c.instaladoHoras : '',
-        tsnCsnRenglones: (c.tsnCsnRenglones || []).map(r => ({
+        tsnCsnRenglones: Array.isArray(c.tsnCsnRenglones) ? c.tsnCsnRenglones.map(r => ({
             valor: String(r.valor || ''),
             unidad: String(r.unidad || 'H')
-        })),
+        })) : [],
         tgInstalacion: c.tgInstalacion !== undefined ? c.tgInstalacion : '',
         estadoTipo: String(c.estadoTipo || 'TSO'),
         estadoActual: c.estadoActual !== undefined ? c.estadoActual : '',
-        disponibilidades: (c.disponibilidades || []).map(d => ({
+        disponibilidades: Array.isArray(c.disponibilidades) ? c.disponibilidades.map(d => ({
             valor: String(d.valor || ''),
             unidad: String(d.unidad || 'H')
-        }))
+        })) : []
     }));
 };
 
@@ -50,13 +51,10 @@ export const getAircrafts = async (req, res) => {
         let filtro = {};
 
         if (elemento) {
-            // Filtro por parámetro de ruta /elemento/:elemento
             filtro = { unidad: elemento };
         } else if (unidad) {
-            // Filtro por parámetro query ?unidad=...
             filtro = { unidad };
         } else if (!esMandoEstrategico) {
-            // Si es un usuario de unidad sin permisos globales, forzamos el filtro por su unidad asignada
             filtro = { unidad: req.user?.elemento || req.user?.unidad };
         }
 
@@ -98,6 +96,7 @@ export const createAircraft = async (req, res) => {
 
         if (payload.matricula) payload.matricula = payload.matricula.toUpperCase();
 
+        // Parseo seguro de acumuladores numéricos
         payload.inicioAeHs = parsearHs(payload.inicioAeHs);
         payload.tgPlaneadorActual = parsearHs(payload.tgPlaneadorActual);
         payload.tgPlaneadorLandings = parsearHs(payload.tgPlaneadorLandings);
@@ -110,16 +109,17 @@ export const createAircraft = async (req, res) => {
         payload.helice1Tsn = parsearHs(payload.helice1Tsn);
         payload.helice2Tsn = parsearHs(payload.helice2Tsn);
 
+        // Sanitización de arrays
         if (payload.compPlaneador) {
             payload.compPlaneador = sanitizarComponentes(payload.compPlaneador);
         }
-        if (payload.motores) {
+        if (Array.isArray(payload.motores)) {
             payload.motores = payload.motores.map(m => ({
                 ...m,
                 componentes: sanitizarComponentes(m.componentes || [])
             }));
         }
-        if (payload.helices) {
+        if (Array.isArray(payload.helices)) {
             payload.helices = payload.helices.map(h => ({
                 ...h,
                 componentes: sanitizarComponentes(h.componentes || [])
@@ -150,6 +150,7 @@ export const updateAircraftStatus = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Aeronave no encontrada' });
         }
 
+        // Asignación explícita de campos numéricos parseados
         if (campos.tgPlaneadorActual !== undefined) aeronaveDoc.tgPlaneadorActual = parsearHs(campos.tgPlaneadorActual);
         if (campos.tgPlaneadorLandings !== undefined) aeronaveDoc.tgPlaneadorLandings = parsearHs(campos.tgPlaneadorLandings);
         if (campos.inicioAeHs !== undefined) aeronaveDoc.inicioAeHs = parsearHs(campos.inicioAeHs);
@@ -161,12 +162,13 @@ export const updateAircraftStatus = async (req, res) => {
         if (campos.helice1Tsn !== undefined) aeronaveDoc.helice1Tsn = parsearHs(campos.helice1Tsn);
         if (campos.helice2Tsn !== undefined) aeronaveDoc.helice2Tsn = parsearHs(campos.helice2Tsn);
 
+        // Sanitización y actualización de componentes
         if (campos.compPlaneador) {
             aeronaveDoc.compPlaneador = sanitizarComponentes(campos.compPlaneador);
             aeronaveDoc.markModified('compPlaneador');
         }
 
-        if (campos.motores) {
+        if (Array.isArray(campos.motores)) {
             aeronaveDoc.motores = campos.motores.map(m => ({
                 ...m,
                 componentes: sanitizarComponentes(m.componentes || [])
@@ -174,7 +176,7 @@ export const updateAircraftStatus = async (req, res) => {
             aeronaveDoc.markModified('motores');
         }
 
-        if (campos.helices) {
+        if (Array.isArray(campos.helices)) {
             aeronaveDoc.helices = campos.helices.map(h => ({
                 ...h,
                 componentes: sanitizarComponentes(h.componentes || [])
@@ -182,7 +184,14 @@ export const updateAircraftStatus = async (req, res) => {
             aeronaveDoc.markModified('helices');
         }
 
-        const camposExcluidos = ['compPlaneador', 'motores', 'helices', 'tgPlaneadorLandings', 'tgPlaneadorActual', 'inicioAeHs'];
+        // Lista completa de campos ya tratados manualmente que deben omitirse en la copia masiva
+        const camposExcluidos = [
+            'compPlaneador', 'motores', 'helices', 
+            'tgPlaneadorLandings', 'tgPlaneadorActual', 'inicioAeHs',
+            'motorTsn', 'motorCsnCso', 'motor2Tsn', 'motor2CsnCso',
+            'helice1Tsn', 'helice2Tsn'
+        ];
+
         Object.keys(campos).forEach(key => {
             if (!camposExcluidos.includes(key)) {
                 aeronaveDoc[key] = campos[key];
