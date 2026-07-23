@@ -15,7 +15,7 @@ const getNovedadesElemento = async (req, res) => {
                                  rolUsuario === 'DIRECTOR' || 
                                  req.user?.esAdmin === true;
 
-        // --- 1. FILTROS POR UNIDAD ---
+        // --- 1. FILTROS POR UNIDAD CON SANITIZACIÓN REGEXP ---
         let filtroAeronave = {};
         let filtroF13 = {};
 
@@ -27,10 +27,13 @@ const getNovedadesElemento = async (req, res) => {
                     msg: 'El elemento del usuario es requerido para segmentar la información.'
                 });
             }
-            filtroAeronave.unidad = { $regex: new RegExp(`^${unidadAFiltrar}$`, 'i') };
+            // Escapar caracteres especiales para evitar errores en RegExp
+            const unidadEscapada = unidadAFiltrar.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            filtroAeronave.unidad = { $regex: new RegExp(`^${unidadEscapada}$`, 'i') };
         } else {
             if (unidad && unidad !== 'TODAS') {
-                filtroAeronave.unidad = { $regex: new RegExp(`^${unidad}$`, 'i') };
+                const unidadEscapada = unidad.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                filtroAeronave.unidad = { $regex: new RegExp(`^${unidadEscapada}$`, 'i') };
             }
         }
 
@@ -42,6 +45,25 @@ const getNovedadesElemento = async (req, res) => {
         const aeronaves = await Aircraft.find(filtroAeronave)
             .select('matricula sda unidad estadoOperativo tgPlaneadorActual inicioAeHs tipoIcono')
             .lean();
+
+        // 🛡️ GUARDAAGUJAS: Si la unidad no tiene aeronaves registradas, retornamos 200 limpio
+        if (!aeronaves || aeronaves.length === 0) {
+            return res.status(200).json({
+                ok: true,
+                resumenMantenimiento: {
+                    totalAeronaves: 0,
+                    operativas: 0,
+                    enMantenimiento: 0,
+                    detalleFlota: []
+                },
+                resumenVuelos: {
+                    totalHorasVoladas: 0,
+                    totalAterrizajes: 0,
+                    cantidadVuelos: 0,
+                    ultimosVuelos: []
+                }
+            });
+        }
 
         const totalAeronaves = aeronaves.length;
         const operativas = aeronaves.filter(a => a.estadoOperativo === 'E/S').length;
@@ -59,7 +81,6 @@ const getNovedadesElemento = async (req, res) => {
             if (fechaFin && !isNaN(new Date(fechaFin).getTime())) {
                 filtroF13.fecha.$lte = new Date(fechaFin);
             }
-            // Si el objeto quedó vacío por fechas inválidas, lo eliminamos
             if (Object.keys(filtroF13.fecha).length === 0) {
                 delete filtroF13.fecha;
             }
@@ -73,7 +94,10 @@ const getNovedadesElemento = async (req, res) => {
             .lean();
 
         const historialVuelos = (historialVuelosRaw || []).map(vuelo => {
-            const sumatoriaSeguridad = (vuelo.horasALaFecha || 0) + (vuelo.horasDelDia || 0);
+            const horasALaFecha = Number(vuelo.horasALaFecha) || 0;
+            const horasDelDia = Number(vuelo.horasDelDia) || 0;
+            const sumatoriaSeguridad = horasALaFecha + horasDelDia;
+
             return {
                 ...vuelo,
                 horasTotales: vuelo.horasTotales !== undefined 
@@ -82,13 +106,12 @@ const getNovedadesElemento = async (req, res) => {
             };
         });
 
-        // --- 5. CÁLCULO EFICIENTE DEL ODÓMETRO EN MEMORIA (SIN QUERIES EXTRA) ---
-        // Mapeamos el último F13 de cada aeronave buscando en la lista ya ordenada
+        // --- 5. CÁLCULO EFICIENTE DEL ODÓMETRO EN MEMORIA ---
         const mapaUltimoF13 = {};
         historialVuelos.forEach(vuelo => {
             const naveId = vuelo.aeronave?._id?.toString() || vuelo.aeronave?.toString();
             if (naveId && !mapaUltimoF13[naveId]) {
-                mapaUltimoF13[naveId] = vuelo; // Al estar ordenado por fecha DESC, el primero que entra es el último
+                mapaUltimoF13[naveId] = vuelo;
             }
         });
 
@@ -101,7 +124,7 @@ const getNovedadesElemento = async (req, res) => {
             if (ultimoF13) {
                 const acumuladoCalculado = ultimoF13.horasTotales !== undefined
                     ? ultimoF13.horasTotales
-                    : (ultimoF13.horasALaFecha || 0) + (ultimoF13.horasDelDia || 0);
+                    : (Number(ultimoF13.horasALaFecha) || 0) + (Number(ultimoF13.horasDelDia) || 0);
                 
                 horasEstructuralesReales = Number(acumuladoCalculado.toFixed(2));
             }
@@ -112,9 +135,9 @@ const getNovedadesElemento = async (req, res) => {
             };
         });
 
-        // --- 6. TOTALIZADORES ---
-        const totalHorasVoladasPeriodo = historialVuelos.reduce((sum, f13) => sum + (f13.horasDelDia || 0), 0);
-        const totalAterrizajesPeriodo = historialVuelos.reduce((sum, f13) => sum + (f13.aterrizajes || 0), 0);
+        // --- 6. TOTALIZADORES PROTEGIDOS ---
+        const totalHorasVoladasPeriodo = historialVuelos.reduce((sum, f13) => sum + (Number(f13.horasDelDia) || 0), 0);
+        const totalAterrizajesPeriodo = historialVuelos.reduce((sum, f13) => sum + (Number(f13.aterrizajes) || 0), 0);
 
         return res.status(200).json({
             ok: true,
