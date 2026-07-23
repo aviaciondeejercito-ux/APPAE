@@ -38,34 +38,41 @@ const getNovedadesElemento = async (req, res) => {
             filtroAeronave.sda = sda;
         }
 
-        // --- 2. OBTENER FLOTA Y NORMALIZAR ---
-        // Solicitamos tgPlaneadorActual y estadoOperativo según el nuevo AircraftSchema
+        // --- 2. OBTENER FLOTA (QUERY 1) ---
         const aeronaves = await Aircraft.find(filtroAeronave)
             .select('matricula sda unidad estadoOperativo tgPlaneadorActual inicioAeHs tipoIcono')
             .lean();
 
-        // Verificación basada en el enum ['E/S', 'F/S']
         const totalAeronaves = aeronaves.length;
         const operativas = aeronaves.filter(a => a.estadoOperativo === 'E/S').length;
         const enMantenimiento = totalAeronaves - operativas;
 
-        // --- 3. CONSULTAR HISTORIAL DE VUELOS (F13) ---
+        // --- 3. SANITIZAR FILTRO DE FECHAS DE FORMA SEGURA ---
         const idsAeronavesUnidad = aeronaves.map(a => a._id);
         filtroF13.aeronave = { $in: idsAeronavesUnidad };
 
         if (fechaInicio || fechaFin) {
             filtroF13.fecha = {};
-            if (fechaInicio) filtroF13.fecha.$gte = new Date(fechaInicio);
-            if (fechaFin) filtroF13.fecha.$lte = new Date(fechaFin);
+            if (fechaInicio && !isNaN(new Date(fechaInicio).getTime())) {
+                filtroF13.fecha.$gte = new Date(fechaInicio);
+            }
+            if (fechaFin && !isNaN(new Date(fechaFin).getTime())) {
+                filtroF13.fecha.$lte = new Date(fechaFin);
+            }
+            // Si el objeto quedó vacío por fechas inválidas, lo eliminamos
+            if (Object.keys(filtroF13.fecha).length === 0) {
+                delete filtroF13.fecha;
+            }
         }
 
+        // --- 4. CONSULTAR HISTORIAL DE VUELOS (QUERY 2) ---
         const historialVuelosRaw = await F13.find(filtroF13)
             .populate('aeronave', 'matricula sda unidad')
             .populate('creadoPor', 'nombre apellido rango')
-            .sort({ fecha: -1 }) 
+            .sort({ fecha: -1, createdAt: -1 }) 
             .lean();
 
-        const historialVuelos = historialVuelosRaw.map(vuelo => {
+        const historialVuelos = (historialVuelosRaw || []).map(vuelo => {
             const sumatoriaSeguridad = (vuelo.horasALaFecha || 0) + (vuelo.horasDelDia || 0);
             return {
                 ...vuelo,
@@ -75,14 +82,20 @@ const getNovedadesElemento = async (req, res) => {
             };
         });
 
-        // --- 4. CÁLCULO DINÁMICO DEL ODÓMETRO ESTRUCTURAL ---
-        const detalleFlotaActualizado = await Promise.all(aeronaves.map(async (nave) => {
-            const ultimoF13 = await F13.findOne({ aeronave: nave._id })
-                .sort({ fecha: -1, createdAt: -1 })
-                .select('horasALaFecha horasDelDia horasTotales')
-                .lean();
+        // --- 5. CÁLCULO EFICIENTE DEL ODÓMETRO EN MEMORIA (SIN QUERIES EXTRA) ---
+        // Mapeamos el último F13 de cada aeronave buscando en la lista ya ordenada
+        const mapaUltimoF13 = {};
+        historialVuelos.forEach(vuelo => {
+            const naveId = vuelo.aeronave?._id?.toString() || vuelo.aeronave?.toString();
+            if (naveId && !mapaUltimoF13[naveId]) {
+                mapaUltimoF13[naveId] = vuelo; // Al estar ordenado por fecha DESC, el primero que entra es el último
+            }
+        });
 
-            // Prioridad de horas: Último F-13 registrado > tgPlaneadorActual > inicioAeHs > 0
+        const detalleFlotaActualizado = aeronaves.map((nave) => {
+            const naveIdStr = nave._id.toString();
+            const ultimoF13 = mapaUltimoF13[naveIdStr];
+
             let horasEstructuralesReales = nave.tgPlaneadorActual || nave.inicioAeHs || 0;
 
             if (ultimoF13) {
@@ -97,8 +110,9 @@ const getNovedadesElemento = async (req, res) => {
                 ...nave,
                 horasTotales: horasEstructuralesReales
             };
-        }));
+        });
 
+        // --- 6. TOTALIZADORES ---
         const totalHorasVoladasPeriodo = historialVuelos.reduce((sum, f13) => sum + (f13.horasDelDia || 0), 0);
         const totalAterrizajesPeriodo = historialVuelos.reduce((sum, f13) => sum + (f13.aterrizajes || 0), 0);
 
