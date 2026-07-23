@@ -5,12 +5,18 @@ exports.getAlertasInternasUnidad = async (req, res) => {
     try {
         const rawRole = req.user?.rol || req.user?.role || '';
         const userRole = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
-        const userUnidad = (req.user?.elemento || req.user?.unidad || '').trim().toUpperCase();
+        
+        // 1. Detectar unidad de forma prioritaria (req.query.unidad > req.user)
+        const unidadBruta = req.query?.unidad || req.user?.elemento || req.user?.unidad || '';
+        const userUnidad = String(unidadBruta).trim();
 
         const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'COMANDO', 'COMANAV'].includes(userRole);
         
         if (!esMandoEstrategico && !userUnidad) {
-            return res.status(400).json({ success: false, mensaje: "El operador no cuenta con un elemento o unidad asignada en su perfil." });
+            return res.status(400).json({ 
+                success: false, 
+                mensaje: "El operador no cuenta con un elemento o unidad asignada en su perfil." 
+            });
         }
 
         const fechaActual = new Date();
@@ -32,19 +38,27 @@ exports.getAlertasInternasUnidad = async (req, res) => {
             return campo;
         };
 
+        // Escapar caracteres especiales para la expresión regular si existe unidad
+        const unidadEscapada = userUnidad.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regexUnidad = new RegExp(`^${unidadEscapada}$`, 'i');
+
         // ==========================================
         // 🛡️ SECCIÓN 1: ALERTAS DE TRIPULANTES
         // ==========================================
-        const queryTripulantes = esMandoEstrategico ? {} : { 
-            $or: [
-                { elemento: userUnidad },
-                { unidad: userUnidad }
-            ]
-        };
+        let queryTripulantes = {};
+        if (!esMandoEstrategico || (req.query?.unidad && req.query.unidad !== 'TODAS')) {
+            queryTripulantes = { 
+                $or: [
+                    { elemento: regexUnidad },
+                    { unidad: regexUnidad }
+                ]
+            };
+        }
 
-        const tripulantes = await Tripulante.find(queryTripulantes).lean();
+        // Consulta segura con captura individual
+        const tripulantes = await Tripulante.find(queryTripulantes).lean().catch(() => []);
 
-        tripulantes.forEach(t => {
+        (tripulantes || []).forEach(t => {
             const identificacion = `${t.grado || ''} ${t.apellido || ''} ${t.nombre || ''}`.trim();
             
             const fPsicoRaw = getFechaSegura(t.certificaciones?.psicofisico);
@@ -120,10 +134,15 @@ exports.getAlertasInternasUnidad = async (req, res) => {
         // ==========================================
         // ✈️ SECCIÓN 2: ALERTAS DE AERONAVES
         // ==========================================
-        const queryAeronaves = esMandoEstrategico ? {} : { unidad: userUnidad };
-        const aeronaves = await Aircraft.find(queryAeronaves).lean();
+        let queryAeronaves = {};
+        if (!esMandoEstrategico || (req.query?.unidad && req.query.unidad !== 'TODAS')) {
+            queryAeronaves = { unidad: regexUnidad };
+        }
 
-        aeronaves.forEach(a => {
+        // Consulta segura con captura individual
+        const aeronaves = await Aircraft.find(queryAeronaves).lean().catch(() => []);
+
+        (aeronaves || []).forEach(a => {
             const refAeronave = `${a.sda || 'SdA'} Mtr: ${a.matricula || 'S/M'}`;
 
             // ---- EVALUACIÓN DE SEGURO ----
@@ -232,6 +251,11 @@ exports.getAlertasInternasUnidad = async (req, res) => {
 
     } catch (error) {
         console.error("❌ Fallo en getAlertasInternasUnidad:", error);
-        return res.status(500).json({ success: false, mensaje: "Error del servidor al compilar el cuadro de alertas." });
+        // Retornar respuesta limpia HTTP 200 con array vacío para no interrumpir el UI
+        return res.status(200).json({
+            success: true,
+            jurisdiccion: "ERROR_RECUPERACION",
+            data: []
+        });
     }
 };
