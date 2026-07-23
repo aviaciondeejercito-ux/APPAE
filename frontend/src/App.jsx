@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import 'leaflet/dist/leaflet.css'; 
 
 // IMPORTANTE: Comunicación centralizada con el backend
@@ -20,7 +20,55 @@ import AlertasWidget from './components/AlertasWidget';
 import F13Page from './pages/F13'; 
 import DashboardNovedades from './components/DashboardNovedades'; 
 import F16Page from './pages/F16';
-import ProgramaMantenimiento from './pages/ProgramaMantenimiento'; // 🛠️ NUEVO MÓDULO IMPORTADO
+import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
+
+// ==========================================
+// 🔻 SUBCOMPONENTE DE DROPDOWN PARA EL NAVBAR
+// ==========================================
+const NavDropdown = ({ title, activeViews = [], currentView, children }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // Cierra el menú al hacer clic fuera del componente
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const isChildActive = activeViews.includes(currentView);
+
+    return (
+        <div style={{ position: 'relative', display: 'inline-block' }} ref={dropdownRef}>
+            <button 
+                onClick={() => setIsOpen(!isOpen)} 
+                style={{
+                    ...styles.btnNav,
+                    backgroundColor: isChildActive ? '#1e3799' : '#4a69bd',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                }}
+            >
+                <span>{title}</span>
+                <span style={{ fontSize: '0.6rem', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.2s' }}>▼</span>
+            </button>
+
+            {isOpen && (
+                <div 
+                    style={styles.dropdownMenu} 
+                    onClick={() => setIsOpen(false)} // Cierra al hacer clic en un ítem
+                >
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
 
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
@@ -83,7 +131,6 @@ function App() {
     const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerEstadoAeronaves = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerCarga = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
-    const puedeVerOficinaTecnica = esAdmin || esOfTecnica;
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
     const puedeVerEbm = esAdmin || esOperaciones || esJefe;
@@ -91,7 +138,12 @@ function App() {
     const puedeVerReportes = esAdmin || esOfTecnica || esBoss || esDirector || esJefe || esOTO;
     const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
     const puedeVerF16 = esAdmin || esOfTecnica; 
-    const puedeVerProgMantenimiento = esAdmin || esOfTecnica; // 🛠️ REGLA EXCLUSIVA ADMIN Y OFICINA TÉCNICA[source: 4]
+    const puedeVerProgMantenimiento = esAdmin || esOfTecnica;
+
+    // Evaluaciones para mostrar menús completos solo si tiene permiso al menos de 1 ítem interno
+    const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos;
+    const puedeVerGrupoOfTecnica = puedeVerF13 || puedeVerF16 || puedeVerProgMantenimiento;
+    const puedeVerGrupoOTO = puedeVerStats || puedeVerOpEnDesarrollo;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
     const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16', 'progMantenimiento'].includes(view);
@@ -99,7 +151,7 @@ function App() {
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
             
-            {/* NAVBAR TÁCTICA */}
+            {/* NAVBAR TÁCTICA CON GRUPOS DESPLEGABLES */}
             <nav style={{
                 ...styles.navbar,
                 flexDirection: isMobile ? 'column' : 'row',
@@ -113,110 +165,140 @@ function App() {
                 <div style={styles.navActions}>
                     {auth ? (
                         <>
-                            <button 
-                                onClick={() => setView('calendar')} 
-                                style={{...styles.btnNav, backgroundColor: view === 'calendar' ? '#1e3799' : '#4a69bd'}}
-                            >📅 Calendario</button>
-                            
-                            {puedeVerUsuarios && (
+                            {/* 1. GRUPO: CALENDARIO (Calendario + Carga) */}
+                            <NavDropdown title="📅 Calendario" activeViews={['calendar', 'operaciones']} currentView={view}>
                                 <button 
-                                    onClick={() => setView('admin')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'admin' ? '#2c3e50' : '#4a69bd'}}
-                                >⚙️ Usuarios</button>
+                                    onClick={() => setView('calendar')} 
+                                    style={{...styles.dropdownItem, backgroundColor: view === 'calendar' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                >
+                                    📅 Calendario General
+                                </button>
+                                {puedeVerCarga && (
+                                    <button 
+                                        onClick={() => setView('operaciones')} 
+                                        style={{...styles.dropdownItem, backgroundColor: view === 'operaciones' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                    >
+                                        📝 Carga
+                                    </button>
+                                )}
+                            </NavDropdown>
+
+                            {/* 2. GRUPO: OPERACIONES (Personal + EBM + Vuelos) */}
+                            {puedeVerGrupoOperaciones && (
+                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos']} currentView={view}>
+                                    {puedeVerTripulantes && (
+                                        <button 
+                                            onClick={() => setView('tripulantes')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'tripulantes' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            👥 Personal
+                                        </button>
+                                    )}
+                                    {puedeVerEbm && (
+                                        <button 
+                                            onClick={() => setView('ebm')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'ebm' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            🎯 EBM
+                                        </button>
+                                    )}
+                                    {puedeVerVuelos && (
+                                        <button 
+                                            onClick={() => setView('vuelos')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'vuelos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            ✈️ Vuelos
+                                        </button>
+                                    )}
+                                </NavDropdown>
                             )}
 
-                            {puedeVerTripulantes && (
-                                <button 
-                                    onClick={() => setView('tripulantes')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'tripulantes' ? '#2980b9' : '#4a69bd'}}
-                                >👥 Personal</button>
+                            {/* 3. GRUPO: OFICINA TÉCNICA (F-13 + F-16 + Prog. Manto) */}
+                            {puedeVerGrupoOfTecnica && (
+                                <NavDropdown title="🛠️ Oficina Técnica" activeViews={['f13', 'f16', 'progMantenimiento']} currentView={view}>
+                                    {puedeVerF13 && (
+                                        <button 
+                                            onClick={() => setView('f13')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'f13' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            📋 Formulario F-13
+                                        </button>
+                                    )}
+                                    {puedeVerF16 && (
+                                        <button 
+                                            onClick={() => setView('f16')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'f16' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            📋 Formulario F-16
+                                        </button>
+                                    )}
+                                    {puedeVerProgMantenimiento && (
+                                        <button 
+                                            onClick={() => setView('progMantenimiento')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'progMantenimiento' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            🛠️ Programa Mantenimiento
+                                        </button>
+                                    )}
+                                </NavDropdown>
                             )}
 
-                            {puedeVerEbm && (
-                                <button 
-                                    onClick={() => setView('ebm')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'ebm' ? '#d63031' : '#4a69bd'}}
-                                >🎯 EBM</button>
+                            {/* 4. GRUPO: OTO (Stats + Op en Desarrollo) */}
+                            {puedeVerGrupoOTO && (
+                                <NavDropdown title="🎯 OTO" activeViews={['stats', 'despacho']} currentView={view}>
+                                    {puedeVerStats && (
+                                        <button 
+                                            onClick={() => setView('stats')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'stats' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            📊 Stats
+                                        </button>
+                                    )}
+                                    {puedeVerOpEnDesarrollo && (
+                                        <button 
+                                            onClick={() => setView('despacho')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'despacho' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            ⚡ Op en Desarrollo
+                                        </button>
+                                    )}
+                                </NavDropdown>
                             )}
 
-                            {puedeVerVuelos && (
+                            {/* --- BOTONES DIRECTOS (SUELTOS) --- */}
+                            {puedeVerEstadoAeronaves && (
                                 <button 
-                                    onClick={() => setView('vuelos')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'vuelos' ? '#1b3a57' : '#4a69bd'}}
-                                >✈️ Vuelos</button>
-                            )}
-
-                            {puedeVerF13 && (
-                                <button 
-                                    onClick={() => setView('f13')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'f13' ? '#1b3a57' : '#4a69bd'}}
-                                >📋 F-13</button>
-                            )}
-
-                            {/* 📊 Botón del Panel de Novedades / Reportes */}
-                            {puedeVerReportes && (
-                                <button 
-                                    onClick={() => setView('reportes')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'reportes' ? '#0984e3' : '#4a69bd'}}
-                                >📊 Reportes</button>
+                                    onClick={() => setView('estado')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'estado' ? '#1e3799' : '#4a69bd'}}
+                                >🦅 Estado Aeronaves</button>
                             )}
 
                             {puedeVerPlaneamiento && (
                                 <button 
                                     onClick={() => setView('planeamiento')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'planeamiento' ? '#8e44ad' : '#4a69bd'}}
+                                    style={{...styles.btnNav, backgroundColor: view === 'planeamiento' ? '#1e3799' : '#4a69bd'}}
                                 >🗺️ Planeamiento</button>
                             )}
 
                             {puedeVerMapa && (
                                 <button 
                                     onClick={() => setView('mapa')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'mapa' ? '#d35400' : '#4a69bd'}}
+                                    style={{...styles.btnNav, backgroundColor: view === 'mapa' ? '#1e3799' : '#4a69bd'}}
                                 >📍 Mapa</button>
                             )}
 
-                            {puedeVerOpEnDesarrollo && (
+                            {puedeVerReportes && (
                                 <button 
-                                    onClick={() => setView('despacho')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'despacho' ? '#e67e22' : '#4a69bd'}}
-                                >⚡ Op en Desarrollo</button>
+                                    onClick={() => setView('reportes')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'reportes' ? '#1e3799' : '#4a69bd'}}
+                                >📊 Reportes</button>
                             )}
 
-                            {puedeVerEstadoAeronaves && (
+                            {puedeVerUsuarios && (
                                 <button 
-                                    onClick={() => setView('estado')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'estado' ? '#2c3e50' : '#4a69bd'}}
-                                >🦅 Estado Aeronaves</button>
-                            )}
-
-
-                            {puedeVerStats && (
-                                <button 
-                                    onClick={() => setView('stats')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'stats' ? '#007bff' : '#4a69bd'}}
-                                >📊 Stats</button>
-                            )}
-
-                            {puedeVerCarga && (
-                                <button 
-                                    onClick={() => setView('operaciones')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'operaciones' ? '#60a3bc' : '#4a69bd'}}
-                                >📝 Carga</button>
-                            )}
-                            
-                            {puedeVerF16 && (
-                                <button 
-                                    onClick={() => setView('f16')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'f16' ? '#2980b9' : '#4a69bd'}}
-                                >📋 F-16</button>
-                            )}
-
-                            {/* 🛠️ BOTÓN DEL NUEVO MÓDULO (Mismo formato estético que F13/F16) */}
-                            {puedeVerProgMantenimiento && (
-                                <button 
-                                    onClick={() => setView('progMantenimiento')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'progMantenimiento' ? '#27ae60' : '#4a69bd'}}
-                                >🛠️ Prog. Manto</button>
+                                    onClick={() => setView('admin')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'admin' ? '#2c3e50' : '#4a69bd'}}
+                                >⚙️ Usuarios</button>
                             )}
 
                             <button onClick={handleLogout} style={styles.btnLogout}>Salir</button>
@@ -229,7 +311,6 @@ function App() {
 
             {/* CONTENIDO PRINCIPAL DINÁMICO */}
             <main style={esVistaFull ? styles.containerFull : styles.container}>
-                {/* 📌 ALERTAS PREVENTIVAS DE UNIDAD: Filtrado según rol asignado */}
                 {auth && puedeVerAlertas && <AlertasWidget />}
 
                 {!auth ? (
@@ -250,7 +331,7 @@ function App() {
                             case 'operaciones': return puedeVerCarga ? <Operaciones /> : <CalendarPage />;
                             case 'estado': return puedeVerEstadoAeronaves ? <EstadoAeronaves /> : <CalendarPage />;
                             case 'f16': return puedeVerF16 ? <F16Page /> : <CalendarPage />;
-                            case 'progMantenimiento': return puedeVerProgMantenimiento ? <ProgramaMantenimiento /> : <CalendarPage />; // 🛠️ ENRUTADO PROTEGIDO
+                            case 'progMantenimiento': return puedeVerProgMantenimiento ? <ProgramaMantenimiento /> : <CalendarPage />;
                             default: return <CalendarPage />;
                         }
                     })()
@@ -270,9 +351,38 @@ function App() {
 const styles = {
     navbar: { backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', position: 'sticky', top: 0, zIndex: 3000 },
     logo: { fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer' },
-    navActions: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'center' },
-    btnNav: { color: 'white', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '0.7rem', transition: '0.3s' },
-    btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' },
+    navActions: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' },
+    btnNav: { color: 'white', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '0.75rem', transition: '0.2s ease' },
+    btnLogout: { backgroundColor: '#c0392b', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' },
+    dropdownMenu: {
+        position: 'absolute',
+        top: '120%',
+        left: 0,
+        backgroundColor: '#1b3a57',
+        minWidth: '180px',
+        boxShadow: '0px 8px 16px rgba(0,0,0,0.3)',
+        borderRadius: '6px',
+        padding: '6px 0',
+        zIndex: 4000,
+        border: '1px solid rgba(255, 255, 255, 0.15)',
+        display: 'flex',
+        flexDirection: 'column'
+    },
+    dropdownItem: {
+        background: 'transparent',
+        border: 'none',
+        color: 'white',
+        padding: '10px 16px',
+        textAlign: 'left',
+        fontSize: '0.75rem',
+        fontWeight: '600',
+        cursor: 'pointer',
+        width: '100%',
+        transition: 'background 0.2s',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px'
+    },
     container: { maxWidth: '1400px', margin: '15px auto', padding: '0 15px', flex: 1 },
     containerFull: { 
         width: '100%', 
