@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAircrafts, getProgramaPorAeronave, guardarProgramaMantenimiento } from '../services/api'; 
+import { getAircrafts, getProgramaPorAeronave, guardarProgramaMantenimiento, guardarAeronave } from '../services/api'; 
 
 const ProgramaMantenimiento = () => {
     const [aeronaves, setAeronaves] = useState([]);
@@ -9,6 +9,9 @@ const ProgramaMantenimiento = () => {
     const [unidadNavegacion, setUnidadNavegacion] = useState('');
     const [aeronaveSeleccionadaId, setAeronaveSeleccionadaId] = useState('');
     
+    // Almacena el objeto completo de la aeronave seleccionada (para compPlaneador, motores, helices)
+    const [aeronaveData, setAeronaveData] = useState(null);
+
     // Banderas de configuración estructural
     const [configAeronave, setConfigAeronave] = useState({
         esBimotor: false,
@@ -32,6 +35,14 @@ const ProgramaMantenimiento = () => {
     const [tablaMotor2, setTablaMotor2] = useState([]);
     const [tablaHelice, setTablaHelice] = useState([]);
     const [tablaHelice2, setTablaHelice2] = useState([]);
+
+    // -------------------------------------------------------------
+    // ESTADOS PARA EDICIÓN DINÁMICA DE COMPONENTES (AIRCRAFT SCHEMA)
+    // -------------------------------------------------------------
+    const [grupoComponente, setGrupoComponente] = useState('compPlaneador'); // 'compPlaneador' | 'motores' | 'helices'
+    const [subIndiceGrupo, setSubIndiceGrupo] = useState(0); // 0 para Motor/Hélice 1, 1 para Motor/Hélice 2
+    const [componenteIndex, setComponenteIndex] = useState('');
+    const [compEdit, setCompEdit] = useState(null);
 
     const usuarioSesion = {
         username: localStorage.getItem('username') || "Operador",
@@ -117,7 +128,6 @@ const ProgramaMantenimiento = () => {
                     const dd = String(fechaOrigen.getDate()).padStart(2, '0');
                     cop.proxFecha = `${yyyy}-${mm}-${dd}`;
                     
-                    // Cálculo de días/meses restantes
                     const hoy = new Date();
                     const diffTime = fechaOrigen - hoy;
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -143,6 +153,7 @@ const ProgramaMantenimiento = () => {
     const handleAeronaveChange = async (e) => {
         const id = e.target.value;
         setAeronaveSeleccionadaId(id);
+        resetSeleccionComponente();
         
         if (!id) {
             resetVistaLocal();
@@ -155,12 +166,14 @@ const ProgramaMantenimiento = () => {
         });
 
         if (avion) {
+            // Guardamos una copia profunda de la aeronave para manipular sus componentes
+            setAeronaveData(JSON.parse(JSON.stringify(avion)));
+
             const esBim = avion.esBimotor || avion.cantidadMotores === 2 || Boolean(avion.motor2Tsn);
             const tieneHel = avion.tieneHelice !== false && avion.tipoPropulsion !== 'TURBOFAN' && avion.tipoPropulsion !== 'REACCION';
 
             setConfigAeronave({ esBimotor: esBim, tieneHelice: tieneHel });
 
-            // Horas provenientes del modelo Aircraft (actualizadas vía F-13)
             const hsPlaneador = formatNum(avion.tgPlaneadorActual ?? avion.horasTotales ?? '0,0');
             const hsMotor1 = formatNum(avion.motor1Tsn ?? avion.motorTsn ?? '0,0');
             const hsMotor2 = formatNum(avion.motor2Tsn ?? '0,0');
@@ -213,11 +226,79 @@ const ProgramaMantenimiento = () => {
 
     const resetVistaLocal = () => {
         setAeronaveSeleccionadaId('');
+        setAeronaveData(null);
         setFormData({ sda: '', matricula: '', nroSerie: '', tgPlaneadorActual: '0,0', tgMotorActual: '0,0', tgMotor2Actual: '0,0', tgHeliceActual: '0,0', tgHelice2Actual: '0,0' });
         limpiarTodasLasTablas();
+        resetSeleccionComponente();
     };
 
-    // Manejo genérico de cambio de celdas
+    // -------------------------------------------------------------
+    // LÓGICA DE GESTIÓN Y EDICIÓN DE COMPONENTES INDIVIDUALES
+    // -------------------------------------------------------------
+    const resetSeleccionComponente = () => {
+        setComponenteIndex('');
+        setCompEdit(null);
+    };
+
+    const getListaComponentesActual = () => {
+        if (!aeronaveData) return [];
+        if (grupoComponente === 'compPlaneador') {
+            return aeronaveData.compPlaneador || [];
+        } else if (grupoComponente === 'motores') {
+            return aeronaveData.motores?.[subIndiceGrupo]?.componentes || [];
+        } else if (grupoComponente === 'helices') {
+            return aeronaveData.helices?.[subIndiceGrupo]?.componentes || [];
+        }
+        return [];
+    };
+
+    const handleComponenteSelect = (e) => {
+        const idx = e.target.value;
+        setComponenteIndex(idx);
+        if (idx !== '') {
+            const lista = getListaComponentesActual();
+            setCompEdit(JSON.parse(JSON.stringify(lista[idx])));
+        } else {
+            setCompEdit(null);
+        }
+    };
+
+    const handleCompFieldChange = (campo, valor) => {
+        setCompEdit(prev => ({ ...prev, [campo]: valor }));
+    };
+
+    const handleCompNestedArrayChange = (arrayName, idx, campo, valor) => {
+        setCompEdit(prev => {
+            const copiaArray = [...(prev[arrayName] || [])];
+            copiaArray[idx] = { ...copiaArray[idx], [campo]: valor };
+            return { ...prev, [arrayName]: copiaArray };
+        });
+    };
+
+    const handleAplicarCambioComponenteLocal = () => {
+        if (componenteIndex === '' || !compEdit || !aeronaveData) return;
+
+        const copiaAeronave = JSON.parse(JSON.stringify(aeronaveData));
+        const idx = parseInt(componenteIndex, 10);
+
+        if (grupoComponente === 'compPlaneador') {
+            if (!copiaAeronave.compPlaneador) copiaAeronave.compPlaneador = [];
+            copiaAeronave.compPlaneador[idx] = compEdit;
+        } else if (grupoComponente === 'motores') {
+            if (copiaAeronave.motores?.[subIndiceGrupo]) {
+                copiaAeronave.motores[subIndiceGrupo].componentes[idx] = compEdit;
+            }
+        } else if (grupoComponente === 'helices') {
+            if (copiaAeronave.helices?.[subIndiceGrupo]) {
+                copiaAeronave.helices[subIndiceGrupo].componentes[idx] = compEdit;
+            }
+        }
+
+        setAeronaveData(copiaAeronave);
+        alert(`✔️ Componente "${compEdit.componente || 'Nº' + compEdit.nro}" actualizado localmente.`);
+    };
+
+    // Manejo de Tablas de Inspección
     const handleCellChange = (tabla, setTabla, id, campo, valor, totalHs) => {
         setTabla(tabla.map(row => {
             if (row.id === id) {
@@ -244,6 +325,7 @@ const ProgramaMantenimiento = () => {
         }]);
     };
 
+    // Guardado Global del Programa y Componentes
     const guardarMantenimiento = async () => {
         if (!aeronaveSeleccionadaId) {
             alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
@@ -257,7 +339,7 @@ const ProgramaMantenimiento = () => {
             return copia;
         });
 
-        const payload = {
+        const payloadPrograma = {
             aeronaveId: aeronaveSeleccionadaId,
             tgPlaneadorActual: formData.tgPlaneadorActual,
             tgMotorActual: formData.tgMotorActual,
@@ -273,13 +355,18 @@ const ProgramaMantenimiento = () => {
         };
 
         try {
-            const respuesta = await guardarProgramaMantenimiento(payload);
-            if (respuesta.status === 200 || respuesta.data?.status === "success") {
-                alert(`📋 ¡Programa de mantenimiento de ${formData.matricula} sincronizado con éxito!`);
+            // 1. Guardar Inspecciones del Programa
+            await guardarProgramaMantenimiento(payloadPrograma);
+
+            // 2. Si hubo cambios en los componentes de la aeronave, sincronizar Aircraft
+            if (aeronaveData && guardarAeronave) {
+                await guardarAeronave(aeronaveData);
             }
+
+            alert(`📋 ¡Programa e Histórico de Componentes de ${formData.matricula} sincronizados con éxito!`);
         } catch (error) {
-            console.error("Error al guardar el programa:", error);
-            alert("Error al guardar el programa de mantenimiento.");
+            console.error("Error al guardar:", error);
+            alert("❌ Ocurrió un error al guardar la información.");
         }
     };
 
@@ -367,13 +454,15 @@ const ProgramaMantenimiento = () => {
 
     if (loading) return <div style={styles.loading}>📡 CONECTANDO CON EL REGISTRO MATRICIAL...</div>;
 
+    const listaCompActuales = getListaComponentesActual();
+
     return (
         <div style={styles.container}>
             {/* CABECERA Y SELECTORES */}
             <div style={styles.topHeaderBar}>
                 <h2 style={styles.mainTitle}>SISTEMA DE GESTIÓN DE MANTENIMIENTO</h2>
                 <button style={styles.btnSave} onClick={guardarMantenimiento} disabled={!aeronaveSeleccionadaId}>
-                    💾 Guardar Cambios
+                    💾 Guardar Todo en Servidor
                 </button>
             </div>
 
@@ -391,14 +480,125 @@ const ProgramaMantenimiento = () => {
                 </div>
             </div>
 
-            {/* SECCIÓN 1: PLANEADOR */}
+            {/* SECCIÓN DINÁMICA: REGISTRO/EDICIÓN DE COMPONENTES DE LA AERONAVE */}
+            {aeronaveData && (
+                <div style={styles.componentBox}>
+                    <h3 style={styles.subTitleBox}>⚙️ EDICIÓN / REGISTRO DE COMPONENTES INDIVIDUALES</h3>
+                    
+                    <div style={styles.compSelectorRow}>
+                        <div>
+                            <label style={styles.miniLabel}>SISTEMA / GRUPO:</label>
+                            <select 
+                                style={styles.compSelect} 
+                                value={grupoComponente} 
+                                onChange={(e) => {
+                                    setGrupoComponente(e.target.value);
+                                    setSubIndiceGrupo(0);
+                                    resetSeleccionComponente();
+                                }}
+                            >
+                                <option value="compPlaneador">✈️ Planeador</option>
+                                <option value="motores">⚙️ Motores</option>
+                                <option value="helices">🌀 Hélices</option>
+                            </select>
+                        </div>
+
+                        {(grupoComponente === 'motores' || grupoComponente === 'helices') && (
+                            <div>
+                                <label style={styles.miniLabel}>SUBGRUPO:</label>
+                                <select 
+                                    style={styles.compSelect} 
+                                    value={subIndiceGrupo} 
+                                    onChange={(e) => {
+                                        setSubIndiceGrupo(Number(e.target.value));
+                                        resetSeleccionComponente();
+                                    }}
+                                >
+                                    <option value={0}>Nº 1</option>
+                                    <option value={1}>Nº 2</option>
+                                </select>
+                            </div>
+                        )}
+
+                        <div style={{ flexGrow: 1 }}>
+                            <label style={styles.miniLabel}>SELECCIONAR COMPONENTE A EDITAR:</label>
+                            <select style={styles.compSelect} value={componenteIndex} onChange={handleComponenteSelect}>
+                                <option value="">-- Seleccione Componente --</option>
+                                {listaCompActuales.map((c, idx) => (
+                                    <option key={idx} value={idx}>
+                                        Nº {c.nro} - {c.componente || 'Sin Nombre'} | P/N: {c.pn || 'S/PN'} | S/N: {c.sn || 'S/SN'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* FORMULARIO DE CAMPOS DEL COMPONENTE SELECCIONADO */}
+                    {compEdit && (
+                        <div style={styles.compEditForm}>
+                            <h4 style={styles.formTitle}>📝 Editando: {compEdit.componente || 'Componente Sin Nombre'}</h4>
+                            <div style={styles.gridForm}>
+                                <div>
+                                    <label style={styles.fieldLabel}>ATA:</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.ata || ''} onChange={(e) => handleCompFieldChange('ata', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>Nombre Componente:</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.componente || ''} onChange={(e) => handleCompFieldChange('componente', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>P/N (Part Number):</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.pn || ''} onChange={(e) => handleCompFieldChange('pn', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>S/N (Serial Number):</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.sn || ''} onChange={(e) => handleCompFieldChange('sn', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>Límite Tipo:</label>
+                                    <select style={styles.selectForm} value={compEdit.limiteTipo || 'TBO'} onChange={(e) => handleCompFieldChange('limiteTipo', e.target.value)}>
+                                        <option value="TBO">TBO</option>
+                                        <option value="LL">LL (Life Limited)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>TG Instalación:</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.tgInstalacion || ''} onChange={(e) => handleCompFieldChange('tgInstalacion', e.target.value)} />
+                                </div>
+                            </div>
+
+                            {/* DYNAMIC LIMITES */}
+                            <div style={{ marginTop: '10px' }}>
+                                <strong style={styles.miniLabel}>LÍMITES:</strong>
+                                {(compEdit.limites || []).map((lim, lIdx) => (
+                                    <div key={lIdx} style={styles.nestedRow}>
+                                        <input style={styles.inputForm} value={lim.valor || ''} onChange={(e) => handleCompNestedArrayChange('limites', lIdx, 'valor', e.target.value)} placeholder="Valor" />
+                                        <select style={styles.selectForm} value={lim.unidad || 'H'} onChange={(e) => handleCompNestedArrayChange('limites', lIdx, 'unidad', e.target.value)}>
+                                            <option value="H">Horas (H)</option>
+                                            <option value="LDG">Aterrizajes (LDG)</option>
+                                            <option value="M">Meses (M)</option>
+                                            <option value="C">Ciclos (C)</option>
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button style={styles.btnApplyComp} onClick={handleAplicarCambioComponenteLocal}>
+                                ✔️ Aplicar Cambio al Componente
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* SECCIÓN 1: PROGRAMA PLANEADOR */}
             {renderTablaSeccion('Total Planeador Actual', formData.tgPlaneadorActual, tablaPlaneador, setTablaPlaneador, '#00a8ff')}
 
-            {/* SECCIÓN 2: MOTOR 1 Y MOTOR 2 */}
+            {/* SECCIÓN 2: PROGRAMA MOTOR 1 Y MOTOR 2 */}
             {renderTablaSeccion('Total Motor #1 Actual', formData.tgMotorActual, tablaMotor, setTablaMotor, '#d35400')}
             {configAeronave.esBimotor && renderTablaSeccion('Total Motor #2 Actual', formData.tgMotor2Actual, tablaMotor2, setTablaMotor2, '#e67e22')}
 
-            {/* SECCIÓN 3: HÉLICE 1 Y HÉLICE 2 */}
+            {/* SECCIÓN 3: PROGRAMA HÉLICE 1 Y HÉLICE 2 */}
             {configAeronave.tieneHelice && renderTablaSeccion('Total Hélice #1 Actual', formData.tgHeliceActual, tablaHelice, setTablaHelice, '#27ae60')}
             {configAeronave.tieneHelice && configAeronave.esBimotor && renderTablaSeccion('Total Hélice #2 Actual', formData.tgHelice2Actual, tablaHelice2, setTablaHelice2, '#2ecc71')}
         </div>
@@ -414,6 +614,22 @@ const styles = {
     selectorGroup: { display: 'flex', flexDirection: 'column', gap: '4px' },
     labelTitle: { fontSize: '0.75rem', fontWeight: 'bold' },
     selectInputFlota: { padding: '6px', fontSize: '0.85rem', fontWeight: 'bold' },
+    
+    // COMPONENT SECTION STYLES
+    componentBox: { background: '#2c3e50', color: '#fff', padding: '12px', marginTop: '15px', border: '1px solid #1a252f' },
+    subTitleBox: { margin: '0 0 10px 0', fontSize: '0.85rem', color: '#f39c12' },
+    compSelectorRow: { display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' },
+    miniLabel: { fontSize: '0.7rem', fontWeight: 'bold', display: 'block', marginBottom: '2px', color: '#ecf0f1' },
+    compSelect: { width: '100%', padding: '5px', fontSize: '0.8rem', background: '#ecf0f1', border: '1px solid #bdc3c7', fontWeight: 'bold' },
+    compEditForm: { background: '#34495e', padding: '10px', marginTop: '10px', borderRadius: '4px' },
+    formTitle: { margin: '0 0 8px 0', fontSize: '0.8rem', color: '#2ecc71' },
+    gridForm: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' },
+    fieldLabel: { fontSize: '0.7rem', color: '#bdc3c7', display: 'block' },
+    inputForm: { width: '100%', padding: '4px', fontSize: '0.75rem', boxSizing: 'border-box' },
+    selectForm: { width: '100%', padding: '4px', fontSize: '0.75rem' },
+    nestedRow: { display: 'flex', gap: '5px', marginTop: '4px' },
+    btnApplyComp: { backgroundColor: '#2980b9', color: '#fff', border: 'none', padding: '6px 12px', marginTop: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem' },
+
     sectionDivider: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' },
     miniKpiExcel: { color: '#000', padding: '4px 10px', border: '1px solid #000', display: 'flex', gap: '8px', alignItems: 'center', fontWeight: 'bold', fontSize: '0.78rem' },
     kpiInputInline: { width: '80px', textAlign: 'center', fontWeight: 'bold', background: '#fff', border: '1px solid #000' },
