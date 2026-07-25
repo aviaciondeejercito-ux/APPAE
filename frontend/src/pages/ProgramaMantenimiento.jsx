@@ -104,16 +104,31 @@ const ProgramaMantenimiento = () => {
 
     const formatNum = (val) => String(val).replace('.', ',');
 
-    // Motor de Cálculo Automático del Renglón
+    // ⏱️ Motor de Cálculo Automático del Renglón con Cómputo Dinámico de Descuento
     const recalcularRenglon = (renglon, totalHsActual) => {
         const cop = { ...renglon };
         const totalHsNum = parseNum(totalHsActual);
 
         if (cop.tipoCriterio === 'HORAS') {
-            const proxHsNum = parseNum(cop.proxHs);
+            const ultHsNum = parseNum(cop.ultHs);
+            const intervaloHsNum = parseNum(cop.intervaloHs);
+            
+            // Si tiene intervalo y última hora, calculamos la próxima vencimiento
+            let proxHsNum = parseNum(cop.proxHs);
+            if (intervaloHsNum > 0 && ultHsNum > 0 && !cop.proxHsManual) {
+                proxHsNum = ultHsNum + intervaloHsNum;
+                cop.proxHs = formatNum(proxHsNum.toFixed(1));
+            }
+
             if (proxHsNum > 0) {
                 const disp = proxHsNum - totalHsNum;
-                cop.disp = `${formatNum(disp.toFixed(1))} Hs`;
+                if (disp <= 0) {
+                    cop.disp = `🛑 VENCIDA (${formatNum(disp.toFixed(1))} Hs)`;
+                } else if (disp <= 10) {
+                    cop.disp = `⚠️ ${formatNum(disp.toFixed(1))} Hs`;
+                } else {
+                    cop.disp = `✔️ ${formatNum(disp.toFixed(1))} Hs`;
+                }
             } else {
                 cop.disp = '-';
             }
@@ -122,16 +137,24 @@ const ProgramaMantenimiento = () => {
             if (cop.ultFecha && meses > 0) {
                 const fechaOrigen = new Date(cop.ultFecha);
                 if (!isNaN(fechaOrigen.getTime())) {
-                    fechaOrigen.setMonth(fechaOrigen.getMonth() + meses);
-                    const yyyy = fechaOrigen.getFullYear();
-                    const mm = String(fechaOrigen.getMonth() + 1).padStart(2, '0');
-                    const dd = String(fechaOrigen.getDate()).padStart(2, '0');
+                    const fechaLimite = new Date(fechaOrigen);
+                    fechaLimite.setMonth(fechaLimite.getMonth() + meses);
+                    const yyyy = fechaLimite.getFullYear();
+                    const mm = String(fechaLimite.getMonth() + 1).padStart(2, '0');
+                    const dd = String(fechaLimite.getDate()).padStart(2, '0');
                     cop.proxFecha = `${yyyy}-${mm}-${dd}`;
                     
                     const hoy = new Date();
-                    const diffTime = fechaOrigen - hoy;
+                    const diffTime = fechaLimite - hoy;
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    cop.disp = diffDays > 0 ? `${diffDays} Días` : `VENCIDA (${Math.abs(diffDays)}d)`;
+                    
+                    if (diffDays <= 0) {
+                        cop.disp = `🛑 VENCIDA (${Math.abs(diffDays)}d)`;
+                    } else if (diffDays <= 15) {
+                        cop.disp = `⚠️ ${diffDays} Días`;
+                    } else {
+                        cop.disp = `✔️ ${diffDays} Días`;
+                    }
                 }
             }
         } else if (cop.tipoCriterio === 'FECHA') {
@@ -141,7 +164,14 @@ const ProgramaMantenimiento = () => {
                     const hoy = new Date();
                     const diffTime = fechaLimite - hoy;
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    cop.disp = diffDays > 0 ? `${diffDays} Días` : `VENCIDA (${Math.abs(diffDays)}d)`;
+                    
+                    if (diffDays <= 0) {
+                        cop.disp = `🛑 VENCIDA (${Math.abs(diffDays)}d)`;
+                    } else if (diffDays <= 15) {
+                        cop.disp = `⚠️ ${diffDays} Días`;
+                    } else {
+                        cop.disp = `✔️ ${diffDays} Días`;
+                    }
                 }
             }
         }
@@ -166,7 +196,6 @@ const ProgramaMantenimiento = () => {
         });
 
         if (avion) {
-            // Guardamos una copia profunda de la aeronave para manipular sus componentes
             setAeronaveData(JSON.parse(JSON.stringify(avion)));
 
             const esBim = avion.esBimotor || avion.cantidadMotores === 2 || Boolean(avion.motor2Tsn);
@@ -303,6 +332,9 @@ const ProgramaMantenimiento = () => {
         setTabla(tabla.map(row => {
             if (row.id === id) {
                 const actualizado = { ...row, [campo]: valor };
+                if (campo === 'proxHs') {
+                    actualizado.proxHsManual = true;
+                }
                 return recalcularRenglon(actualizado, totalHs);
             }
             return row;
@@ -312,8 +344,11 @@ const ProgramaMantenimiento = () => {
     const agregarRenglon = (tabla, setTabla) => {
         setTabla([...tabla, {
             id: 'temp-' + Date.now() + Math.random(),
-            descripcion: "",
+            componenteRef: '',
+            componenteNombre: '',
+            descripcion: '',
             tipoCriterio: "HORAS",
+            intervaloHs: "200",
             intervaloMeses: 0,
             ultHs: "",
             ultFecha: "",
@@ -355,10 +390,8 @@ const ProgramaMantenimiento = () => {
         };
 
         try {
-            // 1. Guardar Inspecciones del Programa
             await guardarProgramaMantenimiento(payloadPrograma);
 
-            // 2. Si hubo cambios en los componentes de la aeronave, sincronizar Aircraft
             if (aeronaveData && guardarAeronave) {
                 await guardarAeronave(aeronaveData);
             }
@@ -370,8 +403,8 @@ const ProgramaMantenimiento = () => {
         }
     };
 
-    // Renderizador de Tabla Reutilizable
-    const renderTablaSeccion = (titulo, totalHs, tabla, setTabla, bgHeader = '#00a8ff') => (
+    // Renderizador de Tabla Reutilizable con Selector de Componentes
+    const renderTablaSeccion = (titulo, totalHs, tabla, setTabla, bgHeader = '#00a8ff', componentesSeccion = []) => (
         <div style={{ marginTop: '20px' }}>
             <div style={styles.sectionDivider}>
                 <div style={{ ...styles.miniKpiExcel, backgroundColor: bgHeader }}>
@@ -387,26 +420,59 @@ const ProgramaMantenimiento = () => {
                 <table style={styles.mantoTable}>
                     <thead>
                         <tr>
-                            <th style={{ ...styles.th, width: '22%' }}>DESCRIPCIÓN</th>
-                            <th style={{ ...styles.th, width: '10%' }}>CRITERIO</th>
-                            <th style={{ ...styles.th, width: '9%' }}>ÚLT. HS</th>
-                            <th style={{ ...styles.th, width: '10%' }}>ÚLT. FECHA</th>
-                            <th style={{ ...styles.th, width: '8%' }}>OT</th>
-                            <th style={{ ...styles.th, width: '10%' }}>PRÓX. HS / MESES</th>
-                            <th style={{ ...styles.th, width: '10%' }}>PRÓX. FECHA</th>
+                            <th style={{ ...styles.th, width: '20%' }}>COMPONENTE (BD) / DESCRIPCIÓN</th>
+                            <th style={{ ...styles.th, width: '8%' }}>CRITERIO</th>
+                            <th style={{ ...styles.th, width: '8%' }}>ÚLT. HS</th>
+                            <th style={{ ...styles.th, width: '8%' }}>INT. (HS)</th>
+                            <th style={{ ...styles.th, width: '9%' }}>ÚLT. FECHA</th>
+                            <th style={{ ...styles.th, width: '7%' }}>OT</th>
+                            <th style={{ ...styles.th, width: '9%' }}>PRÓX. HS</th>
+                            <th style={{ ...styles.th, width: '9%' }}>PRÓX. FECHA</th>
                             <th style={{ ...styles.th, width: '9%' }}>RESPONSABLE</th>
-                            <th style={{ ...styles.th, width: '9%' }}>DISP / REM.</th>
+                            <th style={{ ...styles.th, width: '10%' }}>DISP / REM.</th>
                             <th style={{ ...styles.th, width: '3%' }}>ACC</th>
                         </tr>
                     </thead>
                     <tbody>
                         {tabla.length === 0 ? (
-                            <tr><td colSpan="10" style={styles.tdEmpty}>No hay inspecciones programadas.</td></tr>
+                            <tr><td colSpan="11" style={styles.tdEmpty}>No hay inspecciones programadas.</td></tr>
                         ) : (
                             tabla.map((row) => (
                                 <tr key={row.id} style={styles.tr}>
-                                    <td style={styles.td}>
-                                        <input type="text" style={styles.inputInCellBold} value={row.descripcion} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'descripcion', e.target.value, totalHs)} placeholder="Ej: Insp. 100 Hs / 12 Meses" />
+                                    <td style={{ ...styles.td, padding: '2px' }}>
+                                        {componentesSeccion.length > 0 && (
+                                            <select 
+                                                style={styles.selectInCellMini} 
+                                                value={row.componenteRef || ''} 
+                                                onChange={(e) => {
+                                                    const selectedId = e.target.value;
+                                                    const comp = componentesSeccion.find((c, i) => String(c._id || c.id || i) === String(selectedId));
+                                                    const compNombre = comp ? (comp.componente || comp.nombre || '') : '';
+                                                    const descAuto = compNombre ? `INSPECCIÓN DE ${compNombre.toUpperCase()}` : row.descripcion;
+                                                    
+                                                    setTabla(tabla.map(r => r.id === row.id ? recalcularRenglon({
+                                                        ...r,
+                                                        componenteRef: selectedId,
+                                                        componenteNombre: compNombre,
+                                                        descripcion: descAuto
+                                                    }, totalHs) : r));
+                                                }}
+                                            >
+                                                <option value="">-- Sin Vincular / General --</option>
+                                                {componentesSeccion.map((c, i) => (
+                                                    <option key={c._id || c.id || i} value={c._id || c.id || i}>
+                                                        {c.componente || c.nombre || `Comp #${i+1}`} (P/N: {c.pn || 'S/PN'})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                        <input 
+                                            type="text" 
+                                            style={styles.inputInCellBold} 
+                                            value={row.descripcion} 
+                                            onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'descripcion', e.target.value, totalHs)} 
+                                            placeholder="Ej: Inspección de 200 HS" 
+                                        />
                                     </td>
                                     <td style={styles.td}>
                                         <select style={styles.selectInCell} value={row.tipoCriterio || 'HORAS'} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'tipoCriterio', e.target.value, totalHs)}>
@@ -419,17 +485,20 @@ const ProgramaMantenimiento = () => {
                                         <input type="text" style={styles.inputInCell} value={row.ultHs} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'ultHs', e.target.value, totalHs)} placeholder="0.0" />
                                     </td>
                                     <td style={styles.td}>
+                                        {row.tipoCriterio === 'MESES' ? (
+                                            <input type="number" style={styles.inputInCell} value={row.intervaloMeses || ''} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'intervaloMeses', e.target.value, totalHs)} placeholder="Meses" />
+                                        ) : (
+                                            <input type="text" style={styles.inputInCell} value={row.intervaloHs || ''} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'intervaloHs', e.target.value, totalHs)} placeholder="Ej: 200" />
+                                        )}
+                                    </td>
+                                    <td style={styles.td}>
                                         <input type="date" style={styles.inputInCell} value={row.ultFecha} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'ultFecha', e.target.value, totalHs)} />
                                     </td>
                                     <td style={styles.td}>
-                                        <input type="text" style={styles.inputInCell} value={row.ultOt} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'ultOt', e.target.value, totalHs)} />
+                                        <input type="text" style={styles.inputInCell} value={row.ultOt} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'ultOt', e.target.value, totalHs)} placeholder="OT" />
                                     </td>
                                     <td style={styles.td}>
-                                        {row.tipoCriterio === 'MESES' ? (
-                                            <input type="number" style={styles.inputInCell} value={row.intervaloMeses || ''} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'intervaloMeses', e.target.value, totalHs)} placeholder="Meses (ej: 6)" />
-                                        ) : (
-                                            <input type="text" style={styles.inputInCell} value={row.proxHs} disabled={row.tipoCriterio === 'FECHA'} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'proxHs', e.target.value, totalHs)} placeholder="0.0" />
-                                        )}
+                                        <input type="text" style={{ ...styles.inputInCell, fontWeight: 'bold' }} value={row.proxHs} disabled={row.tipoCriterio === 'FECHA'} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'proxHs', e.target.value, totalHs)} placeholder="0.0" />
                                     </td>
                                     <td style={styles.td}>
                                         <input type="date" style={styles.inputInCell} value={row.proxFecha} disabled={row.tipoCriterio === 'MESES'} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'proxFecha', e.target.value, totalHs)} />
@@ -438,7 +507,16 @@ const ProgramaMantenimiento = () => {
                                         <input type="text" style={styles.inputInCell} value={row.responsable} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'responsable', e.target.value, totalHs)} />
                                     </td>
                                     <td style={styles.td}>
-                                        <input type="text" style={{ ...styles.inputInCell, fontWeight: 'bold', color: String(row.disp).includes('VENCIDA') ? '#e74c3c' : '#27ae60' }} value={row.disp} readOnly />
+                                        <input 
+                                            type="text" 
+                                            style={{ 
+                                                ...styles.inputInCell, 
+                                                fontWeight: 'bold', 
+                                                color: String(row.disp).includes('🛑') ? '#e74c3c' : String(row.disp).includes('⚠️') ? '#f39c12' : '#27ae60' 
+                                            }} 
+                                            value={row.disp || '-'} 
+                                            readOnly 
+                                        />
                                     </td>
                                     <td style={styles.tdAction}>
                                         <button style={styles.btnDeleteRow} onClick={() => setTabla(tabla.filter(r => r.id !== row.id))}>✖</button>
@@ -592,15 +670,50 @@ const ProgramaMantenimiento = () => {
             )}
 
             {/* SECCIÓN 1: PROGRAMA PLANEADOR */}
-            {renderTablaSeccion('Total Planeador Actual', formData.tgPlaneadorActual, tablaPlaneador, setTablaPlaneador, '#00a8ff')}
+            {renderTablaSeccion(
+                'Total Planeador Actual', 
+                formData.tgPlaneadorActual, 
+                tablaPlaneador, 
+                setTablaPlaneador, 
+                '#00a8ff',
+                aeronaveData?.compPlaneador || []
+            )}
 
             {/* SECCIÓN 2: PROGRAMA MOTOR 1 Y MOTOR 2 */}
-            {renderTablaSeccion('Total Motor #1 Actual', formData.tgMotorActual, tablaMotor, setTablaMotor, '#d35400')}
-            {configAeronave.esBimotor && renderTablaSeccion('Total Motor #2 Actual', formData.tgMotor2Actual, tablaMotor2, setTablaMotor2, '#e67e22')}
+            {renderTablaSeccion(
+                'Total Motor #1 Actual', 
+                formData.tgMotorActual, 
+                tablaMotor, 
+                setTablaMotor, 
+                '#d35400',
+                aeronaveData?.motores?.[0]?.componentes || []
+            )}
+            {configAeronave.esBimotor && renderTablaSeccion(
+                'Total Motor #2 Actual', 
+                formData.tgMotor2Actual, 
+                tablaMotor2, 
+                setTablaMotor2, 
+                '#e67e22',
+                aeronaveData?.motores?.[1]?.componentes || []
+            )}
 
             {/* SECCIÓN 3: PROGRAMA HÉLICE 1 Y HÉLICE 2 */}
-            {configAeronave.tieneHelice && renderTablaSeccion('Total Hélice #1 Actual', formData.tgHeliceActual, tablaHelice, setTablaHelice, '#27ae60')}
-            {configAeronave.tieneHelice && configAeronave.esBimotor && renderTablaSeccion('Total Hélice #2 Actual', formData.tgHelice2Actual, tablaHelice2, setTablaHelice2, '#2ecc71')}
+            {configAeronave.tieneHelice && renderTablaSeccion(
+                'Total Hélice #1 Actual', 
+                formData.tgHeliceActual, 
+                tablaHelice, 
+                setTablaHelice, 
+                '#27ae60',
+                aeronaveData?.helices?.[0]?.componentes || []
+            )}
+            {configAeronave.tieneHelice && configAeronave.esBimotor && renderTablaSeccion(
+                'Total Hélice #2 Actual', 
+                formData.tgHelice2Actual, 
+                tablaHelice2, 
+                setTablaHelice2, 
+                '#2ecc71',
+                aeronaveData?.helices?.[1]?.componentes || []
+            )}
         </div>
     );
 };
@@ -644,6 +757,7 @@ const styles = {
     inputInCell: { width: '100%', border: 'none', padding: '5px', textAlign: 'center', fontFamily: 'monospace', boxSizing: 'border-box' },
     inputInCellBold: { width: '100%', border: 'none', padding: '5px', fontWeight: 'bold', fontFamily: 'monospace', boxSizing: 'border-box' },
     selectInCell: { width: '100%', border: 'none', padding: '4px', fontSize: '0.75rem' },
+    selectInCellMini: { width: '100%', border: 'none', background: '#eaf2f8', padding: '2px', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' },
     btnDeleteRow: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold' },
     loading: { padding: '20px', color: '#fff', background: '#1b2a4a', fontFamily: 'monospace' }
 };
