@@ -39,8 +39,8 @@ const ProgramaMantenimiento = () => {
     // -------------------------------------------------------------
     // ESTADOS PARA BUSCADOR / VISOR DE COMPONENTES (SOLO LECTURA)
     // -------------------------------------------------------------
-    const [grupoComponente, setGrupoComponente] = useState('compPlaneador'); // 'compPlaneador' | 'motores' | 'helices'
-    const [subIndiceGrupo, setSubIndiceGrupo] = useState(0); // 0 para Motor/Hélice 1, 1 para Motor/Hélice 2
+    const [grupoComponente, setGrupoComponente] = useState('compPlaneador');
+    const [subIndiceGrupo, setSubIndiceGrupo] = useState(0);
     const [componenteIndex, setComponenteIndex] = useState('');
     const [compVisor, setCompVisor] = useState(null);
 
@@ -108,12 +108,50 @@ const ProgramaMantenimiento = () => {
     const obtenerTextoLimitesComp = (comp) => {
         if (!comp) return 'N/A';
         if (comp.limites && Array.isArray(comp.limites) && comp.limites.length > 0) {
-            return comp.limites.map(l => `${l.valor || 0} ${l.unidad || ''}`).join(' | ');
+            return comp.limites.map(l => `${l.valor ?? l.limiteVal ?? 0} ${l.unidad || ''}`).join(' | ');
         }
         if (comp.limiteValor) {
             return `${comp.limiteValor} ${comp.limiteUnidad || ''}`;
         }
         return 'Sin límite registrado';
+    };
+
+    // 🔍 HELPER MEJORADO: EXTRAE "DISP. CALCULADA" DE CUALQUIER VARIADAD DE ATRIBUTO BD
+    const obtenerTextoDisponibleComp = (comp) => {
+        if (!comp) return 'N/A';
+
+        // 1. Verificación en campos directos
+        const directo = comp.dispCalculada ?? comp.disponibleCalculado ?? comp.disp_calculada ?? comp.disponibleReal ?? comp.disponible ?? comp.remanente;
+        if (directo !== undefined && directo !== null && directo !== '') {
+            return String(directo);
+        }
+
+        // 2. Verificación si la disponibilidad está calculada dentro del arreglo de límites
+        if (Array.isArray(comp.limites) && comp.limites.length > 0) {
+            const dispsLims = comp.limites
+                .map(l => {
+                    const val = l.dispCalculada ?? l.disponibleCalculado ?? l.disponible ?? l.remanente;
+                    if (val !== undefined && val !== null && val !== '') {
+                        return `${val} ${l.unidad || ''}`.trim();
+                    }
+                    return null;
+                })
+                .filter(Boolean);
+
+            if (dispsLims.length > 0) {
+                return dispsLims.join(' | ');
+            }
+        }
+
+        // 3. Verificación si existe un arreglo 'disponibles'
+        if (Array.isArray(comp.disponibles) && comp.disponibles.length > 0) {
+            return comp.disponibles
+                .map(d => typeof d === 'object' ? `${d.valor ?? d.cantidad ?? ''} ${d.unidad || ''}`.trim() : String(d))
+                .filter(Boolean)
+                .join(' | ');
+        }
+
+        return 'N/A';
     };
 
     // ⏱️ Motor de Cálculo Automático del Renglón para TODOS LOS CRITERIOS
@@ -220,7 +258,7 @@ const ProgramaMantenimiento = () => {
         return cop;
     };
 
-    // Cambio de Selección de Aeronave y Extracción de Totales
+    // Cambio de Selección de Aeronave
     const handleAeronaveChange = async (e) => {
         const id = e.target.value;
         setAeronaveSeleccionadaId(id);
@@ -302,7 +340,6 @@ const ProgramaMantenimiento = () => {
         resetSeleccionComponente();
     };
 
-    // Reset del Visor Rápido
     const resetSeleccionComponente = () => {
         setComponenteIndex('');
         setCompVisor(null);
@@ -454,7 +491,7 @@ const ProgramaMantenimiento = () => {
                                 return (
                                     <tr key={row.id} style={styles.tr}>
                                         
-                                        {/* COMPONENTE (BD) + VISTA DE SNAPSHOT COMPLETO */}
+                                        {/* COMPONENTE (BD) + TARJETA EN LÍNEA CON "DISP. CALCULADA" */}
                                         <td style={{ ...styles.td, padding: '4px' }}>
                                             {componentesSeccion.length > 0 && (
                                                 <select 
@@ -492,12 +529,12 @@ const ProgramaMantenimiento = () => {
                                                 placeholder="Ej: Inspección de 200 HS" 
                                             />
 
-                                            {/* TARJETA DINÁMICA DE INFORMACIÓN TÉCNICA DEL COMPONENTE */}
+                                            {/* TARJETA DINÁMICA CON LA DISPONIBILIDAD CORREGIDA */}
                                             {compObj && (
                                                 <div style={styles.inlineCompCard}>
                                                     <div><strong>TG Instalación / Acum:</strong> {compObj.tgInstalacion || compObj.tgAcumulado || '0,0'}</div>
                                                     <div><strong>Límites BD:</strong> {obtenerTextoLimitesComp(compObj)}</div>
-                                                    <div><strong>Disponible BD:</strong> <span style={{ color: '#27ae60', fontWeight: 'bold' }}>{compObj.disponibleReal || compObj.disponible || 'N/D'}</span></div>
+                                                    <div><strong>Disponible BD:</strong> <span style={{ color: '#27ae60', fontWeight: 'bold' }}>{obtenerTextoDisponibleComp(compObj)}</span></div>
                                                 </div>
                                             )}
                                         </td>
@@ -513,7 +550,7 @@ const ProgramaMantenimiento = () => {
                                             </select>
                                         </td>
 
-                                        {/* ÚLTIMO VALOR (DIFERENCIADO SEGÚN CRITERIO) */}
+                                        {/* ÚLTIMO VALOR */}
                                         <td style={styles.td}>
                                             {row.tipoCriterio === 'HORAS' && (
                                                 <input type="text" style={styles.inputInCell} value={row.ultHs || ''} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'ultHs', e.target.value, totalHs)} placeholder="0.0 Hs" />
@@ -705,7 +742,7 @@ const ProgramaMantenimiento = () => {
                                 <div><span style={styles.readOnlyLabel}>Límite Tipo:</span> <strong>{compVisor.limiteTipo || 'TBO'}</strong></div>
                                 <div><span style={styles.readOnlyLabel}>TG Instalación / Acum:</span> <strong style={{ color: '#f39c12' }}>{compVisor.tgInstalacion || compVisor.tgAcumulado || '0,0'}</strong></div>
                                 <div><span style={styles.readOnlyLabel}>Límites Registrados:</span> <strong>{obtenerTextoLimitesComp(compVisor)}</strong></div>
-                                <div><span style={styles.readOnlyLabel}>Disponible BD:</span> <strong style={{ color: '#2ecc71' }}>{compVisor.disponibleReal || compVisor.disponible || 'N/A'}</strong></div>
+                                <div><span style={styles.readOnlyLabel}>Disponible BD:</span> <strong style={{ color: '#2ecc71' }}>{obtenerTextoDisponibleComp(compVisor)}</strong></div>
                             </div>
                         </div>
                     )}
