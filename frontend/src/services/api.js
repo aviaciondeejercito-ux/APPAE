@@ -224,7 +224,7 @@ export const updateEvent = (id, eventData) => {
 export const deleteEvent = (id) => API.delete(`/events/${id}`);
 
 /**
- * SERVICIOS DE MATERIAL AERONÁUTICO (ESTADO DE FLOTA)
+ * SERVICIOS DE MATERIAL AERONÁUTICO (ESTADO DE FLOTA & COMPONENTES)
  */
 export const getAircrafts = () => {
     const role = localStorage.getItem('role')?.toUpperCase().trim().replace(/\s+/g, '_') || '';
@@ -271,6 +271,14 @@ export const updateAircraftStatus = (id, aircraftData) => {
     delete dataNormalized.notas;
     return API.put(`/aircraft/${id}`, dataNormalized);
 };
+
+// 🛠️ GUARDAR / ACTUALIZAR AERONAVE COMPLETA (INCLUYE ESTRUCTURA DE COMPONENTES)
+export const guardarAeronave = (aeronaveData) => {
+    const id = aeronaveData._id?.$oid || aeronaveData._id;
+    return API.put(`/aircraft/${id}`, aeronaveData);
+};
+
+export const updateAircraft = guardarAeronave; // Alias de compatibilidad por si se importa con otro nombre
 
 export const deleteAircraft = (id) => API.delete(`/aircraft/${id}`);
 
@@ -339,6 +347,8 @@ const EventService = {
     registrarF13,
     deleteF13,
     getAircrafts,
+    guardarAeronave,
+    updateAircraft,
     getProgramaPorAeronave,
     guardarProgramaMantenimiento
 };
