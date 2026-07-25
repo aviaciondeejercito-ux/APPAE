@@ -1,8 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    FaSearch, FaTools, FaPlus, FaTrash, FaSave, FaSyncAlt, 
-    FaExclamationTriangle, FaCheckCircle, FaClock, FaCalendarAlt, FaPlane 
-} from 'react-icons/fa'; // <--- CORREGIDO: Importación correcta desde react-icons/fa
 import axios from 'axios';
 
 const ProgramaMantenimiento = ({ aeronaveId }) => {
@@ -276,7 +272,7 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                         ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200' 
                         : 'bg-rose-950/80 border-rose-500 text-rose-200'
                 }`}>
-                    {mensaje.tipo === 'success' ? <FaCheckCircle /> : <FaExclamationTriangle />}
+                    <span>{mensaje.tipo === 'success' ? '✅' : '⚠️'}</span>
                     <span>{mensaje.text}</span>
                 </div>
             )}
@@ -284,7 +280,7 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
             {/* 1. VISOR DE COMPONENTES / FICHA TÉCNICA (SOLO LECTURA) */}
             <div className="bg-slate-800/80 border border-slate-700 rounded-lg p-4 mb-6 shadow-md">
                 <div className="flex items-center gap-2 mb-3 text-amber-400 font-bold text-sm tracking-wider uppercase">
-                    <FaSearch /> VISOR DE COMPONENTES / FICHA TÉCNICA (SOLO LECTURA)
+                    🔍 VISOR DE COMPONENTES / FICHA TÉCNICA (SOLO LECTURA)
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -402,14 +398,14 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                         onClick={agregarRenglon}
                         className="bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1 transition shadow"
                     >
-                        <FaPlus /> AGREGAR INSPECCIÓN
+                        ➕ AGREGAR INSPECCIÓN
                     </button>
                     <button 
                         onClick={guardarPrograma}
                         disabled={loading}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-1.5 rounded flex items-center gap-1.5 transition shadow disabled:opacity-50"
                     >
-                        <FaSave /> {loading ? "GUARDANDO..." : "GUARDAR PROGRAMA"}
+                        💾 {loading ? "GUARDANDO..." : "GUARDAR PROGRAMA"}
                     </button>
                 </div>
             </div>
@@ -670,7 +666,7 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                                             title="Eliminar inspección"
                                             className="p-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded transition"
                                         >
-                                            <FaTrash className="text-xs" />
+                                            🗑️
                                         </button>
                                     </td>
                                 </tr>
@@ -687,7 +683,7 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                     disabled={loading}
                     className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded flex items-center gap-2 shadow-lg transition disabled:opacity-50 text-xs uppercase tracking-wider"
                 >
-                    <FaSave /> {loading ? "GUARDANDO CAMBIOS..." : "GUARDAR Y SINCRONIZAR PROGRAMA"}
+                    💾 {loading ? "GUARDANDO CAMBIOS..." : "GUARDAR Y SINCRONIZAR PROGRAMA"}
                 </button>
             </div>
         </div>
