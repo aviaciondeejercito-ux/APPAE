@@ -50,7 +50,7 @@ API.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response) {
-            // 🔒 SOLO desloguear si es estrictamente un 401 (Sesión expirada / Token inválido)
+            // 🔒 SOLO desloguear si es strictly un 401 (Sesión expirada / Token inválido)
             if (error.response.status === 401) {
                 console.warn("⚠️ SESIÓN EXPIRADA - REDIRIGIENDO A LOGIN");
                 localStorage.clear(); 
@@ -81,6 +81,13 @@ export const getTripulanteById = (id) => API.get(`/tripulantes/${id}`);
 export const createTripulante = (data) => API.post('/tripulantes', data);
 export const updateTripulante = (id, data) => API.put(`/tripulantes/${id}`, data);
 export const deleteTripulante = (id) => API.delete(`/tripulantes/${id}`);
+
+/**
+ * 🎓 NUEVOS SERVICIOS DE LA ESCUELA DE AVIACIÓN DE EJÉRCITO (EC AE)
+ */
+export const registrarInstruccion = (data) => API.post('/escuela/instruccion', data);
+export const getDashboardEscuela = (params = {}) => API.get('/escuela/dashboard', { params });
+export const getFichaAlumno = (idAlumno) => API.get(`/escuela/alumno/${idAlumno}`);
 
 /**
  * NUEVO SERVICIO MÓDULO EBM - PLANIFICACIÓN AUTOMÁTICA
@@ -335,6 +342,9 @@ const EventService = {
     createTripulante,
     updateTripulante,
     deleteTripulante,
+    registrarInstruccion,
+    getDashboardEscuela,
+    getFichaAlumno,
     getPlanificacionEbm,
     getAlertasDashboard,
     getWeatherData,

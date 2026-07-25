@@ -84,8 +84,10 @@ const alertRoutes = require('./routes/alertRoutes');
 const f13Routes = require('./routes/f13');
 const dashboardRoutes = require('./routes/dashboard');
 const aircraftRoutes = require('./routes/aircraftRoutes');
-// 🛠️ Nuevo módulo: Programas de Mantenimiento Independientes
+// 🛠️ Módulo: Programas de Mantenimiento Independientes
 const programaRoutes = require('./routes/programaRoutes');
+// 🎓 Módulo: Escuela de Aviación de Ejército (EC AE)
+const escuelaRoutes = require('./routes/escuelaRoutes');
 
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
@@ -93,7 +95,7 @@ app.get('/api/health', (req, res) => {
     res.status(200).json({
         status: 'online',
         server: 'Aviación de Ejército Argentina',
-        version: '1.5.0-OPERATIONAL-TRIP'
+        version: '1.6.0-OPERATIONAL-ECAE'
     });
 });
 
@@ -110,8 +112,9 @@ app.use('/api/ebm', ebmRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/f13', f13Routes);
 app.use('/api/dashboard', dashboardRoutes);
-// Inyección de la nueva ruta operativa
 app.use('/api/programas-mantenimiento', programaRoutes);
+// Inyección de la ruta operativa para Escuela de Aviación
+app.use('/api/escuela', escuelaRoutes);
 
 // --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
 app.use((req, res) => {
@@ -155,6 +158,13 @@ server.listen(PORT, () => {
         console.log("✅ Módulo de Programas de Mantenimiento verificado e integrado.");
     } else {
         console.warn("⚠️ Advertencia: El módulo de Programas de Mantenimiento falló al inicializarse.");
+    }
+
+    // Verificación de carga de rutas de Escuela de Aviación
+    if (escuelaRoutes) {
+        console.log("🎓 Módulo Escuela de Aviación (EC AE) cargado y operativo.");
+    } else {
+        console.warn("⚠️ Advertencia: El módulo de Escuela de Aviación falló al inicializarse.");
     }
 });
 
