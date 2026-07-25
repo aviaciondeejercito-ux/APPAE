@@ -21,6 +21,7 @@ import F13Page from './pages/F13';
 import DashboardNovedades from './components/DashboardNovedades'; 
 import F16Page from './pages/F16';
 import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
+import CargaInstruccion from './pages/CargaInstruccion'; // 🎓 NUEVO MÓDULO DE INSTRUCCIÓN
 
 // ==========================================
 // 🔻 SUBCOMPONENTE DE DROPDOWN PARA EL NAVBAR
@@ -139,14 +140,15 @@ function App() {
     const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
     const puedeVerF16 = esAdmin || esOfTecnica; 
     const puedeVerProgMantenimiento = esAdmin || esOfTecnica;
+    const puedeVerInstruccion = esAdmin || esOperaciones || esBoss || esDirector || esJefe || esPersonal; // 🎓 Habilitado para gestión de Escuela
 
     // Evaluaciones para mostrar menús completos solo si tiene permiso al menos de 1 ítem interno
-    const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos;
+    const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos || puedeVerInstruccion;
     const puedeVerGrupoOfTecnica = puedeVerF13 || puedeVerF16 || puedeVerProgMantenimiento;
     const puedeVerGrupoOTO = puedeVerStats || puedeVerOpEnDesarrollo;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16', 'progMantenimiento'].includes(view);
+    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16', 'progMantenimiento', 'cargaInstruccion'].includes(view);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -183,15 +185,23 @@ function App() {
                                 )}
                             </NavDropdown>
 
-                            {/* 2. GRUPO: OPERACIONES (Personal + EBM + Vuelos) */}
+                            {/* 2. GRUPO: OPERACIONES (Personal + EBM + Vuelos + Instrucción) */}
                             {puedeVerGrupoOperaciones && (
-                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos']} currentView={view}>
+                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos', 'cargaInstruccion']} currentView={view}>
                                     {puedeVerTripulantes && (
                                         <button 
                                             onClick={() => setView('tripulantes')} 
                                             style={{...styles.dropdownItem, backgroundColor: view === 'tripulantes' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
                                         >
                                             👥 Personal
+                                        </button>
+                                    )}
+                                    {puedeVerInstruccion && (
+                                        <button 
+                                            onClick={() => setView('cargaInstruccion')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'cargaInstruccion' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            🎓 Carga Instrucción
                                         </button>
                                     )}
                                     {puedeVerEbm && (
@@ -319,6 +329,7 @@ function App() {
                     (() => {
                         switch(view) {
                             case 'tripulantes': return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
+                            case 'cargaInstruccion': return puedeVerInstruccion ? <CargaInstruccion /> : <CalendarPage />;
                             case 'ebm': return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
                             case 'vuelos': return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
                             case 'f13': return puedeVerF13 ? <F13Page /> : <CalendarPage />;
