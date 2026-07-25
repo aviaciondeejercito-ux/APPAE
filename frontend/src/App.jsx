@@ -21,7 +21,11 @@ import F13Page from './pages/F13';
 import DashboardNovedades from './components/DashboardNovedades'; 
 import F16Page from './pages/F16';
 import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
-import CargaInstruccion from './pages/CargaInstruccion'; // 🎓 NUEVO MÓDULO DE INSTRUCCIÓN
+
+// 🎓 MÓDULOS DE ESCUELA DE AVIACIÓN (EC AE)
+import CargaInstruccion from './pages/CargaInstruccion';
+import DashboardEscuela from './pages/DashboardEscuela';
+import FichaAlumnoInstruccion from './pages/FichaAlumnoInstruccion';
 
 // ==========================================
 // 🔻 SUBCOMPONENTE DE DROPDOWN PARA EL NAVBAR
@@ -140,15 +144,19 @@ function App() {
     const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
     const puedeVerF16 = esAdmin || esOfTecnica; 
     const puedeVerProgMantenimiento = esAdmin || esOfTecnica;
-    const puedeVerInstruccion = esAdmin || esOperaciones || esBoss || esDirector || esJefe || esPersonal; // 🎓 Habilitado para gestión de Escuela
+    const puedeVerECAE = esAdmin || esOperaciones || esBoss || esDirector || esJefe || esPersonal; // 🎓 Escuela de Aviación
 
     // Evaluaciones para mostrar menús completos solo si tiene permiso al menos de 1 ítem interno
-    const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos || puedeVerInstruccion;
+    const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos;
     const puedeVerGrupoOfTecnica = puedeVerF13 || puedeVerF16 || puedeVerProgMantenimiento;
     const puedeVerGrupoOTO = puedeVerStats || puedeVerOpEnDesarrollo;
 
     // --- LÓGICA DE CONTENEDOR DINÁMICO ---
-    const esVistaFull = ['mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16', 'progMantenimiento', 'cargaInstruccion'].includes(view);
+    const esVistaFull = [
+        'mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 
+        'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16', 'progMantenimiento',
+        'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno'
+    ].includes(view);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
@@ -185,23 +193,15 @@ function App() {
                                 )}
                             </NavDropdown>
 
-                            {/* 2. GRUPO: OPERACIONES (Personal + EBM + Vuelos + Instrucción) */}
+                            {/* 2. GRUPO: OPERACIONES (Personal + EBM + Vuelos) */}
                             {puedeVerGrupoOperaciones && (
-                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos', 'cargaInstruccion']} currentView={view}>
+                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos']} currentView={view}>
                                     {puedeVerTripulantes && (
                                         <button 
                                             onClick={() => setView('tripulantes')} 
                                             style={{...styles.dropdownItem, backgroundColor: view === 'tripulantes' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
                                         >
                                             👥 Personal
-                                        </button>
-                                    )}
-                                    {puedeVerInstruccion && (
-                                        <button 
-                                            onClick={() => setView('cargaInstruccion')} 
-                                            style={{...styles.dropdownItem, backgroundColor: view === 'cargaInstruccion' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
-                                        >
-                                            🎓 Carga Instrucción
                                         </button>
                                     )}
                                     {puedeVerEbm && (
@@ -223,7 +223,31 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* 3. GRUPO: OFICINA TÉCNICA (F-13 + F-16 + Prog. Manto) */}
+                            {/* 3. GRUPO: EC AE (Carga + Dashboard + Ficha Alumno) */}
+                            {puedeVerECAE && (
+                                <NavDropdown title="🎓 EC AE" activeViews={['cargaInstruccion', 'dashboardEscuela', 'fichaAlumno']} currentView={view}>
+                                    <button 
+                                        onClick={() => setView('cargaInstruccion')} 
+                                        style={{...styles.dropdownItem, backgroundColor: view === 'cargaInstruccion' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                    >
+                                        📝 Carga Instrucción
+                                    </button>
+                                    <button 
+                                        onClick={() => setView('dashboardEscuela')} 
+                                        style={{...styles.dropdownItem, backgroundColor: view === 'dashboardEscuela' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                    >
+                                        📊 Dashboard General
+                                    </button>
+                                    <button 
+                                        onClick={() => setView('fichaAlumno')} 
+                                        style={{...styles.dropdownItem, backgroundColor: view === 'fichaAlumno' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                    >
+                                        👨‍✈️ Ficha Alumno
+                                    </button>
+                                </NavDropdown>
+                            )}
+
+                            {/* 4. GRUPO: OFICINA TÉCNICA (F-13 + F-16 + Prog. Manto) */}
                             {puedeVerGrupoOfTecnica && (
                                 <NavDropdown title="🛠️ Oficina Técnica" activeViews={['f13', 'f16', 'progMantenimiento']} currentView={view}>
                                     {puedeVerF13 && (
@@ -253,7 +277,7 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* 4. GRUPO: OTO (Stats + Op en Desarrollo) */}
+                            {/* 5. GRUPO: OTO (Stats + Op en Desarrollo) */}
                             {puedeVerGrupoOTO && (
                                 <NavDropdown title="🎯 OTO" activeViews={['stats', 'despacho']} currentView={view}>
                                     {puedeVerStats && (
@@ -329,7 +353,9 @@ function App() {
                     (() => {
                         switch(view) {
                             case 'tripulantes': return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
-                            case 'cargaInstruccion': return puedeVerInstruccion ? <CargaInstruccion /> : <CalendarPage />;
+                            case 'cargaInstruccion': return puedeVerECAE ? <CargaInstruccion /> : <CalendarPage />;
+                            case 'dashboardEscuela': return puedeVerECAE ? <DashboardEscuela /> : <CalendarPage />;
+                            case 'fichaAlumno': return puedeVerECAE ? <FichaAlumnoInstruccion /> : <CalendarPage />;
                             case 'ebm': return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
                             case 'vuelos': return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
                             case 'f13': return puedeVerF13 ? <F13Page /> : <CalendarPage />;
