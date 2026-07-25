@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { 
+    FaPlus, 
+    FaTrash, 
+    FaSave, 
+    FaPlane, 
+    FaCog, 
+    FaFan, 
+    FaClock, 
+    FaCalendarAlt, 
+    FaSearch, 
+    FaCheckCircle, 
+    FaExclamationTriangle 
+} from 'react-icons/fa';
 
 const ProgramaMantenimiento = ({ aeronaveId }) => {
     // ----------------------------------------------------
@@ -272,7 +285,7 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                         ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200' 
                         : 'bg-rose-950/80 border-rose-500 text-rose-200'
                 }`}>
-                    <span>{mensaje.tipo === 'success' ? '✅' : '⚠️'}</span>
+                    {mensaje.tipo === 'success' ? <FaCheckCircle className="text-emerald-400" /> : <FaExclamationTriangle className="text-rose-400" />}
                     <span>{mensaje.text}</span>
                 </div>
             )}
@@ -280,7 +293,7 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
             {/* 1. VISOR DE COMPONENTES / FICHA TÉCNICA (SOLO LECTURA) */}
             <div className="bg-slate-800/80 border border-slate-700 rounded-lg p-4 mb-6 shadow-md">
                 <div className="flex items-center gap-2 mb-3 text-amber-400 font-bold text-sm tracking-wider uppercase">
-                    🔍 VISOR DE COMPONENTES / FICHA TÉCNICA (SOLO LECTURA)
+                    <FaSearch /> VISOR DE COMPONENTES / FICHA TÉCNICA (SOLO LECTURA)
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -294,11 +307,11 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                             }}
                             className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
                         >
-                            <option value="Planeador">✈️ Planeador</option>
-                            <option value="Motor 1">⚙️ Motor 1</option>
-                            <option value="Motor 2">⚙️ Motor 2</option>
-                            <option value="Hélice 1">🌀 Hélice 1</option>
-                            <option value="Hélice 2">🌀 Hélice 2</option>
+                            <option value="Planeador">Planeador</option>
+                            <option value="Motor 1">Motor 1</option>
+                            <option value="Motor 2">Motor 2</option>
+                            <option value="Hélice 1">Hélice 1</option>
+                            <option value="Hélice 2">Hélice 2</option>
                         </select>
                     </div>
 
@@ -361,24 +374,27 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
             {/* 2. BARRA DE NAVEGACIÓN DE TABS DEL PROGRAMA */}
             <div className="flex flex-wrap gap-2 mb-4 border-b border-slate-700 pb-2">
                 {[
-                    { key: 'programaPlaneador', label: 'PLANEADOR' },
-                    { key: 'programaMotor', label: 'MOTOR 1' },
-                    { key: 'programaMotor2', label: 'MOTOR 2' },
-                    { key: 'programaHelice', label: 'HÉLICE 1' },
-                    { key: 'programaHelice2', label: 'HÉLICE 2' },
-                ].map(tab => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setTabActivo(tab.key)}
-                        className={`px-4 py-2 rounded-t font-bold text-xs uppercase tracking-wider transition-all ${
-                            tabActivo === tab.key 
-                                ? 'bg-amber-500 text-slate-950 shadow' 
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
-                        }`}
-                    >
-                        {tab.label} ({programa[tab.key]?.length || 0})
-                    </button>
-                ))}
+                    { key: 'programaPlaneador', label: 'PLANEADOR', icon: FaPlane },
+                    { key: 'programaMotor', label: 'MOTOR 1', icon: FaCog },
+                    { key: 'programaMotor2', label: 'MOTOR 2', icon: FaCog },
+                    { key: 'programaHelice', label: 'HÉLICE 1', icon: FaFan },
+                    { key: 'programaHelice2', label: 'HÉLICE 2', icon: FaFan },
+                ].map(tab => {
+                    const IconComponent = tab.icon;
+                    return (
+                        <button
+                            key={tab.key}
+                            onClick={() => setTabActivo(tab.key)}
+                            className={`px-4 py-2 rounded-t font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all ${
+                                tabActivo === tab.key 
+                                    ? 'bg-amber-500 text-slate-950 shadow' 
+                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                            }`}
+                        >
+                            <IconComponent /> {tab.label} ({programa[tab.key]?.length || 0})
+                        </button>
+                    );
+                })}
             </div>
 
             {/* CABECERA DE TABLA CON TG Y BOTÓN AGREGAR */}
@@ -396,16 +412,16 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                 <div className="flex items-center gap-2">
                     <button 
                         onClick={agregarRenglon}
-                        className="bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1 transition shadow"
+                        className="bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1.5 transition shadow"
                     >
-                        ➕ AGREGAR INSPECCIÓN
+                        <FaPlus /> AGREGAR INSPECCIÓN
                     </button>
                     <button 
                         onClick={guardarPrograma}
                         disabled={loading}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-1.5 rounded flex items-center gap-1.5 transition shadow disabled:opacity-50"
                     >
-                        💾 {loading ? "GUARDANDO..." : "GUARDAR PROGRAMA"}
+                        <FaSave /> {loading ? "GUARDANDO..." : "GUARDAR PROGRAMA"}
                     </button>
                 </div>
             </div>
@@ -422,7 +438,7 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                             <th className="p-2 border-r border-slate-800 w-24">Últ. Fecha</th>
                             <th className="p-2 border-r border-slate-800 w-24">O.T.</th>
                             <th className="p-2 border-r border-slate-800 w-28">Próx. Vencimiento</th>
-                            <th className="p-2 border-r border-slate-800 w-28">Próx. Fecha</th>
+                            <th className="p-2 border-r border-slate-800 w-24">Próx. Fecha</th>
                             <th className="p-2 border-r border-slate-800 w-24">Resp.</th>
                             <th className="p-2 border-r border-slate-800 w-24">Disp / Rem.</th>
                             <th className="p-2 text-center w-12">Acc</th>
@@ -488,11 +504,11 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                                             onChange={(e) => handleRenglonChange(idx, 'tipoCriterio', e.target.value)}
                                             className="w-full bg-slate-950 border border-slate-700 rounded text-xs p-1 text-slate-200 font-medium"
                                         >
-                                            <option value="HORAS">⏱️ Horas (Hs)</option>
-                                            <option value="FECHA">📅 Fecha Fija</option>
-                                            <option value="MESES">📆 Meses</option>
-                                            <option value="LANDINGS">🛬 Landings</option>
-                                            <option value="CICLOS">🔄 Ciclos</option>
+                                            <option value="HORAS">Horas (Hs)</option>
+                                            <option value="FECHA">Fecha Fija</option>
+                                            <option value="MESES">Meses</option>
+                                            <option value="LANDINGS">Landings</option>
+                                            <option value="CICLOS">Ciclos</option>
                                         </select>
                                     </td>
 
@@ -664,9 +680,9 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                                         <button 
                                             onClick={() => eliminarRenglon(idx)}
                                             title="Eliminar inspección"
-                                            className="p-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded transition"
+                                            className="p-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded transition flex items-center justify-center m-auto"
                                         >
-                                            🗑️
+                                            <FaTrash />
                                         </button>
                                     </td>
                                 </tr>
@@ -683,7 +699,7 @@ const ProgramaMantenimiento = ({ aeronaveId }) => {
                     disabled={loading}
                     className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded flex items-center gap-2 shadow-lg transition disabled:opacity-50 text-xs uppercase tracking-wider"
                 >
-                    💾 {loading ? "GUARDANDO CAMBIOS..." : "GUARDAR Y SINCRONIZAR PROGRAMA"}
+                    <FaSave /> {loading ? "GUARDANDO CAMBIOS..." : "GUARDAR Y SINCRONIZAR PROGRAMA"}
                 </button>
             </div>
         </div>
