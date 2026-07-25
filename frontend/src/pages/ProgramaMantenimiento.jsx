@@ -1,518 +1,765 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { getAircrafts, getProgramaPorAeronave, guardarProgramaMantenimiento, guardarAeronave } from '../services/api'; 
 
-const ProgramaMantenimiento = ({ aeronaveId }) => {
-    // ----------------------------------------------------
-    // ESTADOS
-    // ----------------------------------------------------
-    const [loading, setLoading] = useState(false);
-    const [mensaje, setMensaje] = useState(null);
-    const [tabActivo, setTabActivo] = useState('programaPlaneador');
+const ProgramaMantenimiento = () => {
+    const [aeronaves, setAeronaves] = useState([]);
+    const [unidadesDisponibles, setUnidadesDisponibles] = useState([]); 
+    const [loading, setLoading] = useState(true);
 
-    // Datos del Programa
-    const [programa, setPrograma] = useState({
-        tgPlaneadorActual: "0,0",
-        tgMotorActual: "0,0",
-        tgMotor2Actual: "0,0",
-        tgHeliceActual: "0,0",
-        tgHelice2Actual: "0,0",
-        programaPlaneador: [],
-        programaMotor: [],
-        programaMotor2: [],
-        programaHelice: [],
-        programaHelice2: []
+    const [unidadNavegacion, setUnidadNavegacion] = useState('');
+    const [aeronaveSeleccionadaId, setAeronaveSeleccionadaId] = useState('');
+    
+    // Almacena el objeto completo de la aeronave seleccionada (para compPlaneador, motores, helices)
+    const [aeronaveData, setAeronaveData] = useState(null);
+
+    // Banderas de configuración estructural
+    const [configAeronave, setConfigAeronave] = useState({
+        esBimotor: false,
+        tieneHelice: true
     });
 
-    // Componentes de la BD (Solo Lectura)
-    const [listaComponentes, setListaComponentes] = useState([]);
-    const [sistemaFiltro, setSistemaFiltro] = useState('Planeador');
-    const [componenteSeleccionadoId, setComponenteSeleccionadoId] = useState('');
-    const [componenteDetalle, setComponenteDetalle] = useState(null);
-
-    // ----------------------------------------------------
-    // CARGA INICIAL DE DATOS
-    // ----------------------------------------------------
-    useEffect(() => {
-        if (aeronaveId) {
-            cargarPrograma();
-            cargarComponentesAeronave();
-        }
-    }, [aeronaveId]);
-
-    const cargarPrograma = async () => {
-        setLoading(true);
-        try {
-            const res = await axios.get(`/api/programa-mantenimiento/${aeronaveId}`);
-            if (res.data && res.data.data) {
-                setPrograma(res.data.data);
-            }
-        } catch (err) {
-            console.error("Error al cargar programa:", err);
-            mostrarNotificacion("error", "Error al cargar el programa de mantenimiento.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const cargarComponentesAeronave = async () => {
-        try {
-            const res = await axios.get(`/api/aeronaves/${aeronaveId}/componentes`);
-            if (res.data && Array.isArray(res.data)) {
-                setListaComponentes(res.data);
-            }
-        } catch (err) {
-            console.error("Error al cargar componentes:", err);
-        }
-    };
-
-    // ----------------------------------------------------
-    // LÓGICA DE VISOR DE COMPONENTES (SOLO LECTURA)
-    // ----------------------------------------------------
-    const componentesFiltradosVisor = listaComponentes.filter(c => {
-        if (!c.sistema) return sistemaFiltro === 'Planeador';
-        return c.sistema.toLowerCase() === sistemaFiltro.toLowerCase();
+    const [formData, setFormData] = useState({
+        sda: '',
+        matricula: '',
+        nroSerie: '',
+        tgPlaneadorActual: '0,0',
+        tgMotorActual: '0,0',
+        tgMotor2Actual: '0,0',
+        tgHeliceActual: '0,0',
+        tgHelice2Actual: '0,0'
     });
 
+    // Tablas de Inspecciones
+    const [tablaPlaneador, setTablaPlaneador] = useState([]);
+    const [tablaMotor, setTablaMotor] = useState([]);
+    const [tablaMotor2, setTablaMotor2] = useState([]);
+    const [tablaHelice, setTablaHelice] = useState([]);
+    const [tablaHelice2, setTablaHelice2] = useState([]);
+
+    // -------------------------------------------------------------
+    // ESTADOS PARA EDICIÓN DINÁMICA DE COMPONENTES (AIRCRAFT SCHEMA)
+    // -------------------------------------------------------------
+    const [grupoComponente, setGrupoComponente] = useState('compPlaneador'); // 'compPlaneador' | 'motores' | 'helices'
+    const [subIndiceGrupo, setSubIndiceGrupo] = useState(0); // 0 para Motor/Hélice 1, 1 para Motor/Hélice 2
+    const [componenteIndex, setComponenteIndex] = useState('');
+    const [compEdit, setCompEdit] = useState(null);
+
+    const usuarioSesion = {
+        username: localStorage.getItem('username') || "Operador",
+        role: (localStorage.getItem('role') || localStorage.getItem('rol') || 'USER').toUpperCase().trim(),
+        elemento: (localStorage.getItem('elemento') || '').toUpperCase().trim()
+    };
+
+    const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
+
+    // Carga inicial de Flota
     useEffect(() => {
-        if (!componenteSeleccionadoId) {
-            setComponenteDetalle(null);
-            return;
-        }
-        const comp = listaComponentes.find(c => (c._id || c.id) === componenteSeleccionadoId);
-        setComponenteDetalle(comp || null);
-    }, [componenteSeleccionadoId, listaComponentes]);
+        const inicializarPanel = async () => {
+            setLoading(true);
+            try {
+                const respuesta = await getAircrafts();
+                let listaAviones = [];
+                
+                if (respuesta?.data?.data && Array.isArray(respuesta.data.data)) {
+                    listaAviones = respuesta.data.data; 
+                } else if (respuesta?.data && Array.isArray(respuesta.data)) {
+                    listaAviones = respuesta.data;
+                } else if (Array.isArray(respuesta)) {
+                    listaAviones = respuesta;
+                }
+                
+                setAeronaves(listaAviones);
 
-    // ----------------------------------------------------
-    // MANEJO DE RENGLONES EN LA TABLA
-    // ----------------------------------------------------
-    const handleRenglonChange = (index, campo, valor) => {
-        setPrograma(prev => {
-            const nuevosRenglones = [...prev[tabActivo]];
-            nuevosRenglones[index] = {
-                ...nuevosRenglones[index],
-                [campo]: valor
-            };
-            return { ...prev, [tabActivo]: nuevosRenglones };
-        });
-    };
+                const unidadesUnicas = [...new Set(listaAviones.map(a => a.unidad?.trim().toUpperCase()).filter(Boolean))];
+                setUnidadesDisponibles(unidadesUnicas);
 
-    const handleSelectComponenteEnFila = (index, compId) => {
-        const comp = listaComponentes.find(c => (c._id || c.id) === compId);
-
-        setPrograma(prev => {
-            const nuevosRenglones = [...prev[tabActivo]];
-            if (comp) {
-                nuevosRenglones[index] = {
-                    ...nuevosRenglones[index],
-                    componenteRef: comp._id || comp.id,
-                    componenteNombre: `${comp.nombre || 'COMPONENTE'} (P/N: ${comp.pn || 'S/D'})`,
-                    tgComponente: comp.tgInstalacion || comp.tgAcumulado || "0,0",
-                    limiteComponente: `${comp.limiteValor || ''} ${comp.limiteUnidad || ''} ${comp.limiteTipo ? `(${comp.limiteTipo})` : ''}`.trim(),
-                    dispComponente: comp.disponibleReal || comp.disponible || "0,0",
-                    descripcion: nuevosRenglones[index].descripcion || `INSPECCIÓN DE ${comp.nombre?.toUpperCase() || 'COMPONENTE'}`
-                };
-            } else {
-                nuevosRenglones[index] = {
-                    ...nuevosRenglones[index],
-                    componenteRef: "",
-                    componenteNombre: "",
-                    tgComponente: "",
-                    limiteComponente: "",
-                    dispComponente: ""
-                };
+                if (isMandoEstrategico) {
+                    const unidadInicialAdmin = unidadesUnicas.includes(usuarioSesion.elemento) ? usuarioSesion.elemento : (unidadesUnicas[0] || 'B AV APY COMB 601');
+                    setUnidadNavegacion(unidadInicialAdmin);
+                } else {
+                    setUnidadNavegacion(usuarioSesion.elemento);
+                }
+                
+                setLoading(false);
+            } catch (error) {
+                console.error("❌ Error al inicializar flota:", error);
+                setLoading(false);
             }
-            return { ...prev, [tabActivo]: nuevosRenglones };
-        });
-    };
-
-    const agregarRenglon = () => {
-        const nuevoRenglon = {
-            id: `temp-${Date.now()}`,
-            componenteRef: "",
-            componenteNombre: "",
-            tgComponente: "",
-            limiteComponente: "",
-            dispComponente: "",
-            descripcion: "",
-            tipoCriterio: "HORAS",
-            intervaloHs: "",
-            intervaloMeses: 0,
-            intervaloLandings: 0,
-            intervaloCiclos: 0,
-            ultHs: "",
-            ultFecha: "",
-            ultLandings: "",
-            ultCiclos: "",
-            ultOt: "",
-            proxHs: "",
-            proxFecha: "",
-            proxLandings: "",
-            proxCiclos: "",
-            responsable: "Ec AE",
-            disp: ""
         };
 
-        setPrograma(prev => ({
-            ...prev,
-            [tabActivo]: [...prev[tabActivo], nuevoRenglon]
+        inicializarPanel();
+    }, []);
+
+    const aeronavesFiltradas = aeronaves.filter(a => 
+        a.unidad && String(a.unidad).trim().toUpperCase() === unidadNavegacion.toUpperCase()
+    );
+
+    // Helpers para conversión numérica con coma/punto
+    const parseNum = (val) => {
+        if (!val) return 0;
+        const clean = String(val).replace(',', '.').trim();
+        const num = parseFloat(clean);
+        return isNaN(num) ? 0 : num;
+    };
+
+    const formatNum = (val) => String(val).replace('.', ',');
+
+    // ⏱️ Motor de Cálculo Automático del Renglón con Cómputo Dinámico de Descuento
+    const recalcularRenglon = (renglon, totalHsActual) => {
+        const cop = { ...renglon };
+        const totalHsNum = parseNum(totalHsActual);
+
+        if (cop.tipoCriterio === 'HORAS') {
+            const ultHsNum = parseNum(cop.ultHs);
+            const intervaloHsNum = parseNum(cop.intervaloHs);
+            
+            // Si tiene intervalo y última hora, calculamos la próxima vencimiento
+            let proxHsNum = parseNum(cop.proxHs);
+            if (intervaloHsNum > 0 && ultHsNum > 0 && !cop.proxHsManual) {
+                proxHsNum = ultHsNum + intervaloHsNum;
+                cop.proxHs = formatNum(proxHsNum.toFixed(1));
+            }
+
+            if (proxHsNum > 0) {
+                const disp = proxHsNum - totalHsNum;
+                if (disp <= 0) {
+                    cop.disp = `🛑 VENCIDA (${formatNum(disp.toFixed(1))} Hs)`;
+                } else if (disp <= 10) {
+                    cop.disp = `⚠️ ${formatNum(disp.toFixed(1))} Hs`;
+                } else {
+                    cop.disp = `✔️ ${formatNum(disp.toFixed(1))} Hs`;
+                }
+            } else {
+                cop.disp = '-';
+            }
+        } else if (cop.tipoCriterio === 'MESES') {
+            const meses = parseInt(cop.intervaloMeses, 10) || 0;
+            if (cop.ultFecha && meses > 0) {
+                const fechaOrigen = new Date(cop.ultFecha);
+                if (!isNaN(fechaOrigen.getTime())) {
+                    const fechaLimite = new Date(fechaOrigen);
+                    fechaLimite.setMonth(fechaLimite.getMonth() + meses);
+                    const yyyy = fechaLimite.getFullYear();
+                    const mm = String(fechaLimite.getMonth() + 1).padStart(2, '0');
+                    const dd = String(fechaLimite.getDate()).padStart(2, '0');
+                    cop.proxFecha = `${yyyy}-${mm}-${dd}`;
+                    
+                    const hoy = new Date();
+                    const diffTime = fechaLimite - hoy;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays <= 0) {
+                        cop.disp = `🛑 VENCIDA (${Math.abs(diffDays)}d)`;
+                    } else if (diffDays <= 15) {
+                        cop.disp = `⚠️ ${diffDays} Días`;
+                    } else {
+                        cop.disp = `✔️ ${diffDays} Días`;
+                    }
+                }
+            }
+        } else if (cop.tipoCriterio === 'FECHA') {
+            if (cop.proxFecha) {
+                const fechaLimite = new Date(cop.proxFecha);
+                if (!isNaN(fechaLimite.getTime())) {
+                    const hoy = new Date();
+                    const diffTime = fechaLimite - hoy;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays <= 0) {
+                        cop.disp = `🛑 VENCIDA (${Math.abs(diffDays)}d)`;
+                    } else if (diffDays <= 15) {
+                        cop.disp = `⚠️ ${diffDays} Días`;
+                    } else {
+                        cop.disp = `✔️ ${diffDays} Días`;
+                    }
+                }
+            }
+        }
+
+        return cop;
+    };
+
+    // Cambio de Selección de Aeronave y Extracción de Totales
+    const handleAeronaveChange = async (e) => {
+        const id = e.target.value;
+        setAeronaveSeleccionadaId(id);
+        resetSeleccionComponente();
+        
+        if (!id) {
+            resetVistaLocal();
+            return;
+        }
+
+        const avion = aeronaves.find(a => {
+            const avionId = a._id?.$oid || a._id;
+            return String(avionId) === String(id);
+        });
+
+        if (avion) {
+            setAeronaveData(JSON.parse(JSON.stringify(avion)));
+
+            const esBim = avion.esBimotor || avion.cantidadMotores === 2 || Boolean(avion.motor2Tsn);
+            const tieneHel = avion.tieneHelice !== false && avion.tipoPropulsion !== 'TURBOFAN' && avion.tipoPropulsion !== 'REACCION';
+
+            setConfigAeronave({ esBimotor: esBim, tieneHelice: tieneHel });
+
+            const hsPlaneador = formatNum(avion.tgPlaneadorActual ?? avion.horasTotales ?? '0,0');
+            const hsMotor1 = formatNum(avion.motor1Tsn ?? avion.motorTsn ?? '0,0');
+            const hsMotor2 = formatNum(avion.motor2Tsn ?? '0,0');
+            const hsHelice1 = formatNum(avion.helice1Tsn ?? avion.heliceTsn ?? '0,0');
+            const hsHelice2 = formatNum(avion.helice2Tsn ?? '0,0');
+
+            setFormData({
+                sda: avion.sda || 'N/D',
+                matricula: avion.matricula || 'N/D',
+                nroSerie: avion.nroSerie || 'S/N', 
+                tgPlaneadorActual: hsPlaneador, 
+                tgMotorActual: hsMotor1,
+                tgMotor2Actual: hsMotor2,
+                tgHeliceActual: hsHelice1,
+                tgHelice2Actual: hsHelice2
+            });
+
+            try {
+                const res = await getProgramaPorAeronave(id);
+                
+                if (res?.data?.data) {
+                    const prog = res.data.data;
+                    
+                    const mapTable = (lista, totalHs) => (lista || []).map(r => 
+                        recalcularRenglon({ ...r, id: r._id || r.id || Date.now() + Math.random() }, totalHs)
+                    );
+
+                    setTablaPlaneador(mapTable(prog.programaPlaneador, hsPlaneador));
+                    setTablaMotor(mapTable(prog.programaMotor, hsMotor1));
+                    setTablaMotor2(mapTable(prog.programaMotor2, hsMotor2));
+                    setTablaHelice(mapTable(prog.programaHelice, hsHelice1));
+                    setTablaHelice2(mapTable(prog.programaHelice2, hsHelice2));
+                } else {
+                    limpiarTodasLasTablas();
+                }
+            } catch (error) {
+                console.error("Error al recuperar programa de mantenimiento:", error);
+                limpiarTodasLasTablas();
+            }
+        }
+    };
+
+    const limpiarTodasLasTablas = () => {
+        setTablaPlaneador([]);
+        setTablaMotor([]);
+        setTablaMotor2([]);
+        setTablaHelice([]);
+        setTablaHelice2([]);
+    };
+
+    const resetVistaLocal = () => {
+        setAeronaveSeleccionadaId('');
+        setAeronaveData(null);
+        setFormData({ sda: '', matricula: '', nroSerie: '', tgPlaneadorActual: '0,0', tgMotorActual: '0,0', tgMotor2Actual: '0,0', tgHeliceActual: '0,0', tgHelice2Actual: '0,0' });
+        limpiarTodasLasTablas();
+        resetSeleccionComponente();
+    };
+
+    // -------------------------------------------------------------
+    // LÓGICA DE GESTIÓN Y EDICIÓN DE COMPONENTES INDIVIDUALES
+    // -------------------------------------------------------------
+    const resetSeleccionComponente = () => {
+        setComponenteIndex('');
+        setCompEdit(null);
+    };
+
+    const getListaComponentesActual = () => {
+        if (!aeronaveData) return [];
+        if (grupoComponente === 'compPlaneador') {
+            return aeronaveData.compPlaneador || [];
+        } else if (grupoComponente === 'motores') {
+            return aeronaveData.motores?.[subIndiceGrupo]?.componentes || [];
+        } else if (grupoComponente === 'helices') {
+            return aeronaveData.helices?.[subIndiceGrupo]?.componentes || [];
+        }
+        return [];
+    };
+
+    const handleComponenteSelect = (e) => {
+        const idx = e.target.value;
+        setComponenteIndex(idx);
+        if (idx !== '') {
+            const lista = getListaComponentesActual();
+            setCompEdit(JSON.parse(JSON.stringify(lista[idx])));
+        } else {
+            setCompEdit(null);
+        }
+    };
+
+    const handleCompFieldChange = (campo, valor) => {
+        setCompEdit(prev => ({ ...prev, [campo]: valor }));
+    };
+
+    const handleCompNestedArrayChange = (arrayName, idx, campo, valor) => {
+        setCompEdit(prev => {
+            const copiaArray = [...(prev[arrayName] || [])];
+            copiaArray[idx] = { ...copiaArray[idx], [campo]: valor };
+            return { ...prev, [arrayName]: copiaArray };
+        });
+    };
+
+    const handleAplicarCambioComponenteLocal = () => {
+        if (componenteIndex === '' || !compEdit || !aeronaveData) return;
+
+        const copiaAeronave = JSON.parse(JSON.stringify(aeronaveData));
+        const idx = parseInt(componenteIndex, 10);
+
+        if (grupoComponente === 'compPlaneador') {
+            if (!copiaAeronave.compPlaneador) copiaAeronave.compPlaneador = [];
+            copiaAeronave.compPlaneador[idx] = compEdit;
+        } else if (grupoComponente === 'motores') {
+            if (copiaAeronave.motores?.[subIndiceGrupo]) {
+                copiaAeronave.motores[subIndiceGrupo].componentes[idx] = compEdit;
+            }
+        } else if (grupoComponente === 'helices') {
+            if (copiaAeronave.helices?.[subIndiceGrupo]) {
+                copiaAeronave.helices[subIndiceGrupo].componentes[idx] = compEdit;
+            }
+        }
+
+        setAeronaveData(copiaAeronave);
+        alert(`✔️ Componente "${compEdit.componente || 'Nº' + compEdit.nro}" actualizado localmente.`);
+    };
+
+    // Manejo de Tablas de Inspección
+    const handleCellChange = (tabla, setTabla, id, campo, valor, totalHs) => {
+        setTabla(tabla.map(row => {
+            if (row.id === id) {
+                const actualizado = { ...row, [campo]: valor };
+                if (campo === 'proxHs') {
+                    actualizado.proxHsManual = true;
+                }
+                return recalcularRenglon(actualizado, totalHs);
+            }
+            return row;
         }));
     };
 
-    const eliminarRenglon = (index) => {
-        setPrograma(prev => {
-            const nuevosRenglones = [...prev[tabActivo]];
-            nuevosRenglones.splice(index, 1);
-            return { ...prev, [tabActivo]: nuevosRenglones };
+    const agregarRenglon = (tabla, setTabla) => {
+        setTabla([...tabla, {
+            id: 'temp-' + Date.now() + Math.random(),
+            componenteRef: '',
+            componenteNombre: '',
+            descripcion: '',
+            tipoCriterio: "HORAS",
+            intervaloHs: "200",
+            intervaloMeses: 0,
+            ultHs: "",
+            ultFecha: "",
+            ultOt: "",
+            proxHs: "",
+            proxFecha: "",
+            responsable: "Ec AE",
+            disp: ""
+        }]);
+    };
+
+    // Guardado Global del Programa y Componentes
+    const guardarMantenimiento = async () => {
+        if (!aeronaveSeleccionadaId) {
+            alert("Error: Debe seleccionar una aeronave de la flota antes de guardar.");
+            return;
+        }
+
+        const sanitizar = (lista) => (lista || []).map(r => {
+            const copia = { ...r };
+            if (copia.id && String(copia.id).startsWith('temp-')) delete copia.id;
+            else if (copia.id) { copia._id = copia.id; delete copia.id; }
+            return copia;
         });
-    };
 
-    // ----------------------------------------------------
-    // PERSISTENCIA (GUARDAR EN PROGRAMA)
-    // ----------------------------------------------------
-    const guardarPrograma = async () => {
-        setLoading(true);
+        const payloadPrograma = {
+            aeronaveId: aeronaveSeleccionadaId,
+            tgPlaneadorActual: formData.tgPlaneadorActual,
+            tgMotorActual: formData.tgMotorActual,
+            tgMotor2Actual: formData.tgMotor2Actual,
+            tgHeliceActual: formData.tgHeliceActual,
+            tgHelice2Actual: formData.tgHelice2Actual,
+            programaPlaneador: sanitizar(tablaPlaneador),
+            programaMotor: sanitizar(tablaMotor),
+            programaMotor2: sanitizar(tablaMotor2),
+            programaHelice: sanitizar(tablaHelice),
+            programaHelice2: sanitizar(tablaHelice2),
+            actualizadoPor: usuarioSesion.username
+        };
+
         try {
-            const payload = {
-                aeronaveId,
-                ...programa
-            };
+            await guardarProgramaMantenimiento(payloadPrograma);
 
-            const res = await axios.post('/api/programa-mantenimiento/guardar', payload);
-            if (res.data && res.data.status === 'success') {
-                mostrarNotificacion("success", "Programa de mantenimiento guardado correctamente.");
-                if (res.data.data) {
-                    setPrograma(res.data.data);
-                }
+            if (aeronaveData && guardarAeronave) {
+                await guardarAeronave(aeronaveData);
             }
-        } catch (err) {
-            console.error("Error al guardar programa:", err);
-            mostrarNotificacion("error", "Error al guardar el programa de mantenimiento.");
-        } finally {
-            setLoading(false);
+
+            alert(`📋 ¡Programa e Histórico de Componentes de ${formData.matricula} sincronizados con éxito!`);
+        } catch (error) {
+            console.error("Error al guardar:", error);
+            alert("❌ Ocurrió un error al guardar la información.");
         }
     };
 
-    const mostrarNotificacion = (tipo, text) => {
-        setMensaje({ tipo, text });
-        setTimeout(() => setMensaje(null), 4000);
-    };
-
-    // Helper para etiqueta de TG según el Tab activo
-    const getTgActualTab = () => {
-        switch (tabActivo) {
-            case 'programaPlaneador': return { label: 'TOTAL PLANEADOR ACTUAL', val: programa.tgPlaneadorActual, key: 'tgPlaneadorActual' };
-            case 'programaMotor': return { label: 'TOTAL MOTOR 1 ACTUAL', val: programa.tgMotorActual, key: 'tgMotorActual' };
-            case 'programaMotor2': return { label: 'TOTAL MOTOR 2 ACTUAL', val: programa.tgMotor2Actual, key: 'tgMotor2Actual' };
-            case 'programaHelice': return { label: 'TOTAL HÉLICE 1 ACTUAL', val: programa.tgHeliceActual, key: 'tgHeliceActual' };
-            case 'programaHelice2': return { label: 'TOTAL HÉLICE 2 ACTUAL', val: programa.tgHelice2Actual, key: 'tgHelice2Actual' };
-            default: return { label: 'TOTAL ACTUAL', val: '0,0', key: '' };
-        }
-    };
-
-    const currentTg = getTgActualTab();
-
-    // ----------------------------------------------------
-    // ESTILOS LIMPIOS Y SEGUROS (CSS NATIVO)
-    // ----------------------------------------------------
-    const styles = {
-        container: { fontFamily: 'Arial, sans-serif', padding: '16px', backgroundColor: '#f8fafc', color: '#1e293b' },
-        card: { backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '16px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
-        cardTitle: { fontWeight: 'bold', fontSize: '12px', color: '#334155', textTransform: 'uppercase', marginBottom: '10px' },
-        input: { padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', backgroundColor: '#ffffff', color: '#0f172a', width: '100%', boxSizing: 'border-box' },
-        inputCenter: { textAlign: 'center' },
-        btnPrimary: { backgroundColor: '#48bb78', color: '#ffffff', border: 'none', borderRadius: '4px', padding: '6px 14px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' },
-        btnSecondary: { backgroundColor: '#e2e8f0', color: '#1e293b', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '6px 14px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' },
-        btnDelete: { backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontWeight: 'bold' },
-        tab: { padding: '8px 16px', border: '1px solid #cbd5e1', borderBottom: 'none', backgroundColor: '#e2e8f0', color: '#475569', borderRadius: '4px 4px 0 0', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' },
-        tabActive: { padding: '8px 16px', border: '1px solid #cbd5e1', borderBottom: '2px solid #ffffff', backgroundColor: '#ffffff', color: '#0f172a', borderRadius: '4px 4px 0 0', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' },
-        table: { width: '100%', borderCollapse: 'collapse', backgroundColor: '#ffffff', fontSize: '12px' },
-        th: { backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', padding: '8px', color: '#334155', fontWeight: 'bold', fontSize: '11px', textAlign: 'left' },
-        td: { border: '1px solid #cbd5e1', padding: '6px', verticalAlign: 'top' },
-        snapshot: { marginTop: '4px', padding: '4px 6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '10px', color: '#64748b' }
-    };
-
-    return (
-        <div style={styles.container}>
-            
-            {/* NOTIFICACIÓN FLOTANTE */}
-            {mensaje && (
-                <div style={{ ...styles.card, backgroundColor: mensaje.tipo === 'success' ? '#dcfce7' : '#fee2e2', color: mensaje.tipo === 'success' ? '#166534' : '#991b1b', borderColor: mensaje.tipo === 'success' ? '#86efac' : '#fca5a5' }}>
-                    {mensaje.text}
+    // Renderizador de Tabla Reutilizable con Selector de Componentes
+    const renderTablaSeccion = (titulo, totalHs, tabla, setTabla, bgHeader = '#00a8ff', componentesSeccion = []) => (
+        <div style={{ marginTop: '20px' }}>
+            <div style={styles.sectionDivider}>
+                <div style={{ ...styles.miniKpiExcel, backgroundColor: bgHeader }}>
+                    <span style={styles.kpiLabel}>{titulo.toUpperCase()}:</span>
+                    <input type="text" style={styles.kpiInputInline} value={totalHs} disabled readOnly />
                 </div>
-            )}
-
-            {/* 1. VISOR DE COMPONENTES / FICHA TÉCNICA (SOLO LECTURA) */}
-            <div style={styles.card}>
-                <div style={styles.cardTitle}>VISOR DE COMPONENTES / FICHA TÉCNICA (SOLO LECTURA)</div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px', marginBottom: '12px' }}>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>SISTEMA / GRUPO</label>
-                        <select 
-                            value={sistemaFiltro} 
-                            onChange={(e) => {
-                                setSistemaFiltro(e.target.value);
-                                setComponenteSeleccionadoId('');
-                            }}
-                            style={styles.input}
-                        >
-                            <option value="Planeador">Planeador</option>
-                            <option value="Motor 1">Motor 1</option>
-                            <option value="Motor 2">Motor 2</option>
-                            <option value="Hélice 1">Hélice 1</option>
-                            <option value="Hélice 2">Hélice 2</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>SELECCIONAR COMPONENTE A CONSULTAR</label>
-                        <select 
-                            value={componenteSeleccionadoId} 
-                            onChange={(e) => setComponenteSeleccionadoId(e.target.value)}
-                            style={styles.input}
-                        >
-                            <option value="">-- Seleccionar para ver detalle completo --</option>
-                            {componentesFiltradosVisor.map((comp) => (
-                                <option key={comp._id || comp.id} value={comp._id || comp.id}>
-                                    {comp.nombre} | P/N: {comp.pn || 'N/A'} | S/N: {comp.sn || 'N/A'}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-
-                {/* RESUMEN ESTÁTICO DE INFORMACIÓN DE LA BD */}
-                {componenteDetalle ? (
-                    <div style={{ backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '8px', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', fontSize: '11px' }}>
-                        <div><span style={{ color: '#64748b', display: 'block' }}>ATA</span> <strong>{componenteDetalle.ata || 'N/A'}</strong></div>
-                        <div><span style={{ color: '#64748b', display: 'block' }}>P/N</span> <strong>{componenteDetalle.pn || 'N/A'}</strong></div>
-                        <div><span style={{ color: '#64748b', display: 'block' }}>S/N</span> <strong>{componenteDetalle.sn || 'N/A'}</strong></div>
-                        <div><span style={{ color: '#64748b', display: 'block' }}>TG Inst.</span> <strong style={{ color: '#d97706' }}>{componenteDetalle.tgInstalacion || componenteDetalle.tgAcumulado || '0,0'}</strong></div>
-                        <div><span style={{ color: '#64748b', display: 'block' }}>Límite BD</span> <strong>{componenteDetalle.limiteValor || '-'} {componenteDetalle.limiteUnidad || ''}</strong></div>
-                        <div><span style={{ color: '#64748b', display: 'block' }}>Disponible BD</span> <strong style={{ color: '#16a34a' }}>{componenteDetalle.disponibleReal || componenteDetalle.disponible || 'N/A'}</strong></div>
-                    </div>
-                ) : (
-                    <div style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', padding: '8px', border: '1px dashed #cbd5e1', borderRadius: '4px' }}>
-                        Seleccione un componente del desplegable para consultar su ficha técnica grabada en la base de datos sin alterar registros.
-                    </div>
-                )}
+                <button style={styles.btnAddRow} onClick={() => agregarRenglon(tabla, setTabla)} disabled={!aeronaveSeleccionadaId}>
+                    ➕ Agregar Inspección
+                </button>
             </div>
 
-            {/* 2. BARRA DE NAVEGACIÓN DE TABS DEL PROGRAMA */}
-            <div style={{ display: 'flex', gap: '4px' }}>
-                {[
-                    { key: 'programaPlaneador', label: 'PLANEADOR' },
-                    { key: 'programaMotor', label: 'MOTOR 1' },
-                    { key: 'programaMotor2', label: 'MOTOR 2' },
-                    { key: 'programaHelice', label: 'HÉLICE 1' },
-                    { key: 'programaHelice2', label: 'HÉLICE 2' },
-                ].map(tab => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setTabActivo(tab.key)}
-                        style={tabActivo === tab.key ? styles.tabActive : styles.tab}
-                    >
-                        {tab.label} ({programa[tab.key]?.length || 0})
-                    </button>
-                ))}
-            </div>
-
-            {/* CUERPO PRINCIPAL */}
-            <div style={{ ...styles.card, borderRadius: '0 0 6px 6px', borderTop: 'none', marginTop: '0' }}>
-                
-                {/* CABECERA DE TABLA CON TG Y BOTÓN AGREGAR */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155' }}>{currentTg.label}:</span>
-                        <input 
-                            type="text" 
-                            value={currentTg.val}
-                            onChange={(e) => setPrograma(prev => ({ ...prev, [currentTg.key]: e.target.value }))}
-                            style={{ ...styles.input, ...styles.inputCenter, width: '90px', fontWeight: 'bold' }}
-                        />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={agregarRenglon} style={styles.btnSecondary}>+ AGREGAR INSPECCIÓN</button>
-                        <button onClick={guardarPrograma} disabled={loading} style={styles.btnPrimary}>
-                            {loading ? "GUARDANDO..." : "GUARDAR PROGRAMA"}
-                        </button>
-                    </div>
-                </div>
-
-                {/* 3. TABLA DEL PROGRAMA DE MANTENIMIENTO */}
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={styles.table}>
-                        <thead>
-                            <tr>
-                                <th style={{ ...styles.th, minWidth: '220px' }}>Componente (BD) / Descripción</th>
-                                <th style={{ ...styles.th, width: '110px' }}>Criterio</th>
-                                <th style={{ ...styles.th, width: '90px' }}>Intervalo</th>
-                                <th style={{ ...styles.th, width: '90px' }}>Últ. Hs/Reg</th>
-                                <th style={{ ...styles.th, width: '105px' }}>Últ. Fecha</th>
-                                <th style={{ ...styles.th, width: '70px' }}>O.T.</th>
-                                <th style={{ ...styles.th, width: '90px' }}>Próx. Venc</th>
-                                <th style={{ ...styles.th, width: '105px' }}>Próx. Fecha</th>
-                                <th style={{ ...styles.th, width: '70px' }}>Resp.</th>
-                                <th style={{ ...styles.th, width: '70px' }}>Disp.</th>
-                                <th style={{ ...styles.th, width: '40px', textAlign: 'center' }}>Acc</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {programa[tabActivo]?.length === 0 ? (
-                                <tr>
-                                    <td colSpan="11" style={{ ...styles.td, textAlign: 'center', padding: '20px', color: '#94a3b8', fontStyle: 'italic' }}>
-                                        No hay inspecciones registradas en esta sección. Presione "Agregar Inspección" para crear una nueva alerta.
-                                    </td>
-                                </tr>
-                            ) : (
-                                programa[tabActivo]?.map((renglon, idx) => (
-                                    <tr key={renglon.id || renglon._id || idx}>
-                                        
-                                        {/* COMPONENTE BD + DESCRIPCIÓN */}
-                                        <td style={styles.td}>
+            <div style={styles.tableWrapper}>
+                <table style={styles.mantoTable}>
+                    <thead>
+                        <tr>
+                            <th style={{ ...styles.th, width: '20%' }}>COMPONENTE (BD) / DESCRIPCIÓN</th>
+                            <th style={{ ...styles.th, width: '8%' }}>CRITERIO</th>
+                            <th style={{ ...styles.th, width: '8%' }}>ÚLT. HS</th>
+                            <th style={{ ...styles.th, width: '8%' }}>INT. (HS)</th>
+                            <th style={{ ...styles.th, width: '9%' }}>ÚLT. FECHA</th>
+                            <th style={{ ...styles.th, width: '7%' }}>OT</th>
+                            <th style={{ ...styles.th, width: '9%' }}>PRÓX. HS</th>
+                            <th style={{ ...styles.th, width: '9%' }}>PRÓX. FECHA</th>
+                            <th style={{ ...styles.th, width: '9%' }}>RESPONSABLE</th>
+                            <th style={{ ...styles.th, width: '10%' }}>DISP / REM.</th>
+                            <th style={{ ...styles.th, width: '3%' }}>ACC</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tabla.length === 0 ? (
+                            <tr><td colSpan="11" style={styles.tdEmpty}>No hay inspecciones programadas.</td></tr>
+                        ) : (
+                            tabla.map((row) => (
+                                <tr key={row.id} style={styles.tr}>
+                                    <td style={{ ...styles.td, padding: '2px' }}>
+                                        {componentesSeccion.length > 0 && (
                                             <select 
-                                                value={renglon.componenteRef || ""}
-                                                onChange={(e) => handleSelectComponenteEnFila(idx, e.target.value)}
-                                                style={{ ...styles.input, marginBottom: '4px' }}
+                                                style={styles.selectInCellMini} 
+                                                value={row.componenteRef || ''} 
+                                                onChange={(e) => {
+                                                    const selectedId = e.target.value;
+                                                    const comp = componentesSeccion.find((c, i) => String(c._id || c.id || i) === String(selectedId));
+                                                    const compNombre = comp ? (comp.componente || comp.nombre || '') : '';
+                                                    const descAuto = compNombre ? `INSPECCIÓN DE ${compNombre.toUpperCase()}` : row.descripcion;
+                                                    
+                                                    setTabla(tabla.map(r => r.id === row.id ? recalcularRenglon({
+                                                        ...r,
+                                                        componenteRef: selectedId,
+                                                        componenteNombre: compNombre,
+                                                        descripcion: descAuto
+                                                    }, totalHs) : r));
+                                                }}
                                             >
-                                                <option value="">-- Sin Componente BD Vinculado --</option>
-                                                {listaComponentes.map(c => (
-                                                    <option key={c._id || c.id} value={c._id || c.id}>
-                                                        {c.nombre} (P/N: {c.pn || 'N/A'})
+                                                <option value="">-- Sin Vincular / General --</option>
+                                                {componentesSeccion.map((c, i) => (
+                                                    <option key={c._id || c.id || i} value={c._id || c.id || i}>
+                                                        {c.componente || c.nombre || `Comp #${i+1}`} (P/N: {c.pn || 'S/PN'})
                                                     </option>
                                                 ))}
                                             </select>
-
-                                            <input 
-                                                type="text" 
-                                                value={renglon.descripcion || ''}
-                                                onChange={(e) => handleRenglonChange(idx, 'descripcion', e.target.value)}
-                                                placeholder="Descripción de la inspección..."
-                                                style={{ ...styles.input, fontWeight: 'bold' }}
-                                            />
-
-                                            {/* SNAPSHOT BD */}
-                                            {renglon.componenteRef && (
-                                                <div style={styles.snapshot}>
-                                                    <div>TG Acum: <strong>{renglon.tgComponente || '0,0'}</strong></div>
-                                                    <div>Límite: {renglon.limiteComponente || 'N/A'}</div>
-                                                    <div>Disp: <strong style={{ color: '#16a34a' }}>{renglon.dispComponente || 'N/A'}</strong></div>
-                                                </div>
-                                            )}
-                                        </td>
-
-                                        {/* CRITERIO */}
-                                        <td style={styles.td}>
-                                            <select 
-                                                value={renglon.tipoCriterio || 'HORAS'}
-                                                onChange={(e) => handleRenglonChange(idx, 'tipoCriterio', e.target.value)}
-                                                style={styles.input}
-                                            >
-                                                <option value="HORAS">Horas (Hs)</option>
-                                                <option value="FECHA">Fecha Fija</option>
-                                                <option value="MESES">Meses</option>
-                                                <option value="LANDINGS">Landings</option>
-                                                <option value="CICLOS">Ciclos</option>
-                                            </select>
-                                        </td>
-
-                                        {/* INTERVALO */}
-                                        <td style={styles.td}>
-                                            {renglon.tipoCriterio === 'HORAS' && (
-                                                <input type="text" placeholder="Ej: 200" value={renglon.intervaloHs || ''} onChange={(e) => handleRenglonChange(idx, 'intervaloHs', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                            )}
-                                            {renglon.tipoCriterio === 'MESES' && (
-                                                <input type="number" placeholder="Meses" value={renglon.intervaloMeses || 0} onChange={(e) => handleRenglonChange(idx, 'intervaloMeses', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                            )}
-                                            {renglon.tipoCriterio === 'LANDINGS' && (
-                                                <input type="number" placeholder="Landings" value={renglon.intervaloLandings || 0} onChange={(e) => handleRenglonChange(idx, 'intervaloLandings', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                            )}
-                                            {renglon.tipoCriterio === 'CICLOS' && (
-                                                <input type="number" placeholder="Ciclos" value={renglon.intervaloCiclos || 0} onChange={(e) => handleRenglonChange(idx, 'intervaloCiclos', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                            )}
-                                            {renglon.tipoCriterio === 'FECHA' && (
-                                                <span style={{ fontSize: '10px', color: '#94a3b8', display: 'block', textAlign: 'center' }}>Fijo</span>
-                                            )}
-                                        </td>
-
-                                        {/* ÚLTIMO CUMPLIMIENTO */}
-                                        <td style={styles.td}>
-                                            {renglon.tipoCriterio === 'HORAS' && (
-                                                <input type="text" placeholder="Últ. Hs" value={renglon.ultHs || ''} onChange={(e) => handleRenglonChange(idx, 'ultHs', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                            )}
-                                            {renglon.tipoCriterio === 'LANDINGS' && (
-                                                <input type="text" placeholder="Últ. Landings" value={renglon.ultLandings || ''} onChange={(e) => handleRenglonChange(idx, 'ultLandings', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                            )}
-                                            {renglon.tipoCriterio === 'CICLOS' && (
-                                                <input type="text" placeholder="Últ. Ciclos" value={renglon.ultCiclos || ''} onChange={(e) => handleRenglonChange(idx, 'ultCiclos', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                            )}
-                                            {(renglon.tipoCriterio === 'FECHA' || renglon.tipoCriterio === 'MESES') && (
-                                                <span style={{ fontSize: '10px', color: '#94a3b8', display: 'block', textAlign: 'center' }}>N/A</span>
-                                            )}
-                                        </td>
-
-                                        {/* ÚLTIMA FECHA */}
-                                        <td style={styles.td}>
-                                            <input type="date" value={renglon.ultFecha || ''} onChange={(e) => handleRenglonChange(idx, 'ultFecha', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                        </td>
-
-                                        {/* ORDEN DE TRABAJO */}
-                                        <td style={styles.td}>
-                                            <input type="text" placeholder="OT" value={renglon.ultOt || ''} onChange={(e) => handleRenglonChange(idx, 'ultOt', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                        </td>
-
-                                        {/* PRÓXIMO VENCIMIENTO */}
-                                        <td style={styles.td}>
-                                            {renglon.tipoCriterio === 'HORAS' && (
-                                                <input type="text" placeholder="Próx. Hs" value={renglon.proxHs || ''} onChange={(e) => handleRenglonChange(idx, 'proxHs', e.target.value)} style={{ ...styles.input, ...styles.inputCenter, fontWeight: 'bold' }} />
-                                            )}
-                                            {renglon.tipoCriterio === 'LANDINGS' && (
-                                                <input type="text" placeholder="Próx. Landings" value={renglon.proxLandings || ''} onChange={(e) => handleRenglonChange(idx, 'proxLandings', e.target.value)} style={{ ...styles.input, ...styles.inputCenter, fontWeight: 'bold' }} />
-                                            )}
-                                            {renglon.tipoCriterio === 'CICLOS' && (
-                                                <input type="text" placeholder="Próx. Ciclos" value={renglon.proxCiclos || ''} onChange={(e) => handleRenglonChange(idx, 'proxCiclos', e.target.value)} style={{ ...styles.input, ...styles.inputCenter, fontWeight: 'bold' }} />
-                                            )}
-                                            {(renglon.tipoCriterio === 'FECHA' || renglon.tipoCriterio === 'MESES') && (
-                                                <span style={{ fontSize: '10px', color: '#94a3b8', display: 'block', textAlign: 'center' }}>Ver Fecha</span>
-                                            )}
-                                        </td>
-
-                                        {/* PRÓXIMA FECHA */}
-                                        <td style={styles.td}>
-                                            <input type="date" value={renglon.proxFecha || ''} onChange={(e) => handleRenglonChange(idx, 'proxFecha', e.target.value)} style={{ ...styles.input, ...styles.inputCenter, fontWeight: 'bold' }} />
-                                        </td>
-
-                                        {/* RESPONSABLE */}
-                                        <td style={styles.td}>
-                                            <input type="text" value={renglon.responsable || 'Ec AE'} onChange={(e) => handleRenglonChange(idx, 'responsable', e.target.value)} style={{ ...styles.input, ...styles.inputCenter }} />
-                                        </td>
-
-                                        {/* DISPONIBLE */}
-                                        <td style={styles.td}>
-                                            <input type="text" value={renglon.disp || ''} onChange={(e) => handleRenglonChange(idx, 'disp', e.target.value)} style={{ ...styles.input, ...styles.inputCenter, fontWeight: 'bold', color: '#16a34a' }} />
-                                        </td>
-
-                                        {/* ACCIONES */}
-                                        <td style={{ ...styles.td, textAlign: 'center' }}>
-                                            <button onClick={() => eliminarRenglon(idx)} style={styles.btnDelete}>X</button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* BOTÓN GUARDAR Y SINCRONIZAR */}
-                <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-                    <button onClick={guardarPrograma} disabled={loading} style={{ ...styles.btnPrimary, padding: '8px 20px' }}>
-                        {loading ? "GUARDANDO CAMBIOS..." : "GUARDAR Y SINCRONIZAR PROGRAMA"}
-                    </button>
-                </div>
+                                        )}
+                                        <input 
+                                            type="text" 
+                                            style={styles.inputInCellBold} 
+                                            value={row.descripcion} 
+                                            onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'descripcion', e.target.value, totalHs)} 
+                                            placeholder="Ej: Inspección de 200 HS" 
+                                        />
+                                    </td>
+                                    <td style={styles.td}>
+                                        <select style={styles.selectInCell} value={row.tipoCriterio || 'HORAS'} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'tipoCriterio', e.target.value, totalHs)}>
+                                            <option value="HORAS">⏱️ Horas</option>
+                                            <option value="FECHA">📅 Fecha Fija</option>
+                                            <option value="MESES">📆 Mensual</option>
+                                        </select>
+                                    </td>
+                                    <td style={styles.td}>
+                                        <input type="text" style={styles.inputInCell} value={row.ultHs} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'ultHs', e.target.value, totalHs)} placeholder="0.0" />
+                                    </td>
+                                    <td style={styles.td}>
+                                        {row.tipoCriterio === 'MESES' ? (
+                                            <input type="number" style={styles.inputInCell} value={row.intervaloMeses || ''} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'intervaloMeses', e.target.value, totalHs)} placeholder="Meses" />
+                                        ) : (
+                                            <input type="text" style={styles.inputInCell} value={row.intervaloHs || ''} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'intervaloHs', e.target.value, totalHs)} placeholder="Ej: 200" />
+                                        )}
+                                    </td>
+                                    <td style={styles.td}>
+                                        <input type="date" style={styles.inputInCell} value={row.ultFecha} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'ultFecha', e.target.value, totalHs)} />
+                                    </td>
+                                    <td style={styles.td}>
+                                        <input type="text" style={styles.inputInCell} value={row.ultOt} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'ultOt', e.target.value, totalHs)} placeholder="OT" />
+                                    </td>
+                                    <td style={styles.td}>
+                                        <input type="text" style={{ ...styles.inputInCell, fontWeight: 'bold' }} value={row.proxHs} disabled={row.tipoCriterio === 'FECHA'} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'proxHs', e.target.value, totalHs)} placeholder="0.0" />
+                                    </td>
+                                    <td style={styles.td}>
+                                        <input type="date" style={styles.inputInCell} value={row.proxFecha} disabled={row.tipoCriterio === 'MESES'} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'proxFecha', e.target.value, totalHs)} />
+                                    </td>
+                                    <td style={styles.td}>
+                                        <input type="text" style={styles.inputInCell} value={row.responsable} onChange={(e) => handleCellChange(tabla, setTabla, row.id, 'responsable', e.target.value, totalHs)} />
+                                    </td>
+                                    <td style={styles.td}>
+                                        <input 
+                                            type="text" 
+                                            style={{ 
+                                                ...styles.inputInCell, 
+                                                fontWeight: 'bold', 
+                                                color: String(row.disp).includes('🛑') ? '#e74c3c' : String(row.disp).includes('⚠️') ? '#f39c12' : '#27ae60' 
+                                            }} 
+                                            value={row.disp || '-'} 
+                                            readOnly 
+                                        />
+                                    </td>
+                                    <td style={styles.tdAction}>
+                                        <button style={styles.btnDeleteRow} onClick={() => setTabla(tabla.filter(r => r.id !== row.id))}>✖</button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
+
+    if (loading) return <div style={styles.loading}>📡 CONECTANDO CON EL REGISTRO MATRICIAL...</div>;
+
+    const listaCompActuales = getListaComponentesActual();
+
+    return (
+        <div style={styles.container}>
+            {/* CABECERA Y SELECTORES */}
+            <div style={styles.topHeaderBar}>
+                <h2 style={styles.mainTitle}>SISTEMA DE GESTIÓN DE MANTENIMIENTO</h2>
+                <button style={styles.btnSave} onClick={guardarMantenimiento} disabled={!aeronaveSeleccionadaId}>
+                    💾 Guardar Todo en Servidor
+                </button>
+            </div>
+
+            <div style={styles.selectorsBar}>
+                <div style={styles.selectorGroup}>
+                    <label style={styles.labelTitle}>📁 SU FLOTA ASIGNADA ({unidadNavegacion})</label>
+                    <select style={styles.selectInputFlota} value={aeronaveSeleccionadaId} onChange={handleAeronaveChange}>
+                        <option value="">-- Seleccione Aeronave --</option>
+                        {aeronavesFiltradas.map(a => (
+                            <option key={a._id?.$oid || a._id} value={a._id?.$oid || a._id}>
+                                {a.matricula} - {a.sda}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            {/* SECCIÓN DINÁMICA: REGISTRO/EDICIÓN DE COMPONENTES DE LA AERONAVE */}
+            {aeronaveData && (
+                <div style={styles.componentBox}>
+                    <h3 style={styles.subTitleBox}>⚙️ EDICIÓN / REGISTRO DE COMPONENTES INDIVIDUALES</h3>
+                    
+                    <div style={styles.compSelectorRow}>
+                        <div>
+                            <label style={styles.miniLabel}>SISTEMA / GRUPO:</label>
+                            <select 
+                                style={styles.compSelect} 
+                                value={grupoComponente} 
+                                onChange={(e) => {
+                                    setGrupoComponente(e.target.value);
+                                    setSubIndiceGrupo(0);
+                                    resetSeleccionComponente();
+                                }}
+                            >
+                                <option value="compPlaneador">✈️ Planeador</option>
+                                <option value="motores">⚙️ Motores</option>
+                                <option value="helices">🌀 Hélices</option>
+                            </select>
+                        </div>
+
+                        {(grupoComponente === 'motores' || grupoComponente === 'helices') && (
+                            <div>
+                                <label style={styles.miniLabel}>SUBGRUPO:</label>
+                                <select 
+                                    style={styles.compSelect} 
+                                    value={subIndiceGrupo} 
+                                    onChange={(e) => {
+                                        setSubIndiceGrupo(Number(e.target.value));
+                                        resetSeleccionComponente();
+                                    }}
+                                >
+                                    <option value={0}>Nº 1</option>
+                                    <option value={1}>Nº 2</option>
+                                </select>
+                            </div>
+                        )}
+
+                        <div style={{ flexGrow: 1 }}>
+                            <label style={styles.miniLabel}>SELECCIONAR COMPONENTE A EDITAR:</label>
+                            <select style={styles.compSelect} value={componenteIndex} onChange={handleComponenteSelect}>
+                                <option value="">-- Seleccione Componente --</option>
+                                {listaCompActuales.map((c, idx) => (
+                                    <option key={idx} value={idx}>
+                                        Nº {c.nro} - {c.componente || 'Sin Nombre'} | P/N: {c.pn || 'S/PN'} | S/N: {c.sn || 'S/SN'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* FORMULARIO DE CAMPOS DEL COMPONENTE SELECCIONADO */}
+                    {compEdit && (
+                        <div style={styles.compEditForm}>
+                            <h4 style={styles.formTitle}>📝 Editando: {compEdit.componente || 'Componente Sin Nombre'}</h4>
+                            <div style={styles.gridForm}>
+                                <div>
+                                    <label style={styles.fieldLabel}>ATA:</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.ata || ''} onChange={(e) => handleCompFieldChange('ata', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>Nombre Componente:</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.componente || ''} onChange={(e) => handleCompFieldChange('componente', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>P/N (Part Number):</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.pn || ''} onChange={(e) => handleCompFieldChange('pn', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>S/N (Serial Number):</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.sn || ''} onChange={(e) => handleCompFieldChange('sn', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>Límite Tipo:</label>
+                                    <select style={styles.selectForm} value={compEdit.limiteTipo || 'TBO'} onChange={(e) => handleCompFieldChange('limiteTipo', e.target.value)}>
+                                        <option value="TBO">TBO</option>
+                                        <option value="LL">LL (Life Limited)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={styles.fieldLabel}>TG Instalación:</label>
+                                    <input style={styles.inputForm} type="text" value={compEdit.tgInstalacion || ''} onChange={(e) => handleCompFieldChange('tgInstalacion', e.target.value)} />
+                                </div>
+                            </div>
+
+                            {/* DYNAMIC LIMITES */}
+                            <div style={{ marginTop: '10px' }}>
+                                <strong style={styles.miniLabel}>LÍMITES:</strong>
+                                {(compEdit.limites || []).map((lim, lIdx) => (
+                                    <div key={lIdx} style={styles.nestedRow}>
+                                        <input style={styles.inputForm} value={lim.valor || ''} onChange={(e) => handleCompNestedArrayChange('limites', lIdx, 'valor', e.target.value)} placeholder="Valor" />
+                                        <select style={styles.selectForm} value={lim.unidad || 'H'} onChange={(e) => handleCompNestedArrayChange('limites', lIdx, 'unidad', e.target.value)}>
+                                            <option value="H">Horas (H)</option>
+                                            <option value="LDG">Aterrizajes (LDG)</option>
+                                            <option value="M">Meses (M)</option>
+                                            <option value="C">Ciclos (C)</option>
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button style={styles.btnApplyComp} onClick={handleAplicarCambioComponenteLocal}>
+                                ✔️ Aplicar Cambio al Componente
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* SECCIÓN 1: PROGRAMA PLANEADOR */}
+            {renderTablaSeccion(
+                'Total Planeador Actual', 
+                formData.tgPlaneadorActual, 
+                tablaPlaneador, 
+                setTablaPlaneador, 
+                '#00a8ff',
+                aeronaveData?.compPlaneador || []
+            )}
+
+            {/* SECCIÓN 2: PROGRAMA MOTOR 1 Y MOTOR 2 */}
+            {renderTablaSeccion(
+                'Total Motor #1 Actual', 
+                formData.tgMotorActual, 
+                tablaMotor, 
+                setTablaMotor, 
+                '#d35400',
+                aeronaveData?.motores?.[0]?.componentes || []
+            )}
+            {configAeronave.esBimotor && renderTablaSeccion(
+                'Total Motor #2 Actual', 
+                formData.tgMotor2Actual, 
+                tablaMotor2, 
+                setTablaMotor2, 
+                '#e67e22',
+                aeronaveData?.motores?.[1]?.componentes || []
+            )}
+
+            {/* SECCIÓN 3: PROGRAMA HÉLICE 1 Y HÉLICE 2 */}
+            {configAeronave.tieneHelice && renderTablaSeccion(
+                'Total Hélice #1 Actual', 
+                formData.tgHeliceActual, 
+                tablaHelice, 
+                setTablaHelice, 
+                '#27ae60',
+                aeronaveData?.helices?.[0]?.componentes || []
+            )}
+            {configAeronave.tieneHelice && configAeronave.esBimotor && renderTablaSeccion(
+                'Total Hélice #2 Actual', 
+                formData.tgHelice2Actual, 
+                tablaHelice2, 
+                setTablaHelice2, 
+                '#2ecc71',
+                aeronaveData?.helices?.[1]?.componentes || []
+            )}
+        </div>
+    );
+};
+
+const styles = {
+    container: { padding: '10px 20px', fontFamily: 'monospace, sans-serif' },
+    topHeaderBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1b2a4a', padding: '10px 20px' },
+    mainTitle: { color: '#fff', fontSize: '0.95rem', margin: 0 },
+    btnSave: { backgroundColor: '#27ae60', color: '#fff', border: 'none', padding: '8px 16px', fontWeight: 'bold', cursor: 'pointer' },
+    selectorsBar: { background: '#eef2f5', padding: '10px', marginTop: '10px', border: '1px solid #ccc' },
+    selectorGroup: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    labelTitle: { fontSize: '0.75rem', fontWeight: 'bold' },
+    selectInputFlota: { padding: '6px', fontSize: '0.85rem', fontWeight: 'bold' },
+    
+    // COMPONENT SECTION STYLES
+    componentBox: { background: '#2c3e50', color: '#fff', padding: '12px', marginTop: '15px', border: '1px solid #1a252f' },
+    subTitleBox: { margin: '0 0 10px 0', fontSize: '0.85rem', color: '#f39c12' },
+    compSelectorRow: { display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' },
+    miniLabel: { fontSize: '0.7rem', fontWeight: 'bold', display: 'block', marginBottom: '2px', color: '#ecf0f1' },
+    compSelect: { width: '100%', padding: '5px', fontSize: '0.8rem', background: '#ecf0f1', border: '1px solid #bdc3c7', fontWeight: 'bold' },
+    compEditForm: { background: '#34495e', padding: '10px', marginTop: '10px', borderRadius: '4px' },
+    formTitle: { margin: '0 0 8px 0', fontSize: '0.8rem', color: '#2ecc71' },
+    gridForm: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' },
+    fieldLabel: { fontSize: '0.7rem', color: '#bdc3c7', display: 'block' },
+    inputForm: { width: '100%', padding: '4px', fontSize: '0.75rem', boxSizing: 'border-box' },
+    selectForm: { width: '100%', padding: '4px', fontSize: '0.75rem' },
+    nestedRow: { display: 'flex', gap: '5px', marginTop: '4px' },
+    btnApplyComp: { backgroundColor: '#2980b9', color: '#fff', border: 'none', padding: '6px 12px', marginTop: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem' },
+
+    sectionDivider: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' },
+    miniKpiExcel: { color: '#000', padding: '4px 10px', border: '1px solid #000', display: 'flex', gap: '8px', alignItems: 'center', fontWeight: 'bold', fontSize: '0.78rem' },
+    kpiInputInline: { width: '80px', textAlign: 'center', fontWeight: 'bold', background: '#fff', border: '1px solid #000' },
+    btnAddRow: { backgroundColor: '#2c3e50', color: '#fff', border: 'none', padding: '6px 12px', fontWeight: 'bold', cursor: 'pointer' },
+    tableWrapper: { overflowX: 'auto', border: '1px solid #000' },
+    mantoTable: { width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' },
+    th: { backgroundColor: '#34495e', color: '#fff', border: '1px solid #000', padding: '6px', textAlign: 'center' },
+    tr: { backgroundColor: '#fff' },
+    td: { border: '1px solid #000', padding: '0px' },
+    tdAction: { border: '1px solid #000', textAlign: 'center' },
+    tdEmpty: { padding: '15px', textAlign: 'center', color: '#7f8c8d' },
+    inputInCell: { width: '100%', border: 'none', padding: '5px', textAlign: 'center', fontFamily: 'monospace', boxSizing: 'border-box' },
+    inputInCellBold: { width: '100%', border: 'none', padding: '5px', fontWeight: 'bold', fontFamily: 'monospace', boxSizing: 'border-box' },
+    selectInCell: { width: '100%', border: 'none', padding: '4px', fontSize: '0.75rem' },
+    selectInCellMini: { width: '100%', border: 'none', background: '#eaf2f8', padding: '2px', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' },
+    btnDeleteRow: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold' },
+    loading: { padding: '20px', color: '#fff', background: '#1b2a4a', fontFamily: 'monospace' }
 };
 
 export default ProgramaMantenimiento;
