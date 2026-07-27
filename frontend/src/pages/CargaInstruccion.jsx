@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { registrarInstruccion, getCamadaActiva } from '../services/api';
+import { registrarInstruccion, getCamadaActiva, getPatronesVuelo } from '../services/api';
+
+const NOTAS_OPCIONES = [
+    { value: 'NS', label: 'NS - No Satisfactorio' },
+    { value: 'S', label: 'S - Satisfactorio' },
+    { value: 'SB', label: 'SB - Sobresaliente' },
+    { value: 'AS', label: 'AS - Altamente Satisfactorio' }
+];
 
 const CargaInstruccion = () => {
     // -----------------------------------------------------------------
-    // ESTADOS: ALUMNOS PREVIAMENTE DADOS DE ALTA EN LA CAMADA ACTIVA
+    // 1. ESTADOS: CAMADA ACTIVA Y PATRONES DE VUELO DE LA BD
     // -----------------------------------------------------------------
     const [alumnosCurso, setAlumnosCurso] = useState([]);
     const [nombreCurso, setNombreCurso] = useState('');
@@ -12,33 +19,117 @@ const CargaInstruccion = () => {
     const [tabActiva, setTabActiva] = useState('vuelo');
     const [cargandoCamada, setCargandoCamada] = useState(true);
 
-    // 🌐 Recuperar la camada activa directamente desde el servidor central
+    // Estados para la cascada del Gestor de Patrones
+    const [todosLosPatrones, setTodosLosPatrones] = useState([]);
+    const [aeronavesDisponibles, setAeronavesDisponibles] = useState([]);
+    const [agrupamientosDisponibles, setAgrupamientosDisponibles] = useState([]);
+    const [codigosDisponibles, setCodigosDisponibles] = useState([]);
+
+    // Selección en cascada
+    const [aeronaveSeleccionada, setAeronaveSeleccionada] = useState('');
+    const [agrupamientoSeleccionado, setAgrupamientoSeleccionado] = useState('');
+    const [codigoSeleccionado, setCodigoSeleccionado] = useState('');
+
+    // -----------------------------------------------------------------
+    // 2. RECUPERAR DATOS INICIALES (CAMADA ACTIVA + PATRONES)
+    // -----------------------------------------------------------------
     useEffect(() => {
-        const cargarCamadaServidor = async () => {
+        const cargarDatosIniciales = async () => {
             try {
                 setCargandoCamada(true);
-                const res = await getCamadaActiva();
-                const data = res.data?.data || res.data || {};
-                const lista = data.alumnos || [];
+                // a) Cargar Camada Activa
+                const resCamada = await getCamadaActiva();
+                const dataCamada = resCamada.data?.data || resCamada.data || {};
+                const listaAlumnos = dataCamada.alumnos || [];
                 
-                setAlumnosCurso(lista);
-                setNombreCurso(data.curso || 'Curso Activo');
+                setAlumnosCurso(listaAlumnos);
+                setNombreCurso(dataCamada.curso || 'Curso Activo');
 
-                if (lista.length > 0) {
-                    setAlumnoActivoId(lista[0]._id);
-                    setAlumnoData(lista[0]);
+                if (listaAlumnos.length > 0) {
+                    setAlumnoActivoId(listaAlumnos[0]._id);
+                    setAlumnoData(listaAlumnos[0]);
                 }
+
+                // b) Cargar Patrones de Vuelo
+                const resPatrones = await getPatronesVuelo();
+                const listaPatrones = resPatrones.data?.data || resPatrones.data || [];
+                setTodosLosPatrones(listaPatrones);
+
+                // Obtener tipos de aeronave únicos
+                const tiposAeronaves = [...new Set(listaPatrones.map(p => p.aeronaveTipo || 'GENERAL'))];
+                setAeronavesDisponibles(tiposAeronaves);
+
             } catch (e) {
-                console.error("❌ Error al recuperar la camada activa del servidor:", e);
+                console.error("❌ Error al cargar datos iniciales:", e);
             } finally {
                 setCargandoCamada(false);
             }
         };
 
-        cargarCamadaServidor();
+        cargarDatosIniciales();
     }, []);
 
-    // Manejador para cambiar de alumno en la barra de evaluación
+    // -----------------------------------------------------------------
+    // 3. EFECTOS CASCADA DE PATRONES DE VUELO
+    // -----------------------------------------------------------------
+    // Al cambiar Aeronave/Curso -> Filtrar Agrupamientos (Nombres)
+    useEffect(() => {
+        if (!aeronaveSeleccionada) {
+            setAgrupamientosDisponibles([]);
+            setAgrupamientoSeleccionado('');
+            return;
+        }
+
+        const patronesFiltrados = todosLosPatrones.filter(
+            p => (p.aeronaveTipo || 'GENERAL') === aeronaveSeleccionada
+        );
+
+        const agrupamientos = [...new Set(patronesFiltrados.map(p => p.nombre))];
+        setAgrupamientosDisponibles(agrupamientos);
+        setAgrupamientoSeleccionado('');
+        setCodigoSeleccionado('');
+        setCodigosDisponibles([]);
+    }, [aeronaveSeleccionada, todosLosPatrones]);
+
+    // Al cambiar Agrupamiento -> Filtrar Códigos
+    useEffect(() => {
+        if (!agrupamientoSeleccionado) {
+            setCodigosDisponibles([]);
+            setCodigoSeleccionado('');
+            return;
+        }
+
+        const codigos = todosLosPatrones.filter(
+            p => (p.aeronaveTipo || 'GENERAL') === aeronaveSeleccionada && p.nombre === agrupamientoSeleccionado
+        );
+
+        setCodigosDisponibles(codigos);
+        setCodigoSeleccionado('');
+    }, [agrupamientoSeleccionado, aeronaveSeleccionada, todosLosPatrones]);
+
+    // Al seleccionar Código -> Cargar Maniobras/Estándares automáticamente al Formulario
+    useEffect(() => {
+        if (!codigoSeleccionado) return;
+
+        const patronEncontrado = todosLosPatrones.find(p => p._id === codigoSeleccionado || p.codigo === codigoSeleccionado);
+        
+        if (patronEncontrado && patronEncontrado.estandares) {
+            const estandaresFormateados = patronEncontrado.estandares.map(est => ({
+                estandar: est.nombre,
+                descripcion: est.descripcion || '',
+                nota: 'S' // Nota por defecto: Satisfactorio
+            }));
+
+            setFormVuelo(prev => ({
+                ...prev,
+                fase: patronEncontrado.nombre,
+                codigoPatron: patronEncontrado.codigo,
+                estandares: estandaresFormateados
+            }));
+        }
+    }, [codigoSeleccionado, todosLosPatrones]);
+
+    // Manejador para cambiar de alumno activo
     const handleAlumnoChange = (e) => {
         const id = e.target.value;
         setAlumnoActivoId(id);
@@ -47,19 +138,16 @@ const CargaInstruccion = () => {
     };
 
     // -----------------------------------------------------------------
-    // FORMULARIOS DE EVALUACIÓN
+    // 4. ESTADOS DE LOS FORMULARIOS
     // -----------------------------------------------------------------
     const [formVuelo, setFormVuelo] = useState({
         fecha: new Date().toISOString().split('T')[0],
-        fase: '',
         aeronaveMatricula: '',
         horasVuelo: '',
         instructorNombre: '',
-        calificacionGeneral: 'SATISFACTORIO',
-        estandares: [
-            { estandar: 'Procedimientos de Pre-vuelo y Despegue', nota: '3' },
-            { estandar: 'Mantenimiento de Altitud y Rumbo', nota: '3' }
-        ],
+        codigoPatron: '',
+        calificacionGeneral: 'S', // NS - S - SB - AS
+        estandares: [],
         observacionesInstructor: ''
     });
 
@@ -75,34 +163,43 @@ const CargaInstruccion = () => {
         fechaEvaluacion: new Date().toISOString().split('T')[0],
         especialistaNombre: '',
         aptitudVuelo: 'APTO',
-        atencionConcentracion: '5',
-        toleranciaEstres: '5',
-        tomaDecisiones: '5',
-        trabajoEnEquipo: '5',
         informeDetallado: ''
     });
 
     const [formFisico, setFormFisico] = useState({
         fecha: new Date().toISOString().split('T')[0],
         periodo: 'TRIMESTRAL_1',
-        aerobicoResistencia: '',
-        flexionesBrazo: '',
-        abdominales: '',
         calificacionGlobal: '',
         observaciones: ''
     });
 
+    // Cambiar la nota individual de cada estándar
+    const handleEstandarNotaChange = (index, nuevaNota) => {
+        const nuevosEstandares = [...formVuelo.estandares];
+        nuevosEstandares[index].nota = nuevaNota;
+        setFormVuelo({ ...formVuelo, estandares: nuevosEstandares });
+    };
+
+    // Agregar un estándar de maniobra personalizado
     const addEstandarVuelo = () => {
         setFormVuelo({
             ...formVuelo,
-            estandares: [...formVuelo.estandares, { estandar: '', nota: '3' }]
+            estandares: [...formVuelo.estandares, { estandar: '', descripcion: '', nota: 'S' }]
         });
     };
 
+    // -----------------------------------------------------------------
+    // 5. ENVÍO DE DATOS
+    // -----------------------------------------------------------------
     const handleGuardar = async (e) => {
         e.preventDefault();
         if (!alumnoActivoId || !alumnoData) {
             alert("⚠️ Seleccione un Alumno antes de registrar evaluaciones.");
+            return;
+        }
+
+        if (tabActiva === 'vuelo' && !formVuelo.instructorNombre.trim()) {
+            alert("⚠️ Debe ingresar el nombre del Instructor que realiza la evaluación.");
             return;
         }
 
@@ -116,14 +213,20 @@ const CargaInstruccion = () => {
             }
         };
 
-        if (tabActiva === 'vuelo') payload.data = formVuelo;
+        if (tabActiva === 'vuelo') {
+            payload.data = {
+                ...formVuelo,
+                aeronaveTipo: aeronaveSeleccionada,
+                agrupamiento: agrupamientoSeleccionado
+            };
+        }
         if (tabActiva === 'academico') payload.data = formAcademico;
         if (tabActiva === 'psicotecnico') payload.data = formPsicotecnico;
         if (tabActiva === 'fisico') payload.data = formFisico;
 
         try {
             await registrarInstruccion(payload);
-            alert(`✅ Registro de [${tabActiva.toUpperCase()}] guardado exitosamente para ${payload.alumnoInfo.nombre}`);
+            alert(`✅ Ficha de [${tabActiva.toUpperCase()}] guardada exitosamente por el instructor ${formVuelo.instructorNombre}`);
         } catch (error) {
             console.error("❌ Error al guardar evaluación:", error);
             alert("⚠️ Ocurrió un error al guardar los datos en el servidor.");
@@ -137,10 +240,10 @@ const CargaInstruccion = () => {
                 <h2 style={styles.title}>🎓 ESCUELA DE AVIACIÓN DE EJÉRCITO — CARGA DE EVALUACIONES</h2>
             </div>
 
-            {/* SELECCIÓN DEL ALUMNO A EVALUAR */}
+            {/* SELECCIÓN DEL ALUMNO */}
             {cargandoCamada ? (
                 <div style={styles.warningBox}>
-                    ⏳ Sincronizando camada activa con el servidor central...
+                    ⏳ Sincronizando datos de camada y patrones con el servidor central...
                 </div>
             ) : alumnosCurso.length > 0 ? (
                 <div style={styles.selectorBar}>
@@ -168,7 +271,7 @@ const CargaInstruccion = () => {
                 </div>
             ) : (
                 <div style={styles.warningBox}>
-                    ⚠️ No hay alumnos cargados para evaluar en el servidor. Vaya al módulo <strong>"Gestión de Alumnos"</strong> para dar de alta y confirmar la nómina activa.
+                    ⚠️ No hay alumnos cargados para evaluar en el servidor. Vaya al módulo <strong>"Gestión de Alumnos"</strong>.
                 </div>
             )}
 
@@ -208,15 +311,70 @@ const CargaInstruccion = () => {
             <form onSubmit={handleGuardar} style={styles.formCard}>
                 {tabActiva === 'vuelo' && (
                     <div>
-                        <h3 style={styles.sectionTitle}>✈️ Ficha de Vuelo de Instrucción</h3>
-                        <div style={styles.grid2}>
+                        <h3 style={styles.sectionTitle}>✈️ Ficha de Evaluación de Vuelo</h3>
+                        
+                        {/* SELECCIÓN EN CASCADA DEL PATRÓN */}
+                        <div style={styles.cascadaBox}>
+                            <h4 style={{ margin: '0 0 10px 0', fontSize: '0.8rem', color: '#1b2a4a' }}>
+                                🎯 Selección de Curso y Patrón de Vuelo
+                            </h4>
+                            <div style={styles.grid3}>
+                                <div>
+                                    <label style={styles.miniLabel}>1. Curso / Tipo Aeronave:</label>
+                                    <select 
+                                        style={styles.input} 
+                                        value={aeronaveSeleccionada}
+                                        onChange={e => setAeronaveSeleccionada(e.target.value)}
+                                        required
+                                    >
+                                        <option value="">-- Seleccionar Curso / Aeronave --</option>
+                                        {aeronavesDisponibles.map(aero => (
+                                            <option key={aero} value={aero}>{aero}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={styles.miniLabel}>2. Agrupamiento / Misión:</label>
+                                    <select 
+                                        style={styles.input} 
+                                        value={agrupamientoSeleccionado}
+                                        onChange={e => setAgrupamientoSeleccionado(e.target.value)}
+                                        disabled={!aeronaveSeleccionada}
+                                        required
+                                    >
+                                        <option value="">-- Seleccionar Agrupamiento --</option>
+                                        {agrupamientosDisponibles.map(agrup => (
+                                            <option key={agrup} value={agrup}>{agrup}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={styles.miniLabel}>3. Código de Patrón:</label>
+                                    <select 
+                                        style={styles.input} 
+                                        value={codigoSeleccionado}
+                                        onChange={e => setCodigoSeleccionado(e.target.value)}
+                                        disabled={!agrupamientoSeleccionado}
+                                        required
+                                    >
+                                        <option value="">-- Seleccionar Código --</option>
+                                        {codigosDisponibles.map(patron => (
+                                            <option key={patron._id} value={patron._id}>
+                                                [{patron.codigo}] - {patron.nombre}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* DATOS GENERALES DEL VUELO */}
+                        <div style={{ ...styles.grid2, marginTop: '15px' }}>
                             <div>
                                 <label style={styles.miniLabel}>Fecha de Vuelo:</label>
                                 <input type="date" style={styles.input} value={formVuelo.fecha} onChange={e => setFormVuelo({...formVuelo, fecha: e.target.value})} required />
-                            </div>
-                            <div>
-                                <label style={styles.miniLabel}>Fase / Misión:</label>
-                                <input type="text" style={styles.input} placeholder="Ej: Vuelo Táctico Nocturno" value={formVuelo.fase} onChange={e => setFormVuelo({...formVuelo, fase: e.target.value})} required />
                             </div>
                             <div>
                                 <label style={styles.miniLabel}>Aeronave (Matrícula):</label>
@@ -227,59 +385,91 @@ const CargaInstruccion = () => {
                                 <input type="text" style={styles.input} placeholder="Ej: 1.5" value={formVuelo.horasVuelo} onChange={e => setFormVuelo({...formVuelo, horasVuelo: e.target.value})} required />
                             </div>
                             <div>
-                                <label style={styles.miniLabel}>Instructor:</label>
-                                <input type="text" style={styles.input} placeholder="Nombre del Instructor" value={formVuelo.instructorNombre} onChange={e => setFormVuelo({...formVuelo, instructorNombre: e.target.value})} required />
-                            </div>
-                            <div>
-                                <label style={styles.miniLabel}>Calificación General:</label>
-                                <select style={styles.input} value={formVuelo.calificacionGeneral} onChange={e => setFormVuelo({...formVuelo, calificacionGeneral: e.target.value})}>
-                                    <option value="SOBRESALIENTE">⭐ Sobresaliente (5)</option>
-                                    <option value="SATISFACTORIO">✔️ Satisfactorio (4-3)</option>
-                                    <option value="NO_SATISFACTORIO">❌ No Satisfactorio (1-2)</option>
-                                </select>
+                                <label style={styles.miniLabel}>👨‍✈️ Instructor de Vuelo (Nombre):</label>
+                                <input type="text" style={styles.input} placeholder="Cap. Juan Pérez" value={formVuelo.instructorNombre} onChange={e => setFormVuelo({...formVuelo, instructorNombre: e.target.value})} required />
                             </div>
                         </div>
 
-                        <h4 style={{ ...styles.sectionTitle, marginTop: '20px', fontSize: '0.85rem' }}>Estándares Evaluados</h4>
-                        {formVuelo.estandares.map((est, idx) => (
-                            <div key={idx} style={styles.rowEstandar}>
-                                <input 
-                                    type="text" 
-                                    style={{ ...styles.input, flex: 1 }} 
-                                    placeholder="Maniobra / Estándar"
-                                    value={est.estandar} 
-                                    onChange={e => {
-                                        const nuevos = [...formVuelo.estandares];
-                                        nuevos[idx].estandar = e.target.value;
-                                        setFormVuelo({...formVuelo, estandares: nuevos});
-                                    }}
-                                />
-                                <select 
-                                    style={{ ...styles.input, width: '150px' }} 
-                                    value={est.nota}
-                                    onChange={e => {
-                                        const nuevos = [...formVuelo.estandares];
-                                        nuevos[idx].nota = e.target.value;
-                                        setFormVuelo({...formVuelo, estandares: nuevos});
-                                    }}
-                                >
-                                    <option value="5">5 - Sobresaliente</option>
-                                    <option value="4">4 - Bueno</option>
-                                    <option value="3">3 - Satisfactorio</option>
-                                    <option value="2">2 - Marginal</option>
-                                    <option value="1">1 - Insatisfactorio</option>
-                                </select>
-                            </div>
-                        ))}
-                        <button type="button" style={styles.btnSecondary} onClick={addEstandarVuelo}>➕ Agregar Maniobra</button>
+                        {/* ESTÁNDARES Y MANIOBRAS A EVALUAR */}
+                        <h4 style={{ ...styles.sectionTitle, marginTop: '20px', fontSize: '0.85rem' }}>
+                            📊 Evaluación de Estándares / Maniobras
+                        </h4>
+                        
+                        {formVuelo.estandares.length === 0 ? (
+                            <p style={{ fontSize: '0.8rem', color: '#666', fontStyle: 'italic' }}>
+                                Seleccione un Código de Patrón para cargar automáticamente las maniobras asociadas.
+                            </p>
+                        ) : (
+                            formVuelo.estandares.map((est, idx) => (
+                                <div key={idx} style={styles.rowEstandar}>
+                                    <div style={{ flex: 3 }}>
+                                        <input 
+                                            type="text" 
+                                            style={styles.input} 
+                                            placeholder="Maniobra / Estándar"
+                                            value={est.estandar} 
+                                            onChange={e => {
+                                                const nuevos = [...formVuelo.estandares];
+                                                nuevos[idx].estandar = e.target.value;
+                                                setFormVuelo({...formVuelo, estandares: nuevos});
+                                            }}
+                                        />
+                                        {est.descripcion && (
+                                            <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                                                {est.descripcion}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <select 
+                                            style={{ ...styles.input, fontWeight: 'bold' }} 
+                                            value={est.nota}
+                                            onChange={e => handleEstandarNotaChange(idx, e.target.value)}
+                                        >
+                                            {NOTAS_OPCIONES.map(op => (
+                                                <option key={op.value} value={op.value}>{op.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            ))
+                        )}
 
-                        <div style={{ marginTop: '15px' }}>
-                            <label style={styles.miniLabel}>Observaciones:</label>
-                            <textarea style={styles.textarea} rows="3" value={formVuelo.observacionesInstructor} onChange={e => setFormVuelo({...formVuelo, observacionesInstructor: e.target.value})}></textarea>
+                        <button type="button" style={styles.btnSecondary} onClick={addEstandarVuelo}>
+                            ➕ Agregar Maniobra Adicional
+                        </button>
+
+                        {/* CALIFICACIÓN FINAL Y OBSERVACIONES */}
+                        <div style={{ marginTop: '20px', backgroundColor: '#f8fafc', padding: '15px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                            <div style={styles.grid2}>
+                                <div>
+                                    <label style={styles.miniLabel}>🏆 CALIFICACIÓN FINAL DEL PATRÓN:</label>
+                                    <select 
+                                        style={{ ...styles.input, fontSize: '0.9rem', fontWeight: 'bold', color: '#1b2a4a' }} 
+                                        value={formVuelo.calificacionGeneral} 
+                                        onChange={e => setFormVuelo({...formVuelo, calificacionGeneral: e.target.value})}
+                                    >
+                                        {NOTAS_OPCIONES.map(op => (
+                                            <option key={op.value} value={op.value}>{op.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={styles.miniLabel}>Observaciones del Instructor:</label>
+                                    <textarea 
+                                        style={styles.textarea} 
+                                        rows="2" 
+                                        value={formVuelo.observacionesInstructor} 
+                                        onChange={e => setFormVuelo({...formVuelo, observacionesInstructor: e.target.value})}
+                                        placeholder="Comentarios sobre el desempeño o desvíos..."
+                                    ></textarea>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
 
+                {/* OTROS MÓDULOS PERMANECEN SINO CAMBIAN */}
                 {tabActiva === 'academico' && (
                     <div>
                         <h3 style={styles.sectionTitle}>📚 Notas Académicas</h3>
@@ -379,10 +569,12 @@ const styles = {
     tabInactive: { background: '#e2e8f0', border: '1px solid #dcdfe6', padding: '10px 18px', fontWeight: 'bold', color: '#64748b', cursor: 'pointer', borderRadius: '4px 4px 0 0' },
     formCard: { background: '#fff', padding: '20px', border: '1px solid #dcdfe6', borderRadius: '0 0 4px 4px' },
     sectionTitle: { fontSize: '0.9rem', color: '#1b2a4a', borderBottom: '2px solid #e2e8f0', paddingBottom: '5px', marginBottom: '15px' },
+    cascadaBox: { backgroundColor: '#f1f5f9', padding: '12px', borderRadius: '4px', border: '1px solid #cbd5e1', marginBottom: '15px' },
     grid2: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' },
+    grid3: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' },
     input: { width: '100%', padding: '7px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '4px', boxSizing: 'border-box' },
     textarea: { width: '100%', padding: '7px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '4px', boxSizing: 'border-box', fontFamily: 'sans-serif' },
-    rowEstandar: { display: 'flex', gap: '10px', marginBottom: '8px' },
+    rowEstandar: { display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center' },
     btnSecondary: { backgroundColor: '#34495e', color: '#fff', border: 'none', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer', marginTop: '5px' },
     actionRow: { marginTop: '25px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '15px' },
     btnSubmit: { backgroundColor: '#27ae60', color: '#fff', border: 'none', padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '4px', fontSize: '0.85rem' }

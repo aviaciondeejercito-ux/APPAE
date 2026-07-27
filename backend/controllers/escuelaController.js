@@ -25,19 +25,32 @@ exports.registrarInstruccion = async (req, res) => {
 exports.getDashboardEscuela = async (req, res) => {
   try {
     const { promocion } = req.query;
-    const matchQuery = promocion ? { promocion } : {};
+    const matchQuery = promocion ? { 'alumnoInfo.unidad': promocion } : {};
 
-    const stats = await InstruccionEscuela.aggregate([
-      { $match: matchQuery },
+    // ✈️ Total de Horas y Vuelos
+    const statsVuelo = await InstruccionEscuela.aggregate([
+      { $match: { ...matchQuery, modulo: 'vuelo' } },
       {
         $group: {
           _id: null,
-          totalHoras: { $sum: '$data.horasVuelo' },
-          promedioAcademico: { $avg: '$data.nota' }
+          totalHoras: { $sum: { $toDouble: { $ifNull: ['$data.horasVuelo', 0] } } },
+          totalVuelos: { $sum: 1 }
         }
       }
     ]);
 
+    // 📚 Promedio Académico (solo numéricos)
+    const statsAcademico = await InstruccionEscuela.aggregate([
+      { $match: { ...matchQuery, modulo: 'academico' } },
+      {
+        $group: {
+          _id: null,
+          promedioAcademico: { $avg: { $toDouble: { $ifNull: ['$data.nota', 0] } } }
+        }
+      }
+    ]);
+
+    // 🧠 Resumen Psicotécnico
     const psicotecnicoStats = await EvaluacionPsicotecnica.aggregate([
       {
         $group: {
@@ -49,7 +62,13 @@ exports.getDashboardEscuela = async (req, res) => {
 
     res.json({
       success: true,
-      statsGeneral: stats[0] || { totalHoras: 0, promedioAcademico: 0 },
+      statsGeneral: {
+        totalHoras: statsVuelo[0]?.totalHoras || 0,
+        totalVuelos: statsVuelo[0]?.totalVuelos || 0,
+        promedioAcademico: statsAcademico[0]?.promedioAcademico 
+          ? Number(statsAcademico[0].promedioAcademico.toFixed(2)) 
+          : 0
+      },
       psicotecnicoResumen: psicotecnicoStats
     });
   } catch (error) {
@@ -146,7 +165,6 @@ exports.guardarPatronVuelo = async (req, res) => {
     const idTarget = req.params.id || _id;
 
     let patron;
-    // 🔒 Verificamos que sea un ID válido antes de intentar un update
     if (idTarget && idTarget !== 'null' && idTarget !== 'undefined') {
       patron = await PatronVuelo.findByIdAndUpdate(
         idTarget,
@@ -154,7 +172,6 @@ exports.guardarPatronVuelo = async (req, res) => {
         { new: true, runValidators: true }
       );
     } else {
-      // 🆕 Si es alta nueva, omitimos por completo la propiedad _id
       patron = new PatronVuelo({
         codigo,
         nombre,
@@ -170,7 +187,6 @@ exports.guardarPatronVuelo = async (req, res) => {
   } catch (error) {
     console.error("❌ Error en guardarPatronVuelo:", error);
     
-    // Si el código del patrón ya existe (E11000 duplicate key error)
     if (error.code === 11000) {
       return res.status(400).json({ 
         success: false, 
@@ -179,5 +195,21 @@ exports.guardarPatronVuelo = async (req, res) => {
     }
 
     return res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+// Eliminar un patrón de vuelo por ID
+exports.deletePatronVuelo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const eliminado = await PatronVuelo.findByIdAndDelete(id);
+
+    if (!eliminado) {
+      return res.status(404).json({ success: false, message: 'Patrón de vuelo no encontrado' });
+    }
+
+    res.json({ success: true, message: 'Patrón de vuelo eliminado correctamente' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 };
