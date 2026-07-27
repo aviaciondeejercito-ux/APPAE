@@ -26,6 +26,7 @@ import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
 import CargaInstruccion from './pages/CargaInstruccion';
 import DashboardEscuela from './pages/DashboardEscuela';
 import FichaAlumnoInstruccion from './pages/FichaAlumnoInstruccion';
+import GestionAlumnos from './pages/GestionAlumnos'; // 👈 NUEVO: Gestor de Altas / Nómina
 
 // ==========================================
 // 🔻 SUBCOMPONENTE DE DROPDOWN PARA EL NAVBAR
@@ -34,7 +35,6 @@ const NavDropdown = ({ title, activeViews = [], currentView, children }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
 
-    // Cierra el menú al hacer clic fuera del componente
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -66,7 +66,7 @@ const NavDropdown = ({ title, activeViews = [], currentView, children }) => {
             {isOpen && (
                 <div 
                     style={styles.dropdownMenu} 
-                    onClick={() => setIsOpen(false)} // Cierra al hacer clic en un ítem
+                    onClick={() => setIsOpen(false)}
                 >
                     {children}
                 </div>
@@ -98,7 +98,6 @@ function App() {
         };
     }, []);
 
-    // SINCRO JOKER: Sincronización de sesión y normalización de rol
     useEffect(() => {
         if (auth) {
             const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
@@ -114,7 +113,7 @@ function App() {
         setView('calendar');
     };
 
-    // --- REGLAS DE ACCESO (RBAC) BASADAS EN ROL NORMALIZADO ---
+    // --- REGLAS DE ACCESO (RBAC) ---
     const roleBase = role?.toUpperCase() || '';
 
     const esAdmin = roleBase === 'ADMIN';
@@ -128,7 +127,7 @@ function App() {
     const esJefe = roleBase === 'JEFE';
     const esPersonal = roleBase === 'PERSONAL';
 
-    // --- CONFIGURACIÓN DE VISIBILIDAD DE MÓDULOS ---
+    // --- VISIBILIDAD DE MÓDULOS ---
     const puedeVerUsuarios = esAdmin;
     const puedeVerTripulantes = esAdmin || esOperaciones || esJefe || esPersonal; 
     const puedeVerVuelos = esAdmin || esOperaciones; 
@@ -144,24 +143,21 @@ function App() {
     const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
     const puedeVerF16 = esAdmin || esOfTecnica; 
     const puedeVerProgMantenimiento = esAdmin || esOfTecnica;
-    const puedeVerECAE = esAdmin || esOperaciones || esBoss || esDirector || esJefe || esPersonal; // 🎓 Escuela de Aviación
+    const puedeVerECAE = esAdmin || esOperaciones || esBoss || esDirector || esJefe || esPersonal;
 
-    // Evaluaciones para mostrar menús completos solo si tiene permiso al menos de 1 ítem interno
     const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos;
     const puedeVerGrupoOfTecnica = puedeVerF13 || puedeVerF16 || puedeVerProgMantenimiento;
     const puedeVerGrupoOTO = puedeVerStats || puedeVerOpEnDesarrollo;
 
-    // --- LÓGICA DE CONTENEDOR DINÁMICO ---
     const esVistaFull = [
         'mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 
         'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16', 'progMantenimiento',
-        'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno'
+        'gestionAlumnos', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno'
     ].includes(view);
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
             
-            {/* NAVBAR TÁCTICA CON GRUPOS DESPLEGABLES */}
             <nav style={{
                 ...styles.navbar,
                 flexDirection: isMobile ? 'column' : 'row',
@@ -175,7 +171,7 @@ function App() {
                 <div style={styles.navActions}>
                     {auth ? (
                         <>
-                            {/* 1. GRUPO: CALENDARIO (Calendario + Carga) */}
+                            {/* 1. CALENDARIO */}
                             <NavDropdown title="📅 Calendario" activeViews={['calendar', 'operaciones']} currentView={view}>
                                 <button 
                                     onClick={() => setView('calendar')} 
@@ -193,7 +189,7 @@ function App() {
                                 )}
                             </NavDropdown>
 
-                            {/* 2. GRUPO: OPERACIONES (Personal + EBM + Vuelos) */}
+                            {/* 2. OPERACIONES */}
                             {puedeVerGrupoOperaciones && (
                                 <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos']} currentView={view}>
                                     {puedeVerTripulantes && (
@@ -223,14 +219,20 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* 3. GRUPO: EC AE (Carga + Dashboard + Ficha Alumno) */}
+                            {/* 3. EC AE (Navegación actualizada con la nueva solapa de Gestión) */}
                             {puedeVerECAE && (
-                                <NavDropdown title="🎓 EC AE" activeViews={['cargaInstruccion', 'dashboardEscuela', 'fichaAlumno']} currentView={view}>
+                                <NavDropdown title="🎓 EC AE" activeViews={['gestionAlumnos', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno']} currentView={view}>
+                                    <button 
+                                        onClick={() => setView('gestionAlumnos')} 
+                                        style={{...styles.dropdownItem, backgroundColor: view === 'gestionAlumnos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                    >
+                                        📋 Gestión / Alta de Alumnos
+                                    </button>
                                     <button 
                                         onClick={() => setView('cargaInstruccion')} 
                                         style={{...styles.dropdownItem, backgroundColor: view === 'cargaInstruccion' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
                                     >
-                                        📝 Carga Instrucción
+                                        📝 Carga Evaluaciones
                                     </button>
                                     <button 
                                         onClick={() => setView('dashboardEscuela')} 
@@ -247,7 +249,7 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* 4. GRUPO: OFICINA TÉCNICA (F-13 + F-16 + Prog. Manto) */}
+                            {/* 4. OFICINA TÉCNICA */}
                             {puedeVerGrupoOfTecnica && (
                                 <NavDropdown title="🛠️ Oficina Técnica" activeViews={['f13', 'f16', 'progMantenimiento']} currentView={view}>
                                     {puedeVerF13 && (
@@ -277,7 +279,7 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* 5. GRUPO: OTO (Stats + Op en Desarrollo) */}
+                            {/* 5. OTO */}
                             {puedeVerGrupoOTO && (
                                 <NavDropdown title="🎯 OTO" activeViews={['stats', 'despacho']} currentView={view}>
                                     {puedeVerStats && (
@@ -299,7 +301,7 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* --- BOTONES DIRECTOS (SUELTOS) --- */}
+                            {/* BOTONES SUELTOS */}
                             {puedeVerEstadoAeronaves && (
                                 <button 
                                     onClick={() => setView('estado')} 
@@ -343,7 +345,6 @@ function App() {
                 </div>
             </nav>
 
-            {/* CONTENIDO PRINCIPAL DINÁMICO */}
             <main style={esVistaFull ? styles.containerFull : styles.container}>
                 {auth && puedeVerAlertas && <AlertasWidget />}
 
@@ -353,6 +354,7 @@ function App() {
                     (() => {
                         switch(view) {
                             case 'tripulantes': return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
+                            case 'gestionAlumnos': return puedeVerECAE ? <GestionAlumnos /> : <CalendarPage />;
                             case 'cargaInstruccion': return puedeVerECAE ? <CargaInstruccion /> : <CalendarPage />;
                             case 'dashboardEscuela': return puedeVerECAE ? <DashboardEscuela /> : <CalendarPage />;
                             case 'fichaAlumno': return puedeVerECAE ? <FichaAlumnoInstruccion /> : <CalendarPage />;
@@ -375,7 +377,6 @@ function App() {
                 )}
             </main>
 
-            {/* FOOTER */}
             {!esVistaFull && (
                 <footer style={styles.footer}>
                     <div>© 2026 Aviación de Ejército - Sistema Operativo</div>
