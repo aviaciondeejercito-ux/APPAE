@@ -142,14 +142,19 @@ exports.guardarPatronVuelo = async (req, res) => {
   try {
     const { _id, codigo, nombre, descripcion, aeronaveTipo, estandares, activo } = req.body;
 
+    // Detectar si el ID recibido proviene de los parámetros (req.params.id) o del body
+    const idTarget = req.params.id || _id;
+
     let patron;
-    if (_id) {
+    // 🔒 Verificamos que sea un ID válido antes de intentar un update
+    if (idTarget && idTarget !== 'null' && idTarget !== 'undefined') {
       patron = await PatronVuelo.findByIdAndUpdate(
-        _id,
+        idTarget,
         { codigo, nombre, descripcion, aeronaveTipo, estandares, activo },
         { new: true, runValidators: true }
       );
     } else {
+      // 🆕 Si es alta nueva, omitimos por completo la propiedad _id
       patron = new PatronVuelo({
         codigo,
         nombre,
@@ -161,8 +166,18 @@ exports.guardarPatronVuelo = async (req, res) => {
       await patron.save();
     }
 
-    res.status(201).json({ success: true, data: patron });
+    return res.status(200).json({ success: true, data: patron });
   } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
+    console.error("❌ Error en guardarPatronVuelo:", error);
+    
+    // Si el código del patrón ya existe (E11000 duplicate key error)
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `El código de patrón "${req.body.codigo}" ya existe en la base de datos.` 
+      });
+    }
+
+    return res.status(400).json({ success: false, error: error.message });
   }
 };

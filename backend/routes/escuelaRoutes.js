@@ -29,7 +29,15 @@ router.get('/camada/activa', escuelaController.getCamadaActiva);
 // Obtener todos los patrones de vuelo (opcional filtro ?soloActivos=true)
 router.get('/patrones-vuelo', escuelaController.getPatronesVuelo);
 
-// Crear o actualizar un patrón de vuelo con sus maniobras/estándares
+// Crear un nuevo patrón de vuelo
 router.post('/patrones-vuelo', escuelaController.guardarPatronVuelo);
+
+// 🛠️ ACTUALIZAR un patrón de vuelo existente por ID
+router.put('/patrones-vuelo/:id', escuelaController.guardarPatronVuelo);
+
+// 🗑️ ELIMINAR un patrón de vuelo por ID (si está implementado en tu controlador)
+if (escuelaController.deletePatronVuelo) {
+    router.delete('/patrones-vuelo/:id', escuelaController.deletePatronVuelo);
+}
 
 module.exports = router;

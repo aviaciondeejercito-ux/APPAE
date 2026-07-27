@@ -94,21 +94,29 @@ const GestorPatrones = () => {
     };
 
     const handleGuardar = async (e) => {
-        e.preventDefault();
-        try {
-            if (formData._id) {
-                await updatePatronVuelo(formData._id, formData);
-            } else {
-                await createPatronVuelo(formData);
-            }
-            alert("✅ Patrón de Vuelo guardado exitosamente");
-            cargarPatrones();
-            handleNuevoPatron();
-        } catch (err) {
-            console.error(err);
-            alert("❌ Error al guardar el patrón de vuelo");
+    e.preventDefault();
+    try {
+        // Clonamos el formulario y eliminamos el _id si no existe
+        const payload = { ...formData };
+        if (!payload._id) {
+            delete payload._id;
         }
-    };
+
+        if (formData._id) {
+            await updatePatronVuelo(formData._id, payload);
+        } else {
+            await createPatronVuelo(payload);
+        }
+        
+        alert("✅ Patrón de Vuelo guardado exitosamente");
+        cargarPatrones();
+        handleNuevoPatron();
+    } catch (err) {
+        console.error("Error al guardar:", err);
+        const mensajeError = err.response?.data?.error || "Error al conectar con el servidor";
+        alert(`❌ Error al guardar: ${mensajeError}`);
+    }
+};
 
     return (
         <div style={styles.container}>
