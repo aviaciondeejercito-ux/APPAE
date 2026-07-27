@@ -1,9 +1,13 @@
 const InstruccionEscuela = require('../models/ECAE/InstruccionEscuela');
 const EvaluacionPsicotecnica = require('../models/ECAE/EvaluacionPsicotecnica');
-const Tripulante = require('../models/Tripulante');
 const CamadaEscuela = require('../models/ECAE/CamadaEscuela');
+const PatronVuelo = require('../models/ECAE/PatronVuelo');
+const Tripulante = require('../models/Tripulante');
 
-// 1. Cargar una evaluación de instrucción o académica
+// -----------------------------------------------------------------
+// 1. REGISTRO Y EVALUACIÓN DE INSTRUCCIÓN
+// -----------------------------------------------------------------
+// Cargar una evaluación de instrucción (vuelo, académico, psicotécnico, físico)
 exports.registrarInstruccion = async (req, res) => {
   try {
     const nuevaCarga = new InstruccionEscuela(req.body);
@@ -14,7 +18,10 @@ exports.registrarInstruccion = async (req, res) => {
   }
 };
 
-// 2. Obtener métricas para el Dashboard General de la EC AE
+// -----------------------------------------------------------------
+// 2. DASHBOARD Y FICHA DEL ALUMNO
+// -----------------------------------------------------------------
+// Obtener métricas para el Dashboard General de la EC AE
 exports.getDashboardEscuela = async (req, res) => {
   try {
     const { promocion } = req.query;
@@ -50,7 +57,7 @@ exports.getDashboardEscuela = async (req, res) => {
   }
 };
 
-// 3. Obtener la Ficha Individual Completa del Alumno
+// Obtener la Ficha Individual Completa del Alumno
 exports.getFichaAlumno = async (req, res) => {
   try {
     const { idAlumno } = req.params;
@@ -75,7 +82,10 @@ exports.getFichaAlumno = async (req, res) => {
   }
 };
 
-// 4. Guardar o actualizar la camada activa actual de la EC AE
+// -----------------------------------------------------------------
+// 3. GESTIÓN DE CAMADA Y NÓMINA ACTIVA
+// -----------------------------------------------------------------
+// Guardar o actualizar la camada activa actual de la EC AE
 exports.guardarCamada = async (req, res) => {
   try {
     const { curso, alumnos } = req.body;
@@ -96,7 +106,7 @@ exports.guardarCamada = async (req, res) => {
   }
 };
 
-// 5. Obtener la camada activa actual con los datos completos de los alumnos
+// Obtener la camada activa actual con los datos completos de los alumnos
 exports.getCamadaActiva = async (req, res) => {
   try {
     const camadaActiva = await CamadaEscuela.findOne({ activa: true })
@@ -109,5 +119,50 @@ exports.getCamadaActiva = async (req, res) => {
     res.json({ success: true, data: camadaActiva });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// -----------------------------------------------------------------
+// 4. GESTOR DE PATRONES DE VUELO (DINÁMICO)
+// -----------------------------------------------------------------
+// Obtener todos los patrones de vuelo (opcional filtro por ?soloActivos=true)
+exports.getPatronesVuelo = async (req, res) => {
+  try {
+    const { soloActivos } = req.query;
+    const filtro = soloActivos === 'true' ? { activo: true } : {};
+    const patrones = await PatronVuelo.find(filtro).sort({ codigo: 1 });
+    res.json({ success: true, data: patrones });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Crear un nuevo patrón de vuelo o actualizar uno existente
+exports.guardarPatronVuelo = async (req, res) => {
+  try {
+    const { _id, codigo, nombre, descripcion, aeronaveTipo, estandares, activo } = req.body;
+
+    let patron;
+    if (_id) {
+      patron = await PatronVuelo.findByIdAndUpdate(
+        _id,
+        { codigo, nombre, descripcion, aeronaveTipo, estandares, activo },
+        { new: true, runValidators: true }
+      );
+    } else {
+      patron = new PatronVuelo({
+        codigo,
+        nombre,
+        descripcion,
+        aeronaveTipo,
+        estandares,
+        activo
+      });
+      await patron.save();
+    }
+
+    res.status(201).json({ success: true, data: patron });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
   }
 };

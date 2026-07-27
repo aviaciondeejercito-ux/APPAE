@@ -83,14 +83,27 @@ export const updateTripulante = (id, data) => API.put(`/tripulantes/${id}`, data
 export const deleteTripulante = (id) => API.delete(`/tripulantes/${id}`);
 
 /**
- * 🎓 NUEVOS SERVICIOS DE LA ESCUELA DE AVIACIÓN DE EJÉRCITO (EC AE)
+ * 🎓 SERVICIOS DE LA ESCUELA DE AVIACIÓN DE EJÉRCITO (EC AE)
  */
 export const registrarInstruccion = (data) => API.post('/escuela/instruccion', data);
 export const getDashboardEscuela = (params = {}) => API.get('/escuela/dashboard', { params });
 export const getFichaAlumno = (idAlumno) => API.get(`/escuela/alumno/${idAlumno}`);
+
 // 🌐 PERSISTENCIA COMPARTIDA DE CAMADAS Y CURSOS ACTIVOS
 export const guardarCamadaActiva = (payload) => API.post('/escuela/camada', payload);
 export const getCamadaActiva = () => API.get('/escuela/camada/activa');
+
+// 👨‍✈️ GESTIÓN DE ALUMNOS (NÓMINA EC AE)
+export const getAlumnosEscuela = () => API.get('/escuela/alumnos');
+export const createAlumnoEscuela = (data) => API.post('/escuela/alumnos', data);
+export const updateAlumnoEscuela = (id, data) => API.put(`/escuela/alumnos/${id}`, data);
+export const deleteAlumnoEscuela = (id) => API.delete(`/escuela/alumnos/${id}`);
+
+// ⚙️ GESTOR DE PATRONES DE VUELO
+export const getPatronesVuelo = () => API.get('/escuela/patrones-vuelo');
+export const createPatronVuelo = (data) => API.post('/escuela/patrones-vuelo', data);
+export const updatePatronVuelo = (id, data) => API.put(`/escuela/patrones-vuelo/${id}`, data);
+export const deletePatronVuelo = (id) => API.delete(`/escuela/patrones-vuelo/${id}`);
 
 /**
  * NUEVO SERVICIO MÓDULO EBM - PLANIFICACIÓN AUTOMÁTICA
@@ -350,6 +363,14 @@ const EventService = {
     getFichaAlumno,
     guardarCamadaActiva,
     getCamadaActiva,
+    getAlumnosEscuela,
+    createAlumnoEscuela,
+    updateAlumnoEscuela,
+    deleteAlumnoEscuela,
+    getPatronesVuelo,
+    createPatronVuelo,
+    updatePatronVuelo,
+    deletePatronVuelo,
     getPlanificacionEbm,
     getAlertasDashboard,
     getWeatherData,

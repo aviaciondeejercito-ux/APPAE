@@ -26,7 +26,8 @@ import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
 import CargaInstruccion from './pages/CargaInstruccion';
 import DashboardEscuela from './pages/DashboardEscuela';
 import FichaAlumnoInstruccion from './pages/FichaAlumnoInstruccion';
-import GestionAlumnos from './pages/GestionAlumnos'; // 👈 NUEVO: Gestor de Altas / Nómina
+import GestionAlumnos from './pages/GestionAlumnos'; 
+import GestorPatrones from './pages/GestorPatrones'; // 👈 NUEVO: Gestor de Patrones de Vuelo
 
 // ==========================================
 // 🔻 SUBCOMPONENTE DE DROPDOWN PARA EL NAVBAR
@@ -152,7 +153,7 @@ function App() {
     const esVistaFull = [
         'mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 
         'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16', 'progMantenimiento',
-        'gestionAlumnos', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno'
+        'gestionAlumnos', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno', 'gestorPatrones'
     ].includes(view);
 
     return (
@@ -219,14 +220,20 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* 3. EC AE (Navegación actualizada con la nueva solapa de Gestión) */}
+                            {/* 3. EC AE (Navegación con Gestión de Alumnos y Patrones) */}
                             {puedeVerECAE && (
-                                <NavDropdown title="🎓 EC AE" activeViews={['gestionAlumnos', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno']} currentView={view}>
+                                <NavDropdown title="🎓 EC AE" activeViews={['gestionAlumnos', 'gestorPatrones', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno']} currentView={view}>
                                     <button 
                                         onClick={() => setView('gestionAlumnos')} 
                                         style={{...styles.dropdownItem, backgroundColor: view === 'gestionAlumnos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
                                     >
                                         📋 Gestión / Alta de Alumnos
+                                    </button>
+                                    <button 
+                                        onClick={() => setView('gestorPatrones')} 
+                                        style={{...styles.dropdownItem, backgroundColor: view === 'gestorPatrones' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                    >
+                                        ⚙️ Gestor de Patrones
                                     </button>
                                     <button 
                                         onClick={() => setView('cargaInstruccion')} 
@@ -355,6 +362,7 @@ function App() {
                         switch(view) {
                             case 'tripulantes': return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
                             case 'gestionAlumnos': return puedeVerECAE ? <GestionAlumnos /> : <CalendarPage />;
+                            case 'gestorPatrones': return puedeVerECAE ? <GestorPatrones /> : <CalendarPage />;
                             case 'cargaInstruccion': return puedeVerECAE ? <CargaInstruccion /> : <CalendarPage />;
                             case 'dashboardEscuela': return puedeVerECAE ? <DashboardEscuela /> : <CalendarPage />;
                             case 'fichaAlumno': return puedeVerECAE ? <FichaAlumnoInstruccion /> : <CalendarPage />;
