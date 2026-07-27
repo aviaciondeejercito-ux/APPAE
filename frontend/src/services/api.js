@@ -88,6 +88,9 @@ export const deleteTripulante = (id) => API.delete(`/tripulantes/${id}`);
 export const registrarInstruccion = (data) => API.post('/escuela/instruccion', data);
 export const getDashboardEscuela = (params = {}) => API.get('/escuela/dashboard', { params });
 export const getFichaAlumno = (idAlumno) => API.get(`/escuela/alumno/${idAlumno}`);
+// 🌐 PERSISTENCIA COMPARTIDA DE CAMADAS Y CURSOS ACTIVOS
+export const guardarCamadaActiva = (payload) => API.post('/escuela/camada', payload);
+export const getCamadaActiva = () => API.get('/escuela/camada/activa');
 
 /**
  * NUEVO SERVICIO MÓDULO EBM - PLANIFICACIÓN AUTOMÁTICA
@@ -345,6 +348,8 @@ const EventService = {
     registrarInstruccion,
     getDashboardEscuela,
     getFichaAlumno,
+    guardarCamadaActiva,
+    getCamadaActiva,
     getPlanificacionEbm,
     getAlertasDashboard,
     getWeatherData,

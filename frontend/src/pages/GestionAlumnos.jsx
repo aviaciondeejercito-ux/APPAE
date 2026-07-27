@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTripulantes } from '../services/api';
+import { getTripulantes, guardarCamadaActiva, getCamadaActiva } from '../services/api';
 
 const GestionAlumnos = ({ onGuardarCamada }) => {
     const [tripulantesECAE, setTripulantesECAE] = useState([]);
@@ -7,13 +7,16 @@ const GestionAlumnos = ({ onGuardarCamada }) => {
     const [alumnosCamada, setAlumnosCamada] = useState([]);
     const [cursoNombre, setCursoNombre] = useState('Curso Básico de Aviación de Ejército 2026');
     const [cargando, setCargando] = useState(true);
+    const [guardando, setGuardando] = useState(false);
 
     useEffect(() => {
-        const cargarTripulantes = async () => {
+        const cargarDatosECAE = async () => {
             try {
                 setCargando(true);
-                const res = await getTripulantes();
-                const todos = res.data?.data || res.data || [];
+                
+                // 1. Obtener la nómina general de personal
+                const resTripulantes = await getTripulantes();
+                const todos = resTripulantes.data?.data || resTripulantes.data || [];
                 
                 // Filtramos por la unidad / elemento EC AE
                 const deEscuela = todos.filter(t => {
@@ -23,6 +26,28 @@ const GestionAlumnos = ({ onGuardarCamada }) => {
                 });
 
                 setTripulantesECAE(deEscuela);
+
+                // 2. Cargar camada previamente activa guardada en el servidor
+                try {
+                    const resCamada = await getCamadaActiva();
+                    const camadaServidor = resCamada.data?.data || resCamada.data;
+                    
+                    if (camadaServidor) {
+                        if (camadaServidor.curso) {
+                            setCursoNombre(camadaServidor.curso);
+                        }
+                        
+                        if (camadaServidor.alumnos && Array.isArray(camadaServidor.alumnos)) {
+                            // Sincronizamos los alumnos seleccionados mapeando los IDs recibidos
+                            const idsAlumnos = camadaServidor.alumnos.map(a => typeof a === 'object' ? a._id : a);
+                            const seleccionados = deEscuela.filter(t => idsAlumnos.includes(t._id));
+                            setAlumnosCamada(seleccionados);
+                        }
+                    }
+                } catch (errCamada) {
+                    console.log("ℹ️ No hay camada previa configurada en el servidor o se creará una nueva.");
+                }
+
             } catch (error) {
                 console.error("❌ Error al recuperar tripulantes EC AE:", error);
             } finally {
@@ -30,7 +55,7 @@ const GestionAlumnos = ({ onGuardarCamada }) => {
             }
         };
 
-        cargarTripulantes();
+        cargarDatosECAE();
     }, []);
 
     const tripulantesFiltrados = tripulantesECAE.filter(t => {
@@ -48,24 +73,36 @@ const GestionAlumnos = ({ onGuardarCamada }) => {
         }
     };
 
-    const handleConfirmarCamada = (e) => {
+    const handleConfirmarCamada = async (e) => {
         e.preventDefault();
         if (alumnosCamada.length === 0) {
             alert("⚠️ Seleccione al menos un tripulante para conformar la camada.");
             return;
         }
 
-        // Guardamos la camada (puedes persistirla en localStorage o enviar a backend)
-        localStorage.setItem('camadaActivaECAE', JSON.stringify({
-            curso: cursoNombre,
-            alumnos: alumnosCamada
-        }));
+        try {
+            setGuardando(true);
 
-        if (onGuardarCamada) {
-            onGuardarCamada(alumnosCamada, cursoNombre);
+            // Estructuramos el payload enviando los IDs de los alumnos seleccionados
+            const payload = {
+                curso: cursoNombre,
+                alumnos: alumnosCamada.map(a => a._id)
+            };
+
+            // 🌐 Persistencia compartida en base de datos mediante la API
+            await guardarCamadaActiva(payload);
+
+            if (onGuardarCamada) {
+                onGuardarCamada(alumnosCamada, cursoNombre);
+            }
+
+            alert(`✅ Camada "${cursoNombre}" guardada y sincronizada globalmente con ${alumnosCamada.length} alumnos.`);
+        } catch (error) {
+            console.error("❌ Error al guardar la camada en el servidor:", error);
+            alert("⚠️ Hubo un error al guardar la camada en el servidor. Revisa tu conexión.");
+        } finally {
+            setGuardando(false);
         }
-
-        alert(`✅ Camada "${cursoNombre}" guardada exitosamente con ${alumnosCamada.length} alumnos.`);
     };
 
     return (
@@ -97,7 +134,7 @@ const GestionAlumnos = ({ onGuardarCamada }) => {
 
                 <div style={styles.listContainer}>
                     {cargando ? (
-                        <div style={styles.emptyText}>Cargando tripulantes de la EC AE...</div>
+                        <div style={styles.emptyText}>Cargando tripulantes y camada activa de la EC AE...</div>
                     ) : tripulantesFiltrados.length > 0 ? (
                         tripulantesFiltrados.map(t => {
                             const isChecked = alumnosCamada.some(a => a._id === t._id);
@@ -127,8 +164,16 @@ const GestionAlumnos = ({ onGuardarCamada }) => {
 
                 <div style={styles.summaryRow}>
                     <span>Alumnos tildados para la camada: <strong>{alumnosCamada.length}</strong></span>
-                    <button type="submit" style={styles.btnSubmit}>
-                        💾 GUARDAR Y CONFIRMAR NOMINA DEL CURSO
+                    <button 
+                        type="submit" 
+                        style={{
+                            ...styles.btnSubmit,
+                            opacity: guardando ? 0.7 : 1,
+                            cursor: guardando ? 'not-allowed' : 'pointer'
+                        }}
+                        disabled={guardando}
+                    >
+                        {guardando ? '💾 GUARDANDO...' : '💾 GUARDAR Y CONFIRMAR NOMINA DEL CURSO'}
                     </button>
                 </div>
             </form>

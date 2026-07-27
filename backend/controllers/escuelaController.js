@@ -1,6 +1,7 @@
-const InstruccionEscuela = require('../models/InstruccionEscuela');
-const EvaluacionPsicotecnica = require('../models/EvaluacionPsicotecnica');
+const InstruccionEscuela = require('../models/ECAE/InstruccionEscuela');
+const EvaluacionPsicotecnica = require('../models/ECAE/EvaluacionPsicotecnica');
 const Tripulante = require('../models/Tripulante');
+const CamadaEscuela = require('../models/ECAE/CamadaEscuela');
 
 // 1. Cargar una evaluación de instrucción o académica
 exports.registrarInstruccion = async (req, res) => {
@@ -19,19 +20,17 @@ exports.getDashboardEscuela = async (req, res) => {
     const { promocion } = req.query;
     const matchQuery = promocion ? { promocion } : {};
 
-    // Métricas generales acumuladas
     const stats = await InstruccionEscuela.aggregate([
       { $match: matchQuery },
       {
         $group: {
           _id: null,
-          totalHoras: { $sum: '$horasInstruccion' },
-          promedioAcademico: { $avg: '$notaAcademica' }
+          totalHoras: { $sum: '$data.horasVuelo' },
+          promedioAcademico: { $avg: '$data.nota' }
         }
       }
     ]);
 
-    // Resumen de aptitudes psicotécnicas
     const psicotecnicoStats = await EvaluacionPsicotecnica.aggregate([
       {
         $group: {
@@ -56,17 +55,13 @@ exports.getFichaAlumno = async (req, res) => {
   try {
     const { idAlumno } = req.params;
 
-    // Obtener datos base del Tripulante (sin tocar su esquema)
-    const alumnoBase = await Tripulante.findById(idAlumno).select('nombre apellido grado unidad elemento');
+    const alumnoBase = await Tripulante.findById(idAlumno).select('nombre apellido grado unidad elemento dni');
 
     if (!alumnoBase) {
       return res.status(404).json({ success: false, message: 'Alumno no encontrado' });
     }
 
-    // Historial de instrucción y notas
-    const evaluaciones = await InstruccionEscuela.find({ alumno: idAlumno }).populate('instructor', 'grado apellido');
-
-    // Último examen psicotécnico registrado
+    const evaluaciones = await InstruccionEscuela.find({ alumnoId: idAlumno }).sort({ fechaRegistro: -1 });
     const psicotecnico = await EvaluacionPsicotecnica.findOne({ alumno: idAlumno }).sort({ fecha: -1 });
 
     res.json({
@@ -75,6 +70,43 @@ exports.getFichaAlumno = async (req, res) => {
       evaluaciones,
       psicotecnico
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// 4. Guardar o actualizar la camada activa actual de la EC AE
+exports.guardarCamada = async (req, res) => {
+  try {
+    const { curso, alumnos } = req.body;
+
+    // Desactivar camadas previas para asegurar que solo haya una activa
+    await CamadaEscuela.updateMany({}, { activa: false });
+
+    const nuevaCamada = new CamadaEscuela({
+      curso,
+      alumnos,
+      activa: true
+    });
+
+    await nuevaCamada.save();
+    res.status(201).json({ success: true, data: nuevaCamada });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+// 5. Obtener la camada activa actual con los datos completos de los alumnos
+exports.getCamadaActiva = async (req, res) => {
+  try {
+    const camadaActiva = await CamadaEscuela.findOne({ activa: true })
+      .populate('alumnos', 'nombre apellido grado unidad elemento dni funcion especialidad');
+
+    if (!camadaActiva) {
+      return res.status(200).json({ success: true, data: { curso: '', alumnos: [] } });
+    }
+
+    res.json({ success: true, data: camadaActiva });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

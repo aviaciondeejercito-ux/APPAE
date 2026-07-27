@@ -1,37 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { registrarInstruccion } from '../services/api';
+import { registrarInstruccion, getCamadaActiva } from '../services/api';
 
 const CargaInstruccion = () => {
     // -----------------------------------------------------------------
-    // ESTADOS: ALUMNOS PREVIAMENTE DADOS DE ALTA
+    // ESTADOS: ALUMNOS PREVIAMENTE DADOS DE ALTA EN LA CAMADA ACTIVA
     // -----------------------------------------------------------------
     const [alumnosCurso, setAlumnosCurso] = useState([]);
     const [nombreCurso, setNombreCurso] = useState('');
     const [alumnoActivoId, setAlumnoActivoId] = useState('');
     const [alumnoData, setAlumnoData] = useState(null);
     const [tabActiva, setTabActiva] = useState('vuelo');
+    const [cargandoCamada, setCargandoCamada] = useState(true);
 
-    // Recuperar la nómina activa que se configuró previamente en GestionAlumnos
+    // 🌐 Recuperar la camada activa directamente desde el servidor central
     useEffect(() => {
-        const camadaGuardada = localStorage.getItem('camadaActivaECAE');
-        if (camadaGuardada) {
+        const cargarCamadaServidor = async () => {
             try {
-                const parsed = JSON.parse(camadaGuardada);
-                const lista = parsed.alumnos || [];
+                setCargandoCamada(true);
+                const res = await getCamadaActiva();
+                const data = res.data?.data || res.data || {};
+                const lista = data.alumnos || [];
+                
                 setAlumnosCurso(lista);
-                setNombreCurso(parsed.curso || 'Curso Activo');
+                setNombreCurso(data.curso || 'Curso Activo');
 
                 if (lista.length > 0) {
                     setAlumnoActivoId(lista[0]._id);
                     setAlumnoData(lista[0]);
                 }
             } catch (e) {
-                console.error("Error al leer la camada guardada:", e);
+                console.error("❌ Error al recuperar la camada activa del servidor:", e);
+            } finally {
+                setCargandoCamada(false);
             }
-        }
+        };
+
+        cargarCamadaServidor();
     }, []);
 
-    // Manejador para cambiar de alumno en la barra limpia de evaluación
+    // Manejador para cambiar de alumno en la barra de evaluación
     const handleAlumnoChange = (e) => {
         const id = e.target.value;
         setAlumnoActivoId(id);
@@ -40,7 +47,7 @@ const CargaInstruccion = () => {
     };
 
     // -----------------------------------------------------------------
-    // FORMULARIOS (LIMPIOS DE DATOS MOCK)
+    // FORMULARIOS DE EVALUACIÓN
     // -----------------------------------------------------------------
     const [formVuelo, setFormVuelo] = useState({
         fecha: new Date().toISOString().split('T')[0],
@@ -116,7 +123,7 @@ const CargaInstruccion = () => {
 
         try {
             await registrarInstruccion(payload);
-            alert(`✅ Registro de [${tabActiva.toUpperCase()}] guardado para ${payload.alumnoInfo.nombre}`);
+            alert(`✅ Registro de [${tabActiva.toUpperCase()}] guardado exitosamente para ${payload.alumnoInfo.nombre}`);
         } catch (error) {
             console.error("❌ Error al guardar evaluación:", error);
             alert("⚠️ Ocurrió un error al guardar los datos en el servidor.");
@@ -130,8 +137,12 @@ const CargaInstruccion = () => {
                 <h2 style={styles.title}>🎓 ESCUELA DE AVIACIÓN DE EJÉRCITO — CARGA DE EVALUACIONES</h2>
             </div>
 
-            {/* SELECCIÓN LIMPIA DEL ALUMNO A EVALUAR */}
-            {alumnosCurso.length > 0 ? (
+            {/* SELECCIÓN DEL ALUMNO A EVALUAR */}
+            {cargandoCamada ? (
+                <div style={styles.warningBox}>
+                    ⏳ Sincronizando camada activa con el servidor central...
+                </div>
+            ) : alumnosCurso.length > 0 ? (
                 <div style={styles.selectorBar}>
                     <div style={{ flex: 1 }}>
                         <label style={styles.label}>SELECCIONAR ALUMNO A EVALUAR ({nombreCurso}):</label>
@@ -157,7 +168,7 @@ const CargaInstruccion = () => {
                 </div>
             ) : (
                 <div style={styles.warningBox}>
-                    ⚠️ No hay alumnos cargados para evaluar. Vaya al módulo <strong>"Gestión de Alumnos"</strong> para dar de alta o cargar la nómina del curso.
+                    ⚠️ No hay alumnos cargados para evaluar en el servidor. Vaya al módulo <strong>"Gestión de Alumnos"</strong> para dar de alta y confirmar la nómina activa.
                 </div>
             )}
 
@@ -193,7 +204,7 @@ const CargaInstruccion = () => {
                 </button>
             </div>
 
-            {/* FORMULARIO */}
+            {/* FORMULARIO DE EVALUACIÓN */}
             <form onSubmit={handleGuardar} style={styles.formCard}>
                 {tabActiva === 'vuelo' && (
                     <div>
