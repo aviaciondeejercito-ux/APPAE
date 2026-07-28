@@ -42,7 +42,7 @@ const Vuelos = () => {
         fetchTripulantes();
     }, [userUnidad]);
 
-   const fetchVuelos = async () => {
+    const fetchVuelos = async () => {
         try {
             const res = await API.get('/vuelos');
             
@@ -73,6 +73,13 @@ const Vuelos = () => {
         } catch (error) { console.error("Error cargando tripulantes", error); }
     };
 
+    // --- HELPER DE FORMATEO NUMÉRICO ---
+    const formatearHoras = (val) => {
+        const num = Number(val);
+        if (isNaN(num)) return '0';
+        return Number(num.toFixed(1)).toString();
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         
@@ -92,7 +99,7 @@ const Vuelos = () => {
             copiloto: formData.copiloto || null,
             mecanico: formData.mecanico || null,
             segundoMecanico: formData.segundoMecanico || null,
-            horasVoladas: Number(formData.horasVoladas),
+            horasVoladas: Math.round(Number(formData.horasVoladas) * 10) / 10,
             cantidadPasajeros: Number(formData.cantidadPasajeros),
             pesoCarga: Number(formData.pesoCarga)
         };
@@ -233,7 +240,7 @@ const Vuelos = () => {
                                 <option value="Nocturno">Nocturno</option>
                             </select></div>
                             <div style={styles.group}><label style={styles.label}>Reglas de Vuelo</label>
-                            <select style={styles.input} value={formData.rulesVuelo} onChange={e => setFormData({...formData, reglasVuelo: e.target.value})}>
+                            <select style={styles.input} value={formData.reglasVuelo} onChange={e => setFormData({...formData, reglasVuelo: e.target.value})}>
                                 <option value="VFR">VFR (Visual)</option>
                                 <option value="IFR">IFR (Instrumental)</option>
                             </select></div>
@@ -286,7 +293,7 @@ const Vuelos = () => {
                                         <td style={styles.td}>
                                             <div style={{fontWeight: 'bold'}}>{formatearFechaLocal(v.fecha)}</div>
                                             <div style={{fontSize: '0.7rem', color: '#666'}}>{v.desde} ➔ {v.hasta}</div>
-                                            <div style={styles.hsBadge}>{v.horasVoladas} hs</div>
+                                            <div style={styles.hsBadge}>{formatearHoras(v.horasVoladas)} hs</div>
                                         </td>
                                         <td style={styles.td}>
                                             <div style={{fontWeight: 'bold'}}>{v.aeronave}</div>
@@ -334,7 +341,6 @@ const Vuelos = () => {
     );
 };
 
-// Los estilos se mantienen exactamente igual
 const styles = {
     container: { padding: '20px', backgroundColor: '#f4f7f6', minHeight: 'calc(100vh - 65px)' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
