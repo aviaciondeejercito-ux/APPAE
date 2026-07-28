@@ -214,7 +214,7 @@ function App() {
                                             onClick={() => setView('vuelos')} 
                                             style={{...styles.dropdownItem, backgroundColor: view === 'vuelos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
                                         >
-                                            ✈️ Vuelos
+                                            ✈️ -12
                                         </button>
                                     )}
                                 </NavDropdown>
