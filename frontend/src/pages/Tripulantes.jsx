@@ -13,6 +13,9 @@ const Tripulantes = () => {
     const [modalType, setModalType] = useState(''); 
     const [formData, setFormData] = useState({});
 
+    // --- HELPER DE REDONDEO DE FLOTANTES DE JS ---
+    const redondearHs = (val) => Math.round(Number(val || 0) * 10) / 10;
+
     // --- NORMALIZACIÓN SINCRO JOKER v3.6 ---
     const rawRole = localStorage.getItem('role') || 'user';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
@@ -30,42 +33,33 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS REPARADO ---
-   const obtenerTotalesDinamicos = () => {
-    // Inicializamos estrictamente en 0 para evitar arrastrar duplicados del histórico
-    const totales = {
-        visual: 0,
-        instrumental: 0,
-        nocturno: 0,
-        nvg: 0
+    // --- CÓMPUTO DINÁMICO DE HORAS REPARADO CON SANITIZACIÓN ---
+    const obtenerTotalesDinamicos = () => {
+        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
+        if (!seleccionado) return totales;
+
+        if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
+            seleccionado.habilitaciones.forEach(h => {
+                totales.visual += Number(h.hsVisual || 0);
+                totales.instrumental += Number(h.hsInstrumental || 0);
+                totales.nocturno += Number(h.hsNocturno || 0);
+                totales.nvg += Number(h.hsNVG || 0);
+            });
+        } else if (seleccionado.totalesHistoricos) {
+            totales.visual = Number(seleccionado.totalesHistoricos.vueloDiurno || 0);
+            totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
+            totales.nocturno = Number(seleccionado.totalesHistoricos.vueloNocturno || 0);
+            totales.nvg = Number(seleccionado.totalesHistoricos.vueloVisual || 0);
+        }
+        
+        totales.visual = redondearHs(totales.visual);
+        totales.instrumental = redondearHs(totales.instrumental);
+        totales.nocturno = redondearHs(totales.nocturno);
+        totales.nvg = redondearHs(totales.nvg);
+
+        return totales;
     };
-    
-    if (!seleccionado) return totales;
 
-    // Sumamos de manera transparente los valores reales de cada Habilitación cargada
-    if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
-        seleccionado.habilitaciones.forEach(h => {
-            totales.visual += Number(h.hsVisual || 0);
-            totales.instrumental += Number(h.hsInstrumental || 0);
-            totales.nocturno += Number(h.hsNocturno || 0);
-            totales.nvg += Number(h.hsNVG || 0);
-        });
-    } else if (seleccionado.totalesHistoricos) {
-        // Fallback: Si NO tiene SdA cargados, usamos las horas fijas de la base de datos
-        totales.visual = Number(seleccionado.totalesHistoricos.vueloDiurno || 0);
-        totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
-        totales.nocturno = Number(seleccionado.totalesHistoricos.vueloNocturno || 0);
-        totales.nvg = Number(seleccionado.totalesHistoricos.vueloVisual || 0);
-    }
-    
-    // Opcional: Si necesitas redondear a un decimal para evitar problemas de flotantes en JS (ej: 417.30000000000004)
-    totales.visual = Math.round(totales.visual * 10) / 10;
-    totales.instrumental = Math.round(totales.instrumental * 10) / 10;
-    totales.nocturno = Math.round(totales.nocturno * 10) / 10;
-    totales.nvg = Math.round(totales.nvg * 10) / 10;
-
-    return totales;
-};
     const horasDinamicas = obtenerTotalesDinamicos();
 
     const fetchPersonal = async () => {
@@ -85,7 +79,6 @@ const Tripulantes = () => {
             
             setPersonal(dataFinal || []);
             
-            // Forzar actualización del tripulante en pantalla con sus nuevos cálculos consolidados
             if (seleccionado) {
                 const actualizado = dataFinal.find(p => p._id === seleccionado._id);
                 if (actualizado) setSeleccionado(actualizado);
@@ -127,10 +120,10 @@ const Tripulantes = () => {
             });
         } else if (type === 'horas') {
             setFormData({
-                vueloDiurno: seleccionado.totalesHistoricos?.vueloDiurno || 0,
-                vueloNocturno: seleccionado.totalesHistoricos?.vueloNocturno || 0,
-                vueloInstrumental: seleccionado.totalesHistoricos?.vueloInstrumental || 0,
-                vueloVisual: seleccionado.totalesHistoricos?.vueloVisual || 0
+                vueloDiurno: redondearHs(seleccionado.totalesHistoricos?.vueloDiurno),
+                vueloNocturno: redondearHs(seleccionado.totalesHistoricos?.vueloNocturno),
+                vueloInstrumental: redondearHs(seleccionado.totalesHistoricos?.vueloInstrumental),
+                vueloVisual: redondearHs(seleccionado.totalesHistoricos?.vueloVisual)
             });
         } else if (type === 'habilitacion') {
             setFormData({ 
@@ -158,21 +151,30 @@ const Tripulantes = () => {
                         }
                     });
                 } else if (modalType === 'horas') {
-                    await updateTripulante(seleccionado._id, { totalesHistoricos: formData });
+                    await updateTripulante(seleccionado._id, { 
+                        totalesHistoricos: {
+                            vueloDiurno: redondearHs(formData.vueloDiurno),
+                            vueloNocturno: redondearHs(formData.vueloNocturno),
+                            vueloInstrumental: redondearHs(formData.vueloInstrumental),
+                            vueloVisual: redondearHs(formData.vueloVisual)
+                        } 
+                    });
                 } else if (modalType === 'habilitacion') {
-                    // LLAMADA EXCLUSIVA AL ENDPOINT DEL ALGORITMO v3.6
                     await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, { 
                         aeronave: formData.aeronave,
                         fechaHabilitacion: formData.fechaHabilitacion,
                         rolActual: formData.rolActual,
-                        hsVisual: Number(formData.hsVisual || 0),
-                        hsInstrumental: Number(formData.hsInstrumental || 0),
-                        hsNocturno: Number(formData.hsNocturno || 0),
-                        hsNVG: Number(formData.hsNVG || 0),
+                        hsVisual: redondearHs(formData.hsVisual),
+                        hsInstrumental: redondearHs(formData.hsInstrumental),
+                        hsNocturno: redondearHs(formData.hsNocturno),
+                        hsNVG: redondearHs(formData.hsNVG),
                         observaciones: formData.observaciones || ''
                     });
                 } else if (modalType === 'capacitacion') {
-                    await API.post(`/tripulantes/${seleccionado._id}/capacitacion`, formData);
+                    await API.post(`/tripulantes/${seleccionado._id}/capacitacion`, {
+                        ...formData,
+                        horasAcreditadas: redondearHs(formData.horasAcreditadas)
+                    });
                 }
             }
             setShowAltaModal(false);
@@ -211,7 +213,13 @@ const Tripulantes = () => {
                     nuevosTotales.vueloVisual += sistema.nvg;
                 });
                 
-                updatedData.totalesHistoricos = nuevosTotales;
+                // REDONDEO PREVENTIVO AL BORRAR SUB-ITEMS
+                updatedData.totalesHistoricos = {
+                    vueloDiurno: redondearHs(nuevosTotales.vueloDiurno),
+                    vueloNocturno: redondearHs(nuevosTotales.vueloNocturno),
+                    vueloInstrumental: redondearHs(nuevosTotales.vueloInstrumental),
+                    vueloVisual: redondearHs(nuevosTotales.vueloVisual)
+                };
 
             } else if (type === 'capacitacion') {
                 updatedData.capacitacionesEspeciales = seleccionado.capacitacionesEspeciales.filter(c => c._id !== itemId);
@@ -324,15 +332,15 @@ const Tripulantes = () => {
                                                 <span style={styles.habRol}>{h.rolActual}</span>
                                             </div>
                                             <div style={styles.habTimeInfo}>
-                                                 <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
-                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {h.totalHorasSistema || 0} HS</div>
+                                                 <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365)) : 0} años</div>
+                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {redondearHs(h.totalHorasSistema)} HS</div>
                                             </div>
                                         </div>
                                         <div style={styles.habDesgloseGrid}>
-                                            <div style={styles.desgloseItem}><Eye size={12} /> <span>{h.hsVisual || 0}</span></div>
-                                            <div style={styles.desgloseItem}><Activity size={12} /> <span>{h.hsInstrumental || 0}</span></div>
-                                            <div style={styles.desgloseItem}><Moon size={12} /> <span>{h.hsNocturno || 0}</span></div>
-                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{h.hsNVG || 0}</span></div>
+                                            <div style={styles.desgloseItem}><Eye size={12} /> <span>{redondearHs(h.hsVisual)}</span></div>
+                                            <div style={styles.desgloseItem}><Activity size={12} /> <span>{redondearHs(h.hsInstrumental)}</span></div>
+                                            <div style={styles.desgloseItem}><Moon size={12} /> <span>{redondearHs(h.hsNocturno)}</span></div>
+                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{redondearHs(h.hsNVG)}</span></div>
                                         </div>
                                         {esGestorOperativo && <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>}
                                     </div>
@@ -352,7 +360,7 @@ const Tripulantes = () => {
                                             {esGestorOperativo && <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
                                         </div>
                                         <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
-                                            <span>{c.horasAcreditadas || 0} hs</span>
+                                            <span>{redondearHs(c.horasAcreditadas)} hs</span>
                                             <span>{c.fechaAdquisicion ? new Date(c.fechaAdquisicion).toLocaleDateString() : ''}</span>
                                         </div>
                                     </div>
@@ -405,13 +413,13 @@ const Tripulantes = () => {
                                 {modalType === 'horas' && (
                                     <div style={styles.formCol}>
                                         <label style={styles.label}>Horas Visual Generales</label>
-                                        <input type="number" style={styles.formInput} value={formData.vueloDiurno || 0} onChange={e => setFormData({...formData, vueloDiurno: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloDiurno || 0} onChange={e => setFormData({...formData, vueloDiurno: Number(e.target.value)})} required />
                                         <label style={styles.label}>Horas Nocturno Generales</label>
-                                        <input type="number" style={styles.formInput} value={formData.vueloNocturno || 0} onChange={e => setFormData({...formData, vueloNocturno: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloNocturno || 0} onChange={e => setFormData({...formData, vueloNocturno: Number(e.target.value)})} required />
                                         <label style={styles.label}>Horas Instrumental Generales</label>
-                                        <input type="number" style={styles.formInput} value={formData.vueloInstrumental || 0} onChange={e => setFormData({...formData, vueloInstrumental: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloInstrumental || 0} onChange={e => setFormData({...formData, vueloInstrumental: Number(e.target.value)})} required />
                                         <label style={styles.label}>Horas NVG Generales</label>
-                                        <input type="number" style={styles.formInput} value={formData.vueloVisual || 0} onChange={e => setFormData({...formData, vueloVisual: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloVisual || 0} onChange={e => setFormData({...formData, vueloVisual: Number(e.target.value)})} required />
                                     </div>
                                 )}
 
@@ -426,13 +434,13 @@ const Tripulantes = () => {
                                             <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
                                         </select>
                                         <label style={styles.label}>Hs Visual SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsVisual || 0} onChange={e => setFormData({...formData, hsVisual: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.hsVisual || 0} onChange={e => setFormData({...formData, hsVisual: Number(e.target.value)})} required />
                                         <label style={styles.label}>Hs Nocturno SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsNocturno || 0} onChange={e => setFormData({...formData, hsNocturno: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.hsNocturno || 0} onChange={e => setFormData({...formData, hsNocturno: Number(e.target.value)})} required />
                                         <label style={styles.label}>Hs Instrumental SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsInstrumental || 0} onChange={e => setFormData({...formData, hsInstrumental: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.hsInstrumental || 0} onChange={e => setFormData({...formData, hsInstrumental: Number(e.target.value)})} required />
                                         <label style={styles.label}>Hs NVG SdA</label>
-                                        <input type="number" style={styles.formInput} value={formData.hsNVG || 0} onChange={e => setFormData({...formData, hsNVG: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.hsNVG || 0} onChange={e => setFormData({...formData, hsNVG: Number(e.target.value)})} required />
                                         <label style={styles.label}>Fecha Aptitud Inicial</label>
                                         <input type="date" style={styles.formInput} value={formData.fechaHabilitacion || ''} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
                                         <label style={styles.label}>Observaciones / Notas</label>
@@ -447,7 +455,7 @@ const Tripulantes = () => {
                                             <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                         <label style={styles.label}>Horas Acreditadas</label>
-                                        <input type="number" style={styles.formInput} value={formData.horasAcreditadas || 0} onChange={e => setFormData({...formData, horasAcreditadas: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.horasAcreditadas || 0} onChange={e => setFormData({...formData, horasAcreditadas: Number(e.target.value)})} required />
                                         <label style={styles.label}>Fecha Adquisición</label>
                                         <input type="date" style={styles.formInput} value={formData.fechaAdquisicion || ''} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
                                     </div>

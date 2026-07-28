@@ -2,6 +2,9 @@ const Vuelo = require('../models/Vuelo');
 const Tripulante = require('../models/Tripulante');
 const Auditoria = require('../models/Auditoria');
 
+// Helper para evitar imprecisión flotante de JS (ej: 62.39999999999999 -> 62.4)
+const redondearHs = (val) => Math.round(Number(val || 0) * 10) / 10;
+
 /**
  * REGISTRO DE VUELO E IMPACTO EN LEGAJOS
  * OPTIMIZADO PARA ESTÁNDAR v3.6 (Delegación en Pre-Save)
@@ -14,9 +17,13 @@ exports.registrarVuelo = async (req, res) => {
         // 1. Limpieza y Normalización de IDs
         const limpiarId = (id) => (id && id.toString().trim() !== "" && id !== "undefined") ? id : null;
 
-        // 2. Crear el registro del vuelo con IDs saneados
+        // Sanitizamos y redondeamos las horas voladas recibidas
+        const hsVoladasSanitizadas = redondearHs(datosVuelo.horasVoladas);
+
+        // 2. Crear el registro del vuelo con IDs saneados y horas redondeadas
         const nuevoVuelo = new Vuelo({
             ...datosVuelo,
+            horasVoladas: hsVoladasSanitizadas,
             aeronave: datosVuelo.aeronave?.trim(),
             matricula: datosVuelo.matricula?.toUpperCase().trim(),
             elementoApoyado: datosVuelo.elementoApoyado?.toUpperCase().trim(),
@@ -31,10 +38,10 @@ exports.registrarVuelo = async (req, res) => {
             creadoPor: usuarioLogueado._id
         });
 
-        // El .save() dispara automáticamente el hook 'pre-save' que procesa de forma limpia y consolidada las horas generales y de SdA
+        // El .save() dispara automáticamente el hook 'pre-save'
         await nuevoVuelo.save();
 
-        // 3. PROCESAMIENTO EXCLUSIVO DE CAPACITACIONES TÁCTICAS (El controlador solo maneja esto)
+        // 3. PROCESAMIENTO EXCLUSIVO DE CAPACITACIONES TÁCTICAS
         const mapaTripulantes = new Map();
         if (nuevoVuelo.segundoMecanico) mapaTripulantes.set(nuevoVuelo.segundoMecanico.toString(), 'Mecánico');
         if (nuevoVuelo.mecanico)        mapaTripulantes.set(nuevoVuelo.mecanico.toString(), 'Mecánico');
@@ -42,7 +49,7 @@ exports.registrarVuelo = async (req, res) => {
         if (nuevoVuelo.piloto)          mapaTripulantes.set(nuevoVuelo.piloto.toString(), 'Piloto');
         if (nuevoVuelo.instructor)      mapaTripulantes.set(nuevoVuelo.instructor.toString(), 'Instructor');
 
-        const hs = Number(datosVuelo.horasVoladas || 0);
+        const hs = redondearHs(nuevoVuelo.horasVoladas);
         const esNVG = datosVuelo.usoNVG === true;
 
         for (const idTripulante of mapaTripulantes.keys()) {
@@ -51,18 +58,20 @@ exports.registrarVuelo = async (req, res) => {
 
             let flagModificado = false;
 
-            // Acreditación de horas en la misión específica
+            // Acreditación de horas en la misión específica (con redondeo)
             const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === nuevoVuelo.tipoMision);
             if (indexTactico !== -1) {
-                tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas += hs;
+                const hsActuales = Number(tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas || 0);
+                tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas = redondearHs(hsActuales + hs);
                 flagModificado = true;
             }
 
-            // Acreditación adicional por uso de NVG
+            // Acreditación adicional por uso de NVG (con redondeo)
             if (esNVG) {
                 const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
                 if (indexNVG !== -1) {
-                    tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas += hs;
+                    const hsActualesNVG = Number(tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas || 0);
+                    tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas = redondearHs(hsActualesNVG + hs);
                     flagModificado = true;
                 }
             }
@@ -111,7 +120,14 @@ exports.obtenerVuelos = async (req, res) => {
             .populate('instructor piloto copiloto mecanico segundoMecanico', 'grado apellido nombre')
             .sort({ fecha: -1 });
 
-        res.json(vuelos);
+        // Mapeo preventivo para garantizar que cada vuelo devuelva sus horas limpias
+        const vuelosSanitizados = vuelos.map(v => {
+            const doc = v.toObject();
+            doc.horasVoladas = redondearHs(doc.horasVoladas);
+            return doc;
+        });
+
+        res.json(vuelosSanitizados);
     } catch (error) {
         console.error("❌ Error al obtener vuelos:", error);
         res.status(500).json({ mensaje: "Error al obtener historial de vuelos" });
@@ -126,7 +142,7 @@ exports.eliminarVuelo = async (req, res) => {
         const vuelo = await Vuelo.findById(req.params.id);
         if (!vuelo) return res.status(404).json({ mensaje: "Vuelo no encontrado" });
 
-        const hs = Number(vuelo.horasVoladas || 0);
+        const hs = redondearHs(vuelo.horasVoladas);
         const esNocturno = vuelo.condicion === 'Nocturno';
         const esIFR = vuelo.reglasVuelo === 'IFR';
         const esNVG = vuelo.usoNVG === true;
@@ -143,26 +159,27 @@ exports.eliminarVuelo = async (req, res) => {
             const tripulante = await Tripulante.findById(idTripulante);
             if (!tripulante) continue;
 
-            // 1. Restar de Habilitaciones por SdA y Rol (Lógica espejo)
+            // 1. Restar de Habilitaciones por SdA y Rol (con redondeo)
             const indexHab = tripulante.habilitaciones.findIndex(h => 
                 h.aeronave === vuelo.aeronave && h.rolActual === rolVuelo
             );
             
             if (indexHab !== -1) {
-                if (esVisual) tripulante.habilitaciones[indexHab].hsVisual = Math.max(0, tripulante.habilitaciones[indexHab].hsVisual - hs);
-                if (esIFR) tripulante.habilitaciones[indexHab].hsInstrumental = Math.max(0, tripulante.habilitaciones[indexHab].hsInstrumental - hs);
-                if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno = Math.max(0, tripulante.habilitaciones[indexHab].hsNocturno - hs);
-                if (esNVG) tripulante.habilitaciones[indexHab].hsNVG = Math.max(0, tripulante.habilitaciones[indexHab].hsNVG - hs);
+                if (esVisual)     tripulante.habilitaciones[indexHab].hsVisual = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsVisual - hs));
+                if (esIFR)        tripulante.habilitaciones[indexHab].hsInstrumental = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsInstrumental - hs));
+                if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNocturno - hs));
+                if (esNVG)        tripulante.habilitaciones[indexHab].hsNVG = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNVG - hs));
                 
-                // Recalculamos el total del SdA para ese rol específico
-                tripulante.habilitaciones[indexHab].totalHorasSistema = 
+                // Recalculamos el total del SdA para ese rol redondeado
+                tripulante.habilitaciones[indexHab].totalHorasSistema = redondearHs(
                     Number(tripulante.habilitaciones[indexHab].hsVisual || 0) +
                     Number(tripulante.habilitaciones[indexHab].hsInstrumental || 0) +
                     Number(tripulante.habilitaciones[indexHab].hsNocturno || 0) +
-                    Number(tripulante.habilitaciones[indexHab].hsNVG || 0);
+                    Number(tripulante.habilitaciones[indexHab].hsNVG || 0)
+                );
             }
 
-            // 2. RECALCULO DE TOTALES HISTÓRICOS GENERALES (Aplicando el algoritmo de máximos por SdA para mantener consistencia)
+            // 2. RECALCULO DE TOTALES HISTÓRICOS GENERALES (con redondeo)
             const mapaSdA = {};
             tripulante.habilitaciones.forEach(hab => {
                 const sdaId = hab.aeronave;
@@ -181,27 +198,29 @@ exports.eliminarVuelo = async (req, res) => {
                 totalesLimpios.nvg += sistema.nvg;
             });
 
-            tripulante.totalesHistoricos.vueloDiurno = totalesLimpios.v;
-            tripulante.totalesHistoricos.vueloInstrumental = totalesLimpios.i;
-            tripulante.totalesHistoricos.vueloNocturno = totalesLimpios.n;
-            tripulante.totalesHistoricos.vueloVisual = totalesLimpios.nvg;
+            tripulante.totalesHistoricos.vueloDiurno = redondearHs(totalesLimpios.v);
+            tripulante.totalesHistoricos.vueloInstrumental = redondearHs(totalesLimpios.i);
+            tripulante.totalesHistoricos.vueloNocturno = redondearHs(totalesLimpios.n);
+            tripulante.totalesHistoricos.vueloVisual = redondearHs(totalesLimpios.nvg);
 
-            // 3. Restar de Capacitaciones Tácticas
+            // 3. Restar de Capacitaciones Tácticas (con redondeo)
             const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === vuelo.tipoMision);
             if (indexTactico !== -1) {
-                tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas = Math.max(0, tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas - hs);
+                const hsCap = Number(tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas || 0);
+                tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas = redondearHs(Math.max(0, hsCap - hs));
             }
             if (esNVG) {
                 const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
                 if (indexNVG !== -1) {
-                    tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas = Math.max(0, tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas - hs);
+                    const hsCapNVG = Number(tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas || 0);
+                    tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas = redondearHs(Math.max(0, hsCapNVG - hs));
                 }
             }
 
             await tripulante.save();
         }
 
-        // Finalmente eliminamos físicamente el documento de vuelo
+        // Eliminamos físicamente el documento de vuelo
         await Vuelo.findByIdAndDelete(req.params.id);
         res.json({ mensaje: "Vuelo eliminado y horas descontadas correctamente bajo estándar v3.6" });
     } catch (error) {
