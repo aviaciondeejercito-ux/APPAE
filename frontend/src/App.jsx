@@ -129,10 +129,10 @@ function App() {
     const puedeVerTripulantes = esAdmin || esOperaciones || esJefe || esPersonal; 
     
     // ✈️ FORMULARIO / TABLA ORIGINAL -12
-    const puedeVerVuelos = esAdmin || esOperaciones || esJefe; 
+    const puedeVerVuelos = esAdmin || esOperaciones; 
     
     // 📊 DASHBOARD GRÁFICO DE HORAS Y ESTADÍSTICAS
-    const puedeVerDashboardVuelos = esAdmin || esOperaciones || esJefe || esBoss || esDirector || esOTO; 
+    const puedeVerDashboardVuelos = esAdmin || esOperaciones || esJefe; 
 
     const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esPersonal;
     const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO || esUser || esOperaciones || esLogistico || esJefe || esPersonal;

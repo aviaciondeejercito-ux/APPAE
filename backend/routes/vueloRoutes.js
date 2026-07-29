@@ -6,8 +6,7 @@ const Vuelo = require('../models/Vuelo'); // Importamos para la validación de f
 
 /**
  * RUTAS DE GESTIÓN DE VUELOS - SISTEMA GESTIÓN AE
- * Acceso: admin y OPERACIONES tienen control total. 
- * Otros roles (user, JEFE, etc.) tienen acceso según la lógica del controlador.
+ * Acceso: admin, OPERACIONES, JEFE, BOSS, DIRECTOR, OTO y OFICINATECNICA.
  */
 
 // 1. Protección Global: Requiere Token
@@ -63,15 +62,16 @@ const verificarJurisdiccionBaja = async (req, res, next) => {
 
 /**
  * 4. Definición de Endpoints
+ * Se amplían los roles permitidos para garantizar la lectura de datos desde el Dashboard de Vuelos.
  */
-const rolesConAcceso = ['admin', 'user', 'OPERACIONES', 'JEFE'];
+const rolesConAcceso = ['ADMIN', 'USER', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'];
 
 router.route('/')
     .get(authorize(...rolesConAcceso), vueloController.obtenerVuelos) 
     .post(authorize(...rolesConAcceso), vueloController.registrarVuelo); 
 
 router.route('/:id')
-    // Agregamos la verificación de Jurisdicción antes de que impacte inversamente los legajos
-    .delete(authorize('admin', 'OPERACIONES', 'JEFE'), verificarJurisdiccionBaja, vueloController.eliminarVuelo); 
+    // Eliminación restringida únicamente a Administradores, Operaciones y Jefes
+    .delete(authorize('ADMIN', 'OPERACIONES', 'JEFE'), verificarJurisdiccionBaja, vueloController.eliminarVuelo); 
 
 module.exports = router;

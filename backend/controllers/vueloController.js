@@ -100,19 +100,29 @@ exports.registrarVuelo = async (req, res) => {
 };
 
 /**
- * OBTENER HISTORIAL DE VUELOS
+ * OBTENER HISTORIAL DE VUELOS (Optimizado para -12 y DashboardVuelos)
  */
 exports.obtenerVuelos = async (req, res) => {
     try {
         const { unit } = req.query;
         const unidad = unit || req.query.unidad;
         let filtro = {};
-        const rolUsuario = req.user.role ? req.user.role.toLowerCase() : 'user';
         
-        if (rolUsuario !== 'admin') {
-            filtro.unidadResponsable = req.user.unidad || req.user.elemento;
-        } 
-        else if (unidad && unidad !== 'all') {
+        // Normalización flexible del Rol (soporta req.user.role o req.user.rol en mayúsculas/minúsculas)
+        const rawRole = req.user?.role || req.user?.rol || 'user';
+        const rolUsuario = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
+
+        // Roles con alcance global para el Dashboard y gestión
+        const esMandoGlobal = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolUsuario);
+
+        if (!esMandoGlobal) {
+            // Usuario estándar: filtrado estricto por la unidad a la que pertenece
+            const unidadUsuario = req.user.unidad || req.user.elemento;
+            if (unidadUsuario) {
+                filtro.unidadResponsable = unidadUsuario;
+            }
+        } else if (unidad && unidad !== 'all' && unidad !== 'TODAS') {
+            // Mando global o Admin seleccionando una unidad específica
             filtro.unidadResponsable = unidad;
         }
         
