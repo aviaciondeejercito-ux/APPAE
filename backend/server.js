@@ -91,6 +91,11 @@ const escuelaRoutes = require('./routes/escuelaRoutes');
 
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
+// Endpoint Keep-Alive para UptimeRobot / Ping Preventivo
+app.get('/api/ping', (req, res) => {
+    res.status(200).send('OK');
+});
+
 app.get('/api/health', (req, res) => {
     res.status(200).json({
         status: 'online',
