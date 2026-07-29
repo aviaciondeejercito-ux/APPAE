@@ -23,8 +23,8 @@ import DashboardNovedades from './components/DashboardNovedades';
 import F16Page from './pages/F16';
 import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
 
-// IMPORTACIÓN VERIFICADA (ASEGURATE QUE ESTÉ EN /components O /pages SEGÚN TU ESTRUCTURA)
-import DashboardVuelos from './components/DashboardVuelos'; // <-- Cambia a './pages/DashboardVuelos' si está en pages
+// 🎯 IMPORTACIÓN CORREGIDA A LA CARPETA PAGES
+import DashboardVuelos from './pages/DashboardVuelos';
 
 // 🎓 MÓDULOS DE ESCUELA DE AVIACIÓN (EC AE)
 import CargaInstruccion from './pages/CargaInstruccion';
