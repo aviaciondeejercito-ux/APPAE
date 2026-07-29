@@ -3,6 +3,7 @@ import 'leaflet/dist/leaflet.css';
 
 // IMPORTANTE: Comunicación centralizada con el backend
 import { EventService } from './services/api'; 
+import { useOnlineStatus } from './useOnlineStatus'; // 👈 Importación del Custom Hook
 
 import CalendarPage from './pages/CalendarPage';
 import Login from './pages/Login';
@@ -27,7 +28,7 @@ import CargaInstruccion from './pages/CargaInstruccion';
 import DashboardEscuela from './pages/DashboardEscuela';
 import FichaAlumnoInstruccion from './pages/FichaAlumnoInstruccion';
 import GestionAlumnos from './pages/GestionAlumnos'; 
-import GestorPatrones from './pages/GestorPatrones'; // 👈 NUEVO: Gestor de Patrones de Vuelo
+import GestorPatrones from './pages/GestorPatrones';
 
 // ==========================================
 // 🔻 SUBCOMPONENTE DE DROPDOWN PARA EL NAVBAR
@@ -81,22 +82,14 @@ function App() {
     const [role, setRole] = useState(localStorage.getItem('role') || localStorage.getItem('rol') || 'user');
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    
+    // 🌐 Estado de conexión usando el Hook
+    const isOnline = useOnlineStatus();
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
-    useEffect(() => {
-        const handleStatusChange = () => setIsOnline(navigator.onLine);
-        window.addEventListener('online', handleStatusChange);
-        window.addEventListener('offline', handleStatusChange);
-        return () => {
-            window.removeEventListener('online', handleStatusChange);
-            window.removeEventListener('offline', handleStatusChange);
-        };
     }, []);
 
     useEffect(() => {
@@ -159,6 +152,13 @@ function App() {
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: 0, padding: 0 }}>
             
+            {/* 🔴 BANNER MODO OFFLINE */}
+            {!isOnline && (
+                <div style={styles.offlineBanner}>
+                    ⚠️ <strong>Sin Conexión:</strong> Estás navegando en modo offline. Los datos se cargarán desde la caché del sistema.
+                </div>
+            )}
+
             <nav style={{
                 ...styles.navbar,
                 flexDirection: isMobile ? 'column' : 'row',
@@ -220,7 +220,7 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* 3. EC AE (Navegación con Gestión de Alumnos y Patrones) */}
+                            {/* 3. EC AE */}
                             {puedeVerECAE && (
                                 <NavDropdown title="🎓 EC AE" activeViews={['gestionAlumnos', 'gestorPatrones', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno']} currentView={view}>
                                     <button 
@@ -395,6 +395,16 @@ function App() {
 }
 
 const styles = {
+    offlineBanner: {
+        backgroundColor: '#d32f2f',
+        color: 'white',
+        textAlign: 'center',
+        padding: '6px 12px',
+        fontSize: '0.8rem',
+        fontWeight: 'bold',
+        zIndex: 5000,
+        boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+    },
     navbar: { backgroundColor: '#1b3a57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', position: 'sticky', top: 0, zIndex: 3000 },
     logo: { fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer' },
     navActions: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' },
