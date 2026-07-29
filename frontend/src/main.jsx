@@ -1,9 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
-
-// Eliminamos el import de index.css porque está fallando en el Build
-// y estamos usando estilos inline (Sincro Joker).
+import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
