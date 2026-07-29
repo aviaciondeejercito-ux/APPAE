@@ -1,14 +1,38 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie
 } from 'recharts';
 
+// Importamos el servicio para traer los datos directamente de la base de datos
+import { EventService } from '../services/api';
+
 // Colores del sistema AE
 const COLORS = ['#1b3a57', '#4a69bd', '#1e3799', '#38ada9', '#f6b93b', '#e55039', '#78e08f', '#fa983a'];
 
-export default function DashboardVuelos({ vuelosData = [] }) {
-    // Filtros por rango de fecha o unidad (opcional)
+export default function DashboardVuelos({ vuelosData: vuelosProps }) {
+    const [vuelosData, setVuelosData] = useState(vuelosProps || []);
+    const [loading, setLoading] = useState(!vuelosProps || vuelosProps.length === 0);
     const [filtroMision, setFiltroMision] = useState('TODAS');
+
+    // 🔄 CARGA AUTÓNOMA DE DATOS SI NO VIENEN POR PROPS
+    useEffect(() => {
+        if (!vuelosProps || vuelosProps.length === 0) {
+            setLoading(true);
+            EventService.getVuelos()
+                .then(data => {
+                    setVuelosData(Array.isArray(data) ? data : []);
+                })
+                .catch(err => {
+                    console.error("Error al obtener los vuelos para el Dashboard:", err);
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+        } else {
+            setVuelosData(vuelosProps);
+            setLoading(false);
+        }
+    }, [vuelosProps]);
 
     // ==========================================
     // 📊 PROCESAMIENTO Y CÁLCULOS DE DATOS (-12)
@@ -75,6 +99,14 @@ export default function DashboardVuelos({ vuelosData = [] }) {
             .sort((a, b) => b.horas - a.horas)
             .slice(0, 8); // Top 8 rutas/destinos externos
     }, [vuelosData]);
+
+    if (loading) {
+        return (
+            <div style={{ padding: '50px', textAlign: 'center', color: '#1b3a57', fontWeight: 'bold' }}>
+                ⏳ Cargando métricas y reportes de vuelo (-12)...
+            </div>
+        );
+    }
 
     return (
         <div style={styles.container}>
