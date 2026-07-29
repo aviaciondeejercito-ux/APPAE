@@ -9,13 +9,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 
-// LIMPIEZA AUTOMÁTICA DE SERVICE WORKERS ROTOS
-// Esto ayuda a solucionar el error de "Not Found" en tu navegador
+// REGISTRO DEL SERVICE WORKER PARA PWA
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for(let registration of registrations) {
-            registration.unregister();
-            console.log('SW Unregistered para limpieza');
-        }
-    });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((registration) => {
+        console.log('Service Worker registrado con éxito:', registration.scope);
+      })
+      .catch((error) => {
+        console.error('Error al registrar el Service Worker:', error);
+      });
+  });
 }
