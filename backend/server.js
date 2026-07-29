@@ -141,8 +141,10 @@ app.use((err, req, res, next) => {
 
 // --- 9. LANZAMIENTO DEL SERVICIO ---
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-    console.log(`🚀 SISTEMA OPERATIVO EN PUERTO: ${PORT}`);
+const HOST = '0.0.0.0'; // Requisito explícito de red para Render
+
+server.listen(PORT, HOST, () => {
+    console.log(`🚀 SISTEMA OPERATIVO EN PUERTO: ${PORT} (HOST: ${HOST})`);
     
     // Verificación de carga de rutas EBM
     if (ebmRoutes) {
