@@ -334,7 +334,7 @@ function App() {
                                 <button 
                                     onClick={() => setView('reportes')} 
                                     style={{...styles.btnNav, backgroundColor: view === 'reportes' ? '#1e3799' : '#4a69bd'}}
-                                >📊 Reportes</button>
+                                >📊 Reportes Mant</button>
                             )}
 
                             {puedeVerUsuarios && (
