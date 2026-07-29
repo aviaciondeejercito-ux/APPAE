@@ -1,29 +1,32 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend
 } from 'recharts';
 
-// Importamos el servicio para traer los datos directamente de la base de datos
+// Servicio central de conexión
 import { EventService } from '../services/api';
 
-// Colores del sistema AE
-const COLORS = ['#1b3a57', '#4a69bd', '#1e3799', '#38ada9', '#f6b93b', '#e55039', '#78e08f', '#fa983a'];
+// Colores institucionales
+const COLORS = ['#1b3a57', '#4a69bd', '#10ac84', '#f39c12', '#e74c3c', '#9b59b6', '#34495e', '#38ada9'];
 
 export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [vuelosData, setVuelosData] = useState(vuelosProps || []);
     const [loading, setLoading] = useState(!vuelosProps || vuelosProps.length === 0);
-    const [filtroMision, setFiltroMision] = useState('TODAS');
+    const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
+    const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
-    // 🔄 CARGA AUTÓNOMA DE DATOS SI NO VIENEN POR PROPS
+    // 🔄 CARGA AUTÓNOMA CORREGIDA (PROCESA RES.DATA DE AXIOS)
     useEffect(() => {
         if (!vuelosProps || vuelosProps.length === 0) {
             setLoading(true);
             EventService.getVuelos()
-                .then(data => {
-                    setVuelosData(Array.isArray(data) ? data : []);
+                .then(res => {
+                    // Extraemos la propiedad .data devuelta por Axios
+                    const listaVuelos = res?.data || res || [];
+                    setVuelosData(Array.isArray(listaVuelos) ? listaVuelos : []);
                 })
                 .catch(err => {
-                    console.error("Error al obtener los vuelos para el Dashboard:", err);
+                    console.error("Error al recuperar planillas -12 de la BD:", err);
                 })
                 .finally(() => {
                     setLoading(false);
@@ -34,113 +37,188 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         }
     }, [vuelosProps]);
 
-    // ==========================================
-    // 📊 PROCESAMIENTO Y CÁLCULOS DE DATOS (-12)
-    // ==========================================
-
-    // 1. TOTAL DE HORAS GENERALES
-    const totalHorasGenerales = useMemo(() => {
-        return vuelosData.reduce((acc, v) => acc + Number(v.horasVuelo || v.duracion || 0), 0);
+    // 📌 OBTENER LISTA ÚNICA DE UNIDADES Y MISIONES PARA FILTROS
+    const listaUnidades = useMemo(() => {
+        const unidades = vuelosData.map(v => v.unidadResponsable).filter(Boolean);
+        return ['TODAS', ...Array.from(new Set(unidades))];
     }, [vuelosData]);
 
-    // 2. HORAS DE VUELO POR ELEMENTO APOYADO
+    const listaMisiones = useMemo(() => {
+        const misiones = vuelosData.map(v => v.tipoMision).filter(Boolean);
+        return ['TODAS', ...Array.from(new Set(misiones))];
+    }, [vuelosData]);
+
+    // 📌 VUELOS FILTRADOS DINÁMICAMENTE
+    const vuelosFiltrados = useMemo(() => {
+        return vuelosData.filter(v => {
+            const pasaUnidad = unidadFiltro === 'TODAS' || v.unidadResponsable === unidadFiltro;
+            const pasaMision = misionFiltro === 'TODAS' || v.tipoMision === misionFiltro;
+            return pasaUnidad && pasaMision;
+        });
+    }, [vuelosData, unidadFiltro, misionFiltro]);
+
+    // ==========================================
+    // 📊 CÁLCULOS Y PROCESAMIENTO DE DATOS (-12)
+    // ==========================================
+
+    // 1. TOTAL DE HORAS GENERALES (Usando 'horasVoladas')
+    const totalHorasGenerales = useMemo(() => {
+        return vuelosFiltrados.reduce((acc, v) => acc + (Number(v.horasVoladas) || 0), 0);
+    }, [vuelosFiltrados]);
+
+    // 2. TOTAL DE PASAJEROS Y CARGA
+    const totalPasajeros = useMemo(() => {
+        return vuelosFiltrados.reduce((acc, v) => acc + (Number(v.cantidadPasajeros) || 0), 0);
+    }, [vuelosFiltrados]);
+
+    const totalCargaKg = useMemo(() => {
+        return vuelosFiltrados.reduce((acc, v) => acc + (Number(v.pesoCarga) || 0), 0);
+    }, [vuelosFiltrados]);
+
+    // 3. HORAS POR ELEMENTO APOYADO (Campo: 'elementoApoyado')
     const horasPorElemento = useMemo(() => {
         const mapa = {};
-        vuelosData.forEach(v => {
-            const elem = v.elementoApoyado || v.unidadApoyada || 'SIN ESPECIFICAR';
-            const hs = Number(v.horasVuelo || v.duracion || 0);
+        vuelosFiltrados.forEach(v => {
+            const elem = v.elementoApoyado || 'SIN ESPECIFICAR';
+            const hs = Number(v.horasVoladas) || 0;
             mapa[elem] = (mapa[elem] || 0) + hs;
         });
-        return Object.entries(mapa).map(([name, value]) => ({ name, value }));
-    }, [vuelosData]);
+        return Object.entries(mapa).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
+    }, [vuelosFiltrados]);
 
-    // 3. HORAS POR PILOTO / COPILOTO
-    const horasPorTripulante = useMemo(() => {
-        const mapa = {};
-        vuelosData.forEach(v => {
-            const hs = Number(v.horasVuelo || v.duracion || 0);
-            if (v.piloto) mapa[v.piloto] = (mapa[v.piloto] || 0) + hs;
-            if (v.copiloto) mapa[v.copiloto] = (mapa[v.copiloto] || 0) + hs;
-        });
-        return Object.entries(mapa)
-            .map(([name, horas]) => ({ name, horas }))
-            .sort((a, b) => b.horas - a.horas)
-            .slice(0, 10); // Top 10
-    }, [vuelosData]);
-
-    // 4. HORAS DE VUELO POR MISIÓN
+    // 4. HORAS POR TIPO DE MISIÓN (Campo: 'tipoMision')
     const horasPorMision = useMemo(() => {
         const mapa = {};
-        vuelosData.forEach(v => {
-            const mision = v.mision || v.tipoMision || 'GENERAL';
-            const hs = Number(v.horasVuelo || v.duracion || 0);
+        vuelosFiltrados.forEach(v => {
+            const mision = v.tipoMision || 'GENERAL';
+            const hs = Number(v.horasVoladas) || 0;
             mapa[mision] = (mapa[mision] || 0) + hs;
         });
-        return Object.entries(mapa).map(([name, value]) => ({ name, value }));
-    }, [vuelosData]);
+        return Object.entries(mapa).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
+    }, [vuelosFiltrados]);
 
-    // 5. VUELOS POR DESTINOS (FILTRANDO ORIGEN Y DESTINO SADO SADO)
+    // 5. HORAS POR PILOTO / COPILOTO (Maneja populados { grado, apellido, nombre })
+    const horasPorTripulante = useMemo(() => {
+        const mapa = {};
+        
+        const formatearNombre = (t) => {
+            if (!t) return null;
+            if (typeof t === 'string') return t;
+            return `${t.grado || ''} ${t.apellido || ''}`.trim();
+        };
+
+        vuelosFiltrados.forEach(v => {
+            const hs = Number(v.horasVoladas) || 0;
+            const piloto = formatearNombre(v.piloto);
+            const copiloto = formatearNombre(v.copiloto);
+
+            if (piloto) mapa[piloto] = (mapa[piloto] || 0) + hs;
+            if (copiloto) mapa[copiloto] = (mapa[copiloto] || 0) + hs;
+        });
+
+        return Object.entries(mapa)
+            .map(([name, horas]) => ({ name, horas: Number(horas.toFixed(1)) }))
+            .sort((a, b) => b.horas - a.horas)
+            .slice(0, 10); // Top 10
+    }, [vuelosFiltrados]);
+
+    // 6. RUTAS Y DESTINOS (Campos: 'desde' y 'hasta')
     const horasPorDestino = useMemo(() => {
         const mapa = {};
-        vuelosData.forEach(v => {
-            const origen = (v.origen || '').trim().toUpperCase();
-            const destino = (v.destino || '').trim().toUpperCase();
+        vuelosFiltrados.forEach(v => {
+            const origen = (v.desde || '').trim().toUpperCase();
+            const destino = (v.hasta || '').trim().toUpperCase();
 
-            // Descartamos si Origen y Destino son ambos SADO / Campo de Mayo local
+            // Excluir vuelos locales dentro de Campo de Mayo
             if (origen === 'SADO' && destino === 'SADO') return;
 
-            const ruta = `${origen || 'DESC'} ➔ ${destino || 'DESC'}`;
-            const hs = Number(v.horasVuelo || v.duracion || 0);
+            const ruta = `${origen || 'S/D'} ➔ ${destino || 'S/D'}`;
+            const hs = Number(v.horasVoladas) || 0;
             mapa[ruta] = (mapa[ruta] || 0) + hs;
         });
 
         return Object.entries(mapa)
-            .map(([ruta, horas]) => ({ ruta, horas }))
+            .map(([ruta, horas]) => ({ ruta, horas: Number(horas.toFixed(1)) }))
             .sort((a, b) => b.horas - a.horas)
-            .slice(0, 8); // Top 8 rutas/destinos externos
-    }, [vuelosData]);
+            .slice(0, 8); // Top 8 rutas externas
+    }, [vuelosFiltrados]);
 
     if (loading) {
         return (
-            <div style={{ padding: '50px', textAlign: 'center', color: '#1b3a57', fontWeight: 'bold' }}>
-                ⏳ Cargando métricas y reportes de vuelo (-12)...
+            <div style={{ padding: '60px', textAlign: 'center', color: '#1b3a57', fontWeight: 'bold' }}>
+                🔄 Cargando base de datos de planillas -12...
             </div>
         );
     }
 
     return (
         <div style={styles.container}>
+            {/* ENCABEZADO Y FILTROS */}
             <header style={styles.header}>
-                <h2 style={{ margin: 0, color: '#1b3a57' }}>📊 Dashboard de Reportes de Vuelo (-12)</h2>
-                <span style={styles.subtitle}>Resumen consolidado de horas y misiones de la unidad</span>
+                <div>
+                    <h2 style={{ margin: 0, color: '#1b3a57' }}>📊 Dashboard de Reportes de Vuelo (-12)</h2>
+                    <span style={styles.subtitle}>Resumen consolidado de horas y misiones de la unidad</span>
+                </div>
+
+                <div style={styles.filtrosBar}>
+                    <div style={styles.filtroGroup}>
+                        <label style={styles.label}>Unidad Responsable:</label>
+                        <select 
+                            value={unidadFiltro} 
+                            onChange={(e) => setUnidadFiltro(e.target.value)}
+                            style={styles.select}
+                        >
+                            {listaUnidades.map((u, i) => (
+                                <option key={i} value={u}>{u}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div style={styles.filtroGroup}>
+                        <label style={styles.label}>Tipo Misión:</label>
+                        <select 
+                            value={misionFiltro} 
+                            onChange={(e) => setMisionFiltro(e.target.value)}
+                            style={styles.select}
+                        >
+                            {listaMisiones.map((m, i) => (
+                                <option key={i} value={m}>{m}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
             </header>
 
             {/* TARJETAS DE INDICADORES PRINCIPALES */}
             <div style={styles.kpiContainer}>
                 <div style={styles.kpiCard}>
-                    <span style={styles.kpiTitle}>TOTAL DE HORAS DE VUELO</span>
+                    <span style={styles.kpiTitle}>TOTAL HORAS VOLADAS</span>
                     <span style={styles.kpiValue}>{totalHorasGenerales.toFixed(1)} hs</span>
                 </div>
                 <div style={styles.kpiCard}>
                     <span style={styles.kpiTitle}>VUELOS REGISTRADOS</span>
-                    <span style={styles.kpiValue}>{vuelosData.length}</span>
+                    <span style={styles.kpiValue}>{vuelosFiltrados.length}</span>
                 </div>
                 <div style={styles.kpiCard}>
-                    <span style={styles.kpiTitle}>ELEMENTOS APOYADOS</span>
-                    <span style={styles.kpiValue}>{horasPorElemento.length}</span>
+                    <span style={styles.kpiTitle}>PASAJEROS TRANSPORTADOS</span>
+                    <span style={styles.kpiValue}>{totalPasajeros} pax</span>
+                </div>
+                <div style={styles.kpiCard}>
+                    <span style={styles.kpiTitle}>CARGA TRANSPORTADA</span>
+                    <span style={styles.kpiValue}>{totalCargaKg} kg</span>
                 </div>
             </div>
 
             {/* GRILLA DE GRÁFICOS */}
             <div style={styles.chartsGrid}>
                 
-                {/* 1. HORAS EN FUNCIÓN DEL ELEMENTO APOYADO */}
+                {/* 1. HORAS POR ELEMENTO APOYADO */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>🏢 Horas por Elemento Apoyado</h4>
                     <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={horasPorElemento} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-15} textAnchor="end" />
+                        <BarChart data={horasPorElemento} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" />
                             <YAxis />
                             <Tooltip formatter={(value) => [`${value} hs`, 'Horas']} />
                             <Bar dataKey="value" fill="#1b3a57" radius={[4, 4, 0, 0]} />
@@ -167,16 +245,17 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                                 ))}
                             </Pie>
                             <Tooltip formatter={(value) => [`${value} hs`, 'Horas']} />
+                            <Legend />
                         </PieChart>
                     </ResponsiveContainer>
                 </div>
 
-                {/* 3. TOTAL DE HORAS POR PILOTO / COPILOTO (TOP 10) */}
+                {/* 3. TOTAL DE HORAS POR PILOTO / COPILOTO */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>👨‍✈️ Top 10 Horas por Piloto / Copiloto</h4>
                     <ResponsiveContainer width="100%" height={260}>
                         <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" />
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis type="number" />
                             <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} />
                             <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
@@ -185,12 +264,12 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </ResponsiveContainer>
                 </div>
 
-                {/* 4. DESTINOS EXTERNOS (EXCLUYENDO SADO ➔ SADO) */}
+                {/* 4. DESTINOS EXTERNOS */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>🗺️ Destinos & Rutas (Excluye SADO ➔ SADO)</h4>
                     <ResponsiveContainer width="100%" height={260}>
                         <BarChart data={horasPorDestino} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
-                            <CartesianGrid strokeDasharray="3 3" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis dataKey="ruta" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
                             <YAxis />
                             <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
@@ -204,9 +283,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     );
 }
 
-// ==========================================
-// 🎨 ESTILOS CSS-IN-JS
-// ==========================================
 const styles = {
     container: {
         padding: '20px',
@@ -218,15 +294,44 @@ const styles = {
     header: {
         marginBottom: '20px',
         borderBottom: '2px solid #e2e8f0',
-        paddingBottom: '10px'
+        paddingBottom: '12px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '15px'
     },
     subtitle: {
         fontSize: '0.85rem',
         color: '#64748b'
     },
+    filtrosBar: {
+        display: 'flex',
+        gap: '12px',
+        flexWrap: 'wrap'
+    },
+    filtroGroup: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px'
+    },
+    label: {
+        fontSize: '0.7rem',
+        fontWeight: 'bold',
+        color: '#1b3a57'
+    },
+    select: {
+        padding: '5px 10px',
+        borderRadius: '4px',
+        border: '1px solid #cbd5e1',
+        backgroundColor: '#ffffff',
+        fontSize: '0.8rem',
+        fontWeight: '600',
+        color: '#1b3a57'
+    },
     kpiContainer: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
         gap: '15px',
         marginBottom: '25px'
     },
@@ -240,19 +345,19 @@ const styles = {
         flexDirection: 'column'
     },
     kpiTitle: {
-        fontSize: '0.75rem',
+        fontSize: '0.7rem',
         color: '#64748b',
         fontWeight: 'bold'
     },
     kpiValue: {
-        fontSize: '1.6rem',
+        fontSize: '1.5rem',
         fontWeight: 'bold',
         color: '#1b3a57',
-        marginTop: '6px'
+        marginTop: '4px'
     },
     chartsGrid: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))',
         gap: '20px'
     },
     chartCard: {
@@ -263,7 +368,8 @@ const styles = {
     },
     chartTitle: {
         margin: '0 0 15px 0',
-        fontSize: '0.95rem',
-        color: '#1b3a57'
+        fontSize: '0.9rem',
+        color: '#1b3a57',
+        fontWeight: 'bold'
     }
 };

@@ -15,7 +15,7 @@ import OperacionesMapa from './pages/OperacionesMapa';
 import CargaTactica from './pages/CargaTactica';
 import PlaneamientoMapa from './pages/PlaneamientoMapa';
 import Tripulantes from './pages/Tripulantes'; 
-import Vuelos from './pages/Vuelos';
+import Vuelos from './pages/Vuelos'; // Módulo original de carga/tabla -12
 import EbmPage from './pages/EbmPage'; 
 import AlertasWidget from './components/AlertasWidget'; 
 import F13Page from './pages/F13'; 
@@ -23,7 +23,7 @@ import DashboardNovedades from './components/DashboardNovedades';
 import F16Page from './pages/F16';
 import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
 
-// 🎯 IMPORTACIÓN CORREGIDA A LA CARPETA PAGES
+// 📊 MÓDULO NUEVO DE GRÁFICOS Y METRICAS DE VUELO
 import DashboardVuelos from './pages/DashboardVuelos';
 
 // 🎓 MÓDULOS DE ESCUELA DE AVIACIÓN (EC AE)
@@ -127,7 +127,13 @@ function App() {
     // --- VISIBILIDAD DE MÓDULOS ---
     const puedeVerUsuarios = esAdmin;
     const puedeVerTripulantes = esAdmin || esOperaciones || esJefe || esPersonal; 
-    const puedeVerVuelos = esAdmin || esOperaciones; 
+    
+    // ✈️ FORMULARIO / TABLA ORIGINAL -12
+    const puedeVerVuelos = esAdmin || esOperaciones || esJefe; 
+    
+    // 📊 DASHBOARD GRÁFICO DE HORAS Y ESTADÍSTICAS
+    const puedeVerDashboardVuelos = esAdmin || esOperaciones || esJefe || esBoss || esDirector || esOTO; 
+
     const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esPersonal;
     const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerEstadoAeronaves = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
@@ -142,7 +148,7 @@ function App() {
     const puedeVerProgMantenimiento = esAdmin || esOfTecnica;
     const puedeVerECAE = esAdmin || esOperaciones || esBoss || esDirector || esJefe || esPersonal;
 
-    const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos;
+    const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos || puedeVerDashboardVuelos;
     const puedeVerGrupoOfTecnica = puedeVerF13 || puedeVerF16 || puedeVerProgMantenimiento;
     const puedeVerGrupoOTO = puedeVerStats || puedeVerOpEnDesarrollo;
 
@@ -221,12 +227,14 @@ function App() {
                                             ✈️ -12
                                         </button>
                                     )}
-                                    <button 
-                                        onClick={() => setView('dashboardVuelos')} 
-                                        style={{...styles.dropdownItem, backgroundColor: view === 'dashboardVuelos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
-                                    >
-                                        📊 Reportes Vuelo
-                                    </button>
+                                    {puedeVerDashboardVuelos && (
+                                        <button 
+                                            onClick={() => setView('dashboardVuelos')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'dashboardVuelos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            📊 Dashboard Horas Vuelo
+                                        </button>
+                                    )}
                                 </NavDropdown>
                             )}
 
@@ -340,11 +348,13 @@ function App() {
                                 >📍 Mapa</button>
                             )}
 
-                            {/* BOTÓN INDEPENDIENTE SIEMPRE VISIBLE */}
-                            <button 
-                                onClick={() => setView('dashboardVuelos')} 
-                                style={{...styles.btnNav, backgroundColor: view === 'dashboardVuelos' ? '#1e3799' : '#10ac84'}}
-                            >📊 Reportes Vuelo</button>
+                            {/* BOTÓN INDEPENDIENTE PARA EL DASHBOARD DE GRÁFICOS */}
+                            {puedeVerDashboardVuelos && (
+                                <button 
+                                    onClick={() => setView('dashboardVuelos')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'dashboardVuelos' ? '#1e3799' : '#10ac84'}}
+                                >📊 Dashboard Vuelos</button>
+                            )}
 
                             {puedeVerReportes && (
                                 <button 
@@ -384,7 +394,7 @@ function App() {
                             case 'fichaAlumno': return puedeVerECAE ? <FichaAlumnoInstruccion /> : <CalendarPage />;
                             case 'ebm': return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
                             case 'vuelos': return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
-                            case 'dashboardVuelos': return <DashboardVuelos />;
+                            case 'dashboardVuelos': return puedeVerDashboardVuelos ? <DashboardVuelos /> : <CalendarPage />;
                             case 'f13': return puedeVerF13 ? <F13Page /> : <CalendarPage />;
                             case 'reportes': return puedeVerReportes ? <DashboardNovedades /> : <CalendarPage />; 
                             case 'planeamiento': return puedeVerPlaneamiento ? <PlaneamientoMapa /> : <CalendarPage />;
