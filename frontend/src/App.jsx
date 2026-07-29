@@ -353,7 +353,7 @@ function App() {
                                 <button 
                                     onClick={() => setView('dashboardVuelos')} 
                                     style={{...styles.btnNav, backgroundColor: view === 'dashboardVuelos' ? '#1e3799' : '#10ac84'}}
-                                >📊 Dashboard Vuelos</button>
+                                >📊 Reportes Vuelo</button>
                             )}
 
                             {puedeVerReportes && (
