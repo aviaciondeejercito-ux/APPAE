@@ -15,13 +15,30 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
     const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
-    // 🔄 CARGA AUTÓNOMA CORREGIDA (PROCESA RES.DATA DE AXIOS)
+    // 👤 OBTENER DATOS DEL USUARIO LOGUEADO DESDE STORAGE
+    const usuarioLogueado = useMemo(() => {
+        try {
+            const raw = localStorage.getItem('usuario') || localStorage.getItem('user');
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            console.error("Error al leer usuario de localStorage:", e);
+            return null;
+        }
+    }, []);
+
+    // Determinamos la unidad del usuario (campo "elemento" del modelo)
+    const unidadUsuario = usuarioLogueado?.elemento || usuarioLogueado?.unidad || '';
+    const rawRol = usuarioLogueado?.role || usuarioLogueado?.rol || 'USER';
+    
+    // 🔒 REGLA STRICTA: Únicamente ADMIN es Mando Global con acceso libre
+    const esAdmin = String(rawRol).toUpperCase().replace(/[\s_-]/g, '') === 'ADMIN';
+
+    // 🔄 CARGA AUTÓNOMA (PROCESA RES.DATA DE AXIOS)
     useEffect(() => {
         if (!vuelosProps || vuelosProps.length === 0) {
             setLoading(true);
             EventService.getVuelos()
                 .then(res => {
-                    // Extraemos la propiedad .data devuelta por Axios
                     const listaVuelos = res?.data || res || [];
                     setVuelosData(Array.isArray(listaVuelos) ? listaVuelos : []);
                 })
@@ -37,31 +54,50 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         }
     }, [vuelosProps]);
 
-    // 📌 OBTENER LISTA ÚNICA DE UNIDADES Y MISIONES PARA FILTROS
+    // 📌 ESTABLECER FILTRO DEFAULT SEGÚN ROL
+    useEffect(() => {
+        if (!esAdmin && unidadUsuario) {
+            // Todos los roles (incluyendo OPERACIONES y JEFE) quedan fijados a su unidad
+            setUnidadFiltro(unidadUsuario);
+        } else if (esAdmin) {
+            setUnidadFiltro('TODAS');
+        }
+    }, [unidadUsuario, esAdmin]);
+
+    // 📌 OBTENER LISTA ÚNICA DE UNIDADES Y MISIONES
     const listaUnidades = useMemo(() => {
+        if (!esAdmin) {
+            // Si no es ADMIN, la lista desplegable solo contiene su propia unidad
+            return unidadUsuario ? [unidadUsuario] : ['S/U'];
+        }
+
+        // Si es ADMIN, extrae todas las unidades de los vuelos cargados
         const unidades = vuelosData.map(v => v.unidadResponsable).filter(Boolean);
         return ['TODAS', ...Array.from(new Set(unidades))];
-    }, [vuelosData]);
+    }, [vuelosData, esAdmin, unidadUsuario]);
 
     const listaMisiones = useMemo(() => {
         const misiones = vuelosData.map(v => v.tipoMision).filter(Boolean);
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
-    // 📌 VUELOS FILTRADOS DINÁMICAMENTE
+    // 📌 VUELOS FILTRADOS DINÁMICAMENTE POR UNIDAD Y MISIÓN
     const vuelosFiltrados = useMemo(() => {
         return vuelosData.filter(v => {
-            const pasaUnidad = unidadFiltro === 'TODAS' || v.unidadResponsable === unidadFiltro;
+            const pasaUnidad = esAdmin 
+                ? (unidadFiltro === 'TODAS' || v.unidadResponsable === unidadFiltro)
+                : v.unidadResponsable === unidadUsuario; // Filtro estricto para no-ADMIN
+
             const pasaMision = misionFiltro === 'TODAS' || v.tipoMision === misionFiltro;
             return pasaUnidad && pasaMision;
         });
-    }, [vuelosData, unidadFiltro, misionFiltro]);
+    }, [vuelosData, unidadFiltro, misionFiltro, esAdmin, unidadUsuario]);
 
     // ==========================================
     // 📊 CÁLCULOS Y PROCESAMIENTO DE DATOS (-12)
     // ==========================================
 
-    // 1. TOTAL DE HORAS GENERALES (Usando 'horasVoladas')
+    // 1. TOTAL DE HORAS GENERALES
     const totalHorasGenerales = useMemo(() => {
         return vuelosFiltrados.reduce((acc, v) => acc + (Number(v.horasVoladas) || 0), 0);
     }, [vuelosFiltrados]);
@@ -75,7 +111,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return vuelosFiltrados.reduce((acc, v) => acc + (Number(v.pesoCarga) || 0), 0);
     }, [vuelosFiltrados]);
 
-    // 3. HORAS POR ELEMENTO APOYADO (Campo: 'elementoApoyado')
+    // 3. HORAS POR ELEMENTO APOYADO
     const horasPorElemento = useMemo(() => {
         const mapa = {};
         vuelosFiltrados.forEach(v => {
@@ -86,7 +122,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return Object.entries(mapa).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
     }, [vuelosFiltrados]);
 
-    // 4. HORAS POR TIPO DE MISIÓN (Campo: 'tipoMision')
+    // 4. HORAS POR TIPO DE MISIÓN
     const horasPorMision = useMemo(() => {
         const mapa = {};
         vuelosFiltrados.forEach(v => {
@@ -97,7 +133,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return Object.entries(mapa).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
     }, [vuelosFiltrados]);
 
-    // 5. HORAS POR PILOTO / COPILOTO (Maneja populados { grado, apellido, nombre })
+    // 5. HORAS POR PILOTO / COPILOTO
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         
@@ -119,10 +155,10 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return Object.entries(mapa)
             .map(([name, horas]) => ({ name, horas: Number(horas.toFixed(1)) }))
             .sort((a, b) => b.horas - a.horas)
-            .slice(0, 10); // Top 10
+            .slice(0, 10);
     }, [vuelosFiltrados]);
 
-    // 6. RUTAS Y DESTINOS (Campos: 'desde' y 'hasta')
+    // 6. RUTAS Y DESTINOS
     const horasPorDestino = useMemo(() => {
         const mapa = {};
         vuelosFiltrados.forEach(v => {
@@ -140,7 +176,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return Object.entries(mapa)
             .map(([ruta, horas]) => ({ ruta, horas: Number(horas.toFixed(1)) }))
             .sort((a, b) => b.horas - a.horas)
-            .slice(0, 8); // Top 8 rutas externas
+            .slice(0, 8);
     }, [vuelosFiltrados]);
 
     if (loading) {
@@ -157,7 +193,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             <header style={styles.header}>
                 <div>
                     <h2 style={{ margin: 0, color: '#1b3a57' }}>📊 Dashboard de Reportes de Vuelo (-12)</h2>
-                    <span style={styles.subtitle}>Resumen consolidado de horas y misiones de la unidad</span>
+                    <span style={styles.subtitle}>
+                        {esAdmin && unidadFiltro === 'TODAS' 
+                            ? 'Resumen consolidado general (Vista Administrador Global)' 
+                            : `Resumen consolidado de la unidad: ${unidadUsuario || unidadFiltro}`}
+                    </span>
                 </div>
 
                 <div style={styles.filtrosBar}>
@@ -167,6 +207,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                             value={unidadFiltro} 
                             onChange={(e) => setUnidadFiltro(e.target.value)}
                             style={styles.select}
+                            disabled={!esAdmin} // 🔒 Deshabilitado para todos los roles que no sean ADMIN
                         >
                             {listaUnidades.map((u, i) => (
                                 <option key={i} value={u}>{u}</option>
