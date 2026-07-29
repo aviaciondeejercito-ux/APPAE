@@ -22,7 +22,9 @@ import F13Page from './pages/F13';
 import DashboardNovedades from './components/DashboardNovedades'; 
 import F16Page from './pages/F16';
 import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
-import DashboardVuelos from './pages/DashboardVuelos';
+
+// IMPORTACIÓN VERIFICADA (ASEGURATE QUE ESTÉ EN /components O /pages SEGÚN TU ESTRUCTURA)
+import DashboardVuelos from './components/DashboardVuelos'; // <-- Cambia a './pages/DashboardVuelos' si está en pages
 
 // 🎓 MÓDULOS DE ESCUELA DE AVIACIÓN (EC AE)
 import CargaInstruccion from './pages/CargaInstruccion';
@@ -194,7 +196,7 @@ function App() {
 
                             {/* 2. OPERACIONES */}
                             {puedeVerGrupoOperaciones && (
-                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos']} currentView={view}>
+                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos', 'dashboardVuelos']} currentView={view}>
                                     {puedeVerTripulantes && (
                                         <button 
                                             onClick={() => setView('tripulantes')} 
@@ -219,6 +221,12 @@ function App() {
                                             ✈️ -12
                                         </button>
                                     )}
+                                    <button 
+                                        onClick={() => setView('dashboardVuelos')} 
+                                        style={{...styles.dropdownItem, backgroundColor: view === 'dashboardVuelos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                    >
+                                        📊 Reportes Vuelo
+                                    </button>
                                 </NavDropdown>
                             )}
 
@@ -310,7 +318,7 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* BOTONES SUELTOS (VISIBILIDAD DIRECTA) */}
+                            {/* BOTONES DIRECTOS EN EL NAVBAR */}
                             {puedeVerEstadoAeronaves && (
                                 <button 
                                     onClick={() => setView('estado')} 
@@ -332,9 +340,10 @@ function App() {
                                 >📍 Mapa</button>
                             )}
 
+                            {/* BOTÓN INDEPENDIENTE SIEMPRE VISIBLE */}
                             <button 
                                 onClick={() => setView('dashboardVuelos')} 
-                                style={{...styles.btnNav, backgroundColor: view === 'dashboardVuelos' ? '#1e3799' : '#4a69bd'}}
+                                style={{...styles.btnNav, backgroundColor: view === 'dashboardVuelos' ? '#1e3799' : '#10ac84'}}
                             >📊 Reportes Vuelo</button>
 
                             {puedeVerReportes && (
