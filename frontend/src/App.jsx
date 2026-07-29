@@ -3,7 +3,7 @@ import 'leaflet/dist/leaflet.css';
 
 // IMPORTANTE: Comunicación centralizada con el backend
 import { EventService } from './services/api'; 
-import { useOnlineStatus } from './useOnlineStatus'; // 👈 Importación del Custom Hook
+import { useOnlineStatus } from './useOnlineStatus';
 
 import CalendarPage from './pages/CalendarPage';
 import Login from './pages/Login';
@@ -22,7 +22,7 @@ import F13Page from './pages/F13';
 import DashboardNovedades from './components/DashboardNovedades'; 
 import F16Page from './pages/F16';
 import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
-import DashboardVuelos from './pages/DashboardVuelos'; // 👈 NUEVO: Dashboard de Reportes -12
+import DashboardVuelos from './pages/DashboardVuelos';
 
 // 🎓 MÓDULOS DE ESCUELA DE AVIACIÓN (EC AE)
 import CargaInstruccion from './pages/CargaInstruccion';
@@ -148,7 +148,7 @@ function App() {
         'mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 
         'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16', 'progMantenimiento',
         'gestionAlumnos', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno', 'gestorPatrones',
-        'dashboardVuelos' // 👈 Vista full para el tablero de reportes
+        'dashboardVuelos'
     ].includes(view);
 
     return (
@@ -194,7 +194,7 @@ function App() {
 
                             {/* 2. OPERACIONES */}
                             {puedeVerGrupoOperaciones && (
-                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos', 'dashboardVuelos']} currentView={view}>
+                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos']} currentView={view}>
                                     {puedeVerTripulantes && (
                                         <button 
                                             onClick={() => setView('tripulantes')} 
@@ -216,15 +216,7 @@ function App() {
                                             onClick={() => setView('vuelos')} 
                                             style={{...styles.dropdownItem, backgroundColor: view === 'vuelos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
                                         >
-                                            ✈️ -12 (Carga)
-                                        </button>
-                                    )}
-                                    {puedeVerVuelos && (
-                                        <button 
-                                            onClick={() => setView('dashboardVuelos')} 
-                                            style={{...styles.dropdownItem, backgroundColor: view === 'dashboardVuelos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
-                                        >
-                                            📊 Reportes de Vuelo (-12)
+                                            ✈️ -12
                                         </button>
                                     )}
                                 </NavDropdown>
@@ -319,6 +311,13 @@ function App() {
                             )}
 
                             {/* BOTONES SUELTOS */}
+                            {puedeVerVuelos && (
+                                <button 
+                                    onClick={() => setView('dashboardVuelos')} 
+                                    style={{...styles.btnNav, backgroundColor: view === 'dashboardVuelos' ? '#1e3799' : '#4a69bd'}}
+                                >📊 Reportes Vuelo</button>
+                            )}
+
                             {puedeVerEstadoAeronaves && (
                                 <button 
                                     onClick={() => setView('estado')} 
