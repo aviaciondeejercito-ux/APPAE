@@ -310,14 +310,7 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* BOTONES SUELTOS */}
-                            {puedeVerVuelos && (
-                                <button 
-                                    onClick={() => setView('dashboardVuelos')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'dashboardVuelos' ? '#1e3799' : '#4a69bd'}}
-                                >📊 Reportes Vuelo</button>
-                            )}
-
+                            {/* BOTONES SUELTOS (VISIBILIDAD DIRECTA) */}
                             {puedeVerEstadoAeronaves && (
                                 <button 
                                     onClick={() => setView('estado')} 
@@ -338,6 +331,11 @@ function App() {
                                     style={{...styles.btnNav, backgroundColor: view === 'mapa' ? '#1e3799' : '#4a69bd'}}
                                 >📍 Mapa</button>
                             )}
+
+                            <button 
+                                onClick={() => setView('dashboardVuelos')} 
+                                style={{...styles.btnNav, backgroundColor: view === 'dashboardVuelos' ? '#1e3799' : '#4a69bd'}}
+                            >📊 Reportes Vuelo</button>
 
                             {puedeVerReportes && (
                                 <button 
@@ -377,7 +375,7 @@ function App() {
                             case 'fichaAlumno': return puedeVerECAE ? <FichaAlumnoInstruccion /> : <CalendarPage />;
                             case 'ebm': return puedeVerEbm ? <EbmPage /> : <CalendarPage />;
                             case 'vuelos': return puedeVerVuelos ? <Vuelos /> : <CalendarPage />;
-                            case 'dashboardVuelos': return puedeVerVuelos ? <DashboardVuelos /> : <CalendarPage />;
+                            case 'dashboardVuelos': return <DashboardVuelos />;
                             case 'f13': return puedeVerF13 ? <F13Page /> : <CalendarPage />;
                             case 'reportes': return puedeVerReportes ? <DashboardNovedades /> : <CalendarPage />; 
                             case 'planeamiento': return puedeVerPlaneamiento ? <PlaneamientoMapa /> : <CalendarPage />;
