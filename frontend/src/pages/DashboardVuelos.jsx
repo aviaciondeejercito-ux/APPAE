@@ -32,40 +32,60 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
     const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
-    // 👤 1. DETECTAR Y NORMALIZAR EL USUARIO ACTUAL
-    const { unidadUsuario, esAdminGlobal, rawRol } = useMemo(() => {
+    // 👤 1. DETECTAR Y NORMALIZAR EL USUARIO ACTUAL (Basado en el modelo User: campo 'elemento')
+    const { elementoUsuario, esAdminGlobal, rawRol } = useMemo(() => {
         try {
             const rawUser = localStorage.getItem('usuario') || localStorage.getItem('user');
             const userObj = rawUser ? JSON.parse(rawUser) : {};
             
+            // Sincronizado estrictamente con el modelo User (elemento) y soporte legacy
             const elem = userObj.elemento || userObj.unidad || userObj.unidadResponsable || localStorage.getItem('elemento') || '';
-            const rol = userObj.role || userObj.rol || localStorage.getItem('role') || localStorage.getItem('rol') || 'USER';
+            const rol = userObj.role || userObj.rol || localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
             
             const rolNorm = normalizarClave(rol);
+            // Sincronizado con los mandos globales definidos en vueloController.js
             const esMando = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolNorm);
             
             return {
-                unidadUsuario: normalizarTexto(elem),
+                elementoUsuario: normalizarTexto(elem),
                 esAdminGlobal: esMando,
                 rawRol: rol
             };
         } catch (e) {
             console.error("Error al leer datos de sesión del usuario:", e);
-            return { unidadUsuario: '', esAdminGlobal: false, rawRol: 'USER' };
+            return { elementoUsuario: '', esAdminGlobal: false, rawRol: 'user' };
         }
     }, []);
 
-    // 🔄 2. CARGA DE DATOS DE VUELOS
+    // 📌 2. RESTABLECER FILTRO DEFAULT POR UNIDAD/ELEMENTO
+    useEffect(() => {
+        if (!esAdminGlobal && elementoUsuario) {
+            setUnidadFiltro(elementoUsuario);
+        } else if (esAdminGlobal) {
+            setUnidadFiltro('TODAS');
+        }
+    }, [elementoUsuario, esAdminGlobal]);
+
+    // 🔄 3. CARGA DE DATOS DE VUELOS (Sincronizado con los query params del backend)
     useEffect(() => {
         if (!vuelosProps || vuelosProps.length === 0) {
             setLoading(true);
-            EventService.getVuelos()
+            
+            // Construir parámetros alineados con obtenerVuelos (req.query.unit / unidad)
+            const params = {};
+            if (esAdminGlobal && unidadFiltro && unidadFiltro !== 'TODAS') {
+                params.unidad = unidadFiltro;
+            } else if (!esAdminGlobal && elementoUsuario) {
+                params.unidad = elementoUsuario;
+            }
+
+            EventService.getVuelos(params)
                 .then(res => {
                     const listaVuelos = res?.data || res || [];
                     setVuelosData(Array.isArray(listaVuelos) ? listaVuelos : []);
                 })
                 .catch(err => {
-                    console.error("Error al recuperar planillas -12 de la BD:", err);
+                    console.error("Error al recuperar historial de vuelos:", err);
                 })
                 .finally(() => {
                     setLoading(false);
@@ -74,33 +94,24 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             setVuelosData(vuelosProps);
             setLoading(false);
         }
-    }, [vuelosProps]);
+    }, [vuelosProps, unidadFiltro, esAdminGlobal, elementoUsuario]);
 
-    // 📌 3. RESTABLECIDO: FILTRO DEFAULT POR UNIDAD
-    useEffect(() => {
-        if (!esAdminGlobal && unidadUsuario) {
-            setUnidadFiltro(unidadUsuario);
-        } else if (esAdminGlobal) {
-            setUnidadFiltro('TODAS');
-        }
-    }, [unidadUsuario, esAdminGlobal]);
-
-    // 📌 4. OBTENER LISTA DE UNIDADES ÚNICAS
+    // 📌 4. LISTA DE UNIDADES ÚNICAS PARA EL SELECTOR
     const listaUnidades = useMemo(() => {
         if (!esAdminGlobal) {
-            return [unidadUsuario || 'MI UNIDAD'];
+            return [elementoUsuario || 'MI UNIDAD'];
         }
 
         const unidades = vuelosData.map(v => normalizarTexto(v.unidadResponsable)).filter(Boolean);
         return ['TODAS', ...Array.from(new Set(unidades))];
-    }, [vuelosData, esAdminGlobal, unidadUsuario]);
+    }, [vuelosData, esAdminGlobal, elementoUsuario]);
 
     const listaMisiones = useMemo(() => {
         const misiones = vuelosData.map(v => v.tipoMision).filter(Boolean);
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
-    // 📌 5. FILTRADO ROBUSTO DE VUELOS (RESTABLECIDO Y MEJORADO)
+    // 📌 5. FILTRADO ROBUSTO EN CLIENTE (Respaldo y consistencia por clave normalizada)
     const vuelosFiltrados = useMemo(() => {
         const filtrados = vuelosData.filter(v => {
             const unidadVueloClave = normalizarClave(v.unidadResponsable);
@@ -118,17 +129,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             return pasaUnidad && pasaMision;
         });
 
-        console.log("📊 [DIAGNÓSTICO DASHBOARD VUELOS]:", {
-            rolUsuario: rawRol,
-            esAdminGlobal,
-            unidadUsuarioDetectada: unidadUsuario,
-            unidadFiltroActiva: unidadFiltro,
-            totalVuelosResueltosBD: vuelosData.length,
-            vuelosFiltradosResultado: filtrados.length
-        });
-
         return filtrados;
-    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario, rawRol]);
+    }, [vuelosData, unidadFiltro, misionFiltro]);
 
     // ==========================================
     // 📊 CÁLCULOS Y PROCESAMIENTO
@@ -166,7 +168,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return Object.entries(mapa).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
     }, [vuelosFiltrados]);
 
-    // 👨‍✈️ TODOS LOS PILOTOS Y COPILOTOS
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         
@@ -190,7 +191,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.horas - a.horas);
     }, [vuelosFiltrados]);
 
-    // 🛬 CONTEO DE OPERACIONES POR AEROPUERTO / AERÓDROMO
     const operacionesPorAeropuerto = useMemo(() => {
         const mapa = {};
 
@@ -198,12 +198,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const origen = (v.desde || '').trim().toUpperCase();
             const destino = (v.hasta || '').trim().toUpperCase();
 
-            if (origen) {
-                mapa[origen] = (mapa[origen] || 0) + 1;
-            }
-            if (destino) {
-                mapa[destino] = (mapa[destino] || 0) + 1;
-            }
+            if (origen) mapa[origen] = (mapa[origen] || 0) + 1;
+            if (destino) mapa[destino] = (mapa[destino] || 0) + 1;
         });
 
         return Object.entries(mapa)
@@ -230,13 +226,13 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     <span style={styles.subtitle}>
                         {esAdminGlobal && unidadFiltro === 'TODAS' 
                             ? 'Resumen consolidado general (Vista Administrador Global)' 
-                            : `Resumen consolidado de la unidad: ${unidadUsuario || unidadFiltro}`}
+                            : `Resumen consolidado del elemento: ${elementoUsuario || unidadFiltro}`}
                     </span>
                 </div>
 
                 <div style={styles.filtrosBar}>
                     <div style={styles.filtroGroup}>
-                        <label style={styles.label}>Unidad Responsable:</label>
+                        <label style={styles.label}>Unidad / Elemento:</label>
                         <select 
                             value={unidadFiltro} 
                             onChange={(e) => setUnidadFiltro(e.target.value)}
@@ -339,7 +335,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </ResponsiveContainer>
                 </div>
 
-                {/* 4. TOTAL DE HORAS POR TRIPULANTE (TODOS) */}
+                {/* 4. TOTAL DE HORAS POR TRIPULANTE */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>👨‍✈️ Horas Acumuladas por Piloto / Copiloto (Todos)</h4>
                     <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
