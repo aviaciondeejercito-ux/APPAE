@@ -304,13 +304,13 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
             </div>
 
-            {/* GRILLA DE GRÁFICOS */}
+            {/* GRILLA DE GRÁFICOS (2 COLUMNAS / FILAS DE A 2) */}
             <div style={styles.chartsGrid}>
                 
                 {/* 1. HORAS POR ELEMENTO APOYADO */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>🏢 Horas por Elemento Apoyado</h4>
-                    <ResponsiveContainer width="100%" height={260}>
+                    <ResponsiveContainer width="100%" height={320}>
                         <BarChart data={horasPorElemento} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" />
@@ -324,7 +324,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 {/* 2. HORAS POR TIPO DE MISIÓN */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>🎯 Horas por Misión</h4>
-                    <ResponsiveContainer width="100%" height={260}>
+                    <ResponsiveContainer width="100%" height={320}>
                         <PieChart>
                             <Pie
                                 data={horasPorMision}
@@ -332,7 +332,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                                 nameKey="name"
                                 cx="50%"
                                 cy="50%"
-                                outerRadius={80}
+                                outerRadius={100}
                                 label={(entry) => `${entry.name}: ${entry.value}h`}
                             >
                                 {horasPorMision.map((entry, index) => (
@@ -348,7 +348,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 {/* 3. TOTAL DE HORAS POR PILOTO / COPILOTO */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>👨‍✈️ Top 10 Horas por Piloto / Copiloto</h4>
-                    <ResponsiveContainer width="100%" height={260}>
+                    <ResponsiveContainer width="100%" height={320}>
                         <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis type="number" />
@@ -362,7 +362,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 {/* 4. DESTINOS EXTERNOS */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>🗺️ Destinos & Rutas (Excluye SADO ➔ SADO)</h4>
-                    <ResponsiveContainer width="100%" height={260}>
+                    <ResponsiveContainer width="100%" height={320}>
                         <BarChart data={horasPorDestino} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis dataKey="ruta" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
@@ -383,7 +383,7 @@ const styles = {
         padding: '20px',
         backgroundColor: '#f8f9fa',
         borderRadius: '8px',
-        maxWidth: '1400px',
+        maxWidth: '1600px', // Ampliado para mejor aprovechamiento de pantallas anchas
         margin: '0 auto'
     },
     header: {
@@ -451,7 +451,7 @@ const styles = {
     },
     chartsGrid: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))',
+        gridTemplateColumns: 'repeat(2, 1fr)', // 💡 Forzado estricto a 2 columnas
         gap: '20px'
     },
     chartCard: {
