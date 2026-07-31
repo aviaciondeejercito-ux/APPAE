@@ -30,12 +30,10 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const rawUser = localStorage.getItem('usuario') || localStorage.getItem('user');
             const userObj = rawUser ? JSON.parse(rawUser) : {};
             
-            // Buscar la unidad/elemento en cualquier variación posible
             const elem = userObj.elemento || userObj.unidad || userObj.unidadResponsable || localStorage.getItem('elemento') || '';
             const rol = userObj.role || userObj.rol || localStorage.getItem('role') || localStorage.getItem('rol') || 'USER';
             
             const rolNorm = normalizarTexto(rol).replace(/[\s_-]/g, '');
-            // Incluye roles de gestión/mando con visibilidad global
             const esMando = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolNorm);
             
             return {
@@ -100,8 +98,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const unidadVueloNorm = normalizarTexto(v.unidadResponsable);
             const unidadFiltroNorm = normalizarTexto(unidadFiltro);
 
-            // Si es Admin / Mando Global, aplica el selector.
-            // Si es usuario estándar, acepta todos los datos que ya vienen filtrados por el backend.
             let pasaUnidad = true;
             if (esAdminGlobal && unidadFiltro !== 'TODAS') {
                 pasaUnidad = (unidadVueloNorm === unidadFiltroNorm);
@@ -112,18 +108,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             return pasaUnidad && pasaMision;
         });
 
-        // 🔍 IMPRESIÓN DE DIAGNÓSTICO EN CONSOLA (F12)
-        console.log("📊 [DIAGNÓSTICO DASHBOARD VUELOS]:", {
-            rolUsuario: rawRol,
-            esAdminGlobal: esAdminGlobal,
-            unidadUsuarioDetectada: unidadUsuario,
-            totalVuelosResueltosBD: vuelosData.length,
-            vuelosFiltradosResultado: filtrados.length,
-            unidadesPresentesEnVuelosBD: [...new Set(vuelosData.map(v => v.unidadResponsable))]
-        });
-
         return filtrados;
-    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario, rawRol]);
+    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario]);
 
     // ==========================================
     // 📊 CÁLCULOS Y PROCESAMIENTO
@@ -161,6 +147,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return Object.entries(mapa).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
     }, [vuelosFiltrados]);
 
+    // 👨‍✈️ TODOS LOS PILOTOS Y COPILOTOS (SE ELIMINÓ EL .slice(0, 10))
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         
@@ -181,27 +168,30 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
         return Object.entries(mapa)
             .map(([name, horas]) => ({ name, horas: Number(horas.toFixed(1)) }))
-            .sort((a, b) => b.horas - a.horas)
-            .slice(0, 10);
+            .sort((a, b) => b.horas - a.horas); // Muestra TODOS los tripulantes ordenados
     }, [vuelosFiltrados]);
 
-    const horasPorDestino = useMemo(() => {
+    // 🛬 CONTEO DE OPERACIONES POR AEROPUERTO / AERÓDROMO
+    const operacionesPorAeropuerto = useMemo(() => {
         const mapa = {};
+
         vuelosFiltrados.forEach(v => {
             const origen = (v.desde || '').trim().toUpperCase();
             const destino = (v.hasta || '').trim().toUpperCase();
 
-            if (origen === 'SADO' && destino === 'SADO') return;
-
-            const ruta = `${origen || 'S/D'} ➔ ${destino || 'S/D'}`;
-            const hs = Number(v.horasVoladas) || 0;
-            mapa[ruta] = (mapa[ruta] || 0) + hs;
+            // Suma una operación al aeropuerto de origen (si existe)
+            if (origen) {
+                mapa[origen] = (mapa[origen] || 0) + 1;
+            }
+            // Suma una operación al aeropuerto de destino (si existe)
+            if (destino) {
+                mapa[destino] = (mapa[destino] || 0) + 1;
+            }
         });
 
         return Object.entries(mapa)
-            .map(([ruta, horas]) => ({ ruta, horas: Number(horas.toFixed(1)) }))
-            .sort((a, b) => b.horas - a.horas)
-            .slice(0, 8);
+            .map(([aeropuerto, operaciones]) => ({ aeropuerto, operaciones }))
+            .sort((a, b) => b.operaciones - a.operaciones);
     }, [vuelosFiltrados]);
 
     if (loading) {
@@ -211,6 +201,9 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             </div>
         );
     }
+
+    // Calculamos una altura dinámica para el gráfico vertical de tripulantes en caso de que sean muchos
+    const tripulantesHeight = Math.max(260, horasPorTripulante.length * 30);
 
     return (
         <div style={styles.container}>
@@ -316,32 +309,34 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </ResponsiveContainer>
                 </div>
 
-                {/* 3. TOTAL DE HORAS POR PILOTO / COPILOTO */}
+                {/* 3. OPERACIONES POR AEROPUERTO */}
                 <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>👨‍✈️ Top 10 Horas por Piloto / Copiloto</h4>
+                    <h4 style={styles.chartTitle}>🛬 Frecuencia de Operaciones por Aeropuerto</h4>
                     <ResponsiveContainer width="100%" height={260}>
-                        <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                            <XAxis type="number" />
-                            <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} />
-                            <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
-                            <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} />
+                        <BarChart data={operacionesPorAeropuerto} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="aeropuerto" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
+                            <YAxis allowDecimals={false} />
+                            <Tooltip formatter={(value) => [`${value} operaciones`, 'Frecuencia']} />
+                            <Bar dataKey="operaciones" fill="#38ada9" radius={[4, 4, 0, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
 
-                {/* 4. DESTINOS EXTERNOS */}
+                {/* 4. TOTAL DE HORAS POR TRIPULANTE (TODOS) */}
                 <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>🗺️ Destinos & Rutas (Excluye SADO ➔ SADO)</h4>
-                    <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={horasPorDestino} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="ruta" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
-                            <Bar dataKey="horas" fill="#38ada9" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    <h4 style={styles.chartTitle}>👨‍✈️ Horas Acumuladas por Piloto / Copiloto (Todos)</h4>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                        <ResponsiveContainer width="100%" height={tripulantesHeight}>
+                            <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 60, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} interval={0} />
+                                <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
+                                <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
 
             </div>
