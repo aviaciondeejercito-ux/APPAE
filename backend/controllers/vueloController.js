@@ -105,32 +105,33 @@ exports.registrarVuelo = async (req, res) => {
 exports.obtenerVuelos = async (req, res) => {
     try {
         const { unit } = req.query;
-        const unidad = unit || req.query.unidad;
+        const unidadQuery = unit || req.query.unidad;
         let filtro = {};
         
-        // Normalización flexible del Rol (soporta req.user.role o req.user.rol en mayúsculas/minúsculas)
+        // 1. Normalización del Rol
         const rawRole = req.user?.role || req.user?.rol || 'user';
         const rolUsuario = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
 
-        // Roles con alcance global para el Dashboard y gestión
+        // 2. Roles con visibilidad total de Unidades en el Dashboard
         const esMandoGlobal = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolUsuario);
 
         if (!esMandoGlobal) {
-            // Usuario estándar: filtrado estricto por la unidad a la que pertenece
-            const unidadUsuario = req.user.unidad || req.user.elemento;
+            // Usuario base: Filtrado por la unidad/elemento a la que pertenece
+            const unidadUsuario = req.user.elemento || req.user.unidad;
             if (unidadUsuario) {
-                filtro.unidadResponsable = unidadUsuario;
+                // Búsqueda insensible a mayúsculas/minúsculas y espacios
+                filtro.unidadResponsable = new RegExp(`^${unidadUsuario.trim()}$`, 'i');
             }
-        } else if (unidad && unidad !== 'all' && unidad !== 'TODAS') {
-            // Mando global o Admin seleccionando una unidad específica
-            filtro.unidadResponsable = unidad;
+        } else if (unidadQuery && unidadQuery !== 'all' && unidadQuery !== 'TODAS') {
+            // Un Mando Global filtrando voluntariamente desde el selector del Dashboard
+            filtro.unidadResponsable = new RegExp(`^${unidadQuery.trim()}$`, 'i');
         }
         
         const vuelos = await Vuelo.find(filtro)
             .populate('instructor piloto copiloto mecanico segundoMecanico', 'grado apellido nombre')
             .sort({ fecha: -1 });
 
-        // Mapeo preventivo para garantizar que cada vuelo devuelva sus horas limpias
+        // Mapeo preventivo para garantizar horas limpias y redondeadas
         const vuelosSanitizados = vuelos.map(v => {
             const doc = v.toObject();
             doc.horasVoladas = redondearHs(doc.horasVoladas);

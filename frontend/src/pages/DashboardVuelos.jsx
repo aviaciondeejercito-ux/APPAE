@@ -25,7 +25,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
     // 👤 1. DETECTAR Y NORMALIZAR EL USUARIO ACTUAL
-    const { unidadUsuario, esAdmin, rawRol } = useMemo(() => {
+    const { unidadUsuario, esAdminGlobal, rawRol } = useMemo(() => {
         try {
             const rawUser = localStorage.getItem('usuario') || localStorage.getItem('user');
             const userObj = rawUser ? JSON.parse(rawUser) : {};
@@ -34,16 +34,18 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const elem = userObj.elemento || userObj.unidad || userObj.unidadResponsable || localStorage.getItem('elemento') || '';
             const rol = userObj.role || userObj.rol || localStorage.getItem('role') || localStorage.getItem('rol') || 'USER';
             
-            const rolNorm = normalizarTexto(rol);
+            const rolNorm = normalizarTexto(rol).replace(/[\s_-]/g, '');
+            // Incluye roles de gestión/mando con visibilidad global
+            const esMando = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolNorm);
             
             return {
                 unidadUsuario: normalizarTexto(elem),
-                esAdmin: rolNorm === 'ADMIN',
+                esAdminGlobal: esMando,
                 rawRol: rol
             };
         } catch (e) {
             console.error("Error al leer datos de sesión del usuario:", e);
-            return { unidadUsuario: '', esAdmin: false, rawRol: 'USER' };
+            return { unidadUsuario: '', esAdminGlobal: false, rawRol: 'USER' };
         }
     }, []);
 
@@ -70,22 +72,22 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
     // 📌 3. FILTRO DEFAULT POR UNIDAD
     useEffect(() => {
-        if (!esAdmin && unidadUsuario) {
+        if (!esAdminGlobal && unidadUsuario) {
             setUnidadFiltro(unidadUsuario);
-        } else if (esAdmin) {
+        } else if (esAdminGlobal) {
             setUnidadFiltro('TODAS');
         }
-    }, [unidadUsuario, esAdmin]);
+    }, [unidadUsuario, esAdminGlobal]);
 
-    // 📌 4. OBTENER LISTA DE UNIDADES ÚNICAS (Mapeadas y limpias)
+    // 📌 4. OBTENER LISTA DE UNIDADES ÚNICAS
     const listaUnidades = useMemo(() => {
-        if (!esAdmin) {
-            return [unidadUsuario || 'SIN UNIDAD ASIGNADA'];
+        if (!esAdminGlobal) {
+            return [unidadUsuario || 'MI UNIDAD'];
         }
 
         const unidades = vuelosData.map(v => normalizarTexto(v.unidadResponsable)).filter(Boolean);
         return ['TODAS', ...Array.from(new Set(unidades))];
-    }, [vuelosData, esAdmin, unidadUsuario]);
+    }, [vuelosData, esAdminGlobal, unidadUsuario]);
 
     const listaMisiones = useMemo(() => {
         const misiones = vuelosData.map(v => v.tipoMision).filter(Boolean);
@@ -94,15 +96,16 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
     // 📌 5. FILTRADO ROBUSTO DE VUELOS
     const vuelosFiltrados = useMemo(() => {
-        const unidadFiltroNorm = normalizarTexto(unidadFiltro);
-
         const filtrados = vuelosData.filter(v => {
             const unidadVueloNorm = normalizarTexto(v.unidadResponsable);
+            const unidadFiltroNorm = normalizarTexto(unidadFiltro);
 
-            // Si es ADMIN, filtra por el selector. Si NO es ADMIN, compara contra su unidad de usuario.
-            const pasaUnidad = esAdmin 
-                ? (unidadFiltroNorm === 'TODAS' || unidadVueloNorm === unidadFiltroNorm)
-                : (unidadUsuario ? unidadVueloNorm === unidadUsuario : true); // Si no tiene unidad asignada, muestra lo que devolvió el backend
+            // Si es Admin / Mando Global, aplica el selector.
+            // Si es usuario estándar, acepta todos los datos que ya vienen filtrados por el backend.
+            let pasaUnidad = true;
+            if (esAdminGlobal && unidadFiltro !== 'TODAS') {
+                pasaUnidad = (unidadVueloNorm === unidadFiltroNorm);
+            }
 
             const pasaMision = misionFiltro === 'TODAS' || v.tipoMision === misionFiltro;
 
@@ -112,7 +115,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         // 🔍 IMPRESIÓN DE DIAGNÓSTICO EN CONSOLA (F12)
         console.log("📊 [DIAGNÓSTICO DASHBOARD VUELOS]:", {
             rolUsuario: rawRol,
-            esAdmin: esAdmin,
+            esAdminGlobal: esAdminGlobal,
             unidadUsuarioDetectada: unidadUsuario,
             totalVuelosResueltosBD: vuelosData.length,
             vuelosFiltradosResultado: filtrados.length,
@@ -120,7 +123,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         });
 
         return filtrados;
-    }, [vuelosData, unidadFiltro, misionFiltro, esAdmin, unidadUsuario, rawRol]);
+    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario, rawRol]);
 
     // ==========================================
     // 📊 CÁLCULOS Y PROCESAMIENTO
@@ -216,7 +219,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 <div>
                     <h2 style={{ margin: 0, color: '#1b3a57' }}>📊 Dashboard de Reportes de Vuelo (-12)</h2>
                     <span style={styles.subtitle}>
-                        {esAdmin && unidadFiltro === 'TODAS' 
+                        {esAdminGlobal && unidadFiltro === 'TODAS' 
                             ? 'Resumen consolidado general (Vista Administrador Global)' 
                             : `Resumen consolidado de la unidad: ${unidadUsuario || unidadFiltro}`}
                     </span>
@@ -229,7 +232,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                             value={unidadFiltro} 
                             onChange={(e) => setUnidadFiltro(e.target.value)}
                             style={styles.select}
-                            disabled={!esAdmin}
+                            disabled={!esAdminGlobal}
                         >
                             {listaUnidades.map((u, i) => (
                                 <option key={i} value={u}>{u}</option>
