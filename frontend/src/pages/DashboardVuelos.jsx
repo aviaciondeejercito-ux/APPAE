@@ -9,13 +9,21 @@ import { EventService } from '../services/api';
 // Colores institucionales
 const COLORS = ['#1b3a57', '#4a69bd', '#10ac84', '#f39c12', '#e74c3c', '#9b59b6', '#34495e', '#38ada9'];
 
-// Función de limpieza de texto para comparaciones flexibles
+// Normalización visual (para mostrar en pantalla)
 const normalizarTexto = (str) => {
     if (!str) return '';
     return String(str)
         .trim()
         .toUpperCase()
-        .replace(/\s+/g, ' '); // Elimina múltiples espacios seguidos
+        .replace(/\s+/g, ' ');
+};
+
+// Normalización de clave (elimina espacios, guiones y guiones bajos para comparaciones flexibles)
+const normalizarClave = (str) => {
+    if (!str) return '';
+    return String(str)
+        .toUpperCase()
+        .replace(/[\s_-]/g, '');
 };
 
 export default function DashboardVuelos({ vuelosData: vuelosProps }) {
@@ -33,7 +41,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const elem = userObj.elemento || userObj.unidad || userObj.unidadResponsable || localStorage.getItem('elemento') || '';
             const rol = userObj.role || userObj.rol || localStorage.getItem('role') || localStorage.getItem('rol') || 'USER';
             
-            const rolNorm = normalizarTexto(rol).replace(/[\s_-]/g, '');
+            const rolNorm = normalizarClave(rol);
             const esMando = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolNorm);
             
             return {
@@ -68,7 +76,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         }
     }, [vuelosProps]);
 
-    // 📌 3. FILTRO DEFAULT POR UNIDAD
+    // 📌 3. RESTABLECIDO: FILTRO DEFAULT POR UNIDAD
     useEffect(() => {
         if (!esAdminGlobal && unidadUsuario) {
             setUnidadFiltro(unidadUsuario);
@@ -92,15 +100,17 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
-    // 📌 5. FILTRADO ROBUSTO DE VUELOS
+    // 📌 5. FILTRADO ROBUSTO DE VUELOS (RESTABLECIDO Y MEJORADO)
     const vuelosFiltrados = useMemo(() => {
         const filtrados = vuelosData.filter(v => {
-            const unidadVueloNorm = normalizarTexto(v.unidadResponsable);
-            const unidadFiltroNorm = normalizarTexto(unidadFiltro);
+            const unidadVueloClave = normalizarClave(v.unidadResponsable);
+            const unidadFiltroClave = normalizarClave(unidadFiltro);
 
             let pasaUnidad = true;
-            if (esAdminGlobal && unidadFiltro !== 'TODAS') {
-                pasaUnidad = (unidadVueloNorm === unidadFiltroNorm);
+            if (unidadFiltro !== 'TODAS') {
+                pasaUnidad = unidadVueloClave === unidadFiltroClave || 
+                             unidadVueloClave.includes(unidadFiltroClave) || 
+                             unidadFiltroClave.includes(unidadVueloClave);
             }
 
             const pasaMision = misionFiltro === 'TODAS' || v.tipoMision === misionFiltro;
@@ -108,8 +118,17 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             return pasaUnidad && pasaMision;
         });
 
+        console.log("📊 [DIAGNÓSTICO DASHBOARD VUELOS]:", {
+            rolUsuario: rawRol,
+            esAdminGlobal,
+            unidadUsuarioDetectada: unidadUsuario,
+            unidadFiltroActiva: unidadFiltro,
+            totalVuelosResueltosBD: vuelosData.length,
+            vuelosFiltradosResultado: filtrados.length
+        });
+
         return filtrados;
-    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario]);
+    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario, rawRol]);
 
     // ==========================================
     // 📊 CÁLCULOS Y PROCESAMIENTO
@@ -147,7 +166,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return Object.entries(mapa).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
     }, [vuelosFiltrados]);
 
-    // 👨‍✈️ TODOS LOS PILOTOS Y COPILOTOS (SE ELIMINÓ EL .slice(0, 10))
+    // 👨‍✈️ TODOS LOS PILOTOS Y COPILOTOS
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         
@@ -168,7 +187,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
         return Object.entries(mapa)
             .map(([name, horas]) => ({ name, horas: Number(horas.toFixed(1)) }))
-            .sort((a, b) => b.horas - a.horas); // Muestra TODOS los tripulantes ordenados
+            .sort((a, b) => b.horas - a.horas);
     }, [vuelosFiltrados]);
 
     // 🛬 CONTEO DE OPERACIONES POR AEROPUERTO / AERÓDROMO
@@ -179,11 +198,9 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const origen = (v.desde || '').trim().toUpperCase();
             const destino = (v.hasta || '').trim().toUpperCase();
 
-            // Suma una operación al aeropuerto de origen (si existe)
             if (origen) {
                 mapa[origen] = (mapa[origen] || 0) + 1;
             }
-            // Suma una operación al aeropuerto de destino (si existe)
             if (destino) {
                 mapa[destino] = (mapa[destino] || 0) + 1;
             }
@@ -202,7 +219,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         );
     }
 
-    // Calculamos una altura dinámica para el gráfico vertical de tripulantes en caso de que sean muchos
     const tripulantesHeight = Math.max(260, horasPorTripulante.length * 30);
 
     return (
