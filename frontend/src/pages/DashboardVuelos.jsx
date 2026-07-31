@@ -9,7 +9,7 @@ import { EventService } from '../services/api';
 // Colores institucionales
 const COLORS = ['#1b3a57', '#4a69bd', '#10ac84', '#f39c12', '#e74c3c', '#9b59b6', '#34495e', '#38ada9'];
 
-// Normalización visual (para mostrar en pantalla)
+// Normalización visual (para etiquetas e interfaz)
 const normalizarTexto = (str) => {
     if (!str) return '';
     return String(str)
@@ -18,7 +18,7 @@ const normalizarTexto = (str) => {
         .replace(/\s+/g, ' ');
 };
 
-// Normalización de clave (elimina espacios, guiones y guiones bajos para comparaciones flexibles)
+// Normalización estricta para comparaciones (elimina espacios, guiones y guiones bajos)
 const normalizarClave = (str) => {
     if (!str) return '';
     return String(str)
@@ -32,51 +32,52 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
     const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
-    // 👤 1. DETECTAR Y NORMALIZAR EL USUARIO ACTUAL (Basado en el modelo User: campo 'elemento')
-    const { elementoUsuario, esAdminGlobal, rawRol } = useMemo(() => {
+    // 👤 1. DETECTAR Y NORMALIZAR EL USUARIO ACTUAL
+    const { unidadUsuario, esAdminGlobal, rawRol } = useMemo(() => {
         try {
             const rawUser = localStorage.getItem('usuario') || localStorage.getItem('user');
             const userObj = rawUser ? JSON.parse(rawUser) : {};
             
-            // Sincronizado estrictamente con el modelo User (elemento) y soporte legacy
+            // Búsqueda del elemento o unidad asignada en el perfil del usuario
             const elem = userObj.elemento || userObj.unidad || userObj.unidadResponsable || localStorage.getItem('elemento') || '';
-            const rol = userObj.role || userObj.rol || localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
+            const rol = userObj.role || userObj.rol || localStorage.getItem('role') || localStorage.getItem('rol') || 'USER';
             
             const rolNorm = normalizarClave(rol);
-            // Sincronizado con los mandos globales definidos en vueloController.js
-            const esMando = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolNorm);
+            // Roles con permisos de gestión global
+            const mandos = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'];
+            const esMando = mandos.some(m => rolNorm.includes(m));
             
             return {
-                elementoUsuario: normalizarTexto(elem),
+                unidadUsuario: normalizarTexto(elem),
                 esAdminGlobal: esMando,
                 rawRol: rol
             };
         } catch (e) {
-            console.error("Error al leer datos de sesión del usuario:", e);
-            return { elementoUsuario: '', esAdminGlobal: false, rawRol: 'user' };
+            console.error("Error al leer datos de sesión:", e);
+            return { unidadUsuario: '', esAdminGlobal: false, rawRol: 'USER' };
         }
     }, []);
 
-    // 📌 2. RESTABLECER FILTRO DEFAULT POR UNIDAD/ELEMENTO
+    // 📌 2. SINCRO DE FILTRO INICIAL POR ROL Y UNIDAD
     useEffect(() => {
-        if (!esAdminGlobal && elementoUsuario) {
-            setUnidadFiltro(elementoUsuario);
-        } else if (esAdminGlobal) {
+        if (!esAdminGlobal && unidadUsuario) {
+            setUnidadFiltro(unidadUsuario);
+        } else if (esAdminGlobal && unidadFiltro === '') {
             setUnidadFiltro('TODAS');
         }
-    }, [elementoUsuario, esAdminGlobal]);
+    }, [unidadUsuario, esAdminGlobal]);
 
-    // 🔄 3. CARGA DE DATOS DE VUELOS (Sincronizado con los query params del backend)
+    // 🔄 3. CARGA DE DATOS DESDE EL BACKEND (Pasando parámetro de unidad)
     useEffect(() => {
         if (!vuelosProps || vuelosProps.length === 0) {
             setLoading(true);
             
-            // Construir parámetros alineados con obtenerVuelos (req.query.unit / unidad)
             const params = {};
-            if (esAdminGlobal && unidadFiltro && unidadFiltro !== 'TODAS') {
+            // Si no es admin, enviamos su unidad específica al backend
+            if (!esAdminGlobal && unidadUsuario) {
+                params.unidad = unidadUsuario;
+            } else if (esAdminGlobal && unidadFiltro !== 'TODAS') {
                 params.unidad = unidadFiltro;
-            } else if (!esAdminGlobal && elementoUsuario) {
-                params.unidad = elementoUsuario;
             }
 
             EventService.getVuelos(params)
@@ -85,7 +86,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     setVuelosData(Array.isArray(listaVuelos) ? listaVuelos : []);
                 })
                 .catch(err => {
-                    console.error("Error al recuperar historial de vuelos:", err);
+                    console.error("Error al recuperar planillas -12:", err);
                 })
                 .finally(() => {
                     setLoading(false);
@@ -94,34 +95,36 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             setVuelosData(vuelosProps);
             setLoading(false);
         }
-    }, [vuelosProps, unidadFiltro, esAdminGlobal, elementoUsuario]);
+    }, [vuelosProps, unidadFiltro, esAdminGlobal, unidadUsuario]);
 
-    // 📌 4. LISTA DE UNIDADES ÚNICAS PARA EL SELECTOR
+    // 📌 4. UNIDADES ÚNICAS PARA SELECTOR
     const listaUnidades = useMemo(() => {
         if (!esAdminGlobal) {
-            return [elementoUsuario || 'MI UNIDAD'];
+            return [unidadUsuario || 'MI UNIDAD'];
         }
 
         const unidades = vuelosData.map(v => normalizarTexto(v.unidadResponsable)).filter(Boolean);
         return ['TODAS', ...Array.from(new Set(unidades))];
-    }, [vuelosData, esAdminGlobal, elementoUsuario]);
+    }, [vuelosData, esAdminGlobal, unidadUsuario]);
 
     const listaMisiones = useMemo(() => {
         const misiones = vuelosData.map(v => v.tipoMision).filter(Boolean);
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
-    // 📌 5. FILTRADO ROBUSTO EN CLIENTE (Respaldo y consistencia por clave normalizada)
+    // 📌 5. FILTRADO ROBUSTO DE VUELOS (Aplica a ADMIN y USUARIOS)
     const vuelosFiltrados = useMemo(() => {
-        const filtrados = vuelosData.filter(v => {
-            const unidadVueloClave = normalizarClave(v.unidadResponsable);
-            const unidadFiltroClave = normalizarClave(unidadFiltro);
+        const targetFiltroClave = normalizarClave(unidadFiltro);
 
+        const filtrados = vuelosData.filter(v => {
             let pasaUnidad = true;
-            if (unidadFiltro !== 'TODAS') {
-                pasaUnidad = unidadVueloClave === unidadFiltroClave || 
-                             unidadVueloClave.includes(unidadFiltroClave) || 
-                             unidadFiltroClave.includes(unidadVueloClave);
+
+            // Si el filtro no es 'TODAS', validamos la unidad independientemente del rol
+            if (unidadFiltro !== 'TODAS' && targetFiltroClave !== '') {
+                const unidadVueloClave = normalizarClave(v.unidadResponsable);
+                pasaUnidad = unidadVueloClave === targetFiltroClave || 
+                             unidadVueloClave.includes(targetFiltroClave) || 
+                             targetFiltroClave.includes(unidadVueloClave);
             }
 
             const pasaMision = misionFiltro === 'TODAS' || v.tipoMision === misionFiltro;
@@ -129,11 +132,20 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             return pasaUnidad && pasaMision;
         });
 
+        console.log("📊 [DIAGNÓSTICO DASHBOARD]:", {
+            rolUsuario: rawRol,
+            esAdminGlobal,
+            unidadUsuarioDetectada: unidadUsuario,
+            unidadFiltroActiva: unidadFiltro,
+            totalVuelosOrigen: vuelosData.length,
+            totalVuelosFiltrados: filtrados.length
+        });
+
         return filtrados;
-    }, [vuelosData, unidadFiltro, misionFiltro]);
+    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario, rawRol]);
 
     // ==========================================
-    // 📊 CÁLCULOS Y PROCESAMIENTO
+    // 📊 CÁLCULOS
     // ==========================================
 
     const totalHorasGenerales = useMemo(() => {
@@ -188,23 +200,27 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
         return Object.entries(mapa)
             .map(([name, horas]) => ({ name, horas: Number(horas.toFixed(1)) }))
-            .sort((a, b) => b.horas - a.horas);
+            .sort((a, b) => b.horas - a.horas)
+            .slice(0, 10);
     }, [vuelosFiltrados]);
 
-    const operacionesPorAeropuerto = useMemo(() => {
+    const horasPorDestino = useMemo(() => {
         const mapa = {};
-
         vuelosFiltrados.forEach(v => {
             const origen = (v.desde || '').trim().toUpperCase();
             const destino = (v.hasta || '').trim().toUpperCase();
 
-            if (origen) mapa[origen] = (mapa[origen] || 0) + 1;
-            if (destino) mapa[destino] = (mapa[destino] || 0) + 1;
+            if (origen === 'SADO' && destino === 'SADO') return;
+
+            const ruta = `${origen || 'S/D'} ➔ ${destino || 'S/D'}`;
+            const hs = Number(v.horasVoladas) || 0;
+            mapa[ruta] = (mapa[ruta] || 0) + hs;
         });
 
         return Object.entries(mapa)
-            .map(([aeropuerto, operaciones]) => ({ aeropuerto, operaciones }))
-            .sort((a, b) => b.operaciones - a.operaciones);
+            .map(([ruta, horas]) => ({ ruta, horas: Number(horas.toFixed(1)) }))
+            .sort((a, b) => b.horas - a.horas)
+            .slice(0, 8);
     }, [vuelosFiltrados]);
 
     if (loading) {
@@ -215,8 +231,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         );
     }
 
-    const tripulantesHeight = Math.max(260, horasPorTripulante.length * 30);
-
     return (
         <div style={styles.container}>
             {/* ENCABEZADO Y FILTROS */}
@@ -226,13 +240,13 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     <span style={styles.subtitle}>
                         {esAdminGlobal && unidadFiltro === 'TODAS' 
                             ? 'Resumen consolidado general (Vista Administrador Global)' 
-                            : `Resumen consolidado del elemento: ${elementoUsuario || unidadFiltro}`}
+                            : `Resumen consolidado de la unidad: ${unidadFiltro === 'TODAS' ? unidadUsuario : unidadFiltro}`}
                     </span>
                 </div>
 
                 <div style={styles.filtrosBar}>
                     <div style={styles.filtroGroup}>
-                        <label style={styles.label}>Unidad / Elemento:</label>
+                        <label style={styles.label}>Unidad Responsable:</label>
                         <select 
                             value={unidadFiltro} 
                             onChange={(e) => setUnidadFiltro(e.target.value)}
@@ -321,34 +335,32 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </ResponsiveContainer>
                 </div>
 
-                {/* 3. OPERACIONES POR AEROPUERTO */}
+                {/* 3. TOTAL DE HORAS POR PILOTO / COPILOTO */}
                 <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>🛬 Frecuencia de Operaciones por Aeropuerto</h4>
+                    <h4 style={styles.chartTitle}>👨‍✈️ Top 10 Horas por Piloto / Copiloto</h4>
                     <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={operacionesPorAeropuerto} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="aeropuerto" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
-                            <YAxis allowDecimals={false} />
-                            <Tooltip formatter={(value) => [`${value} operaciones`, 'Frecuencia']} />
-                            <Bar dataKey="operaciones" fill="#38ada9" radius={[4, 4, 0, 0]} />
+                        <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" />
+                            <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} />
+                            <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
+                            <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
 
-                {/* 4. TOTAL DE HORAS POR TRIPULANTE */}
+                {/* 4. DESTINOS EXTERNOS */}
                 <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>👨‍✈️ Horas Acumuladas por Piloto / Copiloto (Todos)</h4>
-                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                        <ResponsiveContainer width="100%" height={tripulantesHeight}>
-                            <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 60, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                <XAxis type="number" />
-                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} interval={0} />
-                                <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
-                                <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
+                    <h4 style={styles.chartTitle}>🗺️ Destinos & Rutas (Excluye SADO ➔ SADO)</h4>
+                    <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={horasPorDestino} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="ruta" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
+                            <YAxis />
+                            <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
+                            <Bar dataKey="horas" fill="#38ada9" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
                 </div>
 
             </div>
