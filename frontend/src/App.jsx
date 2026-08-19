@@ -83,6 +83,7 @@ const NavDropdown = ({ title, activeViews = [], currentView, children }) => {
 function App() {
     const [auth, setAuth] = useState(!!localStorage.getItem('token'));
     const [role, setRole] = useState(localStorage.getItem('role') || localStorage.getItem('rol') || 'user');
+    const [userUnidad, setUserUnidad] = useState(''); // 🔹 Nuevo estado para la unidad del usuario
     const [view, setView] = useState('calendar'); 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     
@@ -100,6 +101,19 @@ function App() {
             const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
             const normalized = rawRole.toUpperCase().replace(/[\s_-]/g, '');
             setRole(normalized);
+
+            // 🔹 Lectura y normalización de la unidad/elemento del usuario desde el almacenamiento local
+            try {
+                const rawUser = localStorage.getItem('usuario') || localStorage.getItem('user');
+                const userObj = rawUser ? JSON.parse(rawUser) : {};
+                const elem = userObj.elemento || userObj.unidad || userObj.unidadResponsable || localStorage.getItem('elemento') || '';
+                
+                const elemNorm = String(elem).trim().toUpperCase().replace(/\s+/g, ' ');
+                setUserUnidad(elemNorm);
+            } catch (e) {
+                console.error("Error al obtener la unidad del usuario:", e);
+                setUserUnidad('');
+            }
         }
     }, [auth]);
 
@@ -107,6 +121,7 @@ function App() {
         localStorage.clear();
         setAuth(false);
         setRole(null);
+        setUserUnidad('');
         setView('calendar');
     };
 
@@ -123,6 +138,9 @@ function App() {
     const esLogistico = roleBase === 'LOGISTICO';
     const esJefe = roleBase === 'JEFE';
     const esPersonal = roleBase === 'PERSONAL';
+
+    // 🔹 Validación exclusiva del elemento/unidad EC AE
+    const esElementoECAE = userUnidad === 'EC AE' || userUnidad === 'ECAE' || userUnidad.includes('EC AE');
 
     // --- VISIBILIDAD DE MÓDULOS ---
     const puedeVerUsuarios = esAdmin;
@@ -146,7 +164,11 @@ function App() {
     const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
     const puedeVerF16 = esAdmin || esOfTecnica; 
     const puedeVerProgMantenimiento = esAdmin || esOfTecnica;
-    const puedeVerECAE = esAdmin || esOperaciones || esBoss || esDirector || esJefe || esPersonal;
+    
+    // 🎓 REGLA MODIFICADA DE EC AE: ADMIN ve siempre, el resto SOLO si pertenece al elemento EC AE
+    const puedeVerECAE = esAdmin || (
+        esElementoECAE && (esOperaciones || esBoss || esDirector || esJefe || esPersonal)
+    );
 
     const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos || puedeVerDashboardVuelos;
     const puedeVerGrupoOfTecnica = puedeVerF13 || puedeVerF16 || puedeVerProgMantenimiento;
@@ -238,7 +260,7 @@ function App() {
                                 </NavDropdown>
                             )}
 
-                            {/* 3. EC AE */}
+                            {/* 3. EC AE (VISIBILIDAD RESTRINGIDA POR UNIDAD) */}
                             {puedeVerECAE && (
                                 <NavDropdown title="🎓 EC AE" activeViews={['gestionAlumnos', 'gestorPatrones', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno']} currentView={view}>
                                     <button 
