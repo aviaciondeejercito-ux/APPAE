@@ -1,30 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Users, Clock, Save, Trash2, Map, Luggage, UserPlus, Info } from 'lucide-react';
+import { Plane, Users, Clock, Save, Trash2, Map, Luggage, UserPlus, Info, Edit2, XCircle } from 'lucide-react';
 import API from '../services/api';
 
 const Vuelos = () => {
     const [vuelos, setVuelos] = useState([]);
     const [tripulantes, setTripulantes] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [editandoId, setEditandoId] = useState(null);
 
-    // --- NORMALIZACIÓN SINCRO JOKER ---
-    const rawRole = localStorage.getItem('role') || 'user';
+    // --- NORMALIZACIÓN DE ROL Y UNIDAD ---
+    const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
 
-    // --- REGLAS DE ACCESO ---
-    const esAdmin = roleNormalizado === 'ADMIN';
-    const esOperaciones = roleNormalizado === 'OPERACIONES';
-    const esJefe = roleNormalizado === 'JEFE';
-    
-    // Solo Admin, Operaciones y el usuario base pueden cargar
-    const puedeCargarVuelos = ['ADMIN', 'OPERACIONES', 'USER'].includes(roleNormalizado);
-    // Definimos quiénes pueden anular registros (Admin + Operaciones + Jefe)
-    const puedeEliminarVuelo = ['ADMIN', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
-    // Mandos superiores ven todo el historial
-    const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+    // --- PERMISOS Y REGLAS DE ACCESO ---
+    const rolesCarga = ['ADMIN', 'USER', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'];
+    const rolesEscrituraCritica = ['ADMIN', 'OPERACIONES', 'JEFE'];
 
-    const [formData, setFormData] = useState({
+    const puedeCargarVuelos = rolesCarga.includes(roleNormalizado);
+    const puedeEditarVuelo = rolesEscrituraCritica.includes(roleNormalizado);
+    const puedeEliminarVuelo = rolesEscrituraCritica.includes(roleNormalizado);
+
+    // Mandos y usuarios autorizados para ver el historial global
+    const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
+
+    const initialFormState = {
         fecha: '', aeronave: '', matricula: '',
         instructor: '', piloto: '', copiloto: '', 
         mecanico: '', segundoMecanico: '',
@@ -32,7 +32,9 @@ const Vuelos = () => {
         condicion: 'Diurno', reglasVuelo: 'VFR', usoNVG: false,
         tipoMision: '', localTravesia: 'Local', 
         elementoApoyado: '', cantidadPasajeros: 0, pesoCarga: 0
-    });
+    };
+
+    const [formData, setFormData] = useState(initialFormState);
 
     const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002"];
     const misiones = ["Entrenamiento","Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR", "Instruccion", "Calificacion"];
@@ -45,13 +47,9 @@ const Vuelos = () => {
     const fetchVuelos = async () => {
         try {
             const res = await API.get('/vuelos');
-            
-            // LOGICA DE VISIBILIDAD TOTAL PARA MANDOS
             if (esMandoEstrategico) {
-                // Si es ADMIN, BOSS, DIRECTOR u OTO, no filtramos nada.
                 setVuelos(res.data);
             } else {
-                // Para OPERACIONES, JEFE o USER, filtramos por su unidad
                 const dataFiltrada = res.data.filter(v => {
                     const unidadVuelo = (v.unidadResponsable || "").toUpperCase();
                     const matriculaVuelo = (v.matricula || "").toUpperCase();
@@ -70,20 +68,62 @@ const Vuelos = () => {
         try {
             const res = await API.get('/tripulantes');
             setTripulantes(res.data);
-        } catch (error) { console.error("Error cargando tripulantes", error); }
+        } catch (error) { 
+            console.error("Error cargando tripulantes", error); 
+        }
     };
 
-    // --- HELPER DE FORMATEO NUMÉRICO ---
     const formatearHoras = (val) => {
         const num = Number(val);
         if (isNaN(num)) return '0';
         return Number(num.toFixed(1)).toString();
     };
 
+    const cargarParaEditar = (vuelo) => {
+        if (!puedeEditarVuelo) return;
+        setEditandoId(vuelo._id);
+        setFormData({
+            fecha: vuelo.fecha ? vuelo.fecha.split('T')[0] : '',
+            aeronave: vuelo.aeronave || '',
+            matricula: vuelo.matricula || '',
+            instructor: vuelo.instructor?._id || vuelo.instructor || '',
+            piloto: vuelo.piloto?._id || vuelo.piloto || '',
+            copiloto: vuelo.copiloto?._id || vuelo.copiloto || '',
+            mecanico: vuelo.mecanico?._id || vuelo.mecanico || '',
+            segundoMecanico: vuelo.segundoMecanico?._id || vuelo.segundoMecanico || '',
+            horasVoladas: vuelo.horasVoladas || 0,
+            desde: vuelo.desde || '',
+            hasta: vuelo.hasta || '',
+            condicion: vuelo.condicion || 'Diurno',
+            reglasVuelo: vuelo.reglasVuelo || 'VFR',
+            usoNVG: vuelo.usoNVG || false,
+            tipoMision: vuelo.tipoMision || '',
+            localTravesia: vuelo.localTravesia || 'Local',
+            elementoApoyado: vuelo.elementoApoyado || '',
+            cantidadPasajeros: vuelo.cantidadPasajeros || 0,
+            pesoCarga: vuelo.pesoCarga || 0
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const cancelarEdicion = () => {
+        setEditandoId(null);
+        setFormData(initialFormState);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // VALIDACIÓN OPERATIVA PRE-FLIGHT: Al menos debe registrarse un piloto responsable de la aeronave
+        if (editandoId && !puedeEditarVuelo) {
+            alert("❌ Denegado: Su rol no cuenta con permisos para modificar registros en la Formulario -12.");
+            return;
+        }
+
+        if (!editandoId && !puedeCargarVuelos) {
+            alert("❌ Denegado: Su rol no cuenta con permisos para registrar vuelos.");
+            return;
+        }
+
         if (!formData.instructor && !formData.piloto && !formData.copiloto) {
             alert("❌ Error de despacho: Debe asignar al menos un Tripulante calificado (Instructor, Piloto o Copiloto) para registrar la misión.");
             return;
@@ -93,7 +133,7 @@ const Vuelos = () => {
 
         const payload = {
             ...formData,
-            unidadResponsable: userUnidad, // Inyectamos la unidad del operador
+            unidadResponsable: userUnidad,
             instructor: formData.instructor || null,
             piloto: formData.piloto || null,
             copiloto: formData.copiloto || null,
@@ -105,36 +145,38 @@ const Vuelos = () => {
         };
 
         try {
-            await API.post('/vuelos', payload);
-            alert("✅ Vuelo registrado y horas computadas correctamente.");
-            setFormData({ 
-                fecha: '', aeronave: '', matricula: '',
-                instructor: '', piloto: '', copiloto: '', mecanico: '', segundoMecanico: '',
-                desde: '', hasta: '', horasVoladas: 0,
-                condicion: 'Diurno', reglasVuelo: 'VFR', usoNVG: false,
-                tipoMision: '', localTravesia: 'Local', 
-                elementoApoyado: '', cantidadPasajeros: 0, pesoCarga: 0
-            });
+            if (editandoId) {
+                await API.put(`/vuelos/${editandoId}`, payload);
+                alert("✅ Formulario -12 actualizado correctamente.");
+            } else {
+                await API.post('/vuelos', payload);
+                alert("✅ Vuelo registrado y horas computadas correctamente.");
+            }
+            
+            cancelarEdicion();
             fetchVuelos();
         } catch (error) {
-            alert("❌ Error: " + (error.response?.data?.mensaje || "Fallo en la validación de carga"));
-        } finally { setLoading(false); }
+            alert("❌ Error: " + (error.response?.data?.mensaje || "Fallo en el procesamiento de la Formulario -12"));
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     const eliminarVuelo = async (id) => {
         if (!puedeEliminarVuelo) {
-            alert("Acceso Denegado: Su nivel jerárquico no permite anular registros de vuelo.");
+            alert("Acceso Denegado: Su rol no tiene permisos para anular registros de vuelo.");
             return;
         }
 
-        if (window.confirm("¿Seguro desea eliminar este registro? This action is irreversible, afectará el cómputo de horas de la aeronave y el legajo de los pilotos.")) {
+        if (window.confirm("¿Seguro desea eliminar este registro? Esta acción descontará las horas del legajo de la tripulación.")) {
             try {
                 await API.delete(`/vuelos/${id}`);
                 alert("✅ Registro eliminado correctamente.");
+                if (editandoId === id) cancelarEdicion();
                 fetchVuelos();
             } catch (error) { 
                 console.error("Error al eliminar:", error);
-                alert("❌ Error: " + (error.response?.data?.mensaje || "No se pudo eliminar el registro. Verifique permisos del servidor.")); 
+                alert("❌ Error: " + (error.response?.data?.mensaje || "No se pudo eliminar el registro. Verifique su jurisdicción o permisos.")); 
             }
         }
     };
@@ -156,9 +198,19 @@ const Vuelos = () => {
             </div>
 
             <div style={styles.mainGrid}>
-                {/* FORMULARIO DE CARGA */}
+                {/* FORMULARIO DE CARGA / EDICIÓN */}
                 <div style={{...styles.card, display: puedeCargarVuelos ? 'block' : 'none'}}>
-                    <h2 style={styles.cardTitle}><Save size={18} /> Nueva Carga - Formulario -12</h2>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h2 style={styles.cardTitle}>
+                            <Save size={18} /> {editandoId ? 'Editar Registro - Formulario -12' : 'Nueva Carga - Formulario -12'}
+                        </h2>
+                        {editandoId && (
+                            <button onClick={cancelarEdicion} style={styles.btnCancel}>
+                                <XCircle size={14} /> Cancelar
+                            </button>
+                        )}
+                    </div>
+
                     <form onSubmit={handleSubmit} style={styles.form}>
                         <div style={styles.row}>
                             <div style={styles.group}><label style={styles.label}>Fecha</label>
@@ -258,8 +310,8 @@ const Vuelos = () => {
                             <label htmlFor="usoNVG" style={{...styles.label, cursor: 'pointer', marginTop: '2px'}}>¿Utilizó visores nocturnos (NVG)?</label>
                         </div>
 
-                        <button disabled={loading} type="submit" style={styles.btnSave}>
-                            {loading ? "SINCRONIZANDO CON BASE DE DATOS..." : "REGISTRAR VUELO"}
+                        <button disabled={loading} type="submit" style={{...styles.btnSave, backgroundColor: editandoId ? '#d97706' : '#1b3a57'}}>
+                            {loading ? "GUARDANDO Y SINCRONIZANDO..." : editandoId ? "ACTUALIZAR REGISTRO -12" : "REGISTRAR VUELO"}
                         </button>
                     </form>
                 </div>
@@ -267,7 +319,7 @@ const Vuelos = () => {
                 {!puedeCargarVuelos && (
                     <div style={styles.card}>
                         <h2 style={styles.cardTitle}><Info size={18} /> Información de Acceso</h2>
-                        <p style={{fontSize: '0.85rem', color: '#666'}}>Su nivel jerárquico actual es de <strong>SOLO CONSULTA</strong> para el historial de vuelos.</p>
+                        <p style={{fontSize: '0.85rem', color: '#666'}}>Su nivel jerárquico actual es de <strong>SOLO CONSULTA</strong> para el historial de vuelos - Formulario 12.</p>
                     </div>
                 )}
 
@@ -309,7 +361,7 @@ const Vuelos = () => {
                                             </div>
                                         </td>
                                         <td style={styles.td}>
-                                            <div style={styles.dataRow}>< Luggage size={12} /> {v.pesoCarga || 0} kg</div>
+                                            <div style={styles.dataRow}><Luggage size={12} /> {v.pesoCarga || 0} kg</div>
                                             <div style={styles.dataRow}><Users size={12} /> {v.cantidadPasajeros || 0} pax</div>
                                         </td>
                                         <td style={styles.td}>
@@ -323,11 +375,18 @@ const Vuelos = () => {
                                             <div style={{fontSize: '0.7rem', marginTop: '4px', color: '#444'}}>APOYO: {v.elementoApoyado}</div>
                                         </td>
                                         <td style={styles.td}>
-                                            {puedeEliminarVuelo && (
-                                                <button onClick={() => eliminarVuelo(v._id)} style={styles.btnDel}>
-                                                    <Trash2 size={16}/>
-                                                </button>
-                                            )}
+                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                {puedeEditarVuelo && (
+                                                    <button onClick={() => cargarParaEditar(v)} style={styles.btnEdit} title="Editar Registro -12">
+                                                        <Edit2 size={16}/>
+                                                    </button>
+                                                )}
+                                                {puedeEliminarVuelo && (
+                                                    <button onClick={() => eliminarVuelo(v._id)} style={styles.btnDel} title="Eliminar Registro -12">
+                                                        <Trash2 size={16}/>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -354,7 +413,8 @@ const styles = {
     group: { display: 'flex', flexDirection: 'column', gap: '3px' },
     label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#666', textTransform: 'uppercase' },
     input: { padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.85rem', outline: 'none' },
-    btnSave: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px', transition: '0.2s' },
+    btnSave: { color: 'white', border: 'none', padding: '12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px', transition: '0.2s' },
+    btnCancel: { backgroundColor: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 'bold' },
     tableContainer: { overflowX: 'auto' },
     table: { width: '100%', borderCollapse: 'collapse' },
     thead: { backgroundColor: '#f9fafb' },
@@ -366,6 +426,7 @@ const styles = {
     dataRow: { display: 'flex', alignItems: 'center', gap: '4px', color: '#444', marginBottom: '2px' },
     miniTag: { display: 'inline-block', backgroundColor: '#f3f4f6', color: '#374151', padding: '1px 5px', borderRadius: '3px', fontSize: '0.65rem', marginRight: '3px', marginBottom: '3px', fontWeight: '600' },
     misionTag: { backgroundColor: '#eff6ff', color: '#1e40af', padding: '3px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' },
+    btnEdit: { background: 'none', border: 'none', color: '#d97706', cursor: 'pointer', padding: '4px', borderRadius: '4px' },
     btnDel: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' },
     noData: { textAlign: 'center', padding: '40px', color: '#9ca3af', fontSize: '0.9rem' }
 };

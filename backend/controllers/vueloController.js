@@ -6,21 +6,109 @@ const Auditoria = require('../models/Auditoria');
 const redondearHs = (val) => Math.round(Number(val || 0) * 10) / 10;
 
 /**
+ * HELPER INTERNO DE VERIFICACIÓN DE ROL ADMINISTRADOR
+ */
+const verificarEsAdmin = (user) => {
+    const rawRole = user?.role || user?.rol || '';
+    const rolNormalizado = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
+    return rolNormalizado === 'ADMIN';
+};
+
+/**
+ * HELPER INTERNO PARA REVERTIR IMPACTO DE VUELO EN LEGAJOS DE TRIPULANTES
+ */
+const revertirImpactoLegajos = async (vuelo) => {
+    const hs = redondearHs(vuelo.horasVoladas);
+    const esNocturno = vuelo.condicion === 'Nocturno';
+    const esIFR = vuelo.reglasVuelo === 'IFR';
+    const esNVG = vuelo.usoNVG === true;
+    const esVisual = !esNocturno && !esIFR && !esNVG;
+
+    const mapaTripulantes = new Map();
+    if (vuelo.segundoMecanico) mapaTripulantes.set(vuelo.segundoMecanico.toString(), 'Mecánico');
+    if (vuelo.mecanico)        mapaTripulantes.set(vuelo.mecanico.toString(), 'Mecánico');
+    if (vuelo.copiloto)        mapaTripulantes.set(vuelo.copiloto.toString(), 'Copiloto');
+    if (vuelo.piloto)          mapaTripulantes.set(vuelo.piloto.toString(), 'Piloto');
+    if (vuelo.instructor)      mapaTripulantes.set(vuelo.instructor.toString(), 'Instructor');
+
+    for (const [idTripulante, rolVuelo] of mapaTripulantes.entries()) {
+        const tripulante = await Tripulante.findById(idTripulante);
+        if (!tripulante) continue;
+
+        // 1. Restar de Habilitaciones por SdA y Rol
+        const indexHab = tripulante.habilitaciones.findIndex(h => 
+            h.aeronave === vuelo.aeronave && h.rolActual === rolVuelo
+        );
+        
+        if (indexHab !== -1) {
+            if (esVisual)     tripulante.habilitaciones[indexHab].hsVisual = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsVisual - hs));
+            if (esIFR)        tripulante.habilitaciones[indexHab].hsInstrumental = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsInstrumental - hs));
+            if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNocturno - hs));
+            if (esNVG)        tripulante.habilitaciones[indexHab].hsNVG = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNVG - hs));
+            
+            tripulante.habilitaciones[indexHab].totalHorasSistema = redondearHs(
+                Number(tripulante.habilitaciones[indexHab].hsVisual || 0) +
+                Number(tripulante.habilitaciones[indexHab].hsInstrumental || 0) +
+                Number(tripulante.habilitaciones[indexHab].hsNocturno || 0) +
+                Number(tripulante.habilitaciones[indexHab].hsNVG || 0)
+            );
+        }
+
+        // 2. Recálculo de Totales Históricos Generales
+        const mapaSdA = {};
+        tripulante.habilitaciones.forEach(hab => {
+            const sdaId = hab.aeronave;
+            if (!mapaSdA[sdaId]) mapaSdA[sdaId] = { v: 0, i: 0, n: 0, nvg: 0 };
+            mapaSdA[sdaId].v = Math.max(mapaSdA[sdaId].v, Number(hab.hsVisual || 0));
+            mapaSdA[sdaId].i = Math.max(mapaSdA[sdaId].i, Number(hab.hsInstrumental || 0));
+            mapaSdA[sdaId].n = Math.max(mapaSdA[sdaId].n, Number(hab.hsNocturno || 0));
+            mapaSdA[sdaId].nvg = Math.max(mapaSdA[sdaId].nvg, Number(hab.hsNVG || 0));
+        });
+
+        const totalesLimpios = { v: 0, i: 0, n: 0, nvg: 0 };
+        Object.values(mapaSdA).forEach(sistema => {
+            totalesLimpios.v += sistema.v;
+            totalesLimpios.i += sistema.i;
+            totalesLimpios.n += sistema.n;
+            totalesLimpios.nvg += sistema.nvg;
+        });
+
+        tripulante.totalesHistoricos.vueloDiurno = redondearHs(totalesLimpios.v);
+        tripulante.totalesHistoricos.vueloInstrumental = redondearHs(totalesLimpios.i);
+        tripulante.totalesHistoricos.vueloNocturno = redondearHs(totalesLimpios.n);
+        tripulante.totalesHistoricos.vueloVisual = redondearHs(totalesLimpios.nvg);
+
+        // 3. Restar de Capacitaciones Tácticas
+        const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === vuelo.tipoMision);
+        if (indexTactico !== -1) {
+            const hsCap = Number(tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas || 0);
+            tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas = redondearHs(Math.max(0, hsCap - hs));
+        }
+        if (esNVG) {
+            const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
+            if (indexNVG !== -1) {
+                const hsCapNVG = Number(tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas || 0);
+                tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas = redondearHs(Math.max(0, hsCapNVG - hs));
+            }
+        }
+
+        await tripulante.save();
+    }
+};
+
+/**
  * REGISTRO DE VUELO E IMPACTO EN LEGAJOS
- * OPTIMIZADO PARA ESTÁNDAR v3.6 (Delegación en Pre-Save)
  */
 exports.registrarVuelo = async (req, res) => {
     try {
         const datosVuelo = req.body;
         const usuarioLogueado = req.user;
 
-        // 1. Limpieza y Normalización de IDs
+        // Limpieza y Normalización de IDs
         const limpiarId = (id) => (id && id.toString().trim() !== "" && id !== "undefined") ? id : null;
-
-        // Sanitizamos y redondeamos las horas voladas recibidas
         const hsVoladasSanitizadas = redondearHs(datosVuelo.horasVoladas);
 
-        // 2. Crear el registro del vuelo con IDs saneados y horas redondeadas
+        // Crear el registro del vuelo
         const nuevoVuelo = new Vuelo({
             ...datosVuelo,
             horasVoladas: hsVoladasSanitizadas,
@@ -38,10 +126,10 @@ exports.registrarVuelo = async (req, res) => {
             creadoPor: usuarioLogueado._id
         });
 
-        // El .save() dispara automáticamente el hook 'pre-save'
+        // El .save() dispara automáticamente el hook 'pre-save' para legajos
         await nuevoVuelo.save();
 
-        // 3. PROCESAMIENTO EXCLUSIVO DE CAPACITACIONES TÁCTICAS
+        // Procesamiento de capacitaciones tácticas
         const mapaTripulantes = new Map();
         if (nuevoVuelo.segundoMecanico) mapaTripulantes.set(nuevoVuelo.segundoMecanico.toString(), 'Mecánico');
         if (nuevoVuelo.mecanico)        mapaTripulantes.set(nuevoVuelo.mecanico.toString(), 'Mecánico');
@@ -58,7 +146,6 @@ exports.registrarVuelo = async (req, res) => {
 
             let flagModificado = false;
 
-            // Acreditación de horas en la misión específica (con redondeo)
             const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === nuevoVuelo.tipoMision);
             if (indexTactico !== -1) {
                 const hsActuales = Number(tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas || 0);
@@ -66,7 +153,6 @@ exports.registrarVuelo = async (req, res) => {
                 flagModificado = true;
             }
 
-            // Acreditación adicional por uso de NVG (con redondeo)
             if (esNVG) {
                 const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
                 if (indexNVG !== -1) {
@@ -76,12 +162,9 @@ exports.registrarVuelo = async (req, res) => {
                 }
             }
 
-            if (flagModificado) {
-                await tripulante.save();
-            }
+            if (flagModificado) await tripulante.save();
         }
 
-        // 4. Auditoría Reforzada
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
@@ -100,7 +183,71 @@ exports.registrarVuelo = async (req, res) => {
 };
 
 /**
- * OBTENER HISTORIAL DE VUELOS (Optimizado para -12 y DashboardVuelos)
+ * EDITAR VUELO - EXCLUSIVO ADMINISTRADOR
+ */
+exports.editarVuelo = async (req, res) => {
+    try {
+        const usuarioLogueado = req.user;
+
+        if (!verificarEsAdmin(usuarioLogueado)) {
+            return res.status(403).json({ mensaje: "Acceso denegado: Solo el perfil Administrador puede editar la Formulario -12." });
+        }
+
+        const { id } = req.params;
+        const vueloExistente = await Vuelo.findById(id);
+        if (!vueloExistente) return res.status(404).json({ mensaje: "Vuelo no encontrado" });
+
+        // 1. Revertimos las horas anteriores en los legajos
+        await revertirImpactoLegajos(vueloExistente);
+
+        // 2. Limpieza de IDs y sanitización de horas para el nuevo objeto
+        const datosNuevos = req.body;
+        const limpiarId = (id) => (id && id.toString().trim() !== "" && id !== "undefined") ? id : null;
+
+        vueloExistente.fecha = datosNuevos.fecha || vueloExistente.fecha;
+        vueloExistente.aeronave = datosNuevos.aeronave?.trim() || vueloExistente.aeronave;
+        vueloExistente.matricula = datosNuevos.matricula?.toUpperCase().trim() || vueloExistente.matricula;
+        vueloExistente.elementoApoyado = datosNuevos.elementoApoyado?.toUpperCase().trim() || vueloExistente.elementoApoyado;
+        vueloExistente.horasVoladas = redondearHs(datosNuevos.horasVoladas);
+        vueloExistente.desde = datosNuevos.desde?.toUpperCase() || vueloExistente.desde;
+        vueloExistente.hasta = datosNuevos.hasta?.toUpperCase() || vueloExistente.hasta;
+        vueloExistente.condicion = datosNuevos.condicion || vueloExistente.condicion;
+        vueloExistente.reglasVuelo = datosNuevos.reglasVuelo || vueloExistente.reglasVuelo;
+        vueloExistente.usoNVG = datosNuevos.usoNVG ?? vueloExistente.usoNVG;
+        vueloExistente.tipoMision = datosNuevos.tipoMision || vueloExistente.tipoMision;
+        vueloExistente.localTravesia = datosNuevos.localTravesia || vueloExistente.localTravesia;
+        vueloExistente.cantidadPasajeros = Number(datosNuevos.cantidadPasajeros || 0);
+        vueloExistente.pesoCarga = Number(datosNuevos.pesoCarga || 0);
+
+        vueloExistente.instructor = limpiarId(datosNuevos.instructor);
+        vueloExistente.piloto = limpiarId(datosNuevos.piloto);
+        vueloExistente.copiloto = limpiarId(datosNuevos.copiloto);
+        vueloExistente.mecanico = limpiarId(datosNuevos.mecanico);
+        vueloExistente.segundoMecanico = limpiarId(datosNuevos.segundoMecanico);
+
+        // 3. El .save() vuelve a ejecutar el hook 'pre-save' para sumar los nuevos datos
+        await vueloExistente.save();
+
+        // 4. Auditoría de modificación
+        await Auditoria.create({
+            usuarioId: usuarioLogueado._id,
+            usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "ADMIN",
+            accion: 'EDICION_ADMIN_-12',
+            entidadAfectada: `Vuelo ${vueloExistente.aeronave} Mat: ${vueloExistente.matricula}`,
+            details: `Edición de Formulario -12 realizada por Administrador. ID: ${id}`
+        });
+
+        res.json({ mensaje: "Formulario -12 modificado y recalculado correctamente por Administrador", vuelo: vueloExistente });
+
+    } catch (error) {
+        console.error("❌ Error en edicion de vuelo:", error);
+        res.status(500).json({ mensaje: "Error al editar el vuelo", detalles: error.message });
+    }
+};
+
+/**
+ * OBTENER HISTORIAL DE VUELOS
  */
 exports.obtenerVuelos = async (req, res) => {
     try {
@@ -108,22 +255,17 @@ exports.obtenerVuelos = async (req, res) => {
         const unidadQuery = unit || req.query.unidad;
         let filtro = {};
         
-        // 1. Normalización del Rol
         const rawRole = req.user?.role || req.user?.rol || 'user';
         const rolUsuario = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
 
-        // 2. Roles con visibilidad total de Unidades en el Dashboard
         const esMandoGlobal = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolUsuario);
 
         if (!esMandoGlobal) {
-            // Usuario base: Filtrado por la unidad/elemento a la que pertenece
             const unidadUsuario = req.user.elemento || req.user.unidad;
             if (unidadUsuario) {
-                // Búsqueda insensible a mayúsculas/minúsculas y espacios
                 filtro.unidadResponsable = new RegExp(`^${unidadUsuario.trim()}$`, 'i');
             }
         } else if (unidadQuery && unidadQuery !== 'all' && unidadQuery !== 'TODAS') {
-            // Un Mando Global filtrando voluntariamente desde el selector del Dashboard
             filtro.unidadResponsable = new RegExp(`^${unidadQuery.trim()}$`, 'i');
         }
         
@@ -131,7 +273,6 @@ exports.obtenerVuelos = async (req, res) => {
             .populate('instructor piloto copiloto mecanico segundoMecanico', 'grado apellido nombre')
             .sort({ fecha: -1 });
 
-        // Mapeo preventivo para garantizar horas limpias y redondeadas
         const vuelosSanitizados = vuelos.map(v => {
             const doc = v.toObject();
             doc.horasVoladas = redondearHs(doc.horasVoladas);
@@ -146,93 +287,29 @@ exports.obtenerVuelos = async (req, res) => {
 };
 
 /**
- * ELIMINAR VUELO (Lógica Inversa Sincronizada con el Recálculo)
+ * ELIMINAR VUELO
  */
 exports.eliminarVuelo = async (req, res) => {
     try {
+        const usuarioLogueado = req.user;
         const vuelo = await Vuelo.findById(req.params.id);
         if (!vuelo) return res.status(404).json({ mensaje: "Vuelo no encontrado" });
 
-        const hs = redondearHs(vuelo.horasVoladas);
-        const esNocturno = vuelo.condicion === 'Nocturno';
-        const esIFR = vuelo.reglasVuelo === 'IFR';
-        const esNVG = vuelo.usoNVG === true;
-        const esVisual = !esNocturno && !esIFR && !esNVG;
+        // Revertir impacto en legajos de tripulantes
+        await revertirImpactoLegajos(vuelo);
 
-        const mapaTripulantes = new Map();
-        if (vuelo.segundoMecanico) mapaTripulantes.set(vuelo.segundoMecanico.toString(), 'Mecánico');
-        if (vuelo.mecanico)        mapaTripulantes.set(vuelo.mecanico.toString(), 'Mecánico');
-        if (vuelo.copiloto)        mapaTripulantes.set(vuelo.copiloto.toString(), 'Copiloto');
-        if (vuelo.piloto)          mapaTripulantes.set(vuelo.piloto.toString(), 'Piloto');
-        if (vuelo.instructor)      mapaTripulantes.set(vuelo.instructor.toString(), 'Instructor');
-
-        for (const [idTripulante, rolVuelo] of mapaTripulantes.entries()) {
-            const tripulante = await Tripulante.findById(idTripulante);
-            if (!tripulante) continue;
-
-            // 1. Restar de Habilitaciones por SdA y Rol (con redondeo)
-            const indexHab = tripulante.habilitaciones.findIndex(h => 
-                h.aeronave === vuelo.aeronave && h.rolActual === rolVuelo
-            );
-            
-            if (indexHab !== -1) {
-                if (esVisual)     tripulante.habilitaciones[indexHab].hsVisual = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsVisual - hs));
-                if (esIFR)        tripulante.habilitaciones[indexHab].hsInstrumental = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsInstrumental - hs));
-                if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNocturno - hs));
-                if (esNVG)        tripulante.habilitaciones[indexHab].hsNVG = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNVG - hs));
-                
-                // Recalculamos el total del SdA para ese rol redondeado
-                tripulante.habilitaciones[indexHab].totalHorasSistema = redondearHs(
-                    Number(tripulante.habilitaciones[indexHab].hsVisual || 0) +
-                    Number(tripulante.habilitaciones[indexHab].hsInstrumental || 0) +
-                    Number(tripulante.habilitaciones[indexHab].hsNocturno || 0) +
-                    Number(tripulante.habilitaciones[indexHab].hsNVG || 0)
-                );
-            }
-
-            // 2. RECALCULO DE TOTALES HISTÓRICOS GENERALES (con redondeo)
-            const mapaSdA = {};
-            tripulante.habilitaciones.forEach(hab => {
-                const sdaId = hab.aeronave;
-                if (!mapaSdA[sdaId]) mapaSdA[sdaId] = { v: 0, i: 0, n: 0, nvg: 0 };
-                mapaSdA[sdaId].v = Math.max(mapaSdA[sdaId].v, Number(hab.hsVisual || 0));
-                mapaSdA[sdaId].i = Math.max(mapaSdA[sdaId].i, Number(hab.hsInstrumental || 0));
-                mapaSdA[sdaId].n = Math.max(mapaSdA[sdaId].n, Number(hab.hsNocturno || 0));
-                mapaSdA[sdaId].nvg = Math.max(mapaSdA[sdaId].nvg, Number(hab.hsNVG || 0));
-            });
-
-            const totalesLimpios = { v: 0, i: 0, n: 0, nvg: 0 };
-            Object.values(mapaSdA).forEach(sistema => {
-                totalesLimpios.v += sistema.v;
-                totalesLimpios.i += sistema.i;
-                totalesLimpios.n += sistema.n;
-                totalesLimpios.nvg += sistema.nvg;
-            });
-
-            tripulante.totalesHistoricos.vueloDiurno = redondearHs(totalesLimpios.v);
-            tripulante.totalesHistoricos.vueloInstrumental = redondearHs(totalesLimpios.i);
-            tripulante.totalesHistoricos.vueloNocturno = redondearHs(totalesLimpios.n);
-            tripulante.totalesHistoricos.vueloVisual = redondearHs(totalesLimpios.nvg);
-
-            // 3. Restar de Capacitaciones Tácticas (con redondeo)
-            const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === vuelo.tipoMision);
-            if (indexTactico !== -1) {
-                const hsCap = Number(tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas || 0);
-                tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas = redondearHs(Math.max(0, hsCap - hs));
-            }
-            if (esNVG) {
-                const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
-                if (indexNVG !== -1) {
-                    const hsCapNVG = Number(tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas || 0);
-                    tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas = redondearHs(Math.max(0, hsCapNVG - hs));
-                }
-            }
-
-            await tripulante.save();
-        }
-
-        // Eliminamos físicamente el documento de vuelo
+        // Eliminación física del vuelo
         await Vuelo.findByIdAndDelete(req.params.id);
+
+        await Auditoria.create({
+            usuarioId: usuarioLogueado._id,
+            usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
+            accion: 'ELIMINACION_VUELO',
+            entidadAfectada: `Vuelo ${vuelo.aeronave} Mat: ${vuelo.matricula}`,
+            details: `Eliminación de registro -12 procesada correctamente.`
+        });
+
         res.json({ mensaje: "Vuelo eliminado y horas descontadas correctamente bajo estándar v3.6" });
     } catch (error) {
         console.error("❌ Error al eliminar vuelo:", error);

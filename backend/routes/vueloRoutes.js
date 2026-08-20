@@ -2,11 +2,12 @@ const express = require('express');
 const router = express.Router();
 const vueloController = require('../controllers/vueloController');
 const { protect } = require('../middleware/authMiddleware');
-const Vuelo = require('../models/Vuelo'); // Importamos para la validación de frontera
+const Vuelo = require('../models/Vuelo');
 
 /**
  * RUTAS DE GESTIÓN DE VUELOS - SISTEMA GESTIÓN AE
- * Acceso: admin, OPERACIONES, JEFE, BOSS, DIRECTOR, OTO y OFICINATECNICA.
+ * Lectura y Carga: ADMIN, USER, OPERACIONES, JEFE, BOSS, DIRECTOR, OTO, OFICINATECNICA.
+ * Edición y Eliminación: ADMIN, OPERACIONES, JEFE (con control de jurisdicción/unidad).
  */
 
 // 1. Protección Global: Requiere Token
@@ -28,7 +29,7 @@ const authorize = (...roles) => {
     };
 };
 
-// 3. Middleware de Control de Frontera/Unidad para Eliminación Crítica
+// 3. Middleware de Control de Frontera/Unidad para Acciones Críticas (Edición y Eliminación)
 const verificarJurisdiccionBaja = async (req, res, next) => {
     try {
         const rawRole = req.user?.rol || req.user?.role || '';
@@ -50,7 +51,7 @@ const verificarJurisdiccionBaja = async (req, res, next) => {
 
         if (unidadUsuario !== unidadVuelo) {
             return res.status(403).json({ 
-                mensaje: `ACCESO ACCIÓN CRÍTICA DENEGADO: No podés eliminar un vuelo perteneciente a la unidad [${unidadVuelo}] desde tu perfil asignado a [${unidadUsuario}].` 
+                mensaje: `ACCESO ACCIÓN CRÍTICA DENEGADO: No podés modificar ni eliminar un vuelo perteneciente a la unidad [${unidadVuelo}] desde tu perfil asignado a [${unidadUsuario}].` 
             });
         }
 
@@ -62,16 +63,20 @@ const verificarJurisdiccionBaja = async (req, res, next) => {
 
 /**
  * 4. Definición de Endpoints
- * Se amplían los roles permitidos para garantizar la lectura de datos desde el Dashboard de Vuelos.
  */
 const rolesConAcceso = ['ADMIN', 'USER', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'];
+const rolesEscrituraCritica = ['ADMIN', 'OPERACIONES', 'JEFE'];
 
+// Lectura y Carga habitual para todos los roles habilitados
 router.route('/')
     .get(authorize(...rolesConAcceso), vueloController.obtenerVuelos) 
     .post(authorize(...rolesConAcceso), vueloController.registrarVuelo); 
 
+// Operaciones específicas sobre un registro
 router.route('/:id')
-    // Eliminación restringida únicamente a Administradores, Operaciones y Jefes
-    .delete(authorize('ADMIN', 'OPERACIONES', 'JEFE'), verificarJurisdiccionBaja, vueloController.eliminarVuelo); 
+    // Edición permitida a ADMIN, OPERACIONES y JEFE con control de jurisdicción
+    .put(authorize(...rolesEscrituraCritica), verificarJurisdiccionBaja, vueloController.editarVuelo)
+    // Eliminación permitida a ADMIN, OPERACIONES y JEFE con control de jurisdicción
+    .delete(authorize(...rolesEscrituraCritica), verificarJurisdiccionBaja, vueloController.eliminarVuelo); 
 
 module.exports = router;
