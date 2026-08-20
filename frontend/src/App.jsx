@@ -370,14 +370,6 @@ function App() {
                                 >📍 Mapa</button>
                             )}
 
-                            {/* BOTÓN INDEPENDIENTE PARA EL DASHBOARD DE GRÁFICOS */}
-                            {puedeVerDashboardVuelos && (
-                                <button 
-                                    onClick={() => setView('dashboardVuelos')} 
-                                    style={{...styles.btnNav, backgroundColor: view === 'dashboardVuelos' ? '#1e3799' : '#10ac84'}}
-                                >📊 Reportes Vuelo</button>
-                            )}
-
                             {puedeVerReportes && (
                                 <button 
                                     onClick={() => setView('reportes')} 
