@@ -10,19 +10,16 @@ const Vuelos = () => {
 
     // --- NORMALIZACIÓN DE ROL Y UNIDAD ---
     const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'user';
-    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
-    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
+    const roleNormalizado = rawRole.toUpperCase().replace(/[\s_-]/g, '');
+    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || localStorage.getItem('unidad')?.trim().toUpperCase() || '';
 
     // --- PERMISOS Y REGLAS DE ACCESO ---
     const rolesCarga = ['ADMIN', 'USER', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'];
-    const rolesEscrituraCritica = ['ADMIN', 'OPERACIONES', 'JEFE'];
+    const rolesEscrituraCritica = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'];
 
     const puedeCargarVuelos = rolesCarga.includes(roleNormalizado);
     const puedeEditarVuelo = rolesEscrituraCritica.includes(roleNormalizado);
     const puedeEliminarVuelo = rolesEscrituraCritica.includes(roleNormalizado);
-
-    // Mandos y usuarios autorizados para ver el historial global
-    const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
 
     const initialFormState = {
         fecha: '', aeronave: '', matricula: '',
@@ -46,19 +43,9 @@ const Vuelos = () => {
 
     const fetchVuelos = async () => {
         try {
-            const res = await API.get('/vuelos');
-            if (esMandoEstrategico) {
-                setVuelos(res.data);
-            } else {
-                const dataFiltrada = res.data.filter(v => {
-                    const unidadVuelo = (v.unidadResponsable || "").toUpperCase();
-                    const matriculaVuelo = (v.matricula || "").toUpperCase();
-                    const miUnidad = userUnidad.toUpperCase();
-
-                    return unidadVuelo === miUnidad || matriculaVuelo.includes(miUnidad);
-                });
-                setVuelos(dataFiltrada);
-            }
+            // Se envía el parámetro unit para alinearse al filtro del controller backend
+            const res = await API.get('/vuelos', { params: { unit: userUnidad } });
+            setVuelos(res.data);
         } catch (error) { 
             console.error("Error cargando historial de vuelos", error); 
         }
@@ -140,8 +127,8 @@ const Vuelos = () => {
             mecanico: formData.mecanico || null,
             segundoMecanico: formData.segundoMecanico || null,
             horasVoladas: Math.round(Number(formData.horasVoladas) * 10) / 10,
-            cantidadPasajeros: Number(formData.cantidadPasajeros),
-            pesoCarga: Number(formData.pesoCarga)
+            cantidadPasajeros: Number(formData.cantidadPasajeros || 0),
+            pesoCarga: Number(formData.pesoCarga || 0)
         };
 
         try {
@@ -213,96 +200,132 @@ const Vuelos = () => {
 
                     <form onSubmit={handleSubmit} style={styles.form}>
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Fecha</label>
-                            <input type="date" style={styles.input} value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} required/></div>
-                            <div style={styles.group}><label style={styles.label}>Aeronave (SdA)</label>
-                            <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
-                                <option value="">Seleccionar...</option>
-                                {aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
-                            </select></div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Fecha</label>
+                                <input type="date" style={styles.input} value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} required/>
+                            </div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Aeronave (SdA)</label>
+                                <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
+                                    <option value="">Seleccionar...</option>
+                                    {aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
+                                </select>
+                            </div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Matrícula</label>
-                            <input placeholder="AE-XXX" style={styles.input} value={formData.matricula} onChange={e => setFormData({...formData, matricula: e.target.value.toUpperCase()})} required/></div>
-                            <div style={styles.group}><label style={styles.label}>Elemento Apoyado</label>
-                            <input placeholder="Ej: DIR AE" style={styles.input} value={formData.elementoApoyado} onChange={e => setFormData({...formData, elementoApoyado: e.target.value.toUpperCase()})} required/></div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Matrícula</label>
+                                <input placeholder="AE-XXX" style={styles.input} value={formData.matricula} onChange={e => setFormData({...formData, matricula: e.target.value.toUpperCase()})} required/>
+                            </div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Elemento Apoyado</label>
+                                <input placeholder="Ej: DIR AE" style={styles.input} value={formData.elementoApoyado} onChange={e => setFormData({...formData, elementoApoyado: e.target.value.toUpperCase()})} required/>
+                            </div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Instructor</label>
-                            <select style={styles.input} value={formData.instructor} onChange={e => setFormData({...formData, instructor: e.target.value})}>
-                                <option value="">Ninguno</option>
-                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
-                            </select></div>
-                            <div style={styles.group}><label style={styles.label}>Piloto</label>
-                            <select style={styles.input} value={formData.piloto} onChange={e => setFormData({...formData, piloto: e.target.value})}>
-                                <option value="">Ninguno</option>
-                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
-                            </select></div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Instructor</label>
+                                <select style={styles.input} value={formData.instructor} onChange={e => setFormData({...formData, instructor: e.target.value})}>
+                                    <option value="">Ninguno</option>
+                                    {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                                </select>
+                            </div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Piloto</label>
+                                <select style={styles.input} value={formData.piloto} onChange={e => setFormData({...formData, piloto: e.target.value})}>
+                                    <option value="">Ninguno</option>
+                                    {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                                </select>
+                            </div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Copiloto</label>
-                            <select style={styles.input} value={formData.copiloto} onChange={e => setFormData({...formData, copiloto: e.target.value})}>
-                                <option value="">Ninguno</option>
-                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
-                            </select></div>
-                            <div style={styles.group}><label style={styles.label}>Mecánico 1 (Opt)</label>
-                            <select style={styles.input} value={formData.mecanico} onChange={e => setFormData({...formData, mecanico: e.target.value})}>
-                                <option value="">Ninguno</option>
-                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
-                            </select></div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Copiloto</label>
+                                <select style={styles.input} value={formData.copiloto} onChange={e => setFormData({...formData, copiloto: e.target.value})}>
+                                    <option value="">Ninguno</option>
+                                    {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                                </select>
+                            </div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Mecánico 1 (Opt)</label>
+                                <select style={styles.input} value={formData.mecanico} onChange={e => setFormData({...formData, mecanico: e.target.value})}>
+                                    <option value="">Ninguno</option>
+                                    {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                                </select>
+                            </div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Mecánico 2 (Opt)</label>
-                            <select style={styles.input} value={formData.segundoMecanico} onChange={e => setFormData({...formData, segundoMecanico: e.target.value})}>
-                                <option value="">Ninguno</option>
-                                {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
-                            </select></div>
-                            <div style={styles.group}><label style={styles.label}>Hs Voladas</label>
-                            <input type="number" step="0.1" style={styles.input} value={formData.horasVoladas} onChange={e => setFormData({...formData, horasVoladas: e.target.value})} required/></div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Mecánico 2 (Opt)</label>
+                                <select style={styles.input} value={formData.segundoMecanico} onChange={e => setFormData({...formData, segundoMecanico: e.target.value})}>
+                                    <option value="">Ninguno</option>
+                                    {tripulantes.map(t => <option key={t._id} value={t._id}>{t.grado} {t.apellido}</option>)}
+                                </select>
+                            </div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Hs Voladas</label>
+                                <input type="number" step="0.1" style={styles.input} value={formData.horasVoladas} onChange={e => setFormData({...formData, horasVoladas: e.target.value})} required/>
+                            </div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Desde</label>
-                            <input placeholder="ORIGEN" style={styles.input} value={formData.desde} onChange={e => setFormData({...formData, desde: e.target.value.toUpperCase()})} required/></div>
-                            <div style={styles.group}><label style={styles.label}>Hasta</label>
-                            <input placeholder="DESTINO" style={styles.input} value={formData.hasta} onChange={e => setFormData({...formData, hasta: e.target.value.toUpperCase()})} required/></div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Desde</label>
+                                <input placeholder="ORIGEN" style={styles.input} value={formData.desde} onChange={e => setFormData({...formData, desde: e.target.value.toUpperCase()})} required/>
+                            </div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Hasta</label>
+                                <input placeholder="DESTINO" style={styles.input} value={formData.hasta} onChange={e => setFormData({...formData, hasta: e.target.value.toUpperCase()})} required/>
+                            </div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Misión</label>
-                            <select style={styles.input} value={formData.tipoMision} onChange={e => setFormData({...formData, tipoMision: e.target.value})} required>
-                                <option value="">Seleccionar...</option>
-                                {misiones.map(m => <option key={m} value={m}>{m}</option>)}
-                            </select></div>
-                            <div style={styles.group}><label style={styles.label}>Navegación</label>
-                            <select style={styles.input} value={formData.localTravesia} onChange={e => setFormData({...formData, localTravesia: e.target.value})}>
-                                <option value="Local">Local</option>
-                                <option value="Travesia">Travesía</option>
-                            </select></div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Misión</label>
+                                <select style={styles.input} value={formData.tipoMision} onChange={e => setFormData({...formData, tipoMision: e.target.value})} required>
+                                    <option value="">Seleccionar...</option>
+                                    {misiones.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                            </div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Navegación</label>
+                                <select style={styles.input} value={formData.localTravesia} onChange={e => setFormData({...formData, localTravesia: e.target.value})}>
+                                    <option value="Local">Local</option>
+                                    <option value="Travesia">Travesía</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Condición</label>
-                            <select style={styles.input} value={formData.condicion} onChange={e => setFormData({...formData, condicion: e.target.value})}>
-                                <option value="Diurno">Diurno</option>
-                                <option value="Nocturno">Nocturno</option>
-                            </select></div>
-                            <div style={styles.group}><label style={styles.label}>Reglas de Vuelo</label>
-                            <select style={styles.input} value={formData.reglasVuelo} onChange={e => setFormData({...formData, reglasVuelo: e.target.value})}>
-                                <option value="VFR">VFR (Visual)</option>
-                                <option value="IFR">IFR (Instrumental)</option>
-                            </select></div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Condición</label>
+                                <select style={styles.input} value={formData.condicion} onChange={e => setFormData({...formData, condicion: e.target.value})}>
+                                    <option value="Diurno">Diurno</option>
+                                    <option value="Nocturno">Nocturno</option>
+                                </select>
+                            </div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Reglas de Vuelo</label>
+                                <select style={styles.input} value={formData.reglasVuelo} onChange={e => setFormData({...formData, reglasVuelo: e.target.value})}>
+                                    <option value="VFR">VFR (Visual)</option>
+                                    <option value="IFR">IFR (Instrumental)</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div style={styles.row}>
-                            <div style={styles.group}><label style={styles.label}>Pasajeros</label>
-                            <input type="number" style={styles.input} value={formData.cantidadPasajeros} onChange={e => setFormData({...formData, cantidadPasajeros: e.target.value})}/></div>
-                            <div style={styles.group}><label style={styles.label}>Carga (Kg)</label>
-                            <input type="number" style={styles.input} value={formData.pesoCarga} onChange={e => setFormData({...formData, pesoCarga: e.target.value})}/></div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Pasajeros</label>
+                                <input type="number" style={styles.input} value={formData.cantidadPasajeros} onChange={e => setFormData({...formData, cantidadPasajeros: e.target.value})}/>
+                            </div>
+                            <div style={styles.group}>
+                                <label style={styles.label}>Carga (Kg)</label>
+                                <input type="number" style={styles.input} value={formData.pesoCarga} onChange={e => setFormData({...formData, pesoCarga: e.target.value})}/>
+                            </div>
                         </div>
 
                         <div style={{ ...styles.group, flexDirection: 'row', alignItems: 'center', gap: '8px', padding: '5px 0' }}>

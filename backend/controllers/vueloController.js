@@ -6,12 +6,25 @@ const Auditoria = require('../models/Auditoria');
 const redondearHs = (val) => Math.round(Number(val || 0) * 10) / 10;
 
 /**
- * HELPER INTERNO DE VERIFICACIÓN DE ROL ADMINISTRADOR
+ * HELPER INTERNO DE VERIFICACIÓN DE PERMISOS DE ESCRITURA (ADMIN, OPERACIONES, JEFE)
  */
-const verificarEsAdmin = (user) => {
+const verificarPermisoEscritura = (user, unidadVuelo = null) => {
     const rawRole = user?.role || user?.rol || '';
     const rolNormalizado = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
-    return rolNormalizado === 'ADMIN';
+    
+    // Admins y mandos globales tienen permiso total
+    const esMandoGlobal = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolNormalizado);
+    if (esMandoGlobal) return true;
+
+    // JEFE y OPERACIONES tienen permiso solo en su misma unidad
+    const rolesEscrituraUnidad = ['OPERACIONES', 'JEFE'];
+    if (rolesEscrituraUnidad.includes(rolNormalizado)) {
+        if (!unidadVuelo) return true; // Carga inicial
+        const unidadUsuario = (user.elemento || user.unidad || '').trim().toUpperCase();
+        return unidadUsuario !== '' && unidadUsuario === unidadVuelo.trim().toUpperCase();
+    }
+
+    return false;
 };
 
 /**
@@ -104,6 +117,10 @@ exports.registrarVuelo = async (req, res) => {
         const datosVuelo = req.body;
         const usuarioLogueado = req.user;
 
+        if (!verificarPermisoEscritura(usuarioLogueado)) {
+            return res.status(403).json({ mensaje: "Acceso denegado: Su rol no cuenta con permisos para registrar vuelos." });
+        }
+
         // Limpieza y Normalización de IDs
         const limpiarId = (id) => (id && id.toString().trim() !== "" && id !== "undefined") ? id : null;
         const hsVoladasSanitizadas = redondearHs(datosVuelo.horasVoladas);
@@ -183,19 +200,19 @@ exports.registrarVuelo = async (req, res) => {
 };
 
 /**
- * EDITAR VUELO - EXCLUSIVO ADMINISTRADOR
+ * EDITAR VUELO - HABILITADO PARA ADMIN, OPERACIONES Y JEFE DE LA UNIDAD
  */
 exports.editarVuelo = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
-
-        if (!verificarEsAdmin(usuarioLogueado)) {
-            return res.status(403).json({ mensaje: "Acceso denegado: Solo el perfil Administrador puede editar la Formulario -12." });
-        }
-
         const { id } = req.params;
         const vueloExistente = await Vuelo.findById(id);
+        
         if (!vueloExistente) return res.status(404).json({ mensaje: "Vuelo no encontrado" });
+
+        if (!verificarPermisoEscritura(usuarioLogueado, vueloExistente.unidadResponsable)) {
+            return res.status(403).json({ mensaje: "Acceso denegado: Su perfil o unidad no le permite editar este registro." });
+        }
 
         // 1. Revertimos las horas anteriores en los legajos
         await revertirImpactoLegajos(vueloExistente);
@@ -232,13 +249,13 @@ exports.editarVuelo = async (req, res) => {
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
             usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
-            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "ADMIN",
-            accion: 'EDICION_ADMIN_-12',
+            usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
+            accion: 'EDICION_-12',
             entidadAfectada: `Vuelo ${vueloExistente.aeronave} Mat: ${vueloExistente.matricula}`,
-            details: `Edición de Formulario -12 realizada por Administrador. ID: ${id}`
+            details: `Edición de Formulario -12 realizada por ${usuarioLogueado.grado} ${usuarioLogueado.apellido}. ID: ${id}`
         });
 
-        res.json({ mensaje: "Formulario -12 modificado y recalculado correctamente por Administrador", vuelo: vueloExistente });
+        res.json({ mensaje: "Formulario -12 modificado y recalculado correctamente", vuelo: vueloExistente });
 
     } catch (error) {
         console.error("❌ Error en edicion de vuelo:", error);
@@ -247,7 +264,7 @@ exports.editarVuelo = async (req, res) => {
 };
 
 /**
- * OBTENER HISTORIAL DE VUELOS
+ * OBTENER HISTORIAL DE VUELOS (FILTRO ESTRICTO POR UNIDAD PARA JEFE Y OPERACIONES)
  */
 exports.obtenerVuelos = async (req, res) => {
     try {
@@ -258,12 +275,16 @@ exports.obtenerVuelos = async (req, res) => {
         const rawRole = req.user?.role || req.user?.rol || 'user';
         const rolUsuario = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
 
-        const esMandoGlobal = ['ADMIN', 'OPERACIONES', 'JEFE', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolUsuario);
+        // Solo la conducción estratégica global puede ver el historial de todas las unidades
+        const esMandoGlobal = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINATECNICA'].includes(rolUsuario);
 
         if (!esMandoGlobal) {
-            const unidadUsuario = req.user.elemento || req.user.unidad;
+            // OPERACIONES, JEFE y USER quedan restringidos estrictamente a su unidad
+            const unidadUsuario = (req.user.elemento || req.user.unidad || '').trim();
             if (unidadUsuario) {
-                filtro.unidadResponsable = new RegExp(`^${unidadUsuario.trim()}$`, 'i');
+                filtro.unidadResponsable = new RegExp(`^${unidadUsuario}$`, 'i');
+            } else {
+                filtro.unidadResponsable = 'SIN_UNIDAD_ASIGNADA';
             }
         } else if (unidadQuery && unidadQuery !== 'all' && unidadQuery !== 'TODAS') {
             filtro.unidadResponsable = new RegExp(`^${unidadQuery.trim()}$`, 'i');
@@ -295,6 +316,10 @@ exports.eliminarVuelo = async (req, res) => {
         const vuelo = await Vuelo.findById(req.params.id);
         if (!vuelo) return res.status(404).json({ mensaje: "Vuelo no encontrado" });
 
+        if (!verificarPermisoEscritura(usuarioLogueado, vuelo.unidadResponsable)) {
+            return res.status(403).json({ mensaje: "Acceso denegado: Su perfil o unidad no le permite eliminar este registro." });
+        }
+
         // Revertir impacto en legajos de tripulantes
         await revertirImpactoLegajos(vuelo);
 
@@ -310,7 +335,7 @@ exports.eliminarVuelo = async (req, res) => {
             details: `Eliminación de registro -12 procesada correctamente.`
         });
 
-        res.json({ mensaje: "Vuelo eliminado y horas descontadas correctamente bajo estándar v3.6" });
+        res.json({ mensaje: "Vuelo eliminado y horas descontadas correctamente" });
     } catch (error) {
         console.error("❌ Error al eliminar vuelo:", error);
         res.status(500).json({ mensaje: "Error al eliminar el vuelo", error: error.message });
