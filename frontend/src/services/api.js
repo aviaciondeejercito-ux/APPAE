@@ -133,9 +133,28 @@ export const registrarVuelo = (vueloData) => {
         instructor: vueloData.instructor || null,
         piloto: vueloData.piloto || null,
         copiloto: vueloData.copiloto || null,
-        mecanico: vueloData.mecanico || null
+        mecanico: vueloData.mecanico || null,
+        segundoMecanico: vueloData.segundoMecanico || null
     };
     return API.post('/vuelos', dataNormalized);
+};
+
+export const actualizarVuelo = (id, vueloData) => {
+    const dataNormalized = {
+        ...vueloData,
+        matricula: vueloData.matricula?.toUpperCase().trim(),
+        desde: vueloData.desde?.toUpperCase().trim(),
+        hasta: vueloData.hasta?.toUpperCase().trim(),
+        tipoMision: vueloData.tipoMision?.trim(),
+        elementoApoyado: (vueloData.elementoApoyado || "").toUpperCase().trim(),
+        horasVoladas: Number(vueloData.horasVoladas) || 0,
+        instructor: vueloData.instructor || null,
+        piloto: vueloData.piloto || null,
+        copiloto: vueloData.copiloto || null,
+        mecanico: vueloData.mecanico || null,
+        segundoMecanico: vueloData.segundoMecanico || null
+    };
+    return API.put(`/vuelos/${id}`, dataNormalized);
 };
 
 export const deleteVuelo = (id) => API.delete(`/vuelos/${id}`);
@@ -377,6 +396,7 @@ const EventService = {
     getAstronomyData,
     getVuelos,
     registrarVuelo,
+    actualizarVuelo,
     deleteVuelo,
     getAeronavesF13,
     getF13s,

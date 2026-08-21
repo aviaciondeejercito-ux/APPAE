@@ -45,38 +45,43 @@ const revertirImpactoLegajos = async (vuelo) => {
     if (vuelo.instructor)      mapaTripulantes.set(vuelo.instructor.toString(), 'Instructor');
 
     for (const [idTripulante, rolVuelo] of mapaTripulantes.entries()) {
+        if (!idTripulante) continue;
         const tripulante = await Tripulante.findById(idTripulante);
         if (!tripulante) continue;
 
         // 1. Restar de Habilitaciones por SdA y Rol
-        const indexHab = tripulante.habilitaciones.findIndex(h => 
-            h.aeronave === vuelo.aeronave && h.rolActual === rolVuelo
-        );
-        
-        if (indexHab !== -1) {
-            if (esVisual)     tripulante.habilitaciones[indexHab].hsVisual = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsVisual - hs));
-            if (esIFR)        tripulante.habilitaciones[indexHab].hsInstrumental = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsInstrumental - hs));
-            if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNocturno - hs));
-            if (esNVG)        tripulante.habilitaciones[indexHab].hsNVG = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNVG - hs));
-            
-            tripulante.habilitaciones[indexHab].totalHorasSistema = redondearHs(
-                Number(tripulante.habilitaciones[indexHab].hsVisual || 0) +
-                Number(tripulante.habilitaciones[indexHab].hsInstrumental || 0) +
-                Number(tripulante.habilitaciones[indexHab].hsNocturno || 0) +
-                Number(tripulante.habilitaciones[indexHab].hsNVG || 0)
+        if (Array.isArray(tripulante.habilitaciones)) {
+            const indexHab = tripulante.habilitaciones.findIndex(h => 
+                h.aeronave === vuelo.aeronave && h.rolActual === rolVuelo
             );
+            
+            if (indexHab !== -1) {
+                if (esVisual)     tripulante.habilitaciones[indexHab].hsVisual = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsVisual - hs));
+                if (esIFR)        tripulante.habilitaciones[indexHab].hsInstrumental = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsInstrumental - hs));
+                if (esNocturno && !esNVG) tripulante.habilitaciones[indexHab].hsNocturno = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNocturno - hs));
+                if (esNVG)        tripulante.habilitaciones[indexHab].hsNVG = redondearHs(Math.max(0, tripulante.habilitaciones[indexHab].hsNVG - hs));
+                
+                tripulante.habilitaciones[indexHab].totalHorasSistema = redondearHs(
+                    Number(tripulante.habilitaciones[indexHab].hsVisual || 0) +
+                    Number(tripulante.habilitaciones[indexHab].hsInstrumental || 0) +
+                    Number(tripulante.habilitaciones[indexHab].hsNocturno || 0) +
+                    Number(tripulante.habilitaciones[indexHab].hsNVG || 0)
+                );
+            }
         }
 
         // 2. Recálculo de Totales Históricos Generales
         const mapaSdA = {};
-        tripulante.habilitaciones.forEach(hab => {
-            const sdaId = hab.aeronave;
-            if (!mapaSdA[sdaId]) mapaSdA[sdaId] = { v: 0, i: 0, n: 0, nvg: 0 };
-            mapaSdA[sdaId].v = Math.max(mapaSdA[sdaId].v, Number(hab.hsVisual || 0));
-            mapaSdA[sdaId].i = Math.max(mapaSdA[sdaId].i, Number(hab.hsInstrumental || 0));
-            mapaSdA[sdaId].n = Math.max(mapaSdA[sdaId].n, Number(hab.hsNocturno || 0));
-            mapaSdA[sdaId].nvg = Math.max(mapaSdA[sdaId].nvg, Number(hab.hsNVG || 0));
-        });
+        if (Array.isArray(tripulante.habilitaciones)) {
+            tripulante.habilitaciones.forEach(hab => {
+                const sdaId = hab.aeronave;
+                if (!mapaSdA[sdaId]) mapaSdA[sdaId] = { v: 0, i: 0, n: 0, nvg: 0 };
+                mapaSdA[sdaId].v = Math.max(mapaSdA[sdaId].v, Number(hab.hsVisual || 0));
+                mapaSdA[sdaId].i = Math.max(mapaSdA[sdaId].i, Number(hab.hsInstrumental || 0));
+                mapaSdA[sdaId].n = Math.max(mapaSdA[sdaId].n, Number(hab.hsNocturno || 0));
+                mapaSdA[sdaId].nvg = Math.max(mapaSdA[sdaId].nvg, Number(hab.hsNVG || 0));
+            });
+        }
 
         const totalesLimpios = { v: 0, i: 0, n: 0, nvg: 0 };
         Object.values(mapaSdA).forEach(sistema => {
@@ -86,26 +91,70 @@ const revertirImpactoLegajos = async (vuelo) => {
             totalesLimpios.nvg += sistema.nvg;
         });
 
+        if (!tripulante.totalesHistoricos) tripulante.totalesHistoricos = {};
         tripulante.totalesHistoricos.vueloDiurno = redondearHs(totalesLimpios.v);
         tripulante.totalesHistoricos.vueloInstrumental = redondearHs(totalesLimpios.i);
         tripulante.totalesHistoricos.vueloNocturno = redondearHs(totalesLimpios.n);
         tripulante.totalesHistoricos.vueloVisual = redondearHs(totalesLimpios.nvg);
 
         // 3. Restar de Capacitaciones Tácticas
-        const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === vuelo.tipoMision);
-        if (indexTactico !== -1) {
-            const hsCap = Number(tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas || 0);
-            tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas = redondearHs(Math.max(0, hsCap - hs));
-        }
-        if (esNVG) {
-            const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
-            if (indexNVG !== -1) {
-                const hsCapNVG = Number(tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas || 0);
-                tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas = redondearHs(Math.max(0, hsCapNVG - hs));
+        if (Array.isArray(tripulante.capacitacionesEspeciales)) {
+            const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === vuelo.tipoMision);
+            if (indexTactico !== -1) {
+                const hsCap = Number(tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas || 0);
+                tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas = redondearHs(Math.max(0, hsCap - hs));
+            }
+            if (esNVG) {
+                const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
+                if (indexNVG !== -1) {
+                    const hsCapNVG = Number(tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas || 0);
+                    tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas = redondearHs(Math.max(0, hsCapNVG - hs));
+                }
             }
         }
 
         await tripulante.save();
+    }
+};
+
+/**
+ * HELPER INTERNO PARA SUMAR CAPACITACIONES TÁCTICAS
+ */
+const sumarCapacitacionesTacticas = async (vuelo) => {
+    const mapaTripulantes = new Map();
+    if (vuelo.segundoMecanico) mapaTripulantes.set(vuelo.segundoMecanico.toString(), 'Mecánico');
+    if (vuelo.mecanico)        mapaTripulantes.set(vuelo.mecanico.toString(), 'Mecánico');
+    if (vuelo.copiloto)        mapaTripulantes.set(vuelo.copiloto.toString(), 'Copiloto');
+    if (vuelo.piloto)          mapaTripulantes.set(vuelo.piloto.toString(), 'Piloto');
+    if (vuelo.instructor)      mapaTripulantes.set(vuelo.instructor.toString(), 'Instructor');
+
+    const hs = redondearHs(vuelo.horasVoladas);
+    const esNVG = vuelo.usoNVG === true;
+
+    for (const idTripulante of mapaTripulantes.keys()) {
+        if (!idTripulante) continue;
+        const tripulante = await Tripulante.findById(idTripulante);
+        if (!tripulante || !Array.isArray(tripulante.capacitacionesEspeciales)) continue;
+
+        let flagModificado = false;
+
+        const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === vuelo.tipoMision);
+        if (indexTactico !== -1) {
+            const hsActuales = Number(tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas || 0);
+            tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas = redondearHs(hsActuales + hs);
+            flagModificado = true;
+        }
+
+        if (esNVG) {
+            const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
+            if (indexNVG !== -1) {
+                const hsActualesNVG = Number(tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas || 0);
+                tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas = redondearHs(hsActualesNVG + hs);
+                flagModificado = true;
+            }
+        }
+
+        if (flagModificado) await tripulante.save();
     }
 };
 
@@ -139,7 +188,7 @@ exports.registrarVuelo = async (req, res) => {
             mecanico: limpiarId(datosVuelo.mecanico),
             segundoMecanico: limpiarId(datosVuelo.segundoMecanico),
 
-            unidadResponsable: usuarioLogueado.unidad || usuarioLogueado.elemento,
+            unidadResponsable: usuarioLogueado.unidad || usuarioLogueado.elemento || "SIN_UNIDAD",
             creadoPor: usuarioLogueado._id
         });
 
@@ -147,44 +196,11 @@ exports.registrarVuelo = async (req, res) => {
         await nuevoVuelo.save();
 
         // Procesamiento de capacitaciones tácticas
-        const mapaTripulantes = new Map();
-        if (nuevoVuelo.segundoMecanico) mapaTripulantes.set(nuevoVuelo.segundoMecanico.toString(), 'Mecánico');
-        if (nuevoVuelo.mecanico)        mapaTripulantes.set(nuevoVuelo.mecanico.toString(), 'Mecánico');
-        if (nuevoVuelo.copiloto)        mapaTripulantes.set(nuevoVuelo.copiloto.toString(), 'Copiloto');
-        if (nuevoVuelo.piloto)          mapaTripulantes.set(nuevoVuelo.piloto.toString(), 'Piloto');
-        if (nuevoVuelo.instructor)      mapaTripulantes.set(nuevoVuelo.instructor.toString(), 'Instructor');
-
-        const hs = redondearHs(nuevoVuelo.horasVoladas);
-        const esNVG = datosVuelo.usoNVG === true;
-
-        for (const idTripulante of mapaTripulantes.keys()) {
-            const tripulante = await Tripulante.findById(idTripulante);
-            if (!tripulante) continue;
-
-            let flagModificado = false;
-
-            const indexTactico = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === nuevoVuelo.tipoMision);
-            if (indexTactico !== -1) {
-                const hsActuales = Number(tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas || 0);
-                tripulante.capacitacionesEspeciales[indexTactico].horasAcreditadas = redondearHs(hsActuales + hs);
-                flagModificado = true;
-            }
-
-            if (esNVG) {
-                const indexNVG = tripulante.capacitacionesEspeciales.findIndex(c => c.tipo === "NVG");
-                if (indexNVG !== -1) {
-                    const hsActualesNVG = Number(tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas || 0);
-                    tripulante.capacitacionesEspeciales[indexNVG].horasAcreditadas = redondearHs(hsActualesNVG + hs);
-                    flagModificado = true;
-                }
-            }
-
-            if (flagModificado) await tripulante.save();
-        }
+        await sumarCapacitacionesTacticas(nuevoVuelo);
 
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
-            usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
+            usuarioNombre: `${usuarioLogueado.grado || ''} ${usuarioLogueado.apellido || ''}`.trim() || usuarioLogueado.username,
             usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
             accion: 'CARGA_HS',
             entidadAfectada: `Vuelo ${nuevoVuelo.aeronave} Mat: ${nuevoVuelo.matricula}`,
@@ -245,14 +261,17 @@ exports.editarVuelo = async (req, res) => {
         // 3. El .save() vuelve a ejecutar el hook 'pre-save' para sumar los nuevos datos
         await vueloExistente.save();
 
-        // 4. Auditoría de modificación
+        // 4. Re-impactar capacitaciones tácticas con los nuevos valores
+        await sumarCapacitacionesTacticas(vueloExistente);
+
+        // 5. Auditoría de modificación
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
-            usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
+            usuarioNombre: `${usuarioLogueado.grado || ''} ${usuarioLogueado.apellido || ''}`.trim() || usuarioLogueado.username,
             usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
             accion: 'EDICION_-12',
             entidadAfectada: `Vuelo ${vueloExistente.aeronave} Mat: ${vueloExistente.matricula}`,
-            details: `Edición de Formulario -12 realizada por ${usuarioLogueado.grado} ${usuarioLogueado.apellido}. ID: ${id}`
+            details: `Edición de Formulario -12 realizada por ${usuarioLogueado.grado || ''} ${usuarioLogueado.apellido || ''}. ID: ${id}`
         });
 
         res.json({ mensaje: "Formulario -12 modificado y recalculado correctamente", vuelo: vueloExistente });
@@ -328,7 +347,7 @@ exports.eliminarVuelo = async (req, res) => {
 
         await Auditoria.create({
             usuarioId: usuarioLogueado._id,
-            usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
+            usuarioNombre: `${usuarioLogueado.grado || ''} ${usuarioLogueado.apellido || ''}`.trim() || usuarioLogueado.username,
             usuarioUnidad: usuarioLogueado.unidad || usuarioLogueado.elemento || "S/U",
             accion: 'ELIMINACION_VUELO',
             entidadAfectada: `Vuelo ${vuelo.aeronave} Mat: ${vuelo.matricula}`,
