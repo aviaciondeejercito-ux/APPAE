@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, CheckCircle, Clock, AlertTriangle, Search, User } from 'lucide-react';
-import { getTripulantes, getVuelos } from '../services/api'; // 🔹 Importamos la API de Vuelos
+import { getTripulantes, getVuelos } from '../services/api';
 
 const VencimientosPilotos = () => {
     const [personal, setPersonal] = useState([]);
@@ -14,8 +14,16 @@ const VencimientosPilotos = () => {
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
 
-    // Grados de oficiales requeridos
-    const GRADOS_OFICIALES = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
+    // Escala jerárquica de antigüedad para Oficiales
+    const ORDEN_JERARQUICO = {
+        'CR': 1,
+        'TC': 2,
+        'MY': 3,
+        'CT': 4,
+        'TP': 5,
+        'TT': 6,
+        'ST': 7
+    };
 
     useEffect(() => {
         cargarDatos();
@@ -25,7 +33,6 @@ const VencimientosPilotos = () => {
         try {
             setLoading(true);
             
-            // 🔹 1. Cargar tripulantes y vuelos en paralelo
             const [resTripulantes, resVuelos] = await Promise.all([
                 getTripulantes().catch(() => ({ data: [] })),
                 getVuelos ? getVuelos().catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
@@ -36,13 +43,13 @@ const VencimientosPilotos = () => {
 
             setVuelosHistorial(vuelosData);
 
-            // 🔹 2. Filtrar solo Oficiales
+            // 1. Filtrar solo Oficiales requeridos
             const soloOficiales = tripulantesData.filter(p => {
                 const gradoNorm = p.grado ? p.grado.trim().toUpperCase() : '';
-                return GRADOS_OFICIALES.includes(gradoNorm);
+                return ORDEN_JERARQUICO.hasOwnProperty(gradoNorm);
             });
 
-            // 🔹 3. Filtrar por unidad / rol del usuario
+            // 2. Filtrado por unidad según rol
             const dataFiltrada = esMandoEstrategico
                 ? soloOficiales 
                 : soloOficiales.filter(p => {
@@ -50,7 +57,24 @@ const VencimientosPilotos = () => {
                     return u.trim().toUpperCase() === userUnidad;
                 });
 
-            setPersonal(dataFiltrada);
+            // 3. Ordenar por jerarquía de antigüedad y luego alfabéticamente por apellido
+            const dataOrdenada = [...dataFiltrada].sort((a, b) => {
+                const gradoA = a.grado ? a.grado.trim().toUpperCase() : '';
+                const gradoB = b.grado ? b.grado.trim().toUpperCase() : '';
+
+                const jerarquiaA = ORDEN_JERARQUICO[gradoA] || 99;
+                const jerarquiaB = ORDEN_JERARQUICO[gradoB] || 99;
+
+                if (jerarquiaA !== jerarquiaB) {
+                    return jerarquiaA - jerarquiaB;
+                }
+
+                const apellidoA = (a.apellido || '').toLowerCase();
+                const apellidoB = (b.apellido || '').toLowerCase();
+                return apellidoA.localeCompare(apellidoB, 'es', { sensitivity: 'base' });
+            });
+
+            setPersonal(dataOrdenada);
         } catch (error) {
             console.error("Error al cargar datos de vencimientos:", error);
         } finally {
@@ -58,14 +82,12 @@ const VencimientosPilotos = () => {
         }
     };
 
-    // Helper para parsear fechas de forma segura
     const parseFecha = (fechaStr) => {
         if (!fechaStr) return null;
         const f = new Date(fechaStr);
         return isNaN(f.getTime()) ? null : f;
     };
 
-    // Helper para calcular días transcurridos
     const calcularDias = (fechaObj) => {
         if (!fechaObj) return null;
         const hoy = new Date();
@@ -73,39 +95,56 @@ const VencimientosPilotos = () => {
         return Math.floor(difMs / (1000 * 60 * 60 * 24));
     };
 
-    // 🔹 Lógica para obtener el último vuelo real cruzando con el historial de vuelos
+    // Helper para extraer ID seguro de un campo de Mongoose (ObjectId o String u Objeto)
+    const extraerId = (campo) => {
+        if (!campo) return '';
+        if (typeof campo === 'string') return campo.toLowerCase();
+        if (typeof campo === 'object') {
+            return (campo._id || campo.id || String(campo)).toLowerCase();
+        }
+        return String(campo).toLowerCase();
+    };
+
+    // 🔹 Lógica alineada con el modelo real de la base de datos
     const obtenerUltimosVuelos = (piloto) => {
-        const idPiloto = String(piloto._id || piloto.id || piloto.dni || '').toLowerCase();
-        const nombreCompleto = `${piloto.apellido || ''} ${piloto.nombre || ''}`.toLowerCase().trim();
+        const idPiloto = extraerId(piloto._id || piloto.id);
+        const apellidoPiloto = (piloto.apellido || '').toLowerCase().trim();
+        const nombrePiloto = (piloto.nombre || '').toLowerCase().trim();
 
-        // 1. Filtrar los vuelos donde participó este piloto (como Comandante, Piloto, Copiloto o Tripulante)
+        // 1. Encontrar todos los vuelos donde participó el piloto (como piloto, copiloto o instructor)
         const vuelosDelPiloto = vuelosHistorial.filter(vuelo => {
-            const tripulacion = Array.isArray(vuelo.tripulacion) ? vuelo.tripulacion : [];
-            const camposPiloto = [
-                vuelo.piloto, vuelo.copiloto, vuelo.comandante, vuelo.instructor, 
-                ...tripulacion
-            ].map(item => typeof item === 'object' ? JSON.stringify(item) : String(item || '')).join(' ').toLowerCase();
+            const idPilotoVuelo = extraerId(vuelo.piloto);
+            const idCopilotoVuelo = extraerId(vuelo.copiloto);
+            const idInstructorVuelo = extraerId(vuelo.instructor);
 
-            return (idPiloto && camposPiloto.includes(idPiloto)) || (nombreCompleto && camposPiloto.includes(nombreCompleto));
+            // Comparación por ID ObjectId
+            const coincideId = (idPiloto && (idPilotoVuelo === idPiloto || idCopilotoVuelo === idPiloto || idInstructorVuelo === idPiloto));
+
+            // Comparación alternativa por texto en caso de que venga populado el objeto con nombre
+            const stringVuelo = JSON.stringify(vuelo).toLowerCase();
+            const coincideNombre = apellidoPiloto.length > 2 && stringVuelo.includes(apellidoPiloto);
+
+            return coincideId || coincideNombre;
         });
 
-        // 2. Buscar la fecha más reciente de vuelo general
+        // 2. Buscar último vuelo general
         let fechaGral = parseFecha(piloto.fechaUltimoVuelo || piloto.ultimoVuelo);
-        
+
         vuelosDelPiloto.forEach(v => {
-            const fechaVuelo = parseFecha(v.fecha || v.fechaVuelo || v.date);
+            const fechaVuelo = parseFecha(v.fecha);
             if (fechaVuelo && (!fechaGral || fechaVuelo > fechaGral)) {
                 fechaGral = fechaVuelo;
             }
         });
 
-        // 3. Buscar la fecha más reciente de vuelo nocturno
+        // 3. Buscar último vuelo nocturno (Evalúa `condicion: 'Nocturno'` según el esquema de Mongoose)
         let fechaNoc = parseFecha(piloto.fechaUltimoVueloNocturno || piloto.ultimoVueloNocturno);
 
         vuelosDelPiloto.forEach(v => {
-            const esNocturno = v.esNocturno || v.nocturno || v.tipoVuelo === 'NOCTURNO' || Number(v.horasNocturnas || 0) > 0;
+            const esNocturno = String(v.condicion).toLowerCase() === 'nocturno' || v.usoNVG === true;
+            
             if (esNocturno) {
-                const fechaVuelo = parseFecha(v.fecha || v.fechaVuelo || v.date);
+                const fechaVuelo = parseFecha(v.fecha);
                 if (fechaVuelo && (!fechaNoc || fechaVuelo > fechaNoc)) {
                     fechaNoc = fechaVuelo;
                 }
@@ -115,20 +154,15 @@ const VencimientosPilotos = () => {
         return { fechaGral, fechaNoc };
     };
 
-    // Evaluación estricta de las 3 reglas
     const evaluarPiloto = (piloto) => {
         const { fechaGral, fechaNoc } = obtenerUltimosVuelos(piloto);
 
         const diasUltimoVuelo = calcularDias(fechaGral);
         const diasUltimoNocturno = calcularDias(fechaNoc);
 
-        // Regla 1: 45 Días General
         const vencidoGeneral = diasUltimoVuelo === null || diasUltimoVuelo > 45;
-        
-        // Regla 2: 60 Días Nocturno
         const vencidoNocturno = diasUltimoNocturno === null || diasUltimoNocturno > 60;
 
-        // Regla 3: Habilitaciones / Capacitaciones Especiales (365 Días)
         const especialidades = piloto.capacitacionesEspeciales || piloto.capacitaciones || [];
         const especialidadesVencidas = especialidades.filter(cap => {
             const fechaCap = parseFecha(cap.fechaUltimaActividad || cap.fechaAdquisicion || cap.fecha);
@@ -167,7 +201,7 @@ const VencimientosPilotos = () => {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px', fontWeight: 'bold', color: '#1b3a57' }}>
-                ⌛ Cruzando datos de vuelos y analizando recientía de Oficiales...
+                ⌛ Procesando registros de vuelos nocturnos y recientía...
             </div>
         );
     }
@@ -222,7 +256,6 @@ const VencimientosPilotos = () => {
                     <thead>
                         <tr style={styles.thRow}>
                             <th style={styles.th}>Oficial</th>
-                            <th style={styles.th}>Unidad</th>
                             <th style={styles.th}>Último Vuelo (Gral)</th>
                             <th style={styles.th}>Último Vuelo Nocturno</th>
                             <th style={styles.th}>Aptitudes / Habilitaciones</th>
@@ -239,8 +272,7 @@ const VencimientosPilotos = () => {
                                         <User size={14} style={{ marginRight: '6px', verticalAlign: 'middle', color: '#1b3a57' }} />
                                         {p.grado} {p.apellido}, {p.nombre}
                                     </td>
-                                    <td style={styles.td}>{p.elemento || p.unidad || 'S/U'}</td>
-                                    
+
                                     {/* Regla 1: Fecha Vuelo General */}
                                     <td style={styles.td}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -265,7 +297,7 @@ const VencimientosPilotos = () => {
                                         </div>
                                     </td>
 
-                                    {/* Regla 3: Capacitaciones / Habilitaciones Especiales */}
+                                    {/* Regla 3: Habilitaciones Especiales */}
                                     <td style={styles.td}>
                                         {(p.capacitacionesEspeciales || p.capacitaciones)?.length > 0 ? (
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
@@ -306,7 +338,7 @@ const VencimientosPilotos = () => {
                         })}
                         {listaFiltrada.length === 0 && (
                             <tr>
-                                <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
+                                <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
                                     No se encontraron Oficiales registrados o en el filtro seleccionado.
                                 </td>
                             </tr>
