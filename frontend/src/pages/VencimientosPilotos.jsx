@@ -13,6 +13,9 @@ const VencimientosPilotos = () => {
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
 
+    // Grados de oficiales permitidos
+    const GRADOS_OFICIALES = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
+
     useEffect(() => {
         cargarPilotos();
     }, []);
@@ -23,10 +26,16 @@ const VencimientosPilotos = () => {
             const res = await getTripulantes();
             const data = res.data || [];
             
-            // Filtrado por unidad/rol
+            // 1. Filtrar solo Oficiales (CR, TC, MY, CT, TP, TT, ST)
+            const soloOficiales = data.filter(p => {
+                const gradoNorm = p.grado ? p.grado.trim().toUpperCase() : '';
+                return GRADOS_OFICIALES.includes(gradoNorm);
+            });
+
+            // 2. Filtrado por unidad / jerarquía de rol
             const dataFiltrada = esMandoEstrategico
-                ? data 
-                : data.filter(p => {
+                ? soloOficiales 
+                : soloOficiales.filter(p => {
                     const u = p.elemento || p.unidad || '';
                     return u.trim().toUpperCase() === userUnidad;
                 });
@@ -39,20 +48,33 @@ const VencimientosPilotos = () => {
         }
     };
 
-    // Helper para evaluar los días transcurridos
-    const calcularDias = (fechaStr) => {
-        if (!fechaStr) return null;
-        const fecha = new Date(fechaStr);
-        if (isNaN(fecha.getTime())) return null;
+    // Helper para obtener y validar la fecha (resuelve distintas nomenclaturas de backend)
+    const obtenerFechaValida = (piloto, campos) => {
+        for (let campo of campos) {
+            if (piloto[campo]) {
+                const f = new Date(piloto[campo]);
+                if (!isNaN(f.getTime())) return f;
+            }
+        }
+        return null;
+    };
+
+    // Helper para calcular días transcurridos a partir de un objeto Date o String
+    const calcularDias = (fechaObj) => {
+        if (!fechaObj) return null;
         const hoy = new Date();
-        const difMs = hoy - fecha;
+        const difMs = hoy - fechaObj;
         return Math.floor(difMs / (1000 * 60 * 60 * 24));
     };
 
     // Evaluación estricta de las 3 reglas
     const evaluarPiloto = (piloto) => {
-        const diasUltimoVuelo = calcularDias(piloto.fechaUltimoVuelo);
-        const diasUltimoNocturno = calcularDias(piloto.fechaUltimoVueloNocturno);
+        // Mapeo robusto de campos para fecha de último vuelo general y nocturno
+        const fechaGral = obtenerFechaValida(piloto, ['fechaUltimoVuelo', 'ultimoVuelo', 'fecha_ultimo_vuelo', 'fechaVuelo']);
+        const fechaNoc = obtenerFechaValida(piloto, ['fechaUltimoVueloNocturno', 'ultimoVueloNocturno', 'fecha_ultimo_vuelo_nocturno', 'fechaNocturno']);
+
+        const diasUltimoVuelo = calcularDias(fechaGral);
+        const diasUltimoNocturno = calcularDias(fechaNoc);
 
         // Regla 1: 45 Días General
         const vencidoGeneral = diasUltimoVuelo === null || diasUltimoVuelo > 45;
@@ -61,15 +83,18 @@ const VencimientosPilotos = () => {
         const vencidoNocturno = diasUltimoNocturno === null || diasUltimoNocturno > 60;
 
         // Regla 3: Habilitaciones / Capacitaciones Especiales (365 Días)
-        const especialidades = piloto.capacitacionesEspeciales || [];
+        const especialidades = piloto.capacitacionesEspeciales || piloto.capacitaciones || [];
         const especialidadesVencidas = especialidades.filter(cap => {
-            const diasCap = calcularDias(cap.fechaUltimaActividad || cap.fechaAdquisicion);
+            const fechaCap = obtenerFechaValida(cap, ['fechaUltimaActividad', 'fechaAdquisicion', 'fecha']);
+            const diasCap = calcularDias(fechaCap);
             return diasCap === null || diasCap > 365;
         });
 
         const esVencidoTotal = vencidoGeneral || vencidoNocturno || especialidadesVencidas.length > 0;
 
         return {
+            fechaGral,
+            fechaNoc,
             diasUltimoVuelo,
             diasUltimoNocturno,
             vencidoGeneral,
@@ -85,7 +110,7 @@ const VencimientosPilotos = () => {
     }));
 
     const listaFiltrada = listaProcesada.filter(p => {
-        const coincideBusqueda = `${p.apellido} ${p.nombre} ${p.grado}`.toLowerCase().includes(busqueda.toLowerCase());
+        const coincideBusqueda = `${p.grado} ${p.apellido} ${p.nombre}`.toLowerCase().includes(busqueda.toLowerCase());
         if (!coincideBusqueda) return false;
 
         if (filtroEstado === 'VENCIDOS') return p.evaluacion.esVencidoTotal;
@@ -95,8 +120,8 @@ const VencimientosPilotos = () => {
 
     if (loading) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px', fontWeight: 'bold' }}>
-                ⌛ Analizando estado de recientía de tripulaciones...
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px', fontWeight: 'bold', color: '#1b3a57' }}>
+                ⌛ Analizando recientía de Oficiales...
             </div>
         );
     }
@@ -105,18 +130,18 @@ const VencimientosPilotos = () => {
         <div style={styles.container}>
             <div style={styles.header}>
                 <div>
-                    <h2 style={styles.title}>⏱️ Control de Recientía y Vencimientos de Pilotos</h2>
-                    <p style={styles.subtitle}>Supervisión de límites operativos (45d General / 60d Nocturno / 365d Capacitaciones Especiales)</p>
+                    <h2 style={styles.title}>⏱️ Vencimiento Pilotos (Oficiales)</h2>
+                    <p style={styles.subtitle}>Límites de recientía (45d General / 60d Nocturno / 365d Habilitaciones Especiales)</p>
                 </div>
             </div>
 
-            {/* Barra de Filtros y Búsqueda */}
+            {/* Filtros */}
             <div style={styles.filterBar}>
                 <div style={styles.searchWrapper}>
                     <Search size={16} color="#7f8c8d" />
                     <input 
                         type="text" 
-                        placeholder="Buscar por apellido o grado..." 
+                        placeholder="Buscar por apellido, nombre o grado..." 
                         value={busqueda} 
                         onChange={(e) => setBusqueda(e.target.value)}
                         style={styles.inputSearch}
@@ -150,31 +175,31 @@ const VencimientosPilotos = () => {
                 <table style={styles.table}>
                     <thead>
                         <tr style={styles.thRow}>
-                            <th style={styles.th}>Grado y Nombre</th>
+                            <th style={styles.th}>Oficial</th>
                             <th style={styles.th}>Unidad</th>
                             <th style={styles.th}>Último Vuelo (Gral)</th>
                             <th style={styles.th}>Último Vuelo Nocturno</th>
-                            <th style={styles.th}>Capacitaciones Especiales</th>
+                            <th style={styles.th}>Aptitudes / Habilitaciones</th>
                             <th style={{...styles.th, textAlign: 'center'}}>Estado Global</th>
                         </tr>
                     </thead>
                     <tbody>
                         {listaFiltrada.map(p => {
-                            const { diasUltimoVuelo, diasUltimoNocturno, vencidoGeneral, vencidoNocturno, especialidadesVencidas, esVencidoTotal } = p.evaluacion;
+                            const { fechaGral, fechaNoc, diasUltimoVuelo, diasUltimoNocturno, vencidoGeneral, vencidoNocturno, especialidadesVencidas, esVencidoTotal } = p.evaluacion;
 
                             return (
-                                <tr key={p._id} style={styles.tr}>
+                                <tr key={p._id || p.id} style={styles.tr}>
                                     <td style={{...styles.td, fontWeight: 'bold'}}>
-                                        <User size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                                        <User size={14} style={{ marginRight: '6px', verticalAlign: 'middle', color: '#1b3a57' }} />
                                         {p.grado} {p.apellido}, {p.nombre}
                                     </td>
                                     <td style={styles.td}>{p.elemento || p.unidad || 'S/U'}</td>
                                     
-                                    {/* Regla 1: 45 Días General */}
+                                    {/* Regla 1: Fecha Vuelo General */}
                                     <td style={styles.td}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span style={{ fontWeight: 'bold', color: vencidoGeneral ? '#c0392b' : '#27ae60' }}>
-                                                {p.fechaUltimoVuelo ? new Date(p.fechaUltimoVuelo).toLocaleDateString() : 'Sin Vuelos'}
+                                                {fechaGral ? fechaGral.toLocaleDateString('es-AR') : 'Sin Registro'}
                                             </span>
                                             <span style={{...styles.badgeDays, backgroundColor: vencidoGeneral ? '#fef2f2' : '#f0fdf4', color: vencidoGeneral ? '#991b1b' : '#166534'}}>
                                                 {diasUltimoVuelo !== null ? `${diasUltimoVuelo}d` : 'S/D'}
@@ -182,11 +207,11 @@ const VencimientosPilotos = () => {
                                         </div>
                                     </td>
 
-                                    {/* Regla 2: 60 Días Nocturno */}
+                                    {/* Regla 2: Fecha Vuelo Nocturno */}
                                     <td style={styles.td}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span style={{ fontWeight: 'bold', color: vencidoNocturno ? '#c0392b' : '#27ae60' }}>
-                                                {p.fechaUltimoVueloNocturno ? new Date(p.fechaUltimoVueloNocturno).toLocaleDateString() : 'Sin Registro'}
+                                                {fechaNoc ? fechaNoc.toLocaleDateString('es-AR') : 'Sin Registro'}
                                             </span>
                                             <span style={{...styles.badgeDays, backgroundColor: vencidoNocturno ? '#fef2f2' : '#f0fdf4', color: vencidoNocturno ? '#991b1b' : '#166534'}}>
                                                 {diasUltimoNocturno !== null ? `${diasUltimoNocturno}d` : 'S/D'}
@@ -194,12 +219,13 @@ const VencimientosPilotos = () => {
                                         </div>
                                     </td>
 
-                                    {/* Regla 3: 365 Días Especiales */}
+                                    {/* Regla 3: Capacitaciones / Habilitaciones Especiales */}
                                     <td style={styles.td}>
-                                        {p.capacitacionesEspeciales && p.capacitacionesEspeciales.length > 0 ? (
+                                        {(p.capacitacionesEspeciales || p.capacitaciones)?.length > 0 ? (
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                {p.capacitacionesEspeciales.map((cap, i) => {
-                                                    const esVencidaCap = especialidadesVencidas.some(ev => ev.tipo === cap.tipo);
+                                                {(p.capacitacionesEspeciales || p.capacitaciones).map((cap, i) => {
+                                                    const nombreCap = cap.tipo || cap.nombre || cap.descripcion || 'Especialidad';
+                                                    const esVencidaCap = especialidadesVencidas.some(ev => (ev.tipo || ev.nombre) === nombreCap);
                                                     return (
                                                         <span key={i} style={{
                                                             ...styles.tagCap,
@@ -207,13 +233,13 @@ const VencimientosPilotos = () => {
                                                             color: esVencidaCap ? '#991b1b' : '#166534',
                                                             border: esVencidaCap ? '1px solid #f87171' : '1px solid #86efac'
                                                         }}>
-                                                            {cap.tipo}
+                                                            {nombreCap}
                                                         </span>
                                                     );
                                                 })}
                                             </div>
                                         ) : (
-                                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Sin aptitudes especiales</span>
+                                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Sin aptitudes registradas</span>
                                         )}
                                     </td>
 
@@ -221,7 +247,7 @@ const VencimientosPilotos = () => {
                                     <td style={{...styles.td, textAlign: 'center'}}>
                                         {esVencidoTotal ? (
                                             <span style={styles.statusVencido}>
-                                                <AlertTriangle size={12} /> INHABILITADO / VENCIDO
+                                                <AlertTriangle size={12} /> INHABILITADO
                                             </span>
                                         ) : (
                                             <span style={styles.statusAlDia}>
@@ -232,6 +258,13 @@ const VencimientosPilotos = () => {
                                 </tr>
                             );
                         })}
+                        {listaFiltrada.length === 0 && (
+                            <tr>
+                                <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
+                                    No se encontraron Oficiales registrados o en el filtro seleccionado.
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -245,7 +278,7 @@ const styles = {
     title: { fontSize: '1.4rem', fontWeight: 'bold', color: '#1b3a57', margin: 0 },
     subtitle: { fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' },
     filterBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', gap: '15px', flexWrap: 'wrap' },
-    searchWrapper: { display: 'flex', alignItems: 'center', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '6px 12px', minWidth: '250px' },
+    searchWrapper: { display: 'flex', alignItems: 'center', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '6px 12px', minWidth: '280px' },
     inputSearch: { border: 'none', outline: 'none', marginLeft: '8px', fontSize: '0.85rem', width: '100%' },
     btnGroup: { display: 'flex', gap: '8px' },
     btnFilter: { border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer' },
