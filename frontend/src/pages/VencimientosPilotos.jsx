@@ -95,7 +95,6 @@ const VencimientosPilotos = () => {
         return Math.floor(difMs / (1000 * 60 * 60 * 24));
     };
 
-    // Helper para extraer ID seguro de un campo de Mongoose (ObjectId o String u Objeto)
     const extraerId = (campo) => {
         if (!campo) return '';
         if (typeof campo === 'string') return campo.toLowerCase();
@@ -105,29 +104,22 @@ const VencimientosPilotos = () => {
         return String(campo).toLowerCase();
     };
 
-    // 🔹 Lógica alineada con el modelo real de la base de datos
     const obtenerUltimosVuelos = (piloto) => {
         const idPiloto = extraerId(piloto._id || piloto.id);
         const apellidoPiloto = (piloto.apellido || '').toLowerCase().trim();
-        const nombrePiloto = (piloto.nombre || '').toLowerCase().trim();
 
-        // 1. Encontrar todos los vuelos donde participó el piloto (como piloto, copiloto o instructor)
         const vuelosDelPiloto = vuelosHistorial.filter(vuelo => {
             const idPilotoVuelo = extraerId(vuelo.piloto);
             const idCopilotoVuelo = extraerId(vuelo.copiloto);
             const idInstructorVuelo = extraerId(vuelo.instructor);
 
-            // Comparación por ID ObjectId
             const coincideId = (idPiloto && (idPilotoVuelo === idPiloto || idCopilotoVuelo === idPiloto || idInstructorVuelo === idPiloto));
-
-            // Comparación alternativa por texto en caso de que venga populado el objeto con nombre
             const stringVuelo = JSON.stringify(vuelo).toLowerCase();
             const coincideNombre = apellidoPiloto.length > 2 && stringVuelo.includes(apellidoPiloto);
 
             return coincideId || coincideNombre;
         });
 
-        // 2. Buscar último vuelo general
         let fechaGral = parseFecha(piloto.fechaUltimoVuelo || piloto.ultimoVuelo);
 
         vuelosDelPiloto.forEach(v => {
@@ -137,7 +129,6 @@ const VencimientosPilotos = () => {
             }
         });
 
-        // 3. Buscar último vuelo nocturno (Evalúa `condicion: 'Nocturno'` según el esquema de Mongoose)
         let fechaNoc = parseFecha(piloto.fechaUltimoVueloNocturno || piloto.ultimoVueloNocturno);
 
         vuelosDelPiloto.forEach(v => {
@@ -329,7 +320,7 @@ const VencimientosPilotos = () => {
                                             </span>
                                         ) : (
                                             <span style={styles.statusAlDia}>
-                                                <CheckCircle size={12} /> EN RECIENTÍA
+                                                <CheckCircle size={12} /> RECIENTE
                                             </span>
                                         )}
                                     </td>
