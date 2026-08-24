@@ -22,6 +22,7 @@ import F13Page from './pages/F13';
 import DashboardNovedades from './components/DashboardNovedades'; 
 import F16Page from './pages/F16';
 import ProgramaMantenimiento from './pages/ProgramaMantenimiento';
+import VencimientosPilotos from './pages/VencimientosPilotos'; // ⏱️ MÓDULO NUEVO DE VENCIMIENTOS
 
 // 📊 MÓDULO NUEVO DE GRÁFICOS Y METRICAS DE VUELO
 import DashboardVuelos from './pages/DashboardVuelos';
@@ -146,6 +147,9 @@ function App() {
     const puedeVerUsuarios = esAdmin;
     const puedeVerTripulantes = esAdmin || esOperaciones || esJefe || esPersonal; 
     
+    // ⏱️ VENCIMIENTOS PILOTOS (Mismos permisos que los módulos de Operaciones)
+    const puedeVerVencimientosPilotos = esAdmin || esOperaciones || esJefe || esPersonal;
+
     // ✈️ FORMULARIO / TABLA ORIGINAL -12
     const puedeVerVuelos = esAdmin || esOperaciones; 
     
@@ -170,12 +174,12 @@ function App() {
         esElementoECAE && (esOperaciones || esBoss || esDirector || esJefe || esPersonal)
     );
 
-    const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos || puedeVerDashboardVuelos;
+    const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos || puedeVerDashboardVuelos || puedeVerVencimientosPilotos;
     const puedeVerGrupoOfTecnica = puedeVerF13 || puedeVerF16 || puedeVerProgMantenimiento;
     const puedeVerGrupoOTO = puedeVerStats || puedeVerOpEnDesarrollo;
 
     const esVistaFull = [
-        'mapa', 'estado', 'tripulantes', 'planeamiento', 'admin', 'stats', 
+        'mapa', 'estado', 'tripulantes', 'vencimientosPilotos', 'planeamiento', 'admin', 'stats', 
         'despacho', 'vuelos', 'ebm', 'f13', 'reportes', 'f16', 'progMantenimiento',
         'gestionAlumnos', 'cargaInstruccion', 'dashboardEscuela', 'fichaAlumno', 'gestorPatrones',
         'dashboardVuelos'
@@ -224,13 +228,21 @@ function App() {
 
                             {/* 2. OPERACIONES */}
                             {puedeVerGrupoOperaciones && (
-                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'ebm', 'vuelos', 'dashboardVuelos']} currentView={view}>
+                                <NavDropdown title="⚔️ Operaciones" activeViews={['tripulantes', 'vencimientosPilotos', 'ebm', 'vuelos', 'dashboardVuelos']} currentView={view}>
                                     {puedeVerTripulantes && (
                                         <button 
                                             onClick={() => setView('tripulantes')} 
                                             style={{...styles.dropdownItem, backgroundColor: view === 'tripulantes' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
                                         >
                                             👥 Personal
+                                        </button>
+                                    )}
+                                    {puedeVerVencimientosPilotos && (
+                                        <button 
+                                            onClick={() => setView('vencimientosPilotos')} 
+                                            style={{...styles.dropdownItem, backgroundColor: view === 'vencimientosPilotos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
+                                        >
+                                            ⏱️ Vencimiento Pilotos
                                         </button>
                                     )}
                                     {puedeVerEbm && (
@@ -401,6 +413,7 @@ function App() {
                     (() => {
                         switch(view) {
                             case 'tripulantes': return puedeVerTripulantes ? <Tripulantes /> : <CalendarPage />;
+                            case 'vencimientosPilotos': return puedeVerVencimientosPilotos ? <VencimientosPilotos /> : <CalendarPage />;
                             case 'gestionAlumnos': return puedeVerECAE ? <GestionAlumnos /> : <CalendarPage />;
                             case 'gestorPatrones': return puedeVerECAE ? <GestorPatrones /> : <CalendarPage />;
                             case 'cargaInstruccion': return puedeVerECAE ? <CargaInstruccion /> : <CalendarPage />;
