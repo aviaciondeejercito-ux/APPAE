@@ -82,7 +82,7 @@ const VencimientosPilotos = () => {
         }
     };
 
-    // Helper robusto para parsear fechas de MongoDB ($date o ISO string)
+    // Helper para parsear fechas
     const parseFecha = (fechaValor) => {
         if (!fechaValor) return null;
         let fechaStr = fechaValor;
@@ -93,7 +93,7 @@ const VencimientosPilotos = () => {
         return isNaN(f.getTime()) ? null : f;
     };
 
-    // Helper para extraer ID seguro de MongoDB ($oid, string u objeto)
+    // Helper para extraer ID seguro de MongoDB
     const extraerId = (campo) => {
         if (!campo) return '';
         if (typeof campo === 'object') {
@@ -112,7 +112,7 @@ const VencimientosPilotos = () => {
         return Math.floor(difMs / (1000 * 60 * 60 * 24));
     };
 
-    // Normalizador de texto para comparar especialidades/misiones
+    // Normalizador de texto
     const normalizarTexto = (str) => {
         if (!str) return '';
         return String(str)
@@ -122,11 +122,11 @@ const VencimientosPilotos = () => {
             .trim();
     };
 
-    // 🔹 Cruce estricto de vuelos por MongoDB Extended JSON
+    // 🔹 Lógica estricta de cruce de vuelos y aptitudes
     const obtenerAnalisisVuelos = (piloto) => {
         const idPiloto = extraerId(piloto._id || piloto.id);
 
-        // Filtrar vuelos donde el piloto figura como piloto, copiloto o instructor por ID
+        // Vuelos del piloto por MongoDB ObjectId
         const vuelosDelPiloto = vuelosHistorial.filter(vuelo => {
             const idPilotoVuelo = extraerId(vuelo.piloto);
             const idCopilotoVuelo = extraerId(vuelo.copiloto);
@@ -144,7 +144,7 @@ const VencimientosPilotos = () => {
             }
         });
 
-        // 2. Fecha de último vuelo nocturno (condicion === 'Nocturno' o usoNVG === true)
+        // 2. Fecha de último vuelo nocturno
         let fechaNoc = parseFecha(piloto.fechaUltimoVueloNocturno || piloto.ultimoVueloNocturno);
         vuelosDelPiloto.forEach(v => {
             const condicionStr = normalizarTexto(v.condicion);
@@ -157,14 +157,13 @@ const VencimientosPilotos = () => {
             }
         });
 
-        // 3. Evaluar habilitaciones / misiones realizadas dentro del año (365 días)
+        // 3. Evaluar aptitudes / misiones REALMENTE registradas en la base de datos
         const especialidadesBase = piloto.capacitacionesEspeciales || piloto.capacitaciones || [];
         const especialidadesEvaluadas = especialidadesBase.map(cap => {
             const nombreCap = cap.tipo || cap.nombre || cap.descripcion || (typeof cap === 'string' ? cap : 'Especialidad');
             const normCap = normalizarTexto(nombreCap);
 
-            // Buscar en el historial si ejecutó una misión equivalente hace menos de 365 días
-            let fechaUltimaMision = parseFecha(cap.fechaUltimaActividad || cap.fechaAdquisicion || cap.fecha);
+            let fechaUltimoVueloMision = null; // Inicializa en NULL para forzar validación real en la BD
 
             vuelosDelPiloto.forEach(v => {
                 const tipoMisionNorm = normalizarTexto(v.tipoMision);
@@ -178,18 +177,19 @@ const VencimientosPilotos = () => {
 
                 if (coincideMision) {
                     const fVuelo = parseFecha(v.fecha);
-                    if (fVuelo && (!fechaUltimaMision || fVuelo > fechaUltimaMision)) {
-                        fechaUltimaMision = fVuelo;
+                    if (fVuelo && (!fechaUltimoVueloMision || fVuelo > fechaUltimoVueloMision)) {
+                        fechaUltimoVueloMision = fVuelo;
                     }
                 }
             });
 
-            const diasTranscurridos = calcularDias(fechaUltimaMision);
+            // Si NUNCA voló esa misión o la fecha es nula, está vencida/sin registro real
+            const diasTranscurridos = calcularDias(fechaUltimoVueloMision);
             const esVencida = diasTranscurridos === null || diasTranscurridos > 365;
 
             return {
                 nombre: nombreCap,
-                fecha: fechaUltimaMision,
+                fecha: fechaUltimoVueloMision,
                 dias: diasTranscurridos,
                 esVencida
             };
@@ -208,9 +208,9 @@ const VencimientosPilotos = () => {
         const vencidoNocturno = diasUltimoNocturno === null || diasUltimoNocturno > 60;
         const tieneEspecialidadesVencidas = especialidadesEvaluadas.some(e => e.esVencida);
 
-        // 🔹 Determinación exacta del Estado según combinación
+        // Determinación del Estado Global
         let estadoLabel = 'RECIENTE';
-        let estadoTipo = 'OK'; // 'OK', 'WARNING', 'DANGER'
+        let estadoTipo = 'OK';
 
         if (vencidoGeneral && vencidoNocturno) {
             estadoLabel = 'Readaptación completa';
@@ -259,7 +259,7 @@ const VencimientosPilotos = () => {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px', fontWeight: 'bold', color: '#1b3a57' }}>
-                ⌛ Sincronizando vuelos en formato MongoDB y verificando recientía...
+                ⌛ Sincronizando registros de vuelo y habilitaciones...
             </div>
         );
     }
@@ -366,7 +366,7 @@ const VencimientosPilotos = () => {
                                                         color: cap.esVencida ? '#991b1b' : '#166534',
                                                         border: cap.esVencida ? '1px solid #f87171' : '1px solid #86efac'
                                                     }}>
-                                                        {cap.nombre} {cap.dias !== null ? `(${cap.dias}d)` : ''}
+                                                        {cap.nombre} {cap.dias !== null ? `(${cap.dias}d)` : '(S/V)'}
                                                     </span>
                                                 ))}
                                             </div>
@@ -375,7 +375,7 @@ const VencimientosPilotos = () => {
                                         )}
                                     </td>
 
-                                    {/* Estado Consolidado según condiciones */}
+                                    {/* Estado Consolidado */}
                                     <td style={{...styles.td, textAlign: 'center'}}>
                                         {estadoTipo === 'OK' && (
                                             <span style={styles.statusAlDia}>
