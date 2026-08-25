@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ShieldAlert, CheckCircle, Clock, AlertTriangle, Search, User } from 'lucide-react';
 import { getTripulantes, getVuelos } from '../services/api';
 
@@ -9,10 +9,14 @@ const VencimientosPilotos = () => {
     const [busqueda, setBusqueda] = useState('');
     const [filtroEstado, setFiltroEstado] = useState('TODOS');
 
+    // Estados para la selección e invisibilidad dinámica por Sistema de Armas (SdA)
+    const [todosLosSdas, setTodosLosSdas] = useState([]);
+    const [sdasVisibles, setSdasVisibles] = useState({});
+
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
     const rawRole = localStorage.getItem('role') || localStorage.getItem('rol') || 'USER';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
-    const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+    const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'COMANDO', 'COMANAV'].includes(roleNormalizado);
 
     // Escala jerárquica de antigüedad para Oficiales
     const ORDEN_JERARQUICO = {
@@ -75,11 +79,35 @@ const VencimientosPilotos = () => {
             });
 
             setPersonal(dataOrdenada);
+
+            // Extracto dinámico de todos los SdA donde el personal posee habilitación activa/registrada
+            const sdasSet = new Set();
+            dataOrdenada.forEach(p => {
+                if (p.aeronave) sdasSet.add(p.aeronave);
+                if (Array.isArray(p.habilitaciones)) {
+                    p.habilitaciones.forEach(h => {
+                        if (h.aeronave) sdasSet.add(h.aeronave);
+                    });
+                }
+            });
+
+            const sdasLista = Array.from(sdasSet).sort();
+            setTodosLosSdas(sdasLista);
+
+            // Inicializamos todos los SdA desmarcados por defecto
+            const visibilidadInicial = {};
+            sdasLista.forEach(sda => { visibilidadInicial[sda] = false; });
+            setSdasVisibles(visibilidadInicial);
+
         } catch (error) {
             console.error("Error al cargar datos de vencimientos:", error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const toggleSdaVisible = (sda) => {
+        setSdasVisibles(prev => ({ ...prev, [sda]: !prev[sda] }));
     };
 
     // Helper para parsear fechas
@@ -104,7 +132,7 @@ const VencimientosPilotos = () => {
         return String(campo).toLowerCase();
     };
 
-    // Helper para calcular días transcurridos a la fecha
+    // Helper para calcular días transcurridos
     const calcularDias = (fechaObj) => {
         if (!fechaObj) return null;
         const hoy = new Date();
@@ -122,11 +150,10 @@ const VencimientosPilotos = () => {
             .trim();
     };
 
-    // 🔹 Lógica estricta de cruce de vuelos y aptitudes
+    // Lógica estricta de cruce de vuelos y aptitudes
     const obtenerAnalisisVuelos = (piloto) => {
         const idPiloto = extraerId(piloto._id || piloto.id);
 
-        // Vuelos del piloto por MongoDB ObjectId
         const vuelosDelPiloto = vuelosHistorial.filter(vuelo => {
             const idPilotoVuelo = extraerId(vuelo.piloto);
             const idCopilotoVuelo = extraerId(vuelo.copiloto);
@@ -163,7 +190,7 @@ const VencimientosPilotos = () => {
             const nombreCap = cap.tipo || cap.nombre || cap.descripcion || (typeof cap === 'string' ? cap : 'Especialidad');
             const normCap = normalizarTexto(nombreCap);
 
-            let fechaUltimoVueloMision = null; // Inicializa en NULL para forzar validación real en la BD
+            let fechaUltimoVueloMision = null;
 
             vuelosDelPiloto.forEach(v => {
                 const tipoMisionNorm = normalizarTexto(v.tipoMision);
@@ -183,7 +210,6 @@ const VencimientosPilotos = () => {
                 }
             });
 
-            // Si NUNCA voló esa misión o la fecha es nula, está vencida/sin registro real
             const diasTranscurridos = calcularDias(fechaUltimoVueloMision);
             const esVencida = diasTranscurridos === null || diasTranscurridos > 365;
 
@@ -208,7 +234,6 @@ const VencimientosPilotos = () => {
         const vencidoNocturno = diasUltimoNocturno === null || diasUltimoNocturno > 60;
         const tieneEspecialidadesVencidas = especialidadesEvaluadas.some(e => e.esVencida);
 
-        // Determinación del Estado Global
         let estadoLabel = 'RECIENTE';
         let estadoTipo = 'OK';
 
@@ -256,6 +281,36 @@ const VencimientosPilotos = () => {
         return true;
     });
 
+    // 🔹 MATRIZ DE AGRUPAMIENTO DINÁMICO POR SISTEMA DE ARMAS (SdA)
+    const matrizSda = useMemo(() => {
+        const agrupa = {};
+        todosLosSdas.forEach(sda => { agrupa[sda] = []; });
+
+        listaFiltrada.forEach(p => {
+            const sdasDelPiloto = new Set();
+            if (p.aeronave) sdasDelPiloto.add(p.aeronave);
+            if (Array.isArray(p.habilitaciones)) {
+                p.habilitaciones.forEach(h => {
+                    if (h.aeronave) sdasDelPiloto.add(h.aeronave);
+                });
+            }
+
+            sdasDelPiloto.forEach(sda => {
+                if (agrupa[sda]) {
+                    agrupa[sda].push(p);
+                }
+            });
+        });
+
+        Object.keys(agrupa).forEach(sda => {
+            agrupa[sda].sort((a, b) => (ORDEN_JERARQUICO[a.grado] || 99) - (ORDEN_JERARQUICO[b.grado] || 99));
+        });
+
+        return agrupa;
+    }, [listaFiltrada, todosLosSdas]);
+
+    const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
+
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px', fontWeight: 'bold', color: '#1b3a57' }}>
@@ -273,7 +328,27 @@ const VencimientosPilotos = () => {
                 </div>
             </div>
 
-            {/* Filtros */}
+            {/* 🔹 Barra de Selección de Sistemas de Armas (SdA) */}
+            <div style={styles.sdaFilterBar}>
+                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1b3a57' }}>Sistemas de Armas:</span>
+                <div style={styles.sdaFilterGroup}>
+                    {todosLosSdas.map(sda => (
+                        <button 
+                            key={sda} 
+                            onClick={() => toggleSdaVisible(sda)} 
+                            style={{ 
+                                ...styles.sdaFilterButton, 
+                                backgroundColor: sdasVisibles[sda] ? '#1b3a57' : '#e2e8f0', 
+                                color: sdasVisibles[sda] ? 'white' : '#475569' 
+                            }}
+                        >
+                            {sda} {sdasVisibles[sda] ? '👁️' : '📁'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Filtros de Búsqueda y Estados */}
             <div style={styles.filterBar}>
                 <div style={styles.searchWrapper}>
                     <Search size={16} color="#7f8c8d" />
@@ -308,7 +383,7 @@ const VencimientosPilotos = () => {
                 </div>
             </div>
 
-            {/* Tabla de Vencimientos */}
+            {/* Tabla de Vencimientos con Despliegue Agrupado por SdA */}
             <div style={styles.tableCard}>
                 <table style={styles.table}>
                     <thead>
@@ -321,87 +396,101 @@ const VencimientosPilotos = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {listaFiltrada.map(p => {
-                            const { fechaGral, fechaNoc, diasUltimoVuelo, diasUltimoNocturno, vencidoGeneral, vencidoNocturno, especialidadesEvaluadas, estadoLabel, estadoTipo } = p.evaluacion;
-
-                            return (
-                                <tr key={p._id?.$oid || p._id || p.id} style={styles.tr}>
-                                    <td style={{...styles.td, fontWeight: 'bold'}}>
-                                        <User size={14} style={{ marginRight: '6px', verticalAlign: 'middle', color: '#1b3a57' }} />
-                                        {p.grado} {p.apellido}, {p.nombre}
-                                    </td>
-
-                                    {/* Regla 1: Fecha Vuelo General */}
-                                    <td style={styles.td}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <span style={{ fontWeight: 'bold', color: vencidoGeneral ? '#c0392b' : '#27ae60' }}>
-                                                {fechaGral ? fechaGral.toLocaleDateString('es-AR') : 'Sin Registro'}
-                                            </span>
-                                            <span style={{...styles.badgeDays, backgroundColor: vencidoGeneral ? '#fef2f2' : '#f0fdf4', color: vencidoGeneral ? '#991b1b' : '#166534'}}>
-                                                {diasUltimoVuelo !== null ? `${diasUltimoVuelo}d` : 'S/D'}
-                                            </span>
-                                        </div>
-                                    </td>
-
-                                    {/* Regla 2: Fecha Vuelo Nocturno */}
-                                    <td style={styles.td}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <span style={{ fontWeight: 'bold', color: vencidoNocturno ? '#c0392b' : '#27ae60' }}>
-                                                {fechaNoc ? fechaNoc.toLocaleDateString('es-AR') : 'Sin Registro'}
-                                            </span>
-                                            <span style={{...styles.badgeDays, backgroundColor: vencidoNocturno ? '#fef2f2' : '#f0fdf4', color: vencidoNocturno ? '#991b1b' : '#166534'}}>
-                                                {diasUltimoNocturno !== null ? `${diasUltimoNocturno}d` : 'S/D'}
-                                            </span>
-                                        </div>
-                                    </td>
-
-                                    {/* Regla 3: Habilitaciones Especiales */}
-                                    <td style={styles.td}>
-                                        {especialidadesEvaluadas.length > 0 ? (
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                {especialidadesEvaluadas.map((cap, i) => (
-                                                    <span key={i} style={{
-                                                        ...styles.tagCap,
-                                                        backgroundColor: cap.esVencida ? '#fef2f2' : '#f0fdf4',
-                                                        color: cap.esVencida ? '#991b1b' : '#166534',
-                                                        border: cap.esVencida ? '1px solid #f87171' : '1px solid #86efac'
-                                                    }}>
-                                                        {cap.nombre} {cap.dias !== null ? `(${cap.dias}d)` : '(S/V)'}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Sin aptitudes registradas</span>
-                                        )}
-                                    </td>
-
-                                    {/* Estado Consolidado */}
-                                    <td style={{...styles.td, textAlign: 'center'}}>
-                                        {estadoTipo === 'OK' && (
-                                            <span style={styles.statusAlDia}>
-                                                <CheckCircle size={12} /> {estadoLabel}
-                                            </span>
-                                        )}
-                                        {estadoTipo === 'WARNING' && (
-                                            <span style={styles.statusWarning}>
-                                                <AlertTriangle size={12} /> {estadoLabel}
-                                            </span>
-                                        )}
-                                        {estadoTipo === 'DANGER' && (
-                                            <span style={styles.statusDanger}>
-                                                <AlertTriangle size={12} /> {estadoLabel}
-                                            </span>
-                                        )}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        {listaFiltrada.length === 0 && (
+                        {!haySdaSeleccionado ? (
                             <tr>
-                                <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
-                                    No se encontraron Oficiales registrados o en el filtro seleccionado.
+                                <td colSpan="5" style={styles.noDataRow}>
+                                    💡 Seleccione un Sistema de Armas arriba para listar los pilotos involucrados y sus vencimientos.
                                 </td>
                             </tr>
+                        ) : (
+                            todosLosSdas.map(sda => {
+                                if (!sdasVisibles[sda] || !matrizSda[sda] || matrizSda[sda].length === 0) return null;
+
+                                return (
+                                    <React.Fragment key={sda}>
+                                        <tr style={styles.sdaGroupRow}>
+                                            <td colSpan="5" style={styles.sdaGroupCell}>
+                                                ✈️ SISTEMA DE ARMAS: {sda} ({matrizSda[sda].length} tripulantes)
+                                            </td>
+                                        </tr>
+                                        {matrizSda[sda].map(p => {
+                                            const { fechaGral, fechaNoc, diasUltimoVuelo, diasUltimoNocturno, vencidoGeneral, vencidoNocturno, especialidadesEvaluadas, estadoLabel, estadoTipo } = p.evaluacion;
+
+                                            return (
+                                                <tr key={`${sda}-${p._id?.$oid || p._id || p.id}`} style={styles.tr}>
+                                                    <td style={{...styles.td, fontWeight: 'bold'}}>
+                                                        <User size={14} style={{ marginRight: '6px', verticalAlign: 'middle', color: '#1b3a57' }} />
+                                                        {p.grado} {p.apellido}, {p.nombre}
+                                                    </td>
+
+                                                    {/* Fecha Vuelo General */}
+                                                    <td style={styles.td}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <span style={{ fontWeight: 'bold', color: vencidoGeneral ? '#c0392b' : '#27ae60' }}>
+                                                                {fechaGral ? fechaGral.toLocaleDateString('es-AR') : 'Sin Registro'}
+                                                            </span>
+                                                            <span style={{...styles.badgeDays, backgroundColor: vencidoGeneral ? '#fef2f2' : '#f0fdf4', color: vencidoGeneral ? '#991b1b' : '#166534'}}>
+                                                                {diasUltimoVuelo !== null ? `${diasUltimoVuelo}d` : 'S/D'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Fecha Vuelo Nocturno */}
+                                                    <td style={styles.td}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <span style={{ fontWeight: 'bold', color: vencidoNocturno ? '#c0392b' : '#27ae60' }}>
+                                                                {fechaNoc ? fechaNoc.toLocaleDateString('es-AR') : 'Sin Registro'}
+                                                            </span>
+                                                            <span style={{...styles.badgeDays, backgroundColor: vencidoNocturno ? '#fef2f2' : '#f0fdf4', color: vencidoNocturno ? '#991b1b' : '#166534'}}>
+                                                                {diasUltimoNocturno !== null ? `${diasUltimoNocturno}d` : 'S/D'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Habilitaciones Especiales */}
+                                                    <td style={styles.td}>
+                                                        {especialidadesEvaluadas.length > 0 ? (
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                                {especialidadesEvaluadas.map((cap, i) => (
+                                                                    <span key={i} style={{
+                                                                        ...styles.tagCap,
+                                                                        backgroundColor: cap.esVencida ? '#fef2f2' : '#f0fdf4',
+                                                                        color: cap.esVencida ? '#991b1b' : '#166534',
+                                                                        border: cap.esVencida ? '1px solid #f87171' : '1px solid #86efac'
+                                                                    }}>
+                                                                        {cap.nombre} {cap.dias !== null ? `(${cap.dias}d)` : '(S/V)'}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Sin aptitudes registradas</span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Estado Consolidado */}
+                                                    <td style={{...styles.td, textAlign: 'center'}}>
+                                                        {estadoTipo === 'OK' && (
+                                                            <span style={styles.statusAlDia}>
+                                                                <CheckCircle size={12} /> {estadoLabel}
+                                                            </span>
+                                                        )}
+                                                        {estadoTipo === 'WARNING' && (
+                                                            <span style={styles.statusWarning}>
+                                                                <AlertTriangle size={12} /> {estadoLabel}
+                                                            </span>
+                                                        )}
+                                                        {estadoTipo === 'DANGER' && (
+                                                            <span style={styles.statusDanger}>
+                                                                <AlertTriangle size={12} /> {estadoLabel}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </React.Fragment>
+                                );
+                            })
                         )}
                     </tbody>
                 </table>
@@ -415,6 +504,9 @@ const styles = {
     header: { marginBottom: '20px' },
     title: { fontSize: '1.4rem', fontWeight: 'bold', color: '#1b3a57', margin: 0 },
     subtitle: { fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' },
+    sdaFilterBar: { backgroundColor: 'white', padding: '12px 15px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' },
+    sdaFilterGroup: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+    sdaFilterButton: { border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' },
     filterBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', gap: '15px', flexWrap: 'wrap' },
     searchWrapper: { display: 'flex', alignItems: 'center', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '6px 12px', minWidth: '280px' },
     inputSearch: { border: 'none', outline: 'none', marginLeft: '8px', fontSize: '0.85rem', width: '100%' },
@@ -424,13 +516,16 @@ const styles = {
     table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' },
     thRow: { backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' },
     th: { padding: '12px 15px', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' },
+    sdaGroupRow: { backgroundColor: '#e2e8f0', borderBottom: '2px solid #cbd5e1' },
+    sdaGroupCell: { padding: '10px 15px', fontWeight: 'bold', fontSize: '13px', color: '#1e293b' },
     tr: { borderBottom: '1px solid #f1f5f9' },
     td: { padding: '12px 15px', color: '#334155' },
     badgeDays: { fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' },
     tagCap: { fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' },
     statusAlDia: { display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#f0fdf4', color: '#166534', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.7rem', border: '1px solid #86efac' },
     statusWarning: { display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#fefce8', color: '#a16207', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.7rem', border: '1px solid #fde047' },
-    statusDanger: { display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#fef2f2', color: '#991b1b', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.7rem', border: '1px solid #f87171' }
+    statusDanger: { display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#fef2f2', color: '#991b1b', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.7rem', border: '1px solid #f87171' },
+    noDataRow: { padding: '40px', color: '#64748b', fontSize: '13px', textAlign: 'center', backgroundColor: '#fafafa' }
 };
 
 export default VencimientosPilotos;
