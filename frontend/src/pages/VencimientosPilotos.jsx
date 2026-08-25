@@ -82,12 +82,29 @@ const VencimientosPilotos = () => {
         }
     };
 
-    const parseFecha = (fechaStr) => {
-        if (!fechaStr) return null;
+    // Helper robusto para parsear fechas de MongoDB ($date o ISO string)
+    const parseFecha = (fechaValor) => {
+        if (!fechaValor) return null;
+        let fechaStr = fechaValor;
+        if (typeof fechaValor === 'object' && fechaValor.$date) {
+            fechaStr = fechaValor.$date;
+        }
         const f = new Date(fechaStr);
         return isNaN(f.getTime()) ? null : f;
     };
 
+    // Helper para extraer ID seguro de MongoDB ($oid, string u objeto)
+    const extraerId = (campo) => {
+        if (!campo) return '';
+        if (typeof campo === 'object') {
+            if (campo.$oid) return campo.$oid.toLowerCase();
+            if (campo._id) return extraerId(campo._id);
+            if (campo.id) return extraerId(campo.id);
+        }
+        return String(campo).toLowerCase();
+    };
+
+    // Helper para calcular días transcurridos a la fecha
     const calcularDias = (fechaObj) => {
         if (!fechaObj) return null;
         const hoy = new Date();
@@ -95,73 +112,121 @@ const VencimientosPilotos = () => {
         return Math.floor(difMs / (1000 * 60 * 60 * 24));
     };
 
-    const extraerId = (campo) => {
-        if (!campo) return '';
-        if (typeof campo === 'string') return campo.toLowerCase();
-        if (typeof campo === 'object') {
-            return (campo._id || campo.id || String(campo)).toLowerCase();
-        }
-        return String(campo).toLowerCase();
+    // Normalizador de texto para comparar especialidades/misiones
+    const normalizarTexto = (str) => {
+        if (!str) return '';
+        return String(str)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim();
     };
 
-    const obtenerUltimosVuelos = (piloto) => {
+    // 🔹 Cruce estricto de vuelos por MongoDB Extended JSON
+    const obtenerAnalisisVuelos = (piloto) => {
         const idPiloto = extraerId(piloto._id || piloto.id);
-        const apellidoPiloto = (piloto.apellido || '').toLowerCase().trim();
 
+        // Filtrar vuelos donde el piloto figura como piloto, copiloto o instructor por ID
         const vuelosDelPiloto = vuelosHistorial.filter(vuelo => {
             const idPilotoVuelo = extraerId(vuelo.piloto);
             const idCopilotoVuelo = extraerId(vuelo.copiloto);
             const idInstructorVuelo = extraerId(vuelo.instructor);
 
-            const coincideId = (idPiloto && (idPilotoVuelo === idPiloto || idCopilotoVuelo === idPiloto || idInstructorVuelo === idPiloto));
-            const stringVuelo = JSON.stringify(vuelo).toLowerCase();
-            const coincideNombre = apellidoPiloto.length > 2 && stringVuelo.includes(apellidoPiloto);
-
-            return coincideId || coincideNombre;
+            return idPiloto && (idPilotoVuelo === idPiloto || idCopilotoVuelo === idPiloto || idInstructorVuelo === idPiloto);
         });
 
+        // 1. Fecha de último vuelo general
         let fechaGral = parseFecha(piloto.fechaUltimoVuelo || piloto.ultimoVuelo);
-
         vuelosDelPiloto.forEach(v => {
-            const fechaVuelo = parseFecha(v.fecha);
-            if (fechaVuelo && (!fechaGral || fechaVuelo > fechaGral)) {
-                fechaGral = fechaVuelo;
+            const fVuelo = parseFecha(v.fecha);
+            if (fVuelo && (!fechaGral || fVuelo > fechaGral)) {
+                fechaGral = fVuelo;
             }
         });
 
+        // 2. Fecha de último vuelo nocturno (condicion === 'Nocturno' o usoNVG === true)
         let fechaNoc = parseFecha(piloto.fechaUltimoVueloNocturno || piloto.ultimoVueloNocturno);
-
         vuelosDelPiloto.forEach(v => {
-            const esNocturno = String(v.condicion).toLowerCase() === 'nocturno' || v.usoNVG === true;
-            
+            const condicionStr = normalizarTexto(v.condicion);
+            const esNocturno = condicionStr === 'nocturno' || v.usoNVG === true;
             if (esNocturno) {
-                const fechaVuelo = parseFecha(v.fecha);
-                if (fechaVuelo && (!fechaNoc || fechaVuelo > fechaNoc)) {
-                    fechaNoc = fechaVuelo;
+                const fVuelo = parseFecha(v.fecha);
+                if (fVuelo && (!fechaNoc || fVuelo > fechaNoc)) {
+                    fechaNoc = fVuelo;
                 }
             }
         });
 
-        return { fechaGral, fechaNoc };
+        // 3. Evaluar habilitaciones / misiones realizadas dentro del año (365 días)
+        const especialidadesBase = piloto.capacitacionesEspeciales || piloto.capacitaciones || [];
+        const especialidadesEvaluadas = especialidadesBase.map(cap => {
+            const nombreCap = cap.tipo || cap.nombre || cap.descripcion || (typeof cap === 'string' ? cap : 'Especialidad');
+            const normCap = normalizarTexto(nombreCap);
+
+            // Buscar en el historial si ejecutó una misión equivalente hace menos de 365 días
+            let fechaUltimaMision = parseFecha(cap.fechaUltimaActividad || cap.fechaAdquisicion || cap.fecha);
+
+            vuelosDelPiloto.forEach(v => {
+                const tipoMisionNorm = normalizarTexto(v.tipoMision);
+                const condicionNorm = normalizarTexto(v.condicion);
+                const reglasNorm = normalizarTexto(v.reglasVuelo);
+
+                const coincideMision = tipoMisionNorm.includes(normCap) || 
+                                       normCap.includes(tipoMisionNorm) ||
+                                       (normCap.includes('nocturno') && (condicionNorm === 'nocturno' || v.usoNVG)) ||
+                                       (normCap.includes('ifr') && reglasNorm === 'ifr');
+
+                if (coincideMision) {
+                    const fVuelo = parseFecha(v.fecha);
+                    if (fVuelo && (!fechaUltimaMision || fVuelo > fechaUltimaMision)) {
+                        fechaUltimaMision = fVuelo;
+                    }
+                }
+            });
+
+            const diasTranscurridos = calcularDias(fechaUltimaMision);
+            const esVencida = diasTranscurridos === null || diasTranscurridos > 365;
+
+            return {
+                nombre: nombreCap,
+                fecha: fechaUltimaMision,
+                dias: diasTranscurridos,
+                esVencida
+            };
+        });
+
+        return { fechaGral, fechaNoc, especialidadesEvaluadas };
     };
 
     const evaluarPiloto = (piloto) => {
-        const { fechaGral, fechaNoc } = obtenerUltimosVuelos(piloto);
+        const { fechaGral, fechaNoc, especialidadesEvaluadas } = obtenerAnalisisVuelos(piloto);
 
         const diasUltimoVuelo = calcularDias(fechaGral);
         const diasUltimoNocturno = calcularDias(fechaNoc);
 
         const vencidoGeneral = diasUltimoVuelo === null || diasUltimoVuelo > 45;
         const vencidoNocturno = diasUltimoNocturno === null || diasUltimoNocturno > 60;
+        const tieneEspecialidadesVencidas = especialidadesEvaluadas.some(e => e.esVencida);
 
-        const especialidades = piloto.capacitacionesEspeciales || piloto.capacitaciones || [];
-        const especialidadesVencidas = especialidades.filter(cap => {
-            const fechaCap = parseFecha(cap.fechaUltimaActividad || cap.fechaAdquisicion || cap.fecha);
-            const diasCap = calcularDias(fechaCap);
-            return diasCap === null || diasCap > 365;
-        });
+        // 🔹 Determinación exacta del Estado según combinación
+        let estadoLabel = 'RECIENTE';
+        let estadoTipo = 'OK'; // 'OK', 'WARNING', 'DANGER'
 
-        const esVencidoTotal = vencidoGeneral || vencidoNocturno || especialidadesVencidas.length > 0;
+        if (vencidoGeneral && vencidoNocturno) {
+            estadoLabel = 'Readaptación completa';
+            estadoTipo = 'DANGER';
+        } else if (vencidoGeneral) {
+            estadoLabel = 'Readaptación General';
+            estadoTipo = 'WARNING';
+        } else if (vencidoNocturno) {
+            estadoLabel = 'Readaptación Nocturno';
+            estadoTipo = 'WARNING';
+        } else if (tieneEspecialidadesVencidas) {
+            estadoLabel = 'Aptitudes Vencidas';
+            estadoTipo = 'WARNING';
+        }
+
+        const esVencidoTotal = estadoTipo !== 'OK';
 
         return {
             fechaGral,
@@ -170,7 +235,9 @@ const VencimientosPilotos = () => {
             diasUltimoNocturno,
             vencidoGeneral,
             vencidoNocturno,
-            especialidadesVencidas,
+            especialidadesEvaluadas,
+            estadoLabel,
+            estadoTipo,
             esVencidoTotal
         };
     };
@@ -192,7 +259,7 @@ const VencimientosPilotos = () => {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px', fontWeight: 'bold', color: '#1b3a57' }}>
-                ⌛ Procesando registros de vuelos nocturnos y recientía...
+                ⌛ Sincronizando vuelos en formato MongoDB y verificando recientía...
             </div>
         );
     }
@@ -249,16 +316,16 @@ const VencimientosPilotos = () => {
                             <th style={styles.th}>Oficial</th>
                             <th style={styles.th}>Último Vuelo (Gral)</th>
                             <th style={styles.th}>Último Vuelo Nocturno</th>
-                            <th style={styles.th}>Aptitudes / Habilitaciones</th>
+                            <th style={styles.th}>Aptitudes / Habilitaciones (365d)</th>
                             <th style={{...styles.th, textAlign: 'center'}}>Estado Global</th>
                         </tr>
                     </thead>
                     <tbody>
                         {listaFiltrada.map(p => {
-                            const { fechaGral, fechaNoc, diasUltimoVuelo, diasUltimoNocturno, vencidoGeneral, vencidoNocturno, especialidadesVencidas, esVencidoTotal } = p.evaluacion;
+                            const { fechaGral, fechaNoc, diasUltimoVuelo, diasUltimoNocturno, vencidoGeneral, vencidoNocturno, especialidadesEvaluadas, estadoLabel, estadoTipo } = p.evaluacion;
 
                             return (
-                                <tr key={p._id || p.id} style={styles.tr}>
+                                <tr key={p._id?.$oid || p._id || p.id} style={styles.tr}>
                                     <td style={{...styles.td, fontWeight: 'bold'}}>
                                         <User size={14} style={{ marginRight: '6px', verticalAlign: 'middle', color: '#1b3a57' }} />
                                         {p.grado} {p.apellido}, {p.nombre}
@@ -290,37 +357,39 @@ const VencimientosPilotos = () => {
 
                                     {/* Regla 3: Habilitaciones Especiales */}
                                     <td style={styles.td}>
-                                        {(p.capacitacionesEspeciales || p.capacitaciones)?.length > 0 ? (
+                                        {especialidadesEvaluadas.length > 0 ? (
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                {(p.capacitacionesEspeciales || p.capacitaciones).map((cap, i) => {
-                                                    const nombreCap = cap.tipo || cap.nombre || cap.descripcion || 'Especialidad';
-                                                    const esVencidaCap = especialidadesVencidas.some(ev => (ev.tipo || ev.nombre) === nombreCap);
-                                                    return (
-                                                        <span key={i} style={{
-                                                            ...styles.tagCap,
-                                                            backgroundColor: esVencidaCap ? '#fef2f2' : '#f0fdf4',
-                                                            color: esVencidaCap ? '#991b1b' : '#166534',
-                                                            border: esVencidaCap ? '1px solid #f87171' : '1px solid #86efac'
-                                                        }}>
-                                                            {nombreCap}
-                                                        </span>
-                                                    );
-                                                })}
+                                                {especialidadesEvaluadas.map((cap, i) => (
+                                                    <span key={i} style={{
+                                                        ...styles.tagCap,
+                                                        backgroundColor: cap.esVencida ? '#fef2f2' : '#f0fdf4',
+                                                        color: cap.esVencida ? '#991b1b' : '#166534',
+                                                        border: cap.esVencida ? '1px solid #f87171' : '1px solid #86efac'
+                                                    }}>
+                                                        {cap.nombre} {cap.dias !== null ? `(${cap.dias}d)` : ''}
+                                                    </span>
+                                                ))}
                                             </div>
                                         ) : (
                                             <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Sin aptitudes registradas</span>
                                         )}
                                     </td>
 
-                                    {/* Estado Consolidado */}
+                                    {/* Estado Consolidado según condiciones */}
                                     <td style={{...styles.td, textAlign: 'center'}}>
-                                        {esVencidoTotal ? (
-                                            <span style={styles.statusVencido}>
-                                                <AlertTriangle size={12} /> INHABILITADO
-                                            </span>
-                                        ) : (
+                                        {estadoTipo === 'OK' && (
                                             <span style={styles.statusAlDia}>
-                                                <CheckCircle size={12} /> RECIENTE
+                                                <CheckCircle size={12} /> {estadoLabel}
+                                            </span>
+                                        )}
+                                        {estadoTipo === 'WARNING' && (
+                                            <span style={styles.statusWarning}>
+                                                <AlertTriangle size={12} /> {estadoLabel}
+                                            </span>
+                                        )}
+                                        {estadoTipo === 'DANGER' && (
+                                            <span style={styles.statusDanger}>
+                                                <AlertTriangle size={12} /> {estadoLabel}
                                             </span>
                                         )}
                                     </td>
@@ -359,8 +428,9 @@ const styles = {
     td: { padding: '12px 15px', color: '#334155' },
     badgeDays: { fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' },
     tagCap: { fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' },
-    statusVencido: { display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#fef2f2', color: '#991b1b', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.7rem', border: '1px solid #f87171' },
-    statusAlDia: { display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#f0fdf4', color: '#166534', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.7rem', border: '1px solid #86efac' }
+    statusAlDia: { display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#f0fdf4', color: '#166534', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.7rem', border: '1px solid #86efac' },
+    statusWarning: { display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#fefce8', color: '#a16207', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.7rem', border: '1px solid #fde047' },
+    statusDanger: { display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#fef2f2', color: '#991b1b', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.7rem', border: '1px solid #f87171' }
 };
 
 export default VencimientosPilotos;
