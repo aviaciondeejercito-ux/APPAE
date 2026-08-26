@@ -9,7 +9,6 @@ const VencimientosPilotos = () => {
     const [busqueda, setBusqueda] = useState('');
     const [filtroEstado, setFiltroEstado] = useState('TODOS');
 
-    // Estados para la selección e invisibilidad dinámica por Sistema de Armas (SdA)
     const [todosLosSdas, setTodosLosSdas] = useState([]);
     const [sdasVisibles, setSdasVisibles] = useState({});
 
@@ -18,20 +17,30 @@ const VencimientosPilotos = () => {
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
     const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'COMANDO', 'COMANAV'].includes(roleNormalizado);
 
-    // Escala jerárquica de antigüedad para Oficiales
     const ORDEN_JERARQUICO = {
-        'CR': 1,
-        'TC': 2,
-        'MY': 3,
-        'CT': 4,
-        'TP': 5,
-        'TT': 6,
-        'ST': 7
+        'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7
     };
 
     useEffect(() => {
         cargarDatos();
     }, []);
+
+    // Helper para extraer ID seguro de MongoDB
+    const extraerId = (campo) => {
+        if (!campo) return '';
+        if (typeof campo === 'object') {
+            if (campo.$oid) return campo.$oid.toLowerCase();
+            if (campo._id) return extraerId(campo._id);
+            if (campo.id) return extraerId(campo.id);
+        }
+        return String(campo).toLowerCase();
+    };
+
+    // Helper para normalizar texto de aeronave / SdA
+    const normalizarSda = (sda) => {
+        if (!sda) return '';
+        return String(sda).trim().toUpperCase();
+    };
 
     const cargarDatos = async () => {
         try {
@@ -61,32 +70,28 @@ const VencimientosPilotos = () => {
                     return u.trim().toUpperCase() === userUnidad;
                 });
 
-            // 3. Ordenar por jerarquía de antigüedad y luego alfabéticamente por apellido
+            // 3. Ordenar por jerarquía
             const dataOrdenada = [...dataFiltrada].sort((a, b) => {
-                const gradoA = a.grado ? a.grado.trim().toUpperCase() : '';
-                const gradoB = b.grado ? b.grado.trim().toUpperCase() : '';
-
-                const jerarquiaA = ORDEN_JERARQUICO[gradoA] || 99;
-                const jerarquiaB = ORDEN_JERARQUICO[gradoB] || 99;
-
-                if (jerarquiaA !== jerarquiaB) {
-                    return jerarquiaA - jerarquiaB;
-                }
-
-                const apellidoA = (a.apellido || '').toLowerCase();
-                const apellidoB = (b.apellido || '').toLowerCase();
-                return apellidoA.localeCompare(apellidoB, 'es', { sensitivity: 'base' });
+                const jerarquiaA = ORDEN_JERARQUICO[a.grado?.trim().toUpperCase()] || 99;
+                const jerarquiaB = ORDEN_JERARQUICO[b.grado?.trim().toUpperCase()] || 99;
+                if (jerarquiaA !== jerarquiaB) return jerarquiaA - jerarquiaB;
+                return (a.apellido || '').localeCompare(b.apellido || '', 'es', { sensitivity: 'base' });
             });
 
             setPersonal(dataOrdenada);
 
-            // Extracto dinámico de todos los SdA donde el personal posee habilitación activa/registrada
+            // Extracto dinámico ÚNICAMENTE de SdA presentes en la base de datos de vuelos o habilitaciones
             const sdasSet = new Set();
+            vuelosData.forEach(v => {
+                const sdaVuelo = normalizarSda(v.aeronave || v.sda || v.sistemaArmas);
+                if (sdaVuelo) sdasSet.add(sdaVuelo);
+            });
+
             dataOrdenada.forEach(p => {
-                if (p.aeronave) sdasSet.add(p.aeronave);
+                if (p.aeronave) sdasSet.add(normalizarSda(p.aeronave));
                 if (Array.isArray(p.habilitaciones)) {
                     p.habilitaciones.forEach(h => {
-                        if (h.aeronave) sdasSet.add(h.aeronave);
+                        if (h.aeronave) sdasSet.add(normalizarSda(h.aeronave));
                     });
                 }
             });
@@ -94,7 +99,6 @@ const VencimientosPilotos = () => {
             const sdasLista = Array.from(sdasSet).sort();
             setTodosLosSdas(sdasLista);
 
-            // Inicializamos todos los SdA desmarcados por defecto
             const visibilidadInicial = {};
             sdasLista.forEach(sda => { visibilidadInicial[sda] = false; });
             setSdasVisibles(visibilidadInicial);
@@ -110,7 +114,6 @@ const VencimientosPilotos = () => {
         setSdasVisibles(prev => ({ ...prev, [sda]: !prev[sda] }));
     };
 
-    // Helper para parsear fechas
     const parseFecha = (fechaValor) => {
         if (!fechaValor) return null;
         let fechaStr = fechaValor;
@@ -121,18 +124,6 @@ const VencimientosPilotos = () => {
         return isNaN(f.getTime()) ? null : f;
     };
 
-    // Helper para extraer ID seguro de MongoDB
-    const extraerId = (campo) => {
-        if (!campo) return '';
-        if (typeof campo === 'object') {
-            if (campo.$oid) return campo.$oid.toLowerCase();
-            if (campo._id) return extraerId(campo._id);
-            if (campo.id) return extraerId(campo.id);
-        }
-        return String(campo).toLowerCase();
-    };
-
-    // Helper para calcular días transcurridos
     const calcularDias = (fechaObj) => {
         if (!fechaObj) return null;
         const hoy = new Date();
@@ -140,30 +131,36 @@ const VencimientosPilotos = () => {
         return Math.floor(difMs / (1000 * 60 * 60 * 24));
     };
 
-    // Normalizador de texto
     const normalizarTexto = (str) => {
         if (!str) return '';
-        return String(str)
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .toLowerCase()
-            .trim();
+        return String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     };
 
-    // Lógica estricta de cruce de vuelos y aptitudes
-    const obtenerAnalisisVuelos = (piloto) => {
+    // 🔹 Lógica de análisis de vuelos FILTRADA estrictamente por el SdA en evaluación
+    const obtenerAnalisisVuelosPorSda = (piloto, sdaObjetivo = null) => {
         const idPiloto = extraerId(piloto._id || piloto.id);
 
+        // Vuelos del piloto filtrados por MongoDB ID y por el SdA específico
         const vuelosDelPiloto = vuelosHistorial.filter(vuelo => {
             const idPilotoVuelo = extraerId(vuelo.piloto);
             const idCopilotoVuelo = extraerId(vuelo.copiloto);
             const idInstructorVuelo = extraerId(vuelo.instructor);
+            const coincidePiloto = idPiloto && (idPilotoVuelo === idPiloto || idCopilotoVuelo === idPiloto || idInstructorVuelo === idPiloto);
 
-            return idPiloto && (idPilotoVuelo === idPiloto || idCopilotoVuelo === idPiloto || idInstructorVuelo === idPiloto);
+            if (!coincidePiloto) return false;
+
+            if (sdaObjetivo) {
+                const sdaVuelo = normalizarSda(vuelo.aeronave || vuelo.sda || vuelo.sistemaArmas);
+                return sdaVuelo === sdaObjetivo;
+            }
+            return true;
         });
 
-        // 1. Fecha de último vuelo general
-        let fechaGral = parseFecha(piloto.fechaUltimoVuelo || piloto.ultimoVuelo);
+        // 1. Fecha de último vuelo general en este SdA
+        let fechaGral = null;
+        if (!sdaObjetivo || normalizarSda(piloto.aeronave) === sdaObjetivo) {
+            fechaGral = parseFecha(piloto.fechaUltimoVuelo || piloto.ultimoVuelo);
+        }
         vuelosDelPiloto.forEach(v => {
             const fVuelo = parseFecha(v.fecha);
             if (fVuelo && (!fechaGral || fVuelo > fechaGral)) {
@@ -171,8 +168,11 @@ const VencimientosPilotos = () => {
             }
         });
 
-        // 2. Fecha de último vuelo nocturno
-        let fechaNoc = parseFecha(piloto.fechaUltimoVueloNocturno || piloto.ultimoVueloNocturno);
+        // 2. Fecha de último vuelo nocturno en este SdA
+        let fechaNoc = null;
+        if (!sdaObjetivo || normalizarSda(piloto.aeronave) === sdaObjetivo) {
+            fechaNoc = parseFecha(piloto.fechaUltimoVueloNocturno || piloto.ultimoVueloNocturno);
+        }
         vuelosDelPiloto.forEach(v => {
             const condicionStr = normalizarTexto(v.condicion);
             const esNocturno = condicionStr === 'nocturno' || v.usoNVG === true;
@@ -184,7 +184,7 @@ const VencimientosPilotos = () => {
             }
         });
 
-        // 3. Evaluar aptitudes / misiones REALMENTE registradas en la base de datos
+        // 3. Evaluar aptitudes/capacitaciones en este SdA
         const especialidadesBase = piloto.capacitacionesEspeciales || piloto.capacitaciones || [];
         const especialidadesEvaluadas = especialidadesBase.map(cap => {
             const nombreCap = cap.tipo || cap.nombre || cap.descripcion || (typeof cap === 'string' ? cap : 'Especialidad');
@@ -221,11 +221,11 @@ const VencimientosPilotos = () => {
             };
         });
 
-        return { fechaGral, fechaNoc, especialidadesEvaluadas };
+        return { fechaGral, fechaNoc, especialidadesEvaluadas, cantidadVuelos: vuelosDelPiloto.length };
     };
 
-    const evaluarPiloto = (piloto) => {
-        const { fechaGral, fechaNoc, especialidadesEvaluadas } = obtenerAnalisisVuelos(piloto);
+    const evaluarPiloto = (piloto, sdaObjetivo = null) => {
+        const { fechaGral, fechaNoc, especialidadesEvaluadas, cantidadVuelos } = obtenerAnalisisVuelosPorSda(piloto, sdaObjetivo);
 
         const diasUltimoVuelo = calcularDias(fechaGral);
         const diasUltimoNocturno = calcularDias(fechaNoc);
@@ -251,8 +251,6 @@ const VencimientosPilotos = () => {
             estadoTipo = 'WARNING';
         }
 
-        const esVencidoTotal = estadoTipo !== 'OK';
-
         return {
             fechaGral,
             fechaNoc,
@@ -263,51 +261,68 @@ const VencimientosPilotos = () => {
             especialidadesEvaluadas,
             estadoLabel,
             estadoTipo,
-            esVencidoTotal
+            esVencidoTotal: estadoTipo !== 'OK',
+            cantidadVuelos
         };
     };
 
-    const listaProcesada = personal.map(p => ({
-        ...p,
-        evaluacion: evaluarPiloto(p)
-    }));
-
-    const listaFiltrada = listaProcesada.filter(p => {
-        const coincideBusqueda = `${p.grado} ${p.apellido} ${p.nombre}`.toLowerCase().includes(busqueda.toLowerCase());
-        if (!coincideBusqueda) return false;
-
-        if (filtroEstado === 'VENCIDOS') return p.evaluacion.esVencidoTotal;
-        if (filtroEstado === 'AL_DIA') return !p.evaluacion.esVencidoTotal;
-        return true;
-    });
-
-    // 🔹 MATRIZ DE AGRUPAMIENTO DINÁMICO POR SISTEMA DE ARMAS (SdA)
+    // 🔹 CONSTRUCCIÓN ESTRICTA DE LA MATRIZ: Se incluye al piloto en un SdA SOLO SI TIENE VUELOS O HABILITACIÓN ACTIVA
     const matrizSda = useMemo(() => {
         const agrupa = {};
         todosLosSdas.forEach(sda => { agrupa[sda] = []; });
 
-        listaFiltrada.forEach(p => {
-            const sdasDelPiloto = new Set();
-            if (p.aeronave) sdasDelPiloto.add(p.aeronave);
+        personal.forEach(p => {
+            const idPiloto = extraerId(p._id || p.id);
+
+            // Obtener todos los SdA donde el piloto realmente registró un vuelo
+            const sdasConVueloReal = new Set(
+                vuelosHistorial
+                    .filter(v => {
+                        const pId = extraerId(v.piloto);
+                        const cId = extraerId(v.copiloto);
+                        const iId = extraerId(v.instructor);
+                        return idPiloto && (pId === idPiloto || cId === idPiloto || iId === idPiloto);
+                    })
+                    .map(v => normalizarSda(v.aeronave || v.sda || v.sistemaArmas))
+                    .filter(Boolean)
+            );
+
+            // SdA asignados en legajo/habilitación
+            if (p.aeronave) sdasConVueloReal.add(normalizarSda(p.aeronave));
             if (Array.isArray(p.habilitaciones)) {
                 p.habilitaciones.forEach(h => {
-                    if (h.aeronave) sdasDelPiloto.add(h.aeronave);
+                    if (h.aeronave) sdasConVueloReal.add(normalizarSda(h.aeronave));
                 });
             }
 
-            sdasDelPiloto.forEach(sda => {
+            // Agrupar evaluando únicamente sobre los SdA correspondientes
+            sdasConVueloReal.forEach(sda => {
                 if (agrupa[sda]) {
-                    agrupa[sda].push(p);
+                    const evaluacionSda = evaluarPiloto(p, sda);
+
+                    // Filtros globales por estado/búsqueda
+                    const coincideBusqueda = `${p.grado} ${p.apellido} ${p.nombre}`.toLowerCase().includes(busqueda.toLowerCase());
+                    let cumpleFiltro = coincideBusqueda;
+
+                    if (cumpleFiltro && filtroEstado === 'VENCIDOS') cumpleFiltro = evaluacionSda.esVencidoTotal;
+                    if (cumpleFiltro && filtroEstado === 'AL_DIA') cumpleFiltro = !evaluacionSda.esVencidoTotal;
+
+                    if (cumpleFiltro) {
+                        agrupa[sda].push({
+                            ...p,
+                            evaluacion: evaluacionSda
+                        });
+                    }
                 }
             });
         });
 
         Object.keys(agrupa).forEach(sda => {
-            agrupa[sda].sort((a, b) => (ORDEN_JERARQUICO[a.grado] || 99) - (ORDEN_JERARQUICO[b.grado] || 99));
+            agrupa[sda].sort((a, b) => (ORDEN_JERARQUICO[a.grado?.trim().toUpperCase()] || 99) - (ORDEN_JERARQUICO[b.grado?.trim().toUpperCase()] || 99));
         });
 
         return agrupa;
-    }, [listaFiltrada, todosLosSdas]);
+    }, [personal, vuelosHistorial, todosLosSdas, busqueda, filtroEstado]);
 
     const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
 
@@ -328,7 +343,7 @@ const VencimientosPilotos = () => {
                 </div>
             </div>
 
-            {/* 🔹 Barra de Selección de Sistemas de Armas (SdA) */}
+            {/* Selector por Sistema de Armas */}
             <div style={styles.sdaFilterBar}>
                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1b3a57' }}>Sistemas de Armas:</span>
                 <div style={styles.sdaFilterGroup}>
@@ -348,7 +363,7 @@ const VencimientosPilotos = () => {
                 </div>
             </div>
 
-            {/* Filtros de Búsqueda y Estados */}
+            {/* Barra de Búsqueda y Estados */}
             <div style={styles.filterBar}>
                 <div style={styles.searchWrapper}>
                     <Search size={16} color="#7f8c8d" />
@@ -366,24 +381,24 @@ const VencimientosPilotos = () => {
                         onClick={() => setFiltroEstado('TODOS')} 
                         style={{...styles.btnFilter, backgroundColor: filtroEstado === 'TODOS' ? '#1b3a57' : '#e2e8f0', color: filtroEstado === 'TODOS' ? 'white' : '#334155'}}
                     >
-                        Todos ({listaProcesada.length})
+                        Todos
                     </button>
                     <button 
                         onClick={() => setFiltroEstado('VENCIDOS')} 
                         style={{...styles.btnFilter, backgroundColor: filtroEstado === 'VENCIDOS' ? '#c0392b' : '#fef2f2', color: filtroEstado === 'VENCIDOS' ? 'white' : '#991b1b'}}
                     >
-                        🚨 Vencidos ({listaProcesada.filter(p => p.evaluacion.esVencidoTotal).length})
+                        🚨 Vencidos
                     </button>
                     <button 
                         onClick={() => setFiltroEstado('AL_DIA')} 
                         style={{...styles.btnFilter, backgroundColor: filtroEstado === 'AL_DIA' ? '#27ae60' : '#f0fdf4', color: filtroEstado === 'AL_DIA' ? 'white' : '#166534'}}
                     >
-                        ✅ Al Día ({listaProcesada.filter(p => !p.evaluacion.esVencidoTotal).length})
+                        ✅ Al Día
                     </button>
                 </div>
             </div>
 
-            {/* Tabla de Vencimientos con Despliegue Agrupado por SdA */}
+            {/* Tabla de Vencimientos */}
             <div style={styles.tableCard}>
                 <table style={styles.table}>
                     <thead>
@@ -423,7 +438,6 @@ const VencimientosPilotos = () => {
                                                         {p.grado} {p.apellido}, {p.nombre}
                                                     </td>
 
-                                                    {/* Fecha Vuelo General */}
                                                     <td style={styles.td}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                             <span style={{ fontWeight: 'bold', color: vencidoGeneral ? '#c0392b' : '#27ae60' }}>
@@ -435,7 +449,6 @@ const VencimientosPilotos = () => {
                                                         </div>
                                                     </td>
 
-                                                    {/* Fecha Vuelo Nocturno */}
                                                     <td style={styles.td}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                             <span style={{ fontWeight: 'bold', color: vencidoNocturno ? '#c0392b' : '#27ae60' }}>
@@ -447,7 +460,6 @@ const VencimientosPilotos = () => {
                                                         </div>
                                                     </td>
 
-                                                    {/* Habilitaciones Especiales */}
                                                     <td style={styles.td}>
                                                         {especialidadesEvaluadas.length > 0 ? (
                                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
@@ -467,7 +479,6 @@ const VencimientosPilotos = () => {
                                                         )}
                                                     </td>
 
-                                                    {/* Estado Consolidado */}
                                                     <td style={{...styles.td, textAlign: 'center'}}>
                                                         {estadoTipo === 'OK' && (
                                                             <span style={styles.statusAlDia}>
