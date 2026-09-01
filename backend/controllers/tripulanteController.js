@@ -1,6 +1,6 @@
 const Tripulante = require('../models/Tripulante');
 const Auditoria = require('../models/Auditoria');
-const Vuelo = require('../models/Vuelo'); // Agregado para validaciones si hicieran falta
+const Vuelo = require('../models/Vuelo'); 
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
@@ -202,7 +202,7 @@ exports.agregarCapacitacion = async (req, res) => {
     }
 };
 
-// 4. Obtener Tripulantes (FIX FIX: Corrección de Typo de 'filter' a 'filtro')
+// 4. Obtener Tripulantes (Acumula horas ÚNICAMENTE en Capacitaciones Tácticas)
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -218,7 +218,7 @@ exports.obtenerTripulantes = async (req, res) => {
             filtro.$or = [{ elemento: miUnidad }, { unidad: miUnidad }];
         } else if (req.query.unidad && req.query.unidad !== 'all') {
             const unidadQuery = req.query.unidad.toUpperCase().trim();
-            filtro.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }]; // Corregido el bug de 'filter' a 'filtro'
+            filtro.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }];
         }
 
         const tripulantes = await Tripulante.find(filtro)
@@ -226,7 +226,64 @@ exports.obtenerTripulantes = async (req, res) => {
             .sort({ apellido: 1 })
             .lean();
 
-        res.status(200).json(tripulantes);
+        if (!tripulantes.length) return res.status(200).json([]);
+
+        const idsTripulantes = tripulantes.map(t => t._id);
+
+        // Consultamos la bitácora de vuelos para sumar únicamente por Capacitación Táctica
+        const vuelos = await Vuelo.find({
+            $or: [
+                { piloto: { $in: idsTripulantes } },
+                { copiloto: { $in: idsTripulantes } },
+                { instructor: { $in: idsTripulantes } }
+            ]
+        }).lean();
+
+        // Acumulador exclusivo para tareas / capacitaciones tácticas
+        const mapaHorasTácticas = {}; // Guarda { "pilotoId_TIPOMISION": hsTotales }
+
+        vuelos.forEach(v => {
+            const hsVuelo = Number(v.horasVoladas || 0);
+            const tipoMision = (v.tipoMision || v.tarea || v.naturaleza || v.tipo || '').trim().toUpperCase();
+
+            if (!tipoMision) return;
+
+            const acumularTáctica = (pilotoId) => {
+                if (!pilotoId) return;
+                const keyTactica = `${pilotoId.toString()}_${tipoMision}`;
+                mapaHorasTácticas[keyTactica] = (mapaHorasTácticas[keyTactica] || 0) + hsVuelo;
+            };
+
+            acumularTáctica(v.piloto);
+            acumularTáctica(v.copiloto);
+            acumularTáctica(v.instructor);
+        });
+
+        // Inyectamos horas calculadas SÓLO en capacitacionesEspeciales.
+        // Las habilitaciones quedan 100% intactas tal cual vienen de la base de datos.
+        const tripulantesConHoras = tripulantes.map(t => {
+            const tIdStr = t._id.toString();
+
+            if (t.capacitacionesEspeciales && t.capacitacionesEspeciales.length > 0) {
+                t.capacitacionesEspeciales = t.capacitacionesEspeciales.map(cap => {
+                    const tipoCap = (cap.tipo || '').trim().toUpperCase();
+                    const key = `${tIdStr}_${tipoCap}`;
+
+                    const hsVoladasEnTipo = mapaHorasTácticas[key] !== undefined 
+                        ? mapaHorasTácticas[key] 
+                        : Number(cap.horasAcreditadas || 0);
+
+                    return {
+                        ...cap,
+                        horasAcreditadas: Math.round(hsVoladasEnTipo * 10) / 10
+                    };
+                });
+            }
+
+            return t;
+        });
+
+        res.status(200).json(tripulantesConHoras);
     } catch (error) {
         console.error("❌ ERROR 500 EN OBTENER_TRIPULANTES:", error);
         res.status(500).json({ mensaje: "Error al obtener tripulantes", detalle: error.message });
