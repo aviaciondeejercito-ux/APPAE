@@ -18,8 +18,6 @@ const CONFIG_HORAS_EBM = {
 
 /**
  * FUNCIÓN AUXILIAR: DETECTAR CATEGORÍA POR NOMBRE DE SDA
- * Comprueba si el SdA contiene palabras clave de helicópteros comunes.
- * Puedes ampliar esta lista de texto según los nombres exactos de tus SdAs.
  */
 const determinarTipoAeronave = (sda) => {
     if (!sda) return 'AVION';
@@ -97,24 +95,28 @@ exports.getPlanificacionCompleta = async (req, res) => {
             return 4;
         };
 
+        // --- MAPEO CON SEGREGACIÓN DE ROLES (Piloto/Copiloto vs Instructor) ---
         const mapHorasVoladas = {};
         vuelosAño.forEach(v => {
             const trim = obtenerTrimestreDeFecha(v.fecha);
             const hs = Number(v.horasVoladas || 0);
             const sda = (v.aeronave || 'SIN SdA').trim().toUpperCase();
 
-            if (v.piloto) {
-                const k = `${v.piloto.toString()}_${sda}_${trim}`;
-                mapHorasVoladas[k] = (mapHorasVoladas[k] || 0) + hs;
-            }
-            if (v.copiloto) {
-                const k = `${v.copiloto.toString()}_${sda}_${trim}`;
-                mapHorasVoladas[k] = (mapHorasVoladas[k] || 0) + hs;
-            }
-            if (v.instructor) {
-                const k = `${v.instructor.toString()}_${sda}_${trim}`;
-                mapHorasVoladas[k] = (mapHorasVoladas[k] || 0) + hs;
-            }
+            const acumular = (pilotoId, rol) => {
+                const k = `${pilotoId.toString()}_${sda}_${trim}`;
+                if (!mapHorasVoladas[k]) {
+                    mapHorasVoladas[k] = { hsPiloto: 0, hsInstructor: 0 };
+                }
+                if (rol === 'INSTRUCTOR') {
+                    mapHorasVoladas[k].hsInstructor += hs;
+                } else {
+                    mapHorasVoladas[k].hsPiloto += hs;
+                }
+            };
+
+            if (v.piloto) acumular(v.piloto, 'PILOTO');
+            if (v.copiloto) acumular(v.copiloto, 'COPILOTO');
+            if (v.instructor) acumular(v.instructor, 'INSTRUCTOR');
         });
 
         const resultadoFinal = [];
@@ -141,6 +143,20 @@ exports.getPlanificacionCompleta = async (req, res) => {
                 const tipoAeronave = determinarTipoAeronave(sda);
                 const defaultHs = (cond, tipo) => CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
 
+                // Auxiliar para armar las métricas de horas del trimestre
+                const getHsTrimestre = (pilotoId, sdaTarget, trimNum) => {
+                    const data = mapHorasVoladas[`${pilotoId}_${sdaTarget}_${trimNum}`] || { hsPiloto: 0, hsInstructor: 0 };
+                    const piloto = Math.round(data.hsPiloto * 10) / 10;
+                    const instructor = Math.round(data.hsInstructor * 10) / 10;
+                    const total = Math.round((data.hsPiloto + data.hsInstructor) * 10) / 10;
+                    return { hsPiloto: piloto, hsInstructor: instructor, hsVoladas: total };
+                };
+
+                const t1 = getHsTrimestre(p._id, sda, 1);
+                const t2 = getHsTrimestre(p._id, sda, 2);
+                const t3 = getHsTrimestre(p._id, sda, 3);
+                const t4 = getHsTrimestre(p._id, sda, 4);
+
                 const bloquePilotoSda = {
                     _id: `${p._id}_${sda}`, 
                     idOriginal: p._id,
@@ -150,11 +166,10 @@ exports.getPlanificacionCompleta = async (req, res) => {
                     elemento: p.elemento || p.unidad,
                     aeronave: sda,
                     
-                    // Inicialización inteligente por defecto según el tipo de aeronave detectado
-                    trimestre1: { condicion: 'CP', tipoEbm: 'A', hsVoladas: mapHorasVoladas[`${p._id}_${sda}_1`] || 0, hsFaltantes: defaultHs('CP', 'A'), motivoNoCumplimiento: '' },
-                    trimestre2: { condicion: 'CP', tipoEbm: 'B', hsVoladas: mapHorasVoladas[`${p._id}_${sda}_2`] || 0, hsFaltantes: defaultHs('CP', 'B'), motivoNoCumplimiento: '' },
-                    trimestre3: { condicion: 'CP', tipoEbm: 'C', hsVoladas: mapHorasVoladas[`${p._id}_${sda}_3`] || 0, hsFaltantes: defaultHs('CP', 'C'), motivoNoCumplimiento: '' },
-                    trimestre4: { condicion: 'CP', tipoEbm: 'D', hsVoladas: mapHorasVoladas[`${p._id}_${sda}_4`] || 0, hsFaltantes: defaultHs('CP', 'D'), motivoNoCumplimiento: '' }
+                    trimestre1: { condicion: 'CP', tipoEbm: 'A', ...t1, hsFaltantes: defaultHs('CP', 'A'), motivoNoCumplimiento: '' },
+                    trimestre2: { condicion: 'CP', tipoEbm: 'B', ...t2, hsFaltantes: defaultHs('CP', 'B'), motivoNoCumplimiento: '' },
+                    trimestre3: { condicion: 'CP', tipoEbm: 'C', ...t3, hsFaltantes: defaultHs('CP', 'C'), motivoNoCumplimiento: '' },
+                    trimestre4: { condicion: 'CP', tipoEbm: 'D', ...t4, hsFaltantes: defaultHs('CP', 'D'), motivoNoCumplimiento: '' }
                 };
 
                 if (planPiloto && planPiloto.trimestres) {
@@ -248,7 +263,6 @@ exports.actualizarConfiguracionEbm = async (req, res) => {
         [1, 2, 3, 4].forEach(n => {
             const trimInput = dataBody[`trimestre${n}`];
             if (trimInput) {
-                // Pasamos sdaTarget para guardar el número correcto en la BD
                 const exigenciaCalculada = calcularHorasExigidas(trimInput.condicion, trimInput.tipoEbm, sdaTarget);
 
                 trimestresMapeadosDB.push({
