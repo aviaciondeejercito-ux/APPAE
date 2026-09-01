@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
 // --- MATRIZ DE REQUISITOS CONFIGURABLE ---
@@ -83,7 +83,6 @@ const EbmPage = () => {
             const response = await getPlanificacionEbm();
             const dataBackend = response.data || [];
 
-            // CORRECCIÓN CRÍTICA: Recalcular hsFaltantes al vuelo basándose en la matriz de Aeronave del Frontend
             const dataNormalizada = dataBackend.map(p => {
                 const pModificado = { ...p };
                 const tipoAeronave = determinarTipoAeronave(p.aeronave);
@@ -199,6 +198,26 @@ const EbmPage = () => {
         return unicos.size === 4; 
     };
 
+    // Helper para calcular totales anuales discriminados
+    const calcularTotalesAnuales = (p) => {
+        let totalPiloto = 0;
+        let totalInstructor = 0;
+        let totalGeneral = 0;
+
+        [1, 2, 3, 4].forEach(num => {
+            const t = p[`trimestre${num}`] || {};
+            totalPiloto += Number(t.hsPiloto || 0);
+            totalInstructor += Number(t.hsInstructor || 0);
+            totalGeneral += Number(t.hsVoladas || 0);
+        });
+
+        return {
+            totalPiloto: Math.round(totalPiloto * 10) / 10,
+            totalInstructor: Math.round(totalInstructor * 10) / 10,
+            totalGeneral: Math.round(totalGeneral * 10) / 10
+        };
+    };
+
     const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
 
     if (loading) return <div style={styles.centerText}>Cargando Matriz de Exigencias EBM...</div>;
@@ -270,6 +289,8 @@ const EbmPage = () => {
                                         {matrizSda[sda].map(p => {
                                             const estaDesplegado = !!filasDesplegadas[p._id];
                                             const rotacionValida = verificarRotacionCorrecta(p);
+                                            const totalesAnuales = calcularTotalesAnuales(p);
+
                                             return (
                                                 <React.Fragment key={p._id}>
                                                     <tr style={styles.pilotRow}>
@@ -315,6 +336,8 @@ const EbmPage = () => {
                                                                 <div style={styles.panelConfigFlex}>
                                                                     {[1, 2, 3, 4].map(num => {
                                                                         const trimData = p[`trimestre${num}`] || {};
+                                                                        const esInstructor = trimData.condicion === 'IE';
+
                                                                         return (
                                                                             <div key={num} style={styles.bloqueTrimestreConfig}>
                                                                                 <h4 style={styles.tituloBloque}>Trimestre {num}</h4>
@@ -345,8 +368,22 @@ const EbmPage = () => {
                                                                                         <option value="D">Tipo D</option>
                                                                                     </select>
                                                                                 </div>
-                                                                                
-                                                                                <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '4px', fontWeight: 'bold' }}>
+
+                                                                                {/* DISCRIMINACIÓN DE HORAS SI ES INSTRUCTOR EN ESTE TRIMESTRE */}
+                                                                                {esInstructor && (
+                                                                                    <div style={styles.boxDiscriminado}>
+                                                                                        <div style={styles.badgeDiscriminadoPiloto}>
+                                                                                            <span>👨‍✈️ Piloto:</span>
+                                                                                            <strong>{formatearHoras(trimData.hsPiloto)} hs</strong>
+                                                                                        </div>
+                                                                                        <div style={styles.badgeDiscriminadoInstructor}>
+                                                                                            <span>🎓 Instructor:</span>
+                                                                                            <strong>{formatearHoras(trimData.hsInstructor)} hs</strong>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+
+                                                                                <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '6px', fontWeight: 'bold' }}>
                                                                                     Exige: {(() => {
                                                                                         const tipoAeronave = determinarTipoAeronave(p.aeronave);
                                                                                         return CONFIG_HORAS_EBM[tipoAeronave]?.[trimData.condicion || 'CP']?.[trimData.tipoEbm || 'A'] || 0;
@@ -356,20 +393,36 @@ const EbmPage = () => {
                                                                         );
                                                                     })}
                                                                 </div>
-                                                                
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
-                                                                    <div>
+
+                                                                {/* BARRA DE CONSOLIDADO Y TOTAL TRIMESTRAL DISCRIMINADO */}
+                                                                <div style={styles.barConsolidado}>
+                                                                    <div style={styles.cardConsolidadoAnual}>
+                                                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>📊 Totales Acumulados (Año 2026):</span>
+                                                                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                                                                            <span style={{ fontSize: '11px', color: '#334155' }}>
+                                                                                Piloto: <strong style={{ color: '#0284c7' }}>{formatearHoras(totalesAnuales.totalPiloto)} hs</strong>
+                                                                            </span>
+                                                                            <span style={{ fontSize: '11px', color: '#334155' }}>
+                                                                                Instructor: <strong style={{ color: '#475569' }}>{formatearHoras(totalesAnuales.totalInstructor)} hs</strong>
+                                                                            </span>
+                                                                            <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 'bold', borderLeft: '1px solid #cbd5e1', paddingLeft: '10px' }}>
+                                                                                Total Volado: {formatearHoras(totalesAnuales.totalGeneral)} hs
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                                                                         {!rotacionValida && (
                                                                             <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 'bold' }}>
-                                                                                ⚠️ Recordatorio: Para cumplir la directiva anual, combine los tipos A, B, C y D en el año.
+                                                                                ⚠️ Combine los tipos A, B, C y D en el año.
                                                                             </span>
                                                                         )}
+                                                                        {esGestorOperativo && (
+                                                                            <button style={styles.btnSaveRow} onClick={() => handleGuardarFila(p._id)} disabled={guardandoId === p._id}>
+                                                                                {guardandoId === p._id ? 'Guardando legajo...' : '💾 Aplicar Configuración Anual'}
+                                                                            </button>
+                                                                        )}
                                                                     </div>
-                                                                    {esGestorOperativo && (
-                                                                        <button style={styles.btnSaveRow} onClick={() => handleGuardarFila(p._id)} disabled={guardandoId === p._id}>
-                                                                            {guardandoId === p._id ? 'Guardando legajo...' : '💾 Aplicar Configuración Anual'}
-                                                                        </button>
-                                                                    )}
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -422,6 +475,11 @@ const styles = {
     grupoInput: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '5px' },
     labelMini: { fontSize: '11px', color: '#475569', fontWeight: 'bold' },
     selectPanel: { backgroundColor: '#fff', color: '#334155', border: '1px solid #cbd5e1', fontSize: '11px', padding: '4px 5px', borderRadius: '3px', width: '70%', cursor: 'pointer' },
+    boxDiscriminado: { marginTop: '8px', paddingTop: '6px', borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' },
+    badgeDiscriminadoPiloto: { display: 'flex', justifyContent: 'space-between', backgroundColor: '#e0f2fe', color: '#0369a1', padding: '3px 6px', borderRadius: '4px', fontSize: '10px' },
+    badgeDiscriminadoInstructor: { display: 'flex', justifyContent: 'space-between', backgroundColor: '#f1f5f9', color: '#334155', padding: '3px 6px', borderRadius: '4px', fontSize: '10px' },
+    barConsolidado: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', backgroundColor: '#e2e8f0', padding: '10px 15px', borderRadius: '6px' },
+    cardConsolidadoAnual: { display: 'flex', alignItems: 'center', gap: '12px' },
     btnSaveRow: { backgroundColor: '#16a34a', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' },
     centerText: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', fontSize: '14px', fontWeight: 'bold', color: '#1b3a57' },
     noDataRow: { padding: '40px', color: '#64748b', fontSize: '13px', textAlign: 'center', backgroundColor: '#fafafa' }
