@@ -33,9 +33,9 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS REPARADO CON SANITIZACIÓN ---
+    // --- CÓMPUTO DINÁMICO DE HORAS REPARADO CON SANITIZACIÓN Y 5TO TOTAL ---
     const obtenerTotalesDinamicos = () => {
-        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
+        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0, total: 0 };
         if (!seleccionado) return totales;
 
         if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
@@ -56,6 +56,9 @@ const Tripulantes = () => {
         totales.instrumental = redondearHs(totales.instrumental);
         totales.nocturno = redondearHs(totales.nocturno);
         totales.nvg = redondearHs(totales.nvg);
+
+        // Suma del 5to elemento total
+        totales.total = redondearHs(totales.visual + totales.instrumental + totales.nocturno + totales.nvg);
 
         return totales;
     };
@@ -316,6 +319,10 @@ const Tripulantes = () => {
                                 <div style={styles.statCard}><span style={styles.statLabel}>NOCTURNO</span><span style={styles.statValue}>{horasDinamicas.nocturno} hs</span></div>
                                 <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{horasDinamicas.instrumental} hs</span></div>
                                 <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{horasDinamicas.nvg} hs</span></div>
+                                <div style={{...styles.statCard, backgroundColor: '#e3f2fd', borderColor: '#1b3a57'}}>
+                                    <span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL HORAS</span>
+                                    <span style={{...styles.statValue, color: '#1b3a57'}}>{horasDinamicas.total} hs</span>
+                                </div>
                             </div>
 
                             {/* EXPERIENCIA SdA */}
