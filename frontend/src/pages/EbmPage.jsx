@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
 // --- MATRIZ DE REQUISITOS CONFIGURABLE ---
@@ -39,6 +41,7 @@ const EbmPage = () => {
     const [todoElPersonal, setTodoElPersonal] = useState([]); 
     const [personalFiltrado, setPersonalFiltrado] = useState([]); 
     const [loading, setLoading] = useState(true);
+    const [generandoPdf, setGenerandoPdf] = useState(false);
     const [guardandoId, setGuardandoId] = useState(null); 
     const [todosLosSdas, setTodosLosSdas] = useState([]);
     const [todosLosElementos, setTodosLosElementos] = useState([]); 
@@ -46,6 +49,8 @@ const EbmPage = () => {
     
     const [sdasVisibles, setSdasVisibles] = useState({});
     const [filasDesplegadas, setFilasDesplegadas] = useState({});
+
+    const pdfRef = useRef(null);
 
     const rawRole = localStorage.getItem('role') || 'user';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
@@ -127,7 +132,7 @@ const EbmPage = () => {
     const toggleSdaVisible = (sda) => { setSdasVisibles(prev => ({ ...prev, [sda]: !prev[sda] })); };
     const toggleFilaDesplegada = (id) => { setFilasDesplegadas(prev => ({ ...prev, [id]: !prev[id] })); };
 
-    // --- APLICAR TIPO DE TRIMESTRE DE FORMA MASIVA A TODO EL SDA ---
+    // --- APLICAR TIPO DE TRIMESTRE GENERAL PARA EL SDA ---
     const handleAplicarTipoSda = (sdaTarget, trimestreNum, nuevoTipoEbm) => {
         if (!esGestorOperativo) return;
 
@@ -149,6 +154,53 @@ const EbmPage = () => {
 
         setPersonalFiltrado(actualizarLista);
         setTodoElPersonal(actualizarLista);
+    };
+
+    // --- GENERACIÓN E IMPRESIÓN DE PDF A4 HORIZONTAL ---
+    const exportarPdfHorizontal = async () => {
+        if (!pdfRef.current) return;
+        try {
+            setGenerandoPdf(true);
+            const element = pdfRef.current;
+
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            
+            // Hoja A4 Horizontal (Landscape: 297mm x 210mm)
+            const pdf = new jsPDF('landscape', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+
+            const imgWidth = pdfWidth - 20; // 10mm de margen a cada lado
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            let heightLeft = imgHeight;
+            let position = 10; // Margen superior inicial
+
+            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+            heightLeft -= (pdfHeight - 20);
+
+            // Control de múltiples páginas
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight + 10;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= (pdfHeight - 20);
+            }
+
+            pdf.save(`Planificacion_EBM_2026_${elementoSeleccionado}.pdf`);
+        } catch (error) {
+            console.error('Error generando PDF:', error);
+            alert('No se pudo generar el documento PDF.');
+        } finally {
+            setGenerandoPdf(false);
+        }
     };
 
     const handleInputChange = (p_id, trimestreNum, campo, valor) => {
@@ -253,6 +305,13 @@ const EbmPage = () => {
                     <p style={styles.subtitle}>Distribución de Exigencias de Horas de Vuelo Mínimas</p>
                 </div>
                 <div style={styles.headerControlsRight}>
+                    <button 
+                        style={styles.btnPdfHorizontal} 
+                        onClick={exportarPdfHorizontal} 
+                        disabled={generandoPdf}
+                    >
+                        {generandoPdf ? '⌛ Generando PDF...' : '📄 Exportar a PDF (A4 Horizontal)'}
+                    </button>
                     <div style={styles.containerFiltroUnidad}>
                         <span style={styles.labelFiltroUnidad}>Elemento/Unidad:</span>
                         <select 
@@ -288,201 +347,202 @@ const EbmPage = () => {
                 </div>
             </div>
 
-            <div style={styles.tableWrapper}>
-                <table style={styles.mainTable}>
-                    <thead>
-                        <tr style={styles.tableHeaderRow}>
-                            <th style={{...styles.th, width: '50px', textAlign: 'center'}}>Ajustar</th>
-                            <th style={styles.th}>Grado, Apellido y Nombre</th>
-                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>1er Trimestre</th>
-                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>2do Trimestre</th>
-                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>3er Trimestre</th>
-                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>4to Trimestre</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {!haySdaSeleccionado ? (
-                            <tr><td colSpan={10} style={styles.noDataRow}>💡 Seleccione un Sistema de Armas arriba para listar y parametrizar las tripulaciones.</td></tr>
-                        ) : (
-                            todosLosSdas.map(sda => {
-                                if (!sdasVisibles[sda] || !matrizSda[sda] || matrizSda[sda].length === 0) return null;
-                                
-                                // Primer piloto como referencia visual del SdA
-                                const primerPiloto = matrizSda[sda][0];
+            {/* CONTENEDOR CAPTURADO PARA EL PDF */}
+            <div ref={pdfRef} style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px' }}>
+                <div style={styles.tableWrapper}>
+                    <table style={styles.mainTable}>
+                        <thead>
+                            <tr style={styles.tableHeaderRow}>
+                                <th style={{...styles.th, width: '50px', textAlign: 'center'}}>Ajustar</th>
+                                <th style={styles.th}>Grado, Apellido y Nombre</th>
+                                <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>1er Trimestre</th>
+                                <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>2do Trimestre</th>
+                                <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>3er Trimestre</th>
+                                <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>4to Trimestre</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {!haySdaSeleccionado ? (
+                                <tr><td colSpan={10} style={styles.noDataRow}>💡 Seleccione un Sistema de Armas arriba para listar y parametrizar las tripulaciones.</td></tr>
+                            ) : (
+                                todosLosSdas.map(sda => {
+                                    if (!sdasVisibles[sda] || !matrizSda[sda] || matrizSda[sda].length === 0) return null;
+                                    
+                                    const primerPiloto = matrizSda[sda][0];
 
-                                return (
-                                    <React.Fragment key={sda}>
-                                        {/* FILA ENCABEZADO DEL SDA CON SELECTORES GENERALES */}
-                                        <tr style={styles.sdaGroupRow}>
-                                            <td colSpan={2} style={styles.sdaGroupCell}>
-                                                ✈️ SISTEMA DE ARMAS: {sda}
-                                            </td>
-                                            {[1, 2, 3, 4].map(num => (
-                                                <td key={num} colSpan={2} style={styles.sdaGroupSelectorCell}>
-                                                    <span style={styles.labelSelectorSda}>T{num}:</span>
-                                                    <select
-                                                        style={styles.selectHeaderSda}
-                                                        disabled={!esGestorOperativo}
-                                                        value={primerPiloto[`trimestre${num}`]?.tipoEbm || 'A'}
-                                                        onChange={(e) => handleAplicarTipoSda(sda, num, e.target.value)}
-                                                    >
-                                                        <option value="A">Tipo A</option>
-                                                        <option value="B">Tipo B</option>
-                                                        <option value="C">Tipo C</option>
-                                                        <option value="D">Tipo D</option>
-                                                    </select>
+                                    return (
+                                        <React.Fragment key={sda}>
+                                            <tr style={styles.sdaGroupRow}>
+                                                <td colSpan={2} style={styles.sdaGroupCell}>
+                                                    ✈️ SISTEMA DE ARMAS: {sda}
                                                 </td>
-                                            ))}
-                                        </tr>
+                                                {[1, 2, 3, 4].map(num => (
+                                                    <td key={num} colSpan={2} style={styles.sdaGroupSelectorCell}>
+                                                        <span style={styles.labelSelectorSda}>T{num}:</span>
+                                                        <select
+                                                            style={styles.selectHeaderSda}
+                                                            disabled={!esGestorOperativo}
+                                                            value={primerPiloto[`trimestre${num}`]?.tipoEbm || 'A'}
+                                                            onChange={(e) => handleAplicarTipoSda(sda, num, e.target.value)}
+                                                        >
+                                                            <option value="A">Tipo A</option>
+                                                            <option value="B">Tipo B</option>
+                                                            <option value="C">Tipo C</option>
+                                                            <option value="D">Tipo D</option>
+                                                        </select>
+                                                    </td>
+                                                ))}
+                                            </tr>
 
-                                        {matrizSda[sda].map(p => {
-                                            const estaDesplegado = !!filasDesplegadas[p._id];
-                                            const rotacionValida = verificarRotacionCorrecta(p);
-                                            const totalesAnuales = calcularTotalesAnuales(p);
+                                            {matrizSda[sda].map(p => {
+                                                const estaDesplegado = !!filasDesplegadas[p._id];
+                                                const rotacionValida = verificarRotacionCorrecta(p);
+                                                const totalesAnuales = calcularTotalesAnuales(p);
 
-                                            return (
-                                                <React.Fragment key={p._id}>
-                                                    <tr style={styles.pilotRow}>
-                                                        <td style={styles.tdCenter}>
-                                                            <button style={styles.btnConfig} onClick={() => toggleFilaDesplegada(p._id)}>⚙️</button>
-                                                        </td>
-                                                        <td style={styles.tdName}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                {p.grado} {p.apellido}, {p.nombre}
-                                                                {!rotacionValida && <span title="Alerta: Deben asignarse los 4 tipos de trimestre (A, B, C y D) en el año sin repetir" style={{ cursor: 'help' }}>⚠️</span>}
-                                                            </div>
-                                                            <div style={styles.miniSubtext}>
-                                                                T1: {p.trimestre1?.condicion}-{p.trimestre1?.tipoEbm} | 
-                                                                T2: {p.trimestre2?.condicion}-{p.trimestre2?.tipoEbm} | 
-                                                                T3: {p.trimestre3?.condicion}-{p.trimestre3?.tipoEbm} | 
-                                                                T4: {p.trimestre4?.condicion}-{p.trimestre4?.tipoEbm}
-                                                            </div>
-                                                        </td>
-                                                        <td style={styles.tdVoladas}>{formatearHoras(p.trimestre1?.hsVoladas)} hs</td>
-                                                        <td style={{...styles.tdFaltan, color: Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                            {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1.hsFaltantes)} hs`}
-                                                        </td>
-
-                                                        <td style={styles.tdVoladas}>{formatearHoras(p.trimestre2?.hsVoladas)} hs</td>
-                                                        <td style={{...styles.tdFaltan, color: Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                            {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2.hsFaltantes)} hs`}
-                                                        </td>
-
-                                                        <td style={styles.tdVoladas}>{formatearHoras(p.trimestre3?.hsVoladas)} hs</td>
-                                                        <td style={{...styles.tdFaltan, color: Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                            {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3.hsFaltantes)} hs`}
-                                                        </td>
-
-                                                        <td style={styles.tdVoladas}>{formatearHoras(p.trimestre4?.hsVoladas)} hs</td>
-                                                        <td style={{...styles.tdFaltan, color: Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                            {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4.hsFaltantes)} hs`}
-                                                        </td>
-                                                    </tr>
-
-                                                    {estaDesplegado && (
-                                                        <tr style={styles.configExpandedRow}>
-                                                            <td colSpan={10} style={styles.configExpandedCell}>
-                                                                <div style={styles.panelConfigFlex}>
-                                                                    {[1, 2, 3, 4].map(num => {
-                                                                        const trimData = p[`trimestre${num}`] || {};
-                                                                        const esInstructor = trimData.condicion === 'IE';
-
-                                                                        return (
-                                                                            <div key={num} style={styles.bloqueTrimestreConfig}>
-                                                                                <h4 style={styles.tituloBloque}>Trimestre {num}</h4>
-                                                                                <div style={styles.grupoInput}>
-                                                                                    <span style={styles.labelMini}>Función:</span>
-                                                                                    <select 
-                                                                                        style={styles.selectPanel} 
-                                                                                        value={trimData.condicion || 'CP'} 
-                                                                                        disabled={!esGestorOperativo} 
-                                                                                        onChange={(e) => handleInputChange(p._id, num, 'condicion', e.target.value)}
-                                                                                    >
-                                                                                        <option value="CP">Copiloto (CP)</option>
-                                                                                        <option value="PC">Piloto en Comando (PC)</option>
-                                                                                        <option value="IE">Instructor / Estand. (IE)</option>
-                                                                                    </select>
-                                                                                </div>
-                                                                                <div style={styles.grupoInput}>
-                                                                                    <span style={styles.labelMini}>Tipo Trimestre:</span>
-                                                                                    <select 
-                                                                                        style={styles.selectPanel} 
-                                                                                        value={trimData.tipoEbm || 'A'} 
-                                                                                        disabled={!esGestorOperativo} 
-                                                                                        onChange={(e) => handleInputChange(p._id, num, 'tipoEbm', e.target.value)}
-                                                                                    >
-                                                                                        <option value="A">Tipo A</option>
-                                                                                        <option value="B">Tipo B</option>
-                                                                                        <option value="C">Tipo C</option>
-                                                                                        <option value="D">Tipo D</option>
-                                                                                    </select>
-                                                                                </div>
-
-                                                                                {esInstructor && (
-                                                                                    <div style={styles.boxDiscriminado}>
-                                                                                        <div style={styles.badgeDiscriminadoPiloto}>
-                                                                                            <span>👨‍✈️ Piloto:</span>
-                                                                                            <strong>{formatearHoras(trimData.hsPiloto)} hs</strong>
-                                                                                        </div>
-                                                                                        <div style={styles.badgeDiscriminadoInstructor}>
-                                                                                            <span>🎓 Instructor:</span>
-                                                                                            <strong>{formatearHoras(trimData.hsInstructor)} hs</strong>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-
-                                                                                <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '6px', fontWeight: 'bold' }}>
-                                                                                    Exige: {(() => {
-                                                                                        const tipoAeronave = determinarTipoAeronave(p.aeronave);
-                                                                                        return CONFIG_HORAS_EBM[tipoAeronave]?.[trimData.condicion || 'CP']?.[trimData.tipoEbm || 'A'] || 0;
-                                                                                    })()} hs
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })}
+                                                return (
+                                                    <React.Fragment key={p._id}>
+                                                        <tr style={styles.pilotRow}>
+                                                            <td style={styles.tdCenter}>
+                                                                <button style={styles.btnConfig} onClick={() => toggleFilaDesplegada(p._id)}>⚙️</button>
+                                                            </td>
+                                                            <td style={styles.tdName}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    {p.grado} {p.apellido}, {p.nombre}
+                                                                    {!rotacionValida && <span title="Alerta: Deben asignarse los 4 tipos de trimestre (A, B, C y D) en el año sin repetir" style={{ cursor: 'help' }}>⚠️</span>}
                                                                 </div>
-
-                                                                <div style={styles.barConsolidado}>
-                                                                    <div style={styles.cardConsolidadoAnual}>
-                                                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>📊 Totales Acumulados (Año 2026):</span>
-                                                                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                                                                            <span style={{ fontSize: '11px', color: '#334155' }}>
-                                                                                Piloto: <strong style={{ color: '#0284c7' }}>{formatearHoras(totalesAnuales.totalPiloto)} hs</strong>
-                                                                            </span>
-                                                                            <span style={{ fontSize: '11px', color: '#334155' }}>
-                                                                                Instructor: <strong style={{ color: '#475569' }}>{formatearHoras(totalesAnuales.totalInstructor)} hs</strong>
-                                                                            </span>
-                                                                            <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 'bold', borderLeft: '1px solid #cbd5e1', paddingLeft: '10px' }}>
-                                                                                Total Volado: {formatearHoras(totalesAnuales.totalGeneral)} hs
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                                                        {!rotacionValida && (
-                                                                            <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 'bold' }}>
-                                                                                ⚠️ Combine los tipos A, B, C y D en el año.
-                                                                            </span>
-                                                                        )}
-                                                                        {esGestorOperativo && (
-                                                                            <button style={styles.btnSaveRow} onClick={() => handleGuardarFila(p._id)} disabled={guardandoId === p._id}>
-                                                                                {guardandoId === p._id ? 'Guardando legajo...' : '💾 Aplicar Configuración Anual'}
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
+                                                                <div style={styles.miniSubtext}>
+                                                                    T1: {p.trimestre1?.condicion}-{p.trimestre1?.tipoEbm} | 
+                                                                    T2: {p.trimestre2?.condicion}-{p.trimestre2?.tipoEbm} | 
+                                                                    T3: {p.trimestre3?.condicion}-{p.trimestre3?.tipoEbm} | 
+                                                                    T4: {p.trimestre4?.condicion}-{p.trimestre4?.tipoEbm}
                                                                 </div>
                                                             </td>
+                                                            <td style={styles.tdVoladas}>{formatearHoras(p.trimestre1?.hsVoladas)} hs</td>
+                                                            <td style={{...styles.tdFaltan, color: Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
+                                                                {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1.hsFaltantes)} hs`}
+                                                            </td>
+
+                                                            <td style={styles.tdVoladas}>{formatearHoras(p.trimestre2?.hsVoladas)} hs</td>
+                                                            <td style={{...styles.tdFaltan, color: Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
+                                                                {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2.hsFaltantes)} hs`}
+                                                            </td>
+
+                                                            <td style={styles.tdVoladas}>{formatearHoras(p.trimestre3?.hsVoladas)} hs</td>
+                                                            <td style={{...styles.tdFaltan, color: Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
+                                                                {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3.hsFaltantes)} hs`}
+                                                            </td>
+
+                                                            <td style={styles.tdVoladas}>{formatearHoras(p.trimestre4?.hsVoladas)} hs</td>
+                                                            <td style={{...styles.tdFaltan, color: Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
+                                                                {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4.hsFaltantes)} hs`}
+                                                            </td>
                                                         </tr>
-                                                    )}
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                    </React.Fragment>
-                                );
-                            })
-                        )}
-                    </tbody>
-                </table>
+
+                                                        {estaDesplegado && (
+                                                            <tr style={styles.configExpandedRow}>
+                                                                <td colSpan={10} style={styles.configExpandedCell}>
+                                                                    <div style={styles.panelConfigFlex}>
+                                                                        {[1, 2, 3, 4].map(num => {
+                                                                            const trimData = p[`trimestre${num}`] || {};
+                                                                            const esInstructor = trimData.condicion === 'IE';
+
+                                                                            return (
+                                                                                <div key={num} style={styles.bloqueTrimestreConfig}>
+                                                                                    <h4 style={styles.tituloBloque}>Trimestre {num}</h4>
+                                                                                    <div style={styles.grupoInput}>
+                                                                                        <span style={styles.labelMini}>Función:</span>
+                                                                                        <select 
+                                                                                            style={styles.selectPanel} 
+                                                                                            value={trimData.condicion || 'CP'} 
+                                                                                            disabled={!esGestorOperativo} 
+                                                                                            onChange={(e) => handleInputChange(p._id, num, 'condicion', e.target.value)}
+                                                                                        >
+                                                                                            <option value="CP">Copiloto (CP)</option>
+                                                                                            <option value="PC">Piloto en Comando (PC)</option>
+                                                                                            <option value="IE">Instructor / Estand. (IE)</option>
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div style={styles.grupoInput}>
+                                                                                        <span style={styles.labelMini}>Tipo Trimestre:</span>
+                                                                                        <select 
+                                                                                            style={styles.selectPanel} 
+                                                                                            value={trimData.tipoEbm || 'A'} 
+                                                                                            disabled={!esGestorOperativo} 
+                                                                                            onChange={(e) => handleInputChange(p._id, num, 'tipoEbm', e.target.value)}
+                                                                                        >
+                                                                                            <option value="A">Tipo A</option>
+                                                                                            <option value="B">Tipo B</option>
+                                                                                            <option value="C">Tipo C</option>
+                                                                                            <option value="D">Tipo D</option>
+                                                                                        </select>
+                                                                                    </div>
+
+                                                                                    {esInstructor && (
+                                                                                        <div style={styles.boxDiscriminado}>
+                                                                                            <div style={styles.badgeDiscriminadoPiloto}>
+                                                                                                <span>👨‍✈️ Piloto:</span>
+                                                                                                <strong>{formatearHoras(trimData.hsPiloto)} hs</strong>
+                                                                                            </div>
+                                                                                            <div style={styles.badgeDiscriminadoInstructor}>
+                                                                                                <span>🎓 Instructor:</span>
+                                                                                                <strong>{formatearHoras(trimData.hsInstructor)} hs</strong>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '6px', fontWeight: 'bold' }}>
+                                                                                        Exige: {(() => {
+                                                                                            const tipoAeronave = determinarTipoAeronave(p.aeronave);
+                                                                                            return CONFIG_HORAS_EBM[tipoAeronave]?.[trimData.condicion || 'CP']?.[trimData.tipoEbm || 'A'] || 0;
+                                                                                        })()} hs
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+
+                                                                    <div style={styles.barConsolidado}>
+                                                                        <div style={styles.cardConsolidadoAnual}>
+                                                                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>📊 Totales Acumulados (Año 2026):</span>
+                                                                            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                                                                                <span style={{ fontSize: '11px', color: '#334155' }}>
+                                                                                    Piloto: <strong style={{ color: '#0284c7' }}>{formatearHoras(totalesAnuales.totalPiloto)} hs</strong>
+                                                                                </span>
+                                                                                <span style={{ fontSize: '11px', color: '#334155' }}>
+                                                                                    Instructor: <strong style={{ color: '#475569' }}>{formatearHoras(totalesAnuales.totalInstructor)} hs</strong>
+                                                                                </span>
+                                                                                <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 'bold', borderLeft: '1px solid #cbd5e1', paddingLeft: '10px' }}>
+                                                                                    Total Volado: {formatearHoras(totalesAnuales.totalGeneral)} hs
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                                            {!rotacionValida && (
+                                                                                <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 'bold' }}>
+                                                                                    ⚠️ Combine los tipos A, B, C y D en el año.
+                                                                                </span>
+                                                                            )}
+                                                                            {esGestorOperativo && (
+                                                                                <button style={styles.btnSaveRow} onClick={() => handleGuardarFila(p._id)} disabled={guardandoId === p._id}>
+                                                                                    {guardandoId === p._id ? 'Guardando legajo...' : '💾 Aplicar Configuración Anual'}
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                        </React.Fragment>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
@@ -493,7 +553,8 @@ const styles = {
     headerArea: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
     title: { margin: 0, fontSize: '20px', color: '#1b3a57', fontWeight: 'bold' },
     subtitle: { margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' },
-    headerControlsRight: { display: 'flex', alignItems: 'center', gap: '20px' },
+    headerControlsRight: { display: 'flex', alignItems: 'center', gap: '15px' },
+    btnPdfHorizontal: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' },
     containerFiltroUnidad: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' },
     labelFiltroUnidad: { fontSize: '12px', fontWeight: 'bold', color: '#334155' },
     selectUnidadSuperior: { padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', color: '#1b3a57', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: 'white' },
