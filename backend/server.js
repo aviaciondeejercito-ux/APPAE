@@ -11,17 +11,14 @@ const conectarDB = require('./config/db');
  * Configuración de motor centralizado para API de Aviación de Ejército.
  */
 
-// --- 1. CONFIGURACIÓN DE ENTORNO ---
 dotenv.config();
 
-// --- 2. CONEXIÓN A BASE DE DATOS ---
 console.log('⏳ PROTOCOLO DE ACCESO: Iniciando conexión a MongoDB...');
 conectarDB();
 
 const app = express();
 const server = http.createServer(app);
 
-// --- 3. MIDDLEWARES DE SEGURIDAD ---
 app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
@@ -53,7 +50,6 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 
-// --- 4. INICIALIZACIÓN DE SOCKET.IO ---
 const io = new Server(server, {
     cors: {
         origin: allowedOrigins,
@@ -84,14 +80,14 @@ const alertRoutes = require('./routes/alertRoutes');
 const f13Routes = require('./routes/f13');
 const dashboardRoutes = require('./routes/dashboard');
 const aircraftRoutes = require('./routes/aircraftRoutes');
-// 🛠️ Módulo: Programas de Mantenimiento Independientes
 const programaRoutes = require('./routes/programaRoutes');
-// 🎓 Módulo: Escuela de Aviación de Ejército (EC AE)
 const escuelaRoutes = require('./routes/escuelaRoutes');
+
+// 📋 Módulo: Control de Entrenamiento de Tripulantes
+const trainingRoutes = require('./routes/trainingRoutes');
 
 // --- 6. DEFINICIÓN DE RUTAS API ---
 
-// Endpoint Keep-Alive para UptimeRobot / Ping Preventivo
 app.get('/api/ping', (req, res) => {
     res.status(200).send('OK');
 });
@@ -118,10 +114,11 @@ app.use('/api/alerts', alertRoutes);
 app.use('/api/f13', f13Routes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/programas-mantenimiento', programaRoutes);
-// Inyección de la ruta operativa para Escuela de Aviación
 app.use('/api/escuela', escuelaRoutes);
 
-// --- 7. MANEJO DE RUTAS NO MAPEADAS (404) ---
+// Inyección de la ruta operativa para Entrenamiento de Tripulantes
+app.use('/api/training', trainingRoutes);
+
 app.use((req, res) => {
     res.status(404).json({
         success: false,
@@ -129,7 +126,6 @@ app.use((req, res) => {
     });
 });
 
-// --- 8. MANEJO GLOBAL DE ERRORES ---
 app.use((err, req, res, next) => {
     console.error(`❌ FALLO CRÍTICO EN SERVIDOR: ${err.message}`);
     res.status(err.status || 500).json({
@@ -139,39 +135,22 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- 9. LANZAMIENTO DEL SERVICIO ---
 const PORT = process.env.PORT || 5000;
-const HOST = '0.0.0.0'; // Requisito explícito de red para Render
+const HOST = '0.0.0.0';
 
 server.listen(PORT, HOST, () => {
     console.log(`🚀 SISTEMA OPERATIVO EN PUERTO: ${PORT} (HOST: ${HOST})`);
     
-    // Verificación de carga de rutas EBM
-    if (ebmRoutes) {
-        console.log("✅ Módulo EBM cargado correctamente.");
+    if (ebmRoutes) console.log("✅ Módulo EBM cargado correctamente.");
+    if (f13Routes) console.log("✅ Módulo F-13 (Libretas Históricas) cargado correctamente.");
+    if (programaRoutes) console.log("✅ Módulo de Programas de Mantenimiento verificado e integrado.");
+    if (escuelaRoutes) console.log("🎓 Módulo Escuela de Aviación (EC AE) cargado y operativo.");
+    
+    // Verificación de carga de rutas de Entrenamiento
+    if (trainingRoutes) {
+        console.log("📋 Módulo de Control de Entrenamiento cargado correctamente.");
     } else {
-        console.warn("⚠️ Advertencia: El módulo EBM no pudo cargarse.");
-    }
-
-    // Verificación de carga de rutas F-13
-    if (f13Routes) {
-        console.log("✅ Módulo F-13 (Libretas Históricas) cargado correctamente.");
-    } else {
-        console.warn("⚠️ Advertencia: El módulo F-13 no pudo cargarse.");
-    }
-
-    // Verificación de carga de rutas del Programa de Mantenimiento
-    if (programaRoutes) {
-        console.log("✅ Módulo de Programas de Mantenimiento verificado e integrado.");
-    } else {
-        console.warn("⚠️ Advertencia: El módulo de Programas de Mantenimiento falló al inicializarse.");
-    }
-
-    // Verificación de carga de rutas de Escuela de Aviación
-    if (escuelaRoutes) {
-        console.log("🎓 Módulo Escuela de Aviación (EC AE) cargado y operativo.");
-    } else {
-        console.warn("⚠️ Advertencia: El módulo de Escuela de Aviación falló al inicializarse.");
+        console.warn("⚠️ Advertencia: El módulo de Control de Entrenamiento falló al inicializarse.");
     }
 });
 

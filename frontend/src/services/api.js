@@ -27,7 +27,6 @@ const API = axios.create({
 
 /**
  * INTERCEPTOR DE SEGURIDAD JWT (Peticiones)
- * Añade automáticamente el token de sesión a cada consulta al servidor.
  */
 API.interceptors.request.use(
     (config) => {
@@ -43,14 +42,12 @@ API.interceptors.request.use(
 );
 
 /**
- * INTERCEPTOR DE RESPUESTA (Manejo unificado de errores de red y sesión)
- * Evita desloguear al usuario por errores comunes de rutas (404) o permisos (403).
+ * INTERCEPTOR DE RESPUESTA
  */
 API.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response) {
-            // 🔒 SOLO desloguear si es strictly un 401 (Sesión expirada / Token inválido)
             if (error.response.status === 401) {
                 console.warn("⚠️ SESIÓN EXPIRADA - REDIRIGIENDO A LOGIN");
                 localStorage.clear(); 
@@ -81,6 +78,12 @@ export const getTripulanteById = (id) => API.get(`/tripulantes/${id}`);
 export const createTripulante = (data) => API.post('/tripulantes', data);
 export const updateTripulante = (id, data) => API.put(`/tripulantes/${id}`, data);
 export const deleteTripulante = (id) => API.delete(`/tripulantes/${id}`);
+
+/**
+ * 📋 SERVICIOS DE CONTROL DE ENTRENAMIENTO DE TRIPULANTES
+ */
+export const guardarEntrenamiento = (data) => API.post('/training', data);
+export const getDashboardEntrenamiento = () => API.get('/training/dashboard-stats');
 
 /**
  * 🎓 SERVICIOS DE LA ESCUELA DE AVIACIÓN DE EJÉRCITO (EC AE)
@@ -161,7 +164,6 @@ export const deleteVuelo = (id) => API.delete(`/vuelos/${id}`);
 
 /**
  * 🌟 SERVICIOS EXCLUSIVOS MÓDULO F-13 (REGISTRO HISTÓRICO DE AERONAVES)
- * Mapeados idénticamente a tu F13Controller en el Backend
  */
 export const getAeronavesF13 = () => API.get('/f13/aeronaves-disponibles');
 export const getF13s = () => API.get('/f13'); 
@@ -314,19 +316,17 @@ export const updateAircraftStatus = (id, aircraftData) => {
     return API.put(`/aircraft/${id}`, dataNormalized);
 };
 
-// 🛠️ GUARDAR / ACTUALIZAR AERONAVE COMPLETA (INCLUYE ESTRUCTURA DE COMPONENTES)
 export const guardarAeronave = (aeronaveData) => {
     const id = aeronaveData._id?.$oid || aeronaveData._id;
     return API.put(`/aircraft/${id}`, aeronaveData);
 };
 
-export const updateAircraft = guardarAeronave; // Alias de compatibilidad por si se importa con otro nombre
+export const updateAircraft = guardarAeronave;
 
 export const deleteAircraft = (id) => API.delete(`/aircraft/${id}`);
 
 /**
- * 🌟 NUEVOS SERVICIOS ASOCIADOS AL PROGRAMA DE MANTENIMIENTO
- * Vinculados directamente con la instancia global segura de Axios
+ * SERVICIOS ASOCIADOS AL PROGRAMA DE MANTENIMIENTO
  */
 export const getProgramaPorAeronave = (aeronaveId) => API.get(`/programas-mantenimiento/aeronave/${aeronaveId}`);
 export const guardarProgramaMantenimiento = (payload) => API.post('/programas-mantenimiento/guardar', payload);
@@ -377,6 +377,8 @@ const EventService = {
     createTripulante,
     updateTripulante,
     deleteTripulante,
+    guardarEntrenamiento,
+    getDashboardEntrenamiento,
     registrarInstruccion,
     getDashboardEscuela,
     getFichaAlumno,
