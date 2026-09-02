@@ -221,25 +221,30 @@ const EbmPage = () => {
 
     // --- RENDERIZADOR AUXILIAR DE CELDA DE HORAS VOLADAS ---
     const renderCeldaVoladas = (trimestreData) => {
-        const hsVoladas = Number(trimestreData?.hsVoladas || 0);
-        const esInstructor = trimestreData?.condicion === 'IE';
+    if (!trimestreData) return <td style={styles.tdVoladas}>0 hs</td>;
 
-        // Intentamos leer hsPiloto e hsInstructor o fallback según la condición
-        let hsPiloto = Number(trimestreData?.hsPiloto ?? (esInstructor ? 0 : hsVoladas));
-        let hsInstructor = Number(trimestreData?.hsInstructor ?? (esInstructor ? hsVoladas : 0));
+    const hsVoladas = Number(trimestreData.hsVoladas || 0);
 
-        return (
-            <td style={styles.tdVoladas}>
-                <div style={styles.totalPrincipal}>{formatearHoras(hsVoladas)} hs</div>
-                {esInstructor && (
-                    <div style={styles.subtextSutil}>
-                        <span>P: {formatearHoras(hsPiloto)}</span>
-                        <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(hsInstructor)}</span>
-                    </div>
-                )}
-            </td>
-        );
-    };
+    // Verificación flexible de la condición/función de Instructor (IE o INSTRUCTOR)
+    const funcionActual = String(trimestreData.condicion || trimestreData.funcion || '').trim().toUpperCase();
+    const esInstructor = funcionActual === 'IE' || funcionActual === 'INSTRUCTOR';
+
+    // Obtención de horas (con fallback en caso de valores 0 o undefined)
+    const hsPiloto = Number(trimestreData.hsPiloto ?? (esInstructor ? 0 : hsVoladas));
+    const hsInstructor = Number(trimestreData.hsInstructor ?? (esInstructor ? hsVoladas : 0));
+
+    return (
+        <td style={styles.tdVoladas}>
+            <div style={styles.totalPrincipal}>{formatearHoras(hsVoladas)} hs</div>
+            {esInstructor && (
+                <div style={styles.subtextSutil}>
+                    <span>P: {formatearHoras(hsPiloto)}</span>
+                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(hsInstructor)}</span>
+                </div>
+            )}
+        </td>
+    );
+};
 
     if (loading) return <div style={styles.centerText}>Cargando Matriz de Exigencias EBM...</div>;
 
