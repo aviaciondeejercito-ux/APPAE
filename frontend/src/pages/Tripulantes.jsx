@@ -198,6 +198,7 @@ const EbmPage = () => {
         return unicos.size === 4; 
     };
 
+    // Helper para calcular totales anuales discriminados
     const calcularTotalesAnuales = (p) => {
         let totalPiloto = 0;
         let totalInstructor = 0;
@@ -217,34 +218,31 @@ const EbmPage = () => {
         };
     };
 
-    const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
-
-    // --- RENDERIZADOR AUXILIAR DE CELDA DE HORAS VOLADAS ---
+    // --- RENDERIZADOR DE CELDA DE HORAS VOLADAS ---
     const renderCeldaVoladas = (trimestreData) => {
-    if (!trimestreData) return <td style={styles.tdVoladas}>0 hs</td>;
+        if (!trimestreData) return <td style={styles.tdVoladas}>0 hs</td>;
 
-    const hsVoladas = Number(trimestreData.hsVoladas || 0);
+        const totalVoladas = trimestreData.hsVoladas || 0;
+        const esInstructor = trimestreData.condicion === 'IE';
 
-    // Verificación flexible de la condición/función de Instructor (IE o INSTRUCTOR)
-    const funcionActual = String(trimestreData.condicion || trimestreData.funcion || '').trim().toUpperCase();
-    const esInstructor = funcionActual === 'IE' || funcionActual === 'INSTRUCTOR';
+        return (
+            <td style={styles.tdVoladas}>
+                <div style={styles.totalPrincipal}>{formatearHoras(totalVoladas)} hs</div>
+                
+                {/* Muestra la información discriminada debajo del total SOLO si es Instructor */}
+                {esInstructor && (
+                    <div style={styles.subtextSutil}>
+                        <span>P: {formatearHoras(trimestreData.hsPiloto)}</span>
+                        <span style={{ marginLeft: '4px', color: '#0369a1' }}>
+                            I: {formatearHoras(trimestreData.hsInstructor)}
+                        </span>
+                    </div>
+                )}
+            </td>
+        );
+    };
 
-    // Obtención de horas (con fallback en caso de valores 0 o undefined)
-    const hsPiloto = Number(trimestreData.hsPiloto ?? (esInstructor ? 0 : hsVoladas));
-    const hsInstructor = Number(trimestreData.hsInstructor ?? (esInstructor ? hsVoladas : 0));
-
-    return (
-        <td style={styles.tdVoladas}>
-            <div style={styles.totalPrincipal}>{formatearHoras(hsVoladas)} hs</div>
-            {esInstructor && (
-                <div style={styles.subtextSutil}>
-                    <span>P: {formatearHoras(hsPiloto)}</span>
-                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(hsInstructor)}</span>
-                </div>
-            )}
-        </td>
-    );
-};
+    const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
 
     if (loading) return <div style={styles.centerText}>Cargando Matriz de Exigencias EBM...</div>;
 
@@ -400,6 +398,7 @@ const EbmPage = () => {
                                                                                     </select>
                                                                                 </div>
 
+                                                                                {/* DISCRIMINACIÓN DE HORAS SI ES INSTRUCTOR EN ESTE TRIMESTRE */}
                                                                                 {esInstructor && (
                                                                                     <div style={styles.boxDiscriminado}>
                                                                                         <div style={styles.badgeDiscriminadoPiloto}>
@@ -424,6 +423,7 @@ const EbmPage = () => {
                                                                     })}
                                                                 </div>
 
+                                                                {/* BARRA DE CONSOLIDADO Y TOTAL TRIMESTRAL DISCRIMINADO */}
                                                                 <div style={styles.barConsolidado}>
                                                                     <div style={styles.cardConsolidadoAnual}>
                                                                         <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>📊 Totales Acumulados (Año 2026):</span>
@@ -496,7 +496,7 @@ const styles = {
     
     tdVoladas: { padding: '8px 6px', fontSize: '12px', textAlign: 'center', backgroundColor: '#fafafa', borderRight: '1px solid #f1f5f9', verticalAlign: 'middle' },
     totalPrincipal: { fontWeight: 'bold', color: '#1b3a57', fontSize: '12px' },
-    subtextSutil: { fontSize: '9px', color: '#64748b', marginTop: '2px', fontFamily: 'monospace', fontWeight: 'bold' },
+    subtextSutil: { fontSize: '10px', color: '#64748b', marginTop: '2px', fontWeight: 'bold', display: 'block', fontFamily: 'monospace' },
 
     tdFaltan: { padding: '12px 10px', fontSize: '12px', textAlign: 'center', fontWeight: 'bold', borderRight: '1px solid #e2e8f0', verticalAlign: 'middle' },
     btnConfig: { background: 'none', border: 'none', fontSize: '15px', cursor: 'pointer', padding: '4px' },
