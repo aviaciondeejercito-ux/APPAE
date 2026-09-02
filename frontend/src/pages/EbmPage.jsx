@@ -127,6 +127,30 @@ const EbmPage = () => {
     const toggleSdaVisible = (sda) => { setSdasVisibles(prev => ({ ...prev, [sda]: !prev[sda] })); };
     const toggleFilaDesplegada = (id) => { setFilasDesplegadas(prev => ({ ...prev, [id]: !prev[id] })); };
 
+    // --- APLICAR TIPO DE TRIMESTRE DE FORMA MASIVA A TODO EL SDA ---
+    const handleAplicarTipoSda = (sdaTarget, trimestreNum, nuevoTipoEbm) => {
+        if (!esGestorOperativo) return;
+
+        const actualizarLista = prev => prev.map(p => {
+            if (p.aeronave !== sdaTarget) return p;
+
+            const keyTrimestre = `trimestre${trimestreNum}`;
+            const trimModificado = { ...p[keyTrimestre], tipoEbm: nuevoTipoEbm };
+
+            const cond = p[keyTrimestre]?.condicion || 'CP';
+            const tipoAeronave = determinarTipoAeronave(p.aeronave);
+            const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[nuevoTipoEbm] || 0;
+
+            const restantes = reqHs - Number(p[keyTrimestre]?.hsVoladas || 0);
+            trimModificado.hsFaltantes = restantes > 0 ? Math.round(restantes * 10) / 10 : 0;
+
+            return { ...p, [keyTrimestre]: trimModificado };
+        });
+
+        setPersonalFiltrado(actualizarLista);
+        setTodoElPersonal(actualizarLista);
+    };
+
     const handleInputChange = (p_id, trimestreNum, campo, valor) => {
         if (!esGestorOperativo) return; 
 
@@ -198,7 +222,6 @@ const EbmPage = () => {
         return unicos.size === 4; 
     };
 
-    // Helper para calcular totales anuales discriminados
     const calcularTotalesAnuales = (p) => {
         let totalPiloto = 0;
         let totalInstructor = 0;
@@ -283,9 +306,35 @@ const EbmPage = () => {
                         ) : (
                             todosLosSdas.map(sda => {
                                 if (!sdasVisibles[sda] || !matrizSda[sda] || matrizSda[sda].length === 0) return null;
+                                
+                                // Primer piloto como referencia visual del SdA
+                                const primerPiloto = matrizSda[sda][0];
+
                                 return (
                                     <React.Fragment key={sda}>
-                                        <tr style={styles.sdaGroupRow}><td colSpan={10} style={styles.sdaGroupCell}>✈️ SISTEMA DE ARMAS: {sda}</td></tr>
+                                        {/* FILA ENCABEZADO DEL SDA CON SELECTORES GENERALES */}
+                                        <tr style={styles.sdaGroupRow}>
+                                            <td colSpan={2} style={styles.sdaGroupCell}>
+                                                ✈️ SISTEMA DE ARMAS: {sda}
+                                            </td>
+                                            {[1, 2, 3, 4].map(num => (
+                                                <td key={num} colSpan={2} style={styles.sdaGroupSelectorCell}>
+                                                    <span style={styles.labelSelectorSda}>T{num}:</span>
+                                                    <select
+                                                        style={styles.selectHeaderSda}
+                                                        disabled={!esGestorOperativo}
+                                                        value={primerPiloto[`trimestre${num}`]?.tipoEbm || 'A'}
+                                                        onChange={(e) => handleAplicarTipoSda(sda, num, e.target.value)}
+                                                    >
+                                                        <option value="A">Tipo A</option>
+                                                        <option value="B">Tipo B</option>
+                                                        <option value="C">Tipo C</option>
+                                                        <option value="D">Tipo D</option>
+                                                    </select>
+                                                </td>
+                                            ))}
+                                        </tr>
+
                                         {matrizSda[sda].map(p => {
                                             const estaDesplegado = !!filasDesplegadas[p._id];
                                             const rotacionValida = verificarRotacionCorrecta(p);
@@ -369,7 +418,6 @@ const EbmPage = () => {
                                                                                     </select>
                                                                                 </div>
 
-                                                                                {/* DISCRIMINACIÓN DE HORAS SI ES INSTRUCTOR EN ESTE TRIMESTRE */}
                                                                                 {esInstructor && (
                                                                                     <div style={styles.boxDiscriminado}>
                                                                                         <div style={styles.badgeDiscriminadoPiloto}>
@@ -394,7 +442,6 @@ const EbmPage = () => {
                                                                     })}
                                                                 </div>
 
-                                                                {/* BARRA DE CONSOLIDADO Y TOTAL TRIMESTRAL DISCRIMINADO */}
                                                                 <div style={styles.barConsolidado}>
                                                                     <div style={styles.cardConsolidadoAnual}>
                                                                         <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>📊 Totales Acumulados (Año 2026):</span>
@@ -460,6 +507,9 @@ const styles = {
     th: { padding: '12px 15px', fontSize: '12px', fontWeight: 'bold' },
     sdaGroupRow: { backgroundColor: '#e2e8f0', borderBottom: '2px solid #cbd5e1' },
     sdaGroupCell: { padding: '10px 15px', fontWeight: 'bold', fontSize: '13px', color: '#1e293b' },
+    sdaGroupSelectorCell: { padding: '6px 10px', textAlign: 'center', borderLeft: '1px solid #cbd5e1' },
+    labelSelectorSda: { fontSize: '11px', fontWeight: 'bold', color: '#1b3a57', marginRight: '5px' },
+    selectHeaderSda: { padding: '3px 6px', fontSize: '11px', fontWeight: 'bold', color: '#1b3a57', backgroundColor: 'white', border: '1px solid #94a3b8', borderRadius: '4px', cursor: 'pointer' },
     pilotRow: { borderBottom: '1px solid #e2e8f0', transition: 'background-color 0.1s' },
     tdCenter: { padding: '10px', textAlign: 'center' },
     tdName: { padding: '12px 15px', fontWeight: 'bold', fontSize: '13px', color: '#334155' },
