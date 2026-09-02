@@ -35,8 +35,8 @@ const F16Page = () => {
         inicioAeFecha: '', inicioAeHs: '', tgPlaneadorActual: '', tgPlaneadorLandings: '',
         motorSn: '', motorTsn: '', motorCsnCso: '',
         motor2Sn: '', motor2Tsn: '', motor2CsnCso: '',
-        helice1Sn: '', helice1Tsn: '',
-        helice2Sn: '', helice2Tsn: '',
+        helice1Sn: '', helice1Tsn: '', helice1Ciclos: '', helice1Dur: '',
+        helice2Sn: '', helice2Tsn: '', helice2Ciclos: '', helice2Dur: '',
         vencimientoElt: '', vencimientoPitot: '', vencimientoTransponder: '',
         vencimientoSeguro: '', vencimientoAvionica: '', observacionesPopup: ''
     };
@@ -95,6 +95,36 @@ const F16Page = () => {
     }, [unidadNavegacion, token]);
 
     /**
+     * Helper para formatear días remanentes a Años, Meses y Días
+     */
+    const formatearTiempoMeses = (fechaLimite) => {
+        const hoy = new Date();
+        if (fechaLimite <= hoy) return 'VENCIDO';
+
+        let anios = fechaLimite.getFullYear() - hoy.getFullYear();
+        let meses = fechaLimite.getMonth() - hoy.getMonth();
+        let dias = fechaLimite.getDate() - hoy.getDate();
+
+        if (dias < 0) {
+            meses--;
+            const ultimoDiaMesAnterior = new Date(fechaLimite.getFullYear(), fechaLimite.getMonth(), 0).getDate();
+            dias += ultimoDiaMesAnterior;
+        }
+
+        if (meses < 0) {
+            anios--;
+            meses += 12;
+        }
+
+        let partes = [];
+        if (anios > 0) partes.push(`${anios}a`);
+        if (meses > 0) partes.push(`${meses}m`);
+        if (dias > 0 || partes.length === 0) partes.push(`${dias}d`);
+
+        return partes.join(' ');
+    };
+
+    /**
      * 🧮 CÁLCULO DINÁMICO DE DISPONIBILIDAD DE RENGLÓN
      */
     const calcularDisponibilidadRenglon = (comp, limItem, tgActualMatriz) => {
@@ -137,21 +167,14 @@ const F16Page = () => {
             if (isNaN(fechaInst.getTime())) fechaInst = new Date();
 
             fechaInst.setMonth(fechaInst.getMonth() + parseInt(limiteVal, 10));
-            const hoy = new Date();
-            const diffDias = Math.ceil((fechaInst - hoy) / (1000 * 60 * 60 * 24));
 
-            if (diffDias <= 0) return 'VENCIDO';
-
-            const fechaFormateada = fechaInst.toISOString().split('T')[0];
-            return `${fechaFormateada} (${diffDias} d)`;
+            return formatearTiempoMeses(fechaInst);
         }
 
         if (unidad === 'C') {
             if (!limItem.valor) return '-';
             const fechaLimite = new Date(limItem.valor);
-            const hoy = new Date();
-            const diffDias = Math.ceil((fechaLimite - hoy) / (1000 * 60 * 60 * 24));
-            return diffDias > 0 ? `${diffDias} d` : 'VENCIDO';
+            return formatearTiempoMeses(fechaLimite);
         }
 
         return '-';
@@ -184,8 +207,12 @@ const F16Page = () => {
                 motor2CsnCso: aero.motor2CsnCso ?? '',
                 helice1Sn: aero.helice1Sn || '',
                 helice1Tsn: aero.helice1Tsn ?? '',
+                helice1Ciclos: aero.helice1Ciclos ?? '',
+                helice1Dur: aero.helice1Dur ?? '',
                 helice2Sn: aero.helice2Sn || '',
                 helice2Tsn: aero.helice2Tsn ?? '',
+                helice2Ciclos: aero.helice2Ciclos ?? '',
+                helice2Dur: aero.helice2Dur ?? '',
                 vencimientoElt: formatearFechaHtml(aero.vencimientoElt),
                 vencimientoPitot: formatearFechaHtml(aero.vencimientoPitot),
                 vencimientoTransponder: formatearFechaHtml(aero.vencimientoTransponder),
@@ -230,7 +257,11 @@ const F16Page = () => {
             motor2Tsn: cabecera.motor2Tsn === '' ? 0 : Number(cabecera.motor2Tsn),
             motor2CsnCso: cabecera.motor2CsnCso === '' ? 0 : Number(cabecera.motor2CsnCso),
             helice1Tsn: cabecera.helice1Tsn === '' ? 0 : Number(cabecera.helice1Tsn),
+            helice1Ciclos: cabecera.helice1Ciclos === '' ? 0 : Number(cabecera.helice1Ciclos),
+            helice1Dur: cabecera.helice1Dur === '' ? 0 : Number(cabecera.helice1Dur),
             helice2Tsn: cabecera.helice2Tsn === '' ? 0 : Number(cabecera.helice2Tsn),
+            helice2Ciclos: cabecera.helice2Ciclos === '' ? 0 : Number(cabecera.helice2Ciclos),
+            helice2Dur: cabecera.helice2Dur === '' ? 0 : Number(cabecera.helice2Dur),
             unidad: esAdminGlobal ? unidadNavegacion : usuarioSesion.elemento,
             compPlaneador, motores, helices,
             creadoPor: usuarioSesion.username, actualizadoPor: usuarioSesion.username
@@ -463,12 +494,12 @@ const F16Page = () => {
     const colorEstadoOperativo = cabecera.estadoOperativo === 'E/S' ? '#2ecc71' : '#e74c3c';
     const esBimotor = motores.length > 1;
 
-    // Estilos dinámicos para los campos de Totales (Editable en Alta / Bloqueado en Edición)
+    // Estilos dinámicos para campos habilitados en etapa de prueba
     const estiloCampoTotal = {
         ...styles.input,
-        backgroundColor: esEdicion ? '#e9ecef' : '#fff9db',
+        backgroundColor: '#fff9db',
         fontWeight: 'bold',
-        cursor: esEdicion ? 'not-allowed' : 'text'
+        cursor: 'text'
     };
 
     return (
@@ -603,7 +634,6 @@ const F16Page = () => {
                                     type="number" 
                                     value={cabecera.tgPlaneadorLandings} 
                                     onChange={e => handleCabeceraChange('tgPlaneadorLandings', e.target.value)} 
-                                    disabled={esEdicion}
                                     style={estiloCampoTotal} 
                                     placeholder="0" 
                                 />
@@ -615,7 +645,6 @@ const F16Page = () => {
                                     type="number" 
                                     value={cabecera.tgPlaneadorActual} 
                                     onChange={e => handleCabeceraChange('tgPlaneadorActual', e.target.value)} 
-                                    disabled={esEdicion}
                                     style={estiloCampoTotal} 
                                     placeholder="0.0" 
                                 />
@@ -636,16 +665,24 @@ const F16Page = () => {
                                 <div style={styles.field}><label style={styles.label}>Motor S/N</label><input type="text" value={cabecera.motorSn} onChange={e => handleCabeceraChange('motorSn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
                                 <div style={styles.field}>
                                     <label style={styles.label}>TG Motor 1 (TSN)</label>
-                                    <input type="number" value={cabecera.motorTsn} onChange={e => handleCabeceraChange('motorTsn', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0.0" />
+                                    <input type="number" value={cabecera.motorTsn} onChange={e => handleCabeceraChange('motorTsn', e.target.value)} style={estiloCampoTotal} placeholder="0.0" />
                                 </div>
                                 <div style={styles.field}>
                                     <label style={styles.label}>CSN/CSO M1</label>
-                                    <input type="number" value={cabecera.motorCsnCso} onChange={e => handleCabeceraChange('motorCsnCso', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0" />
+                                    <input type="number" value={cabecera.motorCsnCso} onChange={e => handleCabeceraChange('motorCsnCso', e.target.value)} style={estiloCampoTotal} placeholder="0" />
                                 </div>
                                 <div style={styles.field}><label style={styles.label}>Hélice 1 S/N</label><input type="text" value={cabecera.helice1Sn} onChange={e => handleCabeceraChange('helice1Sn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
                                 <div style={styles.field}>
                                     <label style={styles.label}>TG Hélice 1 (TSN)</label>
-                                    <input type="number" value={cabecera.helice1Tsn} onChange={e => handleCabeceraChange('helice1Tsn', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0.0" />
+                                    <input type="number" value={cabecera.helice1Tsn} onChange={e => handleCabeceraChange('helice1Tsn', e.target.value)} style={estiloCampoTotal} placeholder="0.0" />
+                                </div>
+                                <div style={styles.field}>
+                                    <label style={styles.label}>Ciclos Hélice 1</label>
+                                    <input type="number" value={cabecera.helice1Ciclos} onChange={e => handleCabeceraChange('helice1Ciclos', e.target.value)} style={estiloCampoTotal} placeholder="0" />
+                                </div>
+                                <div style={styles.field}>
+                                    <label style={styles.label}>DUR Hélice 1</label>
+                                    <input type="number" value={cabecera.helice1Dur} onChange={e => handleCabeceraChange('helice1Dur', e.target.value)} style={estiloCampoTotal} placeholder="0.0" />
                                 </div>
                             </div>
                         </div>
@@ -659,16 +696,24 @@ const F16Page = () => {
                                     <div style={styles.field}><label style={styles.label}>Motor 2 S/N</label><input type="text" value={cabecera.motor2Sn} onChange={e => handleCabeceraChange('motor2Sn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
                                     <div style={styles.field}>
                                         <label style={styles.label}>TG Motor 2 (TSN)</label>
-                                        <input type="number" value={cabecera.motor2Tsn} onChange={e => handleCabeceraChange('motor2Tsn', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0.0" />
+                                        <input type="number" value={cabecera.motor2Tsn} onChange={e => handleCabeceraChange('motor2Tsn', e.target.value)} style={estiloCampoTotal} placeholder="0.0" />
                                     </div>
                                     <div style={styles.field}>
                                         <label style={styles.label}>CSN/CSO M2</label>
-                                        <input type="number" value={cabecera.motor2CsnCso} onChange={e => handleCabeceraChange('motor2CsnCso', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0" />
+                                        <input type="number" value={cabecera.motor2CsnCso} onChange={e => handleCabeceraChange('motor2CsnCso', e.target.value)} style={estiloCampoTotal} placeholder="0" />
                                     </div>
                                     <div style={styles.field}><label style={styles.label}>Hélice 2 S/N</label><input type="text" value={cabecera.helice2Sn} onChange={e => handleCabeceraChange('helice2Sn', e.target.value)} style={styles.input} placeholder="S/N" /></div>
                                     <div style={styles.field}>
                                         <label style={styles.label}>TG Hélice 2 (TSN)</label>
-                                        <input type="number" value={cabecera.helice2Tsn} onChange={e => handleCabeceraChange('helice2Tsn', e.target.value)} disabled={esEdicion} style={estiloCampoTotal} placeholder="0.0" />
+                                        <input type="number" value={cabecera.helice2Tsn} onChange={e => handleCabeceraChange('helice2Tsn', e.target.value)} style={estiloCampoTotal} placeholder="0.0" />
+                                    </div>
+                                    <div style={styles.field}>
+                                        <label style={styles.label}>Ciclos Hélice 2</label>
+                                        <input type="number" value={cabecera.helice2Ciclos} onChange={e => handleCabeceraChange('helice2Ciclos', e.target.value)} style={estiloCampoTotal} placeholder="0" />
+                                    </div>
+                                    <div style={styles.field}>
+                                        <label style={styles.label}>DUR Hélice 2</label>
+                                        <input type="number" value={cabecera.helice2Dur} onChange={e => handleCabeceraChange('helice2Dur', e.target.value)} style={estiloCampoTotal} placeholder="0.0" />
                                     </div>
                                 </div>
                             </div>
