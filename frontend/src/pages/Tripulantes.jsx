@@ -312,57 +312,49 @@ const EbmPage = () => {
                                                         {/* TRIMESTRE 1 */}
                                                         <td style={styles.tdVoladas}>
                                                             <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre1?.hsVoladas)} hs</div>
-                                                            {(Number(p.trimestre1?.hsInstructor) > 0 || Number(p.trimestre1?.hsPiloto) > 0) && (
-                                                                <div style={styles.subtextSutil}>
-                                                                    <span>P: {formatearHoras(p.trimestre1?.hsPiloto)}</span>
-                                                                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre1?.hsInstructor)}</span>
-                                                                </div>
-                                                            )}
+                                                            <div style={styles.subtextSutil}>
+                                                                <span>P: {formatearHoras(p.trimestre1?.hsPiloto)}</span>
+                                                                <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre1?.hsInstructor)}</span>
+                                                            </div>
                                                         </td>
                                                         <td style={{...styles.tdFaltan, color: Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                            {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1.hsFaltantes)} hs`}
+                                                            {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1?.hsFaltantes)} hs`}
                                                         </td>
 
                                                         {/* TRIMESTRE 2 */}
                                                         <td style={styles.tdVoladas}>
                                                             <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre2?.hsVoladas)} hs</div>
-                                                            {(Number(p.trimestre2?.hsInstructor) > 0 || Number(p.trimestre2?.hsPiloto) > 0) && (
-                                                                <div style={styles.subtextSutil}>
-                                                                    <span>P: {formatearHoras(p.trimestre2?.hsPiloto)}</span>
-                                                                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre2?.hsInstructor)}</span>
-                                                                </div>
-                                                            )}
+                                                            <div style={styles.subtextSutil}>
+                                                                <span>P: {formatearHoras(p.trimestre2?.hsPiloto)}</span>
+                                                                <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre2?.hsInstructor)}</span>
+                                                            </div>
                                                         </td>
                                                         <td style={{...styles.tdFaltan, color: Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                            {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2.hsFaltantes)} hs`}
+                                                            {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2?.hsFaltantes)} hs`}
                                                         </td>
 
                                                         {/* TRIMESTRE 3 */}
                                                         <td style={styles.tdVoladas}>
                                                             <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre3?.hsVoladas)} hs</div>
-                                                            {(Number(p.trimestre3?.hsInstructor) > 0 || Number(p.trimestre3?.hsPiloto) > 0) && (
-                                                                <div style={styles.subtextSutil}>
-                                                                    <span>P: {formatearHoras(p.trimestre3?.hsPiloto)}</span>
-                                                                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre3?.hsInstructor)}</span>
-                                                                </div>
-                                                            )}
+                                                            <div style={styles.subtextSutil}>
+                                                                <span>P: {formatearHoras(p.trimestre3?.hsPiloto)}</span>
+                                                                <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre3?.hsInstructor)}</span>
+                                                            </div>
                                                         </td>
                                                         <td style={{...styles.tdFaltan, color: Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                            {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3.hsFaltantes)} hs`}
+                                                            {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3?.hsFaltantes)} hs`}
                                                         </td>
 
                                                         {/* TRIMESTRE 4 */}
                                                         <td style={styles.tdVoladas}>
                                                             <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre4?.hsVoladas)} hs</div>
-                                                            {(Number(p.trimestre4?.hsInstructor) > 0 || Number(p.trimestre4?.hsPiloto) > 0) && (
-                                                                <div style={styles.subtextSutil}>
-                                                                    <span>P: {formatearHoras(p.trimestre4?.hsPiloto)}</span>
-                                                                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre4?.hsInstructor)}</span>
-                                                                </div>
-                                                            )}
+                                                            <div style={styles.subtextSutil}>
+                                                                <span>P: {formatearHoras(p.trimestre4?.hsPiloto)}</span>
+                                                                <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre4?.hsInstructor)}</span>
+                                                            </div>
                                                         </td>
                                                         <td style={{...styles.tdFaltan, color: Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                            {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4.hsFaltantes)} hs`}
+                                                            {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4?.hsFaltantes)} hs`}
                                                         </td>
                                                     </tr>
 
@@ -499,7 +491,6 @@ const styles = {
     tdName: { padding: '12px 15px', fontWeight: 'bold', fontSize: '13px', color: '#334155' },
     miniSubtext: { fontSize: '10px', color: '#64748b', marginTop: '3px', fontFamily: 'monospace' },
     
-    // ESTILOS DE CELDAS REVISADOS
     tdVoladas: { padding: '8px 6px', fontSize: '12px', textAlign: 'center', backgroundColor: '#fafafa', borderRight: '1px solid #f1f5f9', verticalAlign: 'middle' },
     totalPrincipal: { fontWeight: 'bold', color: '#1b3a57', fontSize: '12px' },
     subtextSutil: { fontSize: '9px', color: '#64748b', marginTop: '2px', fontFamily: 'monospace', fontWeight: 'bold' },
