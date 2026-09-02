@@ -308,7 +308,7 @@ const Tripulantes = () => {
 
                             {/* TOTALES DINÁMICOS CONSOLIDADOS */}
                             <div style={styles.sectionHeader}>
-                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES CONSOLIDADOS v3.6)</span>
+                                <Clock size={18} /> <span>LEGAJO DE VUELO</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
                             </div>
                             <div style={styles.gridStats}>
