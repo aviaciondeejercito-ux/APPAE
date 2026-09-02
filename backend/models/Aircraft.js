@@ -1,4 +1,5 @@
-import mongoose, { Schema } from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
 // 1. Subesquema para Límites (TBO, LL, etc.)
 const LimiteSchema = new mongoose.Schema({
@@ -24,7 +25,7 @@ const ComponenteSchema = new mongoose.Schema({
   limites: [LimiteSchema],
   
   instaladoFecha: { type: String, default: '' },
-  instaladoHoras: { type: Schema.Types.Mixed, default: '' }, // ✅ Ahora Schema está definido
+  instaladoHoras: { type: Schema.Types.Mixed, default: '' },
   
   tsnCsnRenglones: [ValorUnidadSchema],
   tgInstalacion: { type: Schema.Types.Mixed, default: '' },
@@ -93,4 +94,4 @@ const AircraftSchema = new mongoose.Schema({
   timestamps: true 
 });
 
-export default mongoose.models.Aircraft || mongoose.model('Aircraft', AircraftSchema);
+module.exports = mongoose.models.Aircraft || mongoose.model('Aircraft', AircraftSchema);

@@ -1,5 +1,7 @@
 const F13 = require('../models/F13'); 
-const Aeronave = require('../models/Aircraft');
+const AeronaveModule = require('../models/Aircraft');
+// Garantiza la importación tanto si el módulo usa CommonJS como si viene de ES Modules
+const Aeronave = AeronaveModule.default || AeronaveModule;
 const ProgramaMantenimiento = require('../models/ProgramaMantenimiento');
 
 /**
