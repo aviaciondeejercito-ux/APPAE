@@ -1,572 +1,527 @@
-import React, { useState, useEffect } from 'react';
-import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity } from 'lucide-react';
-import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
+import React, { useState, useEffect, useMemo } from 'react';
+import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
-const Tripulantes = () => {
-    const [busqueda, setBusqueda] = useState('');
-    const [seleccionado, setSeleccionado] = useState(null);
-    const [personal, setPersonal] = useState([]);
+// --- MATRIZ DE REQUISITOS CONFIGURABLE ---
+const CONFIG_HORAS_EBM = {
+    HELICOPTERO: {
+        CP: { A: 6, B: 18, C: 15, D: 15 },
+        PC: { A: 16, B: 24, C: 20, D: 20 },
+        IE: { A: 20, B: 30, C: 25, D: 25 }
+    },
+    AVION: {
+        CP: { A: 12, B: 18, C: 15, D: 15 },
+        PC: { A: 20, B: 30, C: 25, D: 25 },
+        IE: { A: 24, B: 36, C: 30, D: 30 }
+    }
+};
+
+// --- DETECTOR AUXILIAR DE TIPO DE AERONAVE ---
+const determinarTipoAeronave = (sda) => {
+    if (!sda) return 'AVION';
+    const sdaUpper = sda.toUpperCase();
+    const palabrasHelicopteros = ['UH', 'BELL', 'PUMA', 'AB206', 'AB-206', 'HUEY', 'AS332', 'AS350', 'HA-1'];
+    if (palabrasHelicopteros.some(p => sdaUpper.includes(p))) return 'HELICOPTERO';
+    return 'AVION';
+};
+
+// --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---
+const getTrimestreActualCronologico = () => {
+    const mesActual = new Date().getMonth(); 
+    if (mesActual >= 0 && mesActual <= 2) return 1;
+    if (mesActual >= 3 && mesActual <= 5) return 2;
+    if (mesActual >= 6 && mesActual <= 8) return 3;
+    return 4;
+};
+
+const ORDEN_GRADOS = { 'CR': 1, 'TC': 2, 'MY': 3, 'CT': 4, 'TP': 5, 'TT': 6, 'ST': 7 };
+
+const EbmPage = () => {
+    const [todoElPersonal, setTodoElPersonal] = useState([]); 
+    const [personalFiltrado, setPersonalFiltrado] = useState([]); 
     const [loading, setLoading] = useState(true);
+    const [guardandoId, setGuardandoId] = useState(null); 
+    const [todosLosSdas, setTodosLosSdas] = useState([]);
+    const [todosLosElementos, setTodosLosElementos] = useState([]); 
+    const [elementoSeleccionado, setElementoSeleccionado] = useState(''); 
     
-    const [showAltaModal, setShowAltaModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [modalType, setModalType] = useState(''); 
-    const [formData, setFormData] = useState({});
+    const [sdasVisibles, setSdasVisibles] = useState({});
+    const [filasDesplegadas, setFilasDesplegadas] = useState({});
 
-    // --- HELPER DE REDONDEO DE FLOTANTES DE JS ---
-    const redondearHs = (val) => Math.round(Number(val || 0) * 10) / 10;
-
-    // --- NORMALIZACIÓN SINCRO JOKER v3.6 ---
     const rawRole = localStorage.getItem('role') || 'user';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
-    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || '';
+    const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || localStorage.getItem('unidad')?.trim().toUpperCase() || 'MI UNIDAD';
 
-    const esAdmin = roleNormalizado === 'ADMIN';
+    const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'COMANDO', 'COMANAV'].includes(roleNormalizado);
     const esGestorOperativo = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
-    const puedeEliminarPersonal = ['ADMIN', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
 
-    const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
-    const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
-    const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002", "T-41"];
-    const rolesVuelo = ['Cursante','Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
-    const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
+    const trimestreActualId = getTrimestreActualCronologico();
 
-    useEffect(() => { fetchPersonal(); }, []);
+    useEffect(() => {
+        fetchPlanificacion();
+    }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS REPARADO CON SANITIZACIÓN Y 5TO TOTAL ---
-    const obtenerTotalesDinamicos = () => {
-        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0, total: 0 };
-        if (!seleccionado) return totales;
-
-        if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
-            seleccionado.habilitaciones.forEach(h => {
-                totales.visual += Number(h.hsVisual || 0);
-                totales.instrumental += Number(h.hsInstrumental || 0);
-                totales.nocturno += Number(h.hsNocturno || 0);
-                totales.nvg += Number(h.hsNVG || 0);
-            });
-        } else if (seleccionado.totalesHistoricos) {
-            totales.visual = Number(seleccionado.totalesHistoricos.vueloDiurno || 0);
-            totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
-            totales.nocturno = Number(seleccionado.totalesHistoricos.vueloNocturno || 0);
-            totales.nvg = Number(seleccionado.totalesHistoricos.vueloVisual || 0);
+    useEffect(() => {
+        let filtrados = todoElPersonal;
+        if (elementoSeleccionado && elementoSeleccionado !== 'TODOS') {
+            filtrados = todoElPersonal.filter(p => (p.elemento || p.unidad || '').trim().toUpperCase() === elementoSeleccionado);
         }
-        
-        totales.visual = redondearHs(totales.visual);
-        totales.instrumental = redondearHs(totales.instrumental);
-        totales.nocturno = redondearHs(totales.nocturno);
-        totales.nvg = redondearHs(totales.nvg);
+        setPersonalFiltrado(filtrados);
 
-        // Suma del 5to elemento total
-        totales.total = redondearHs(totales.visual + totales.instrumental + totales.nocturno + totales.nvg);
+        const sdas = [...new Set(filtrados.map(p => p.aeronave).filter(Boolean))];
+        setTodosLosSdas(sdas);
 
-        return totales;
-    };
+        setSdasVisibles(prev => {
+            const nuevo = { ...prev };
+            sdas.forEach(sda => { if (nuevo[sda] === undefined) nuevo[sda] = false; });
+            return nuevo;
+        });
+    }, [elementoSeleccionado, todoElPersonal]);
 
-    const horasDinamicas = obtenerTotalesDinamicos();
-
-    const fetchPersonal = async () => {
+    const fetchPlanificacion = async () => {
         try {
             setLoading(true);
-            const response = await getTripulantes();
-            const miUnidadLogueada = userUnidad.trim().toUpperCase();
-            const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleNormalizado);
+            const response = await getPlanificacionEbm();
+            const dataBackend = response.data || [];
 
-            const dataFinal = esMandoEstrategico
-                ? response.data 
-                : response.data.filter(p => {
-                    const unidadDelPiloto = p.elemento || p.unidad;
-                    if (!unidadDelPiloto) return false;
-                    return unidadDelPiloto.trim().toUpperCase() === miUnidadLogueada;
+            const dataNormalizada = dataBackend.map(p => {
+                const pModificado = { ...p };
+                const tipoAeronave = determinarTipoAeronave(p.aeronave);
+                
+                [1, 2, 3, 4].forEach(num => {
+                    const keyTrimestre = `trimestre${num}`;
+                    if (pModificado[keyTrimestre]) {
+                        const cond = pModificado[keyTrimestre].condicion || 'CP';
+                        const tipo = pModificado[keyTrimestre].tipoEbm || 'A';
+                        
+                        const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
+                        const restantes = reqHs - Number(pModificado[keyTrimestre].hsVoladas || 0);
+                        
+                        pModificado[keyTrimestre] = {
+                            ...pModificado[keyTrimestre],
+                            hsFaltantes: restantes > 0 ? Math.round(restantes * 10) / 10 : 0
+                        };
+                    }
                 });
+                return pModificado;
+            });
+
+            const dataJurisdiccion = esMandoEstrategico ? dataNormalizada : dataNormalizada.filter(p => {
+                const unidadPiloto = p.elemento || p.unidad;
+                return unidadPiloto && unidadPiloto.trim().toUpperCase() === userUnidad;
+            });
+
+            setTodoElPersonal(dataJurisdiccion);
+
+            const elementosUnicos = [...new Set(dataJurisdiccion.map(p => (p.elemento || p.unidad || '').trim().toUpperCase()).filter(Boolean))].sort();
+            setTodosLosElementos(elementosUnicos);
             
-            setPersonal(dataFinal || []);
+            setElementoSeleccionado(esMandoEstrategico ? 'TODOS' : userUnidad);
+
+        } catch (error) {
+            console.error("Error cargando planificación EBM:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const toggleSdaVisible = (sda) => { setSdasVisibles(prev => ({ ...prev, [sda]: !prev[sda] })); };
+    const toggleFilaDesplegada = (id) => { setFilasDesplegadas(prev => ({ ...prev, [id]: !prev[id] })); };
+
+    const handleInputChange = (p_id, trimestreNum, campo, valor) => {
+        if (!esGestorOperativo) return; 
+
+        const actualizarLista = prev => prev.map(p => {
+            if (p._id !== p_id) return p;
             
-            if (seleccionado) {
-                const actualizado = dataFinal.find(p => p._id === seleccionado._id);
-                if (actualizado) setSeleccionado(actualizado);
-                else setSeleccionado(null);
-            }
-        } catch (error) { 
-            console.error("❌ Error de carga de personal:", error); 
-        } finally { 
-            setLoading(false); 
-        }
+            const keyTrimestre = `trimestre${trimestreNum}`;
+            const trimModificado = { ...p[keyTrimestre], [campo]: valor };
+
+            const cond = campo === 'condicion' ? valor : p[keyTrimestre].condicion;
+            const tipo = campo === 'tipoEbm' ? valor : p[keyTrimestre].tipoEbm;
+            
+            const tipoAeronave = determinarTipoAeronave(p.aeronave);
+            const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
+
+            const restantes = reqHs - Number(p[keyTrimestre].hsVoladas || 0);
+            trimModificado.hsFaltantes = restantes > 0 ? Math.round(restantes * 10) / 10 : 0;
+
+            return { ...p, [keyTrimestre]: trimModificado };
+        });
+
+        setPersonalFiltrado(actualizarLista);
+        setTodoElPersonal(actualizarLista);
     };
 
-    const handleEliminarTripulante = async (id) => {
-        if (!window.confirm("¿ESTÁ SEGURO? Esta acción dará de baja el legajo operativo de la unidad.")) return;
-        try {
-            await deleteTripulante(id);
-            alert("Legajo dado de baja correctamente (Historial de vuelos preservado).");
-            setSeleccionado(null);
-            await fetchPersonal();
-        } catch (error) { alert("Error al procesar la baja. Verifique permisos o jurisdicción."); }
-    };
-
-    const getEstadoVencimiento = (fecha) => {
-        if (!fecha) return { label: 'SIN DATOS', color: '#95a5a6' };
-        const hoy = new Date();
-        const fVenc = new Date(fecha);
-        const difDias = Math.ceil((fVenc - hoy) / (1000 * 60 * 60 * 24));
-        if (difDias < 0) return { label: 'VENCIDO', color: '#e74c3c' };
-        if (difDias <= 30) return { label: 'PRÓXIMO A VENCER', color: '#f39c12' };
-        return { label: 'AL DÍA', color: '#27ae60' };
-    };
-
-    const handleOpenEdit = (type) => {
-        setModalType(type);
-        if (type === 'certificaciones') {
-            setFormData({
-                psicofisicoVencimiento: seleccionado.certificaciones?.psicofisico?.vencimiento?.split('T')[0] || '',
-                crmVencimiento: seleccionado.certificaciones?.crm?.vencimiento?.split('T')[0] || ''
-            });
-        } else if (type === 'horas') {
-            setFormData({
-                vueloDiurno: redondearHs(seleccionado.totalesHistoricos?.vueloDiurno),
-                vueloNocturno: redondearHs(seleccionado.totalesHistoricos?.vueloNocturno),
-                vueloInstrumental: redondearHs(seleccionado.totalesHistoricos?.vueloInstrumental),
-                vueloVisual: redondearHs(seleccionado.totalesHistoricos?.vueloVisual)
-            });
-        } else if (type === 'habilitacion') {
-            setFormData({ 
-                aeronave: '', rolActual: '', fechaHabilitacion: '', 
-                hsVisual: 0, hsInstrumental: 0, hsNocturno: 0, hsNVG: 0, observaciones: '' 
-            });
-        } else if (type === 'capacitacion') {
-            setFormData({ tipo: '', fechaAdquisicion: '', horasAcreditadas: 0 });
-        }
-        setShowEditModal(true);
-    };
-
-    const handleAction = async (e) => {
-        e.preventDefault();
-        try {
-            if (showAltaModal) {
-                await createTripulante({ ...formData, elemento: formData.unidad });
-                alert("Personal incorporado al legajo digital.");
-            } else {
-                if (modalType === 'certificaciones') {
-                    await updateTripulante(seleccionado._id, {
-                        certificaciones: {
-                            psicofisico: { vencimiento: formData.psicofisicoVencimiento },
-                            crm: { vencimiento: formData.crmVencimiento }
-                        }
-                    });
-                } else if (modalType === 'horas') {
-                    await updateTripulante(seleccionado._id, { 
-                        totalesHistoricos: {
-                            vueloDiurno: redondearHs(formData.vueloDiurno),
-                            vueloNocturno: redondearHs(formData.vueloNocturno),
-                            vueloInstrumental: redondearHs(formData.vueloInstrumental),
-                            vueloVisual: redondearHs(formData.vueloVisual)
-                        } 
-                    });
-                } else if (modalType === 'habilitacion') {
-                    await API.post(`/tripulantes/${seleccionado._id}/habilitacion`, { 
-                        aeronave: formData.aeronave,
-                        fechaHabilitacion: formData.fechaHabilitacion,
-                        rolActual: formData.rolActual,
-                        hsVisual: redondearHs(formData.hsVisual),
-                        hsInstrumental: redondearHs(formData.hsInstrumental),
-                        hsNocturno: redondearHs(formData.hsNocturno),
-                        hsNVG: redondearHs(formData.hsNVG),
-                        observaciones: formData.observaciones || ''
-                    });
-                } else if (modalType === 'capacitacion') {
-                    await API.post(`/tripulantes/${seleccionado._id}/capacitacion`, {
-                        ...formData,
-                        horasAcreditadas: redondearHs(formData.horasAcreditadas)
-                    });
-                }
-            }
-            setShowAltaModal(false);
-            setShowEditModal(false);
-            await fetchPersonal();
-        } catch (error) { 
-            console.error(error);
-            alert("Error en la operación del legajo. Verifique jurisdicción de unidad."); 
-        }
-    };
-
-    const deleteSubItem = async (type, itemId) => {
+    const handleGuardarFila = async (pilotoId) => {
         if (!esGestorOperativo) return;
-        if (!window.confirm("¿Desea eliminar este registro de historial?")) return;
         try {
-            let updatedData = { ...seleccionado };
+            setGuardandoId(pilotoId);
+            const pData = personalFiltrado.find(p => p._id === pilotoId);
             
-            if (type === 'habilitacion') {
-                updatedData.habilitaciones = seleccionado.habilitaciones.filter(h => h._id !== itemId);
-                
-                const mapaSdA = {};
-                updatedData.habilitaciones.forEach(h => {
-                    const sda = h.aeronave;
-                    if (!mapaSdA[sda]) mapaSdA[sda] = { visual: 0, nocturno: 0, instrumental: 0, nvg: 0 };
-                    mapaSdA[sda].visual += Number(h.hsVisual || 0);
-                    mapaSdA[sda].nocturno += Number(h.hsNocturno || 0);
-                    mapaSdA[sda].instrumental += Number(h.hsInstrumental || 0);
-                    mapaSdA[sda].nvg += Number(h.hsNVG || 0);
-                });
+            const payload = {
+                trimestre1: pData.trimestre1,
+                trimestre2: pData.trimestre2,
+                trimestre3: pData.trimestre3,
+                trimestre4: pData.trimestre4
+            };
 
-                const nuevosTotales = { vueloDiurno: 0, vueloNocturno: 0, vueloInstrumental: 0, vueloVisual: 0 };
-                Object.values(mapaSdA).forEach(sistema => {
-                    nuevosTotales.vueloDiurno += sistema.visual;
-                    nuevosTotales.vueloNocturno += sistema.nocturno;
-                    nuevosTotales.vueloInstrumental += sistema.instrumental;
-                    nuevosTotales.vueloVisual += sistema.nvg;
-                });
-                
-                // REDONDEO PREVENTIVO AL BORRAR SUB-ITEMS
-                updatedData.totalesHistoricos = {
-                    vueloDiurno: redondearHs(nuevosTotales.vueloDiurno),
-                    vueloNocturno: redondearHs(nuevosTotales.vueloNocturno),
-                    vueloInstrumental: redondearHs(nuevosTotales.vueloInstrumental),
-                    vueloVisual: redondearHs(nuevosTotales.vueloVisual)
-                };
-
-            } else if (type === 'capacitacion') {
-                updatedData.capacitacionesEspeciales = seleccionado.capacitacionesEspeciales.filter(c => c._id !== itemId);
-            }
-            
-            await updateTripulante(seleccionado._id, updatedData);
-            await fetchPersonal();
-        } catch (error) { 
-            alert("Error al eliminar registro histórico."); 
+            await actualizarConfiguracionEbm(pilotoId, payload);
+            alert(`Parámetros EBM guardados con éxito para ${pData.grado} ${pData.apellido}.`);
+            setFilasDesplegadas(prev => ({ ...prev, [pilotoId]: false }));
+        } catch (error) {
+            console.error(error);
+            alert("Error al guardar la configuración del legajo.");
+        } finally {
+            setGuardandoId(null);
         }
     };
+
+    const matrizSda = useMemo(() => {
+        const agrupa = {};
+        todosLosSdas.forEach(sda => { agrupa[sda] = []; });
+        personalFiltrado.forEach(p => { if (p.aeronave && agrupa[p.aeronave]) agrupa[p.aeronave].push(p); });
+        
+        Object.keys(agrupa).forEach(sda => {
+            agrupa[sda].sort((a, b) => (ORDEN_GRADOS[a.grado] || 99) - (ORDEN_GRADOS[b.grado] || 99));
+        });
+        return agrupa;
+    }, [personalFiltrado, todosLosSdas]);
+
+    const formatearHoras = (valor) => {
+        const num = Number(valor || 0);
+        return Number.isInteger(num) ? num : num.toFixed(1);
+    };
+
+    const verificarRotacionCorrecta = (p) => {
+        const tipos = [p.trimestre1?.tipoEbm, p.trimestre2?.tipoEbm, p.trimestre3?.tipoEbm, p.trimestre4?.tipoEbm];
+        const unicos = new Set(tipos.filter(Boolean));
+        return unicos.size === 4; 
+    };
+
+    const calcularTotalesAnuales = (p) => {
+        let totalPiloto = 0;
+        let totalInstructor = 0;
+        let totalGeneral = 0;
+
+        [1, 2, 3, 4].forEach(num => {
+            const t = p[`trimestre${num}`] || {};
+            totalPiloto += Number(t.hsPiloto || 0);
+            totalInstructor += Number(t.hsInstructor || 0);
+            totalGeneral += Number(t.hsVoladas || 0);
+        });
+
+        return {
+            totalPiloto: Math.round(totalPiloto * 10) / 10,
+            totalInstructor: Math.round(totalInstructor * 10) / 10,
+            totalGeneral: Math.round(totalGeneral * 10) / 10
+        };
+    };
+
+    const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
+
+    if (loading) return <div style={styles.centerText}>Cargando Matriz de Exigencias EBM...</div>;
 
     return (
-        <div style={styles.dashboardContainer}>
-            <div style={styles.sidebar}>
-                {esGestorOperativo && (
-                    <div style={styles.altaBox}>
-                        <button style={styles.btnAlta} onClick={() => { setFormData({ grado: '', apellido: '', nombre: '', unidad: userUnidad }); setShowAltaModal(true); }}>
-                            <UserPlus size={18} /> <span>Incorporar Personal</span>
-                        </button>
-                    </div>
-                )}
-                <div style={styles.searchBox}>
-                    <div style={styles.inputWrapper}>
-                        <Search size={18} style={styles.searchIcon} />
-                        <input type="text" placeholder="Buscar apellido o legajo..." style={styles.input} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-                    </div>
+        <div style={styles.pageContainer}>
+            <div style={styles.headerArea}>
+                <div>
+                    <h2 style={styles.title}>Planificación Anual EBM - Año 2026</h2>
+                    <p style={styles.subtitle}>Distribución de Exigencias de Horas de Vuelo Mínimas</p>
                 </div>
-                <div style={styles.listContainer}>
-                    {personal.filter(p => p.apellido?.toLowerCase().includes(busqueda.toLowerCase())).map(p => (
-                        <div key={p._id} onClick={() => setSeleccionado(p)} style={{...styles.personItem, backgroundColor: seleccionado?._id === p._id ? '#e3f2fd' : 'white', borderLeft: seleccionado?._id === p._id ? '4px solid #1b3a57' : '4px solid transparent'}}>
-                            <div style={styles.personInfo}>
-                                <span style={styles.itemGrado}>{p.grado} - {p.elemento || p.unidad}</span>
-                                <span style={styles.itemNombre}>{p.apellido}, {p.nombre}</span>
-                            </div>
-                            <ChevronRight size={16} color="#bdc3c7" />
-                        </div>
+                <div style={styles.headerControlsRight}>
+                    <div style={styles.containerFiltroUnidad}>
+                        <span style={styles.labelFiltroUnidad}>Elemento/Unidad:</span>
+                        <select 
+                            style={styles.selectUnidadSuperior} 
+                            value={elementoSeleccionado} 
+                            disabled={!esMandoEstrategico} 
+                            onChange={(e) => setElementoSeleccionado(e.target.value)}
+                        >
+                            {esMandoEstrategico && <option value="TODOS">⚠️ VER TODO EL COMANDO</option>}
+                            {todosLosElementos.map(el => <option key={el} value={el}>{el}</option>)}
+                        </select>
+                    </div>
+                    <div style={styles.badgeTrimestre}>Trimestre Cronológico: T{trimestreActualId}</div>
+                </div>
+            </div>
+
+            <div style={styles.filterBar}>
+                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1b3a57' }}>Sistemas de Armas:</span>
+                <div style={styles.filterGroup}>
+                    {todosLosSdas.map(sda => (
+                        <button 
+                            key={sda} 
+                            onClick={() => toggleSdaVisible(sda)} 
+                            style={{ 
+                                ...styles.filterButton, 
+                                backgroundColor: sdasVisibles[sda] ? '#1b3a57' : '#e2e8f0', 
+                                color: sdasVisibles[sda] ? 'white' : '#475569' 
+                            }}
+                        >
+                            {sda} {sdasVisibles[sda] ? '👁️' : '📁'}
+                        </button>
                     ))}
                 </div>
             </div>
 
-            <div style={styles.mainView}>
-                {seleccionado ? (
-                    <div style={styles.legajoCard}>
-                        <div style={styles.legajoHeader}>
-                            <div style={styles.avatar}><User size={35} color="white" /></div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <h2 style={styles.legajoTitle}>{seleccionado.grado} {seleccionado.apellido}, {seleccionado.nombre}</h2>
-                                    {puedeEliminarPersonal && (
-                                        <button onClick={() => handleEliminarTripulante(seleccionado._id)} style={styles.btnDelete}>
-                                            <Trash2 size={22}/>
-                                        </button>
-                                    )}
-                                </div>
-                                <span style={styles.legajoSubtitle}>{seleccionado.elemento || seleccionado.unidad}</span>
-                            </div>
-                        </div>
+            <div style={styles.tableWrapper}>
+                <table style={styles.mainTable}>
+                    <thead>
+                        <tr style={styles.tableHeaderRow}>
+                            <th style={{...styles.th, width: '50px', textAlign: 'center'}}>Ajustar</th>
+                            <th style={styles.th}>Grado, Apellido y Nombre</th>
+                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>1er Trimestre</th>
+                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>2do Trimestre</th>
+                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>3er Trimestre</th>
+                            <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>4to Trimestre</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {!haySdaSeleccionado ? (
+                            <tr><td colSpan={10} style={styles.noDataRow}>💡 Seleccione un Sistema de Armas arriba para listar y parametrizar las tripulaciones.</td></tr>
+                        ) : (
+                            todosLosSdas.map(sda => {
+                                if (!sdasVisibles[sda] || !matrizSda[sda] || matrizSda[sda].length === 0) return null;
+                                return (
+                                    <React.Fragment key={sda}>
+                                        <tr style={styles.sdaGroupRow}><td colSpan={10} style={styles.sdaGroupCell}>✈️ SISTEMA DE ARMAS: {sda}</td></tr>
+                                        {matrizSda[sda].map(p => {
+                                            const estaDesplegado = !!filasDesplegadas[p._id];
+                                            const rotacionValida = verificarRotacionCorrecta(p);
+                                            const totalesAnuales = calcularTotalesAnuales(p);
 
-                        <div style={styles.legajoBody}>
-                            {/* CERTIFICACIONES */}
-                            <div style={styles.sectionHeader}>
-                                <ShieldCheck size={18} /> <span>CERTIFICACIONES TÉCNICAS</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
-                            </div>
-                            <div style={styles.gridStats}>
-                                <div style={styles.statCard}>
-                                    <span style={styles.statLabel}>PSICOFÍSICO</span>
-                                    <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).color}}>
-                                        {seleccionado.certificaciones?.psicofisico?.vencimiento ? new Date(seleccionado.certificaciones.psicofisico.vencimiento).toLocaleDateString() : 'S/D'}
-                                    </span>
-                                    <div style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).color}}>
-                                        {getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).label}
-                                    </div>
-                                </div>
-                                <div style={styles.statCard}>
-                                    <span style={styles.statLabel}>CRM</span>
-                                    <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).color}}>
-                                        {seleccionado.certificaciones?.crm?.vencimiento ? new Date(seleccionado.certificaciones.crm.vencimiento).toLocaleDateString() : 'S/D'}
-                                    </span>
-                                    <div style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).color}}>
-                                        {getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).label}
-                                    </div>
-                                </div>
-                            </div>
+                                            return (
+                                                <React.Fragment key={p._id}>
+                                                    <tr style={styles.pilotRow}>
+                                                        <td style={styles.tdCenter}>
+                                                            <button style={styles.btnConfig} onClick={() => toggleFilaDesplegada(p._id)}>⚙️</button>
+                                                        </td>
+                                                        <td style={styles.tdName}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                {p.grado} {p.apellido}, {p.nombre}
+                                                                {!rotacionValida && <span title="Alerta: Deben asignarse los 4 tipos de trimestre (A, B, C y D) en el año sin repetir" style={{ cursor: 'help' }}>⚠️</span>}
+                                                            </div>
+                                                            <div style={styles.miniSubtext}>
+                                                                T1: {p.trimestre1?.condicion}-{p.trimestre1?.tipoEbm} | 
+                                                                T2: {p.trimestre2?.condicion}-{p.trimestre2?.tipoEbm} | 
+                                                                T3: {p.trimestre3?.condicion}-{p.trimestre3?.tipoEbm} | 
+                                                                T4: {p.trimestre4?.condicion}-{p.trimestre4?.tipoEbm}
+                                                            </div>
+                                                        </td>
 
-                            {/* TOTALES DINÁMICOS CONSOLIDADOS */}
-                            <div style={styles.sectionHeader}>
-                                <Clock size={18} /> <span>LEGAJO DE VUELO</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
-                            </div>
-                            <div style={styles.gridStats}>
-                                <div style={styles.statCard}><span style={styles.statLabel}>VISUAL</span><span style={styles.statValue}>{horasDinamicas.visual} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>NOCTURNO</span><span style={styles.statValue}>{horasDinamicas.nocturno} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{horasDinamicas.instrumental} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{horasDinamicas.nvg} hs</span></div>
-                                <div style={{...styles.statCard, backgroundColor: '#e3f2fd', borderColor: '#1b3a57'}}>
-                                    <span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span>
-                                    <span style={{...styles.statValue, color: '#1b3a57'}}>{horasDinamicas.total} hs</span>
-                                </div>
-                            </div>
+                                                        {/* TRIMESTRE 1 */}
+                                                        <td style={styles.tdVoladas}>
+                                                            <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre1?.hsVoladas)} hs</div>
+                                                            {(Number(p.trimestre1?.hsInstructor) > 0 || Number(p.trimestre1?.hsPiloto) > 0) && (
+                                                                <div style={styles.subtextSutil}>
+                                                                    <span>P: {formatearHoras(p.trimestre1?.hsPiloto)}</span>
+                                                                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre1?.hsInstructor)}</span>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td style={{...styles.tdFaltan, color: Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
+                                                            {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1.hsFaltantes)} hs`}
+                                                        </td>
 
-                            {/* EXPERIENCIA SdA */}
-                            <div style={styles.sectionHeader}>
-                                <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>}
-                            </div>
-                            <div style={styles.habilitacionesList}>
-                                {seleccionado.habilitaciones?.map((h, i) => (
-                                    <div key={i} style={styles.habItem}>
-                                        <div style={styles.habInfoMain}>
-                                            <div style={styles.habTitleGroup}>
-                                                <strong style={styles.habAeronave}>{h.aeronave}</strong>
-                                                <span style={styles.habRol}>{h.rolActual}</span>
-                                            </div>
-                                            <div style={styles.habTimeInfo}>
-                                                 <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365)) : 0} años</div>
-                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {redondearHs(h.totalHorasSistema)} HS</div>
-                                            </div>
-                                        </div>
-                                        <div style={styles.habDesgloseGrid}>
-                                            <div style={styles.desgloseItem}><Eye size={12} /> <span>{redondearHs(h.hsVisual)}</span></div>
-                                            <div style={styles.desgloseItem}><Activity size={12} /> <span>{redondearHs(h.hsInstrumental)}</span></div>
-                                            <div style={styles.desgloseItem}><Moon size={12} /> <span>{redondearHs(h.hsNocturno)}</span></div>
-                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{redondearHs(h.hsNVG)}</span></div>
-                                        </div>
-                                        {esGestorOperativo && <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>}
-                                    </div>
-                                ))}
-                            </div>
+                                                        {/* TRIMESTRE 2 */}
+                                                        <td style={styles.tdVoladas}>
+                                                            <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre2?.hsVoladas)} hs</div>
+                                                            {(Number(p.trimestre2?.hsInstructor) > 0 || Number(p.trimestre2?.hsPiloto) > 0) && (
+                                                                <div style={styles.subtextSutil}>
+                                                                    <span>P: {formatearHoras(p.trimestre2?.hsPiloto)}</span>
+                                                                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre2?.hsInstructor)}</span>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td style={{...styles.tdFaltan, color: Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
+                                                            {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2.hsFaltantes)} hs`}
+                                                        </td>
 
-                            {/* CAPACITACIONES */}
-                            <div style={styles.sectionHeader}>
-                                <Star size={18} /> <span>APTITUDES TÁCTICAS ESPECIALES (Hs a partir del 2025)</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>}
-                            </div>
-                            <div style={styles.tacticasContainer}>
-                                {seleccionado.capacitacionesEspeciales?.map((c, i) => (
-                                    <div key={i} style={styles.tacticaBadge}>
-                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', width: '100%'}}>
-                                            <div style={{fontWeight: 'bold', fontSize: '0.75rem'}}>{c.tipo}</div>
-                                            {esGestorOperativo && <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
-                                        </div>
-                                        <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
-                                            <span>{redondearHs(c.horasAcreditadas)} hs</span>
-                                            <span>{c.fechaAdquisicion ? new Date(c.fechaAdquisicion).toLocaleDateString() : ''}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div style={styles.emptyState}><User size={60} color="#dcdde1" /><h3>Monitor de Legajos Digitales AE</h3></div>
-                )}
+                                                        {/* TRIMESTRE 3 */}
+                                                        <td style={styles.tdVoladas}>
+                                                            <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre3?.hsVoladas)} hs</div>
+                                                            {(Number(p.trimestre3?.hsInstructor) > 0 || Number(p.trimestre3?.hsPiloto) > 0) && (
+                                                                <div style={styles.subtextSutil}>
+                                                                    <span>P: {formatearHoras(p.trimestre3?.hsPiloto)}</span>
+                                                                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre3?.hsInstructor)}</span>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td style={{...styles.tdFaltan, color: Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
+                                                            {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3.hsFaltantes)} hs`}
+                                                        </td>
+
+                                                        {/* TRIMESTRE 4 */}
+                                                        <td style={styles.tdVoladas}>
+                                                            <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre4?.hsVoladas)} hs</div>
+                                                            {(Number(p.trimestre4?.hsInstructor) > 0 || Number(p.trimestre4?.hsPiloto) > 0) && (
+                                                                <div style={styles.subtextSutil}>
+                                                                    <span>P: {formatearHoras(p.trimestre4?.hsPiloto)}</span>
+                                                                    <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre4?.hsInstructor)}</span>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td style={{...styles.tdFaltan, color: Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
+                                                            {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4.hsFaltantes)} hs`}
+                                                        </td>
+                                                    </tr>
+
+                                                    {estaDesplegado && (
+                                                        <tr style={styles.configExpandedRow}>
+                                                            <td colSpan={10} style={styles.configExpandedCell}>
+                                                                <div style={styles.panelConfigFlex}>
+                                                                    {[1, 2, 3, 4].map(num => {
+                                                                        const trimData = p[`trimestre${num}`] || {};
+                                                                        const esInstructor = trimData.condicion === 'IE';
+
+                                                                        return (
+                                                                            <div key={num} style={styles.bloqueTrimestreConfig}>
+                                                                                <h4 style={styles.tituloBloque}>Trimestre {num}</h4>
+                                                                                <div style={styles.grupoInput}>
+                                                                                    <span style={styles.labelMini}>Función:</span>
+                                                                                    <select 
+                                                                                        style={styles.selectPanel} 
+                                                                                        value={trimData.condicion || 'CP'} 
+                                                                                        disabled={!esGestorOperativo} 
+                                                                                        onChange={(e) => handleInputChange(p._id, num, 'condicion', e.target.value)}
+                                                                                    >
+                                                                                        <option value="CP">Copiloto (CP)</option>
+                                                                                        <option value="PC">Piloto en Comando (PC)</option>
+                                                                                        <option value="IE">Instructor / Estand. (IE)</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div style={styles.grupoInput}>
+                                                                                    <span style={styles.labelMini}>Tipo Trimestre:</span>
+                                                                                    <select 
+                                                                                        style={styles.selectPanel} 
+                                                                                        value={trimData.tipoEbm || 'A'} 
+                                                                                        disabled={!esGestorOperativo} 
+                                                                                        onChange={(e) => handleInputChange(p._id, num, 'tipoEbm', e.target.value)}
+                                                                                    >
+                                                                                        <option value="A">Tipo A</option>
+                                                                                        <option value="B">Tipo B</option>
+                                                                                        <option value="C">Tipo C</option>
+                                                                                        <option value="D">Tipo D</option>
+                                                                                    </select>
+                                                                                </div>
+
+                                                                                {esInstructor && (
+                                                                                    <div style={styles.boxDiscriminado}>
+                                                                                        <div style={styles.badgeDiscriminadoPiloto}>
+                                                                                            <span>👨‍✈️ Piloto:</span>
+                                                                                            <strong>{formatearHoras(trimData.hsPiloto)} hs</strong>
+                                                                                        </div>
+                                                                                        <div style={styles.badgeDiscriminadoInstructor}>
+                                                                                            <span>🎓 Instructor:</span>
+                                                                                            <strong>{formatearHoras(trimData.hsInstructor)} hs</strong>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+
+                                                                                <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '6px', fontWeight: 'bold' }}>
+                                                                                    Exige: {(() => {
+                                                                                        const tipoAeronave = determinarTipoAeronave(p.aeronave);
+                                                                                        return CONFIG_HORAS_EBM[tipoAeronave]?.[trimData.condicion || 'CP']?.[trimData.tipoEbm || 'A'] || 0;
+                                                                                    })()} hs
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+
+                                                                <div style={styles.barConsolidado}>
+                                                                    <div style={styles.cardConsolidadoAnual}>
+                                                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>📊 Totales Acumulados (Año 2026):</span>
+                                                                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                                                                            <span style={{ fontSize: '11px', color: '#334155' }}>
+                                                                                Piloto: <strong style={{ color: '#0284c7' }}>{formatearHoras(totalesAnuales.totalPiloto)} hs</strong>
+                                                                            </span>
+                                                                            <span style={{ fontSize: '11px', color: '#334155' }}>
+                                                                                Instructor: <strong style={{ color: '#475569' }}>{formatearHoras(totalesAnuales.totalInstructor)} hs</strong>
+                                                                            </span>
+                                                                            <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 'bold', borderLeft: '1px solid #cbd5e1', paddingLeft: '10px' }}>
+                                                                                Total Volado: {formatearHoras(totalesAnuales.totalGeneral)} hs
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                                        {!rotacionValida && (
+                                                                            <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 'bold' }}>
+                                                                                ⚠️ Combine los tipos A, B, C y D en el año.
+                                                                            </span>
+                                                                        )}
+                                                                        {esGestorOperativo && (
+                                                                            <button style={styles.btnSaveRow} onClick={() => handleGuardarFila(p._id)} disabled={guardandoId === p._id}>
+                                                                                {guardandoId === p._id ? 'Guardando legajo...' : '💾 Aplicar Configuración Anual'}
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </React.Fragment>
+                                );
+                            })
+                        )}
+                    </tbody>
+                </table>
             </div>
-
-            {/* MODALES */}
-            {(showAltaModal || showEditModal) && (
-                <div style={styles.overlay}>
-                    <div style={styles.modal}>
-                        <div style={styles.modalHeader}>
-                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{showAltaModal ? 'Incorporación de Personal' : `Gestión de ${modalType.toUpperCase()}`}</h3>
-                            <X size={24} style={{cursor:'pointer', color: '#7f8c8d'}} onClick={() => {setShowAltaModal(false); setShowEditModal(false);}} />
-                        </div>
-                        
-                        <form onSubmit={handleAction} style={styles.formContainerScroll}>
-                            <div style={styles.form}>
-                                {showAltaModal && (
-                                    <div style={styles.formCol}>
-                                        <label style={styles.label}>Grado</label>
-                                        <select style={styles.formInput} value={formData.grado || ''} onChange={e => setFormData({...formData, grado: e.target.value})} required>
-                                            <option value="">Seleccionar...</option>{gradosAE.map(g => <option key={g} value={g}>{g}</option>)}
-                                        </select>
-                                        <label style={styles.label}>Apellido</label>
-                                        <input type="text" placeholder="APELLIDO" style={styles.formInput} value={formData.apellido || ''} onChange={e => setFormData({...formData, apellido: e.target.value.toUpperCase()})} required />
-                                        <label style={styles.label}>Nombre</label>
-                                        <input type="text" placeholder="Nombre" style={styles.formInput} value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
-                                        <label style={styles.label}>Unidad</label>
-                                        <select style={styles.formInput} value={formData.unidad || ''} onChange={e => setFormData({...formData, unidad: e.target.value})} required>
-                                            <option value="">Unidad...</option>{unidadesAE.map(u => <option key={u} value={u}>{u}</option>)}
-                                        </select>
-                                    </div>
-                                )}
-                                
-                                {modalType === 'certificaciones' && (
-                                    <div style={styles.formCol}>
-                                        <label style={styles.label}>Vencimiento Psicofísico</label>
-                                        <input type="date" style={styles.formInput} value={formData.psicofisicoVencimiento || ''} onChange={e => setFormData({...formData, psicofisicoVencimiento: e.target.value})} />
-                                        <label style={styles.label}>Vencimiento CRM</label>
-                                        <input type="date" style={styles.formInput} value={formData.crmVencimiento || ''} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
-                                    </div>
-                                )}
-
-                                {modalType === 'horas' && (
-                                    <div style={styles.formCol}>
-                                        <label style={styles.label}>Horas Visual Generales</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloDiurno || 0} onChange={e => setFormData({...formData, vueloDiurno: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Horas Nocturno Generales</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloNocturno || 0} onChange={e => setFormData({...formData, vueloNocturno: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Horas Instrumental Generales</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloInstrumental || 0} onChange={e => setFormData({...formData, vueloInstrumental: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Horas NVG Generales</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloVisual || 0} onChange={e => setFormData({...formData, vueloVisual: Number(e.target.value)})} required />
-                                    </div>
-                                )}
-
-                                {modalType === 'habilitacion' && (
-                                    <div style={styles.formCol}>
-                                        <label style={styles.label}>SdA</label>
-                                        <select style={styles.formInput} value={formData.aeronave || ''} onChange={e => setFormData({...formData, aeronave: e.target.value})} required>
-                                            <option value="">Seleccionar...</option>{aeronavesAE.map(a => <option key={a} value={a}>{a}</option>)}
-                                        </select>
-                                        <label style={styles.label}>Función</label>
-                                        <select style={styles.formInput} value={formData.rolActual || ''} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
-                                            <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
-                                        </select>
-                                        <label style={styles.label}>Hs Visual SdA</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.hsVisual || 0} onChange={e => setFormData({...formData, hsVisual: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Hs Nocturno SdA</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.hsNocturno || 0} onChange={e => setFormData({...formData, hsNocturno: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Hs Instrumental SdA</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.hsInstrumental || 0} onChange={e => setFormData({...formData, hsInstrumental: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Hs NVG SdA</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.hsNVG || 0} onChange={e => setFormData({...formData, hsNVG: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Fecha Aptitud Inicial</label>
-                                        <input type="date" style={styles.formInput} value={formData.fechaHabilitacion || ''} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
-                                        <label style={styles.label}>Observaciones / Notas</label>
-                                        <input type="text" placeholder="Opcional..." style={styles.formInput} value={formData.observaciones || ''} onChange={e => setFormData({...formData, observaciones: e.target.value})} />
-                                    </div>
-                                )}
-
-                                {modalType === 'capacitacion' && (
-                                    <div style={styles.formCol}>
-                                        <label style={styles.label}>Capacitación</label>
-                                        <select style={styles.formInput} value={formData.tipo || ''} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
-                                            <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                        <label style={styles.label}>Horas Acreditadas</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.horasAcreditadas || 0} onChange={e => setFormData({...formData, horasAcreditadas: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Fecha Adquisición</label>
-                                        <input type="date" style={styles.formInput} value={formData.fechaAdquisicion || ''} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
-                                    </div>
-                                )}
-                            </div>
-                            
-                            <div style={styles.modalFooter}>
-                                <button type="submit" style={styles.btnSave}><Save size={18} /> Confirmar Cambios</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
 
 const styles = {
-    dashboardContainer: { display: 'flex', height: 'calc(100vh - 65px)', backgroundColor: '#f5f6fa' },
-    sidebar: { width: '350px', backgroundColor: 'white', borderRight: '1px solid #dcdde1', display: 'flex', flexDirection: 'column' },
-    altaBox: { padding: '15px', borderBottom: '1px solid #eee' },
-    btnAlta: { width: '100%', backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontWeight: 'bold', cursor: 'pointer' },
-    searchBox: { padding: '15px', backgroundColor: '#f8f9fa' },
-    inputWrapper: { position: 'relative', display: 'flex', alignItems: 'center' },
-    searchIcon: { position: 'absolute', left: '10px', color: '#7f8c8d' },
-    input: { width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid #dcdde1', outline: 'none' },
-    listContainer: { flex: 1, overflowY: 'auto' },
-    personItem: { padding: '15px', borderBottom: '1px solid #f1f2f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: '0.2s' },
-    personInfo: { display: 'flex', flexDirection: 'column' },
-    itemGrado: { fontSize: '0.7rem', color: '#7f8c8d', fontWeight: 'bold' },
-    itemNombre: { fontSize: '0.9rem', color: '#2f3640', fontWeight: '600' },
-    mainView: { flex: 1, padding: '30px', overflowY: 'auto' },
-    legajoCard: { backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', overflow: 'hidden' },
-    legajoHeader: { padding: '25px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', alignItems: 'center', gap: '20px' },
-    avatar: { width: '70px', height: '70px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid rgba(255,255,255,0.2)' },
-    legajoTitle: { margin: 0, fontSize: '1.4rem', fontWeight: 'bold' },
-    legajoSubtitle: { opacity: 0.8, fontSize: '0.9rem' },
-    legajoBody: { padding: '25px' },
-    sectionHeader: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 'bold', color: '#1b3a57', borderBottom: '2px solid #f1f2f6', paddingBottom: '10px', marginBottom: '20px', marginTop: '30px' },
-    gridStats: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' },
-    statCard: { padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '10px', border: '1px solid #eee', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' },
-    statLabel: { fontSize: '0.65rem', color: '#7f8c8d', fontWeight: 'bold', textTransform: 'uppercase' },
-    statValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1b3a57' },
-    statusTag: { fontSize: '0.6rem', color: 'white', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', marginTop: '5px' },
-    habilitacionesList: { display: 'flex', flexDirection: 'column', gap: '10px' },
-    habItem: { padding: '15px', backgroundColor: '#fcfcfc', borderRadius: '10px', border: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-    habInfoMain: { flex: 1 },
-    habTitleGroup: { display: 'flex', alignItems: 'center', gap: '10px' },
-    habAeronave: { fontSize: '1rem', color: '#1b3a57' },
-    habRol: { fontSize: '0.75rem', background: '#e1e8ed', padding: '2px 8px', borderRadius: '4px', color: '#1b3a57', fontWeight: 'bold' },
-    habTimeInfo: { display: 'flex', gap: '10px', marginTop: '5px' },
-    habBadge: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.65rem', color: '#7f8c8d', background: '#eee', padding: '2px 6px', borderRadius: '4px' },
-    habDesgloseGrid: { display: 'flex', gap: '15px', marginRight: '20px' },
-    desgloseItem: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', color: '#1b3a57', fontWeight: 'bold' },
-    tacticasContainer: { display: 'flex', flexWrap: 'wrap', gap: '10px' },
-    tacticaBadge: { background: '#1b3a57', color: 'white', padding: '8px 12px', borderRadius: '8px', minWidth: '140px' },
-    btnEditSmall: { background: 'none', border: 'none', color: '#3498db', cursor: 'pointer', marginLeft: '10px' },
-    btnAddSmall: { background: '#27ae60', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', marginLeft: 'auto' },
-    btnDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', transition: '0.2s', padding: '5px', borderRadius: '5px' },
-    btnIconDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', opacity: 0.6 },
-    emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#7f8c8d', gap: '10px' },
+    pageContainer: { padding: '25px', backgroundColor: '#f1f5f9', minHeight: 'calc(100vh - 65px)' },
+    headerArea: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
+    title: { margin: 0, fontSize: '20px', color: '#1b3a57', fontWeight: 'bold' },
+    subtitle: { margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' },
+    headerControlsRight: { display: 'flex', alignItems: 'center', gap: '20px' },
+    containerFiltroUnidad: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' },
+    labelFiltroUnidad: { fontSize: '12px', fontWeight: 'bold', color: '#334155' },
+    selectUnidadSuperior: { padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', color: '#1b3a57', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: 'white' },
+    badgeTrimestre: { backgroundColor: '#1b3a57', color: 'white', padding: '8px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' },
+    filterBar: { backgroundColor: 'white', padding: '12px 15px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
+    filterGroup: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+    filterButton: { border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' },
+    tableWrapper: { backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden' },
+    mainTable: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
+    tableHeaderRow: { backgroundColor: '#1b3a57', color: 'white' },
+    th: { padding: '12px 15px', fontSize: '12px', fontWeight: 'bold' },
+    sdaGroupRow: { backgroundColor: '#e2e8f0', borderBottom: '2px solid #cbd5e1' },
+    sdaGroupCell: { padding: '10px 15px', fontWeight: 'bold', fontSize: '13px', color: '#1e293b' },
+    pilotRow: { borderBottom: '1px solid #e2e8f0', transition: 'background-color 0.1s' },
+    tdCenter: { padding: '10px', textAlign: 'center' },
+    tdName: { padding: '12px 15px', fontWeight: 'bold', fontSize: '13px', color: '#334155' },
+    miniSubtext: { fontSize: '10px', color: '#64748b', marginTop: '3px', fontFamily: 'monospace' },
+    
+    // ESTILOS DE CELDAS REVISADOS
+    tdVoladas: { padding: '8px 6px', fontSize: '12px', textAlign: 'center', backgroundColor: '#fafafa', borderRight: '1px solid #f1f5f9', verticalAlign: 'middle' },
+    totalPrincipal: { fontWeight: 'bold', color: '#1b3a57', fontSize: '12px' },
+    subtextSutil: { fontSize: '9px', color: '#64748b', marginTop: '2px', fontFamily: 'monospace', fontWeight: 'bold' },
 
-    overlay: { 
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-        backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', 
-        alignItems: 'center', justifyContent: 'center', zIndex: 2000,
-        padding: '20px'
-    },
-    modal: { 
-        backgroundColor: 'white', borderRadius: '12px', width: '100%', 
-        maxWidth: '500px', display: 'flex', flexDirection: 'column', 
-        boxShadow: '0 15px 35px rgba(0,0,0,0.2)', overflow: 'hidden',
-        maxHeight: 'calc(100vh - 40px)'
-    },
-    modalHeader: { 
-        padding: '20px', borderBottom: '1px solid #eef0f3', 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        backgroundColor: '#fff'
-    },
-    formContainerScroll: {
-        display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1
-    },
-    form: { 
-        padding: '20px', overflowY: 'auto', flex: 1,
-        maxHeight: '60vh'
-    },
-    formCol: { display: 'flex', flexDirection: 'column', gap: '4px' },
-    label: { fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '10px', marginBottom: '4px' },
-    formInput: { 
-        width: '100%', padding: '10px', borderRadius: '6px', 
-        border: '1px solid #dcdde1', outline: 'none', fontSize: '0.9rem',
-        boxSizing: 'border-box'
-    },
-    modalFooter: {
-        padding: '15px 20px', borderTop: '1px solid #eef0f3',
-        backgroundColor: '#f8f9fa', display: 'flex', justifyContent: 'flex-end'
-    },
-    btnSave: { 
-        width: '100%', backgroundColor: '#1b3a57', color: 'white', 
-        border: 'none', padding: '12px', borderRadius: '8px', 
-        display: 'flex', alignItems: 'center', justifyContent: 'center', 
-        gap: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem' 
-    },
-    btnIconDeleteWhite: { background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8 }
+    tdFaltan: { padding: '12px 10px', fontSize: '12px', textAlign: 'center', fontWeight: 'bold', borderRight: '1px solid #e2e8f0', verticalAlign: 'middle' },
+    btnConfig: { background: 'none', border: 'none', fontSize: '15px', cursor: 'pointer', padding: '4px' },
+    configExpandedRow: { backgroundColor: '#f8fafc', borderLeft: '5px solid #1b3a57' },
+    configExpandedCell: { padding: '15px 20px', backgroundColor: '#f8fafc' },
+    panelConfigFlex: { display: 'flex', gap: '15px' },
+    bloqueTrimestreConfig: { flex: 1, backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '12px', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' },
+    tituloBloque: { margin: '0 0 10px 0', fontSize: '11px', color: '#1b3a57', textTransform: 'uppercase', fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' },
+    grupoInput: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '5px' },
+    labelMini: { fontSize: '11px', color: '#475569', fontWeight: 'bold' },
+    selectPanel: { backgroundColor: '#fff', color: '#334155', border: '1px solid #cbd5e1', fontSize: '11px', padding: '4px 5px', borderRadius: '3px', width: '70%', cursor: 'pointer' },
+    boxDiscriminado: { marginTop: '8px', paddingTop: '6px', borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' },
+    badgeDiscriminadoPiloto: { display: 'flex', justifyContent: 'space-between', backgroundColor: '#e0f2fe', color: '#0369a1', padding: '3px 6px', borderRadius: '4px', fontSize: '10px' },
+    badgeDiscriminadoInstructor: { display: 'flex', justifyContent: 'space-between', backgroundColor: '#f1f5f9', color: '#334155', padding: '3px 6px', borderRadius: '4px', fontSize: '10px' },
+    barConsolidado: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', backgroundColor: '#e2e8f0', padding: '10px 15px', borderRadius: '6px' },
+    cardConsolidadoAnual: { display: 'flex', alignItems: 'center', gap: '12px' },
+    btnSaveRow: { backgroundColor: '#16a34a', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' },
+    centerText: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', fontSize: '14px', fontWeight: 'bold', color: '#1b3a57' },
+    noDataRow: { padding: '40px', color: '#64748b', fontSize: '13px', textAlign: 'center', backgroundColor: '#fafafa' }
 };
 
-export default Tripulantes;
+export default EbmPage;
