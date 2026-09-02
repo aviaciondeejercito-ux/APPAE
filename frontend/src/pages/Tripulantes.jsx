@@ -320,7 +320,7 @@ const Tripulantes = () => {
                                 <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{horasDinamicas.instrumental} hs</span></div>
                                 <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{horasDinamicas.nvg} hs</span></div>
                                 <div style={{...styles.statCard, backgroundColor: '#e3f2fd', borderColor: '#1b3a57'}}>
-                                    <span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL HORAS</span>
+                                    <span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span>
                                     <span style={{...styles.statValue, color: '#1b3a57'}}>{horasDinamicas.total} hs</span>
                                 </div>
                             </div>
