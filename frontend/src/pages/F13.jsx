@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Users, Clock, Save, Trash2, History } from 'lucide-react';
+import { Save, Trash2, Clock } from 'lucide-react';
 import { getF13s, registrarF13, deleteF13, getAircrafts } from '../services/api'; 
 
 const F13Component = () => {
@@ -19,17 +19,17 @@ const F13Component = () => {
     const isMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OTOAE'].includes(usuarioSesion.role) || usuarioSesion.elemento === 'COMANDO';
     const roleNormalizado = usuarioSesion.role;
 
-    // 🛡️ CORREGIDO: Se incluyó 'OFICINA_TECNICA' con guión bajo para coincidir con la sesión real
     const puedeCargarF13 = ['ADMIN', 'OPERACIONES', 'OFICINA_TECNICA', 'OFICINATECNICA', 'USER'].includes(roleNormalizado); 
     const puedeEliminarF13 = ['ADMIN', 'OPERACIONES', 'OFICINA_TECNICA', 'OFICINATECNICA', 'JEFE'].includes(roleNormalizado); 
 
     // --- ESTADO DEL FORMULARIO ---
     const [formData, setFormData] = useState({
-        fecha: '',
+        fecha: new Date().toISOString().split('T')[0],
         aeronave: '', 
         misionVuelo: '',
         horasALaFecha: 0,
         horasDelDia: 0,
+        ciclosALaFecha: 0,
         ciclos: 0,
         apu: 0,
         aterrizajes: 1,
@@ -38,7 +38,7 @@ const F13Component = () => {
         inspeccionDiaria: '',   
         inspeccionPrevuelo: '', 
         inspeccionPostvuelo: '',
-        esHistorico: false // 👈 Agregado para control de carga retroactiva
+        esHistorico: false
     });
 
     const misiones = [
@@ -102,6 +102,21 @@ const F13Component = () => {
         }
     };
 
+    // ⚡ AUTOLENADO DE HORAS Y CICLOS DE LA AERONAVE SELECCIONADA
+    const handleAeronaveChange = (idSeleccionado) => {
+        const seleccionada = aeronaves.find(a => (a._id?.$oid || a._id) === idSeleccionado);
+        if (seleccionada) {
+            setFormData(prev => ({
+                ...prev,
+                aeronave: idSeleccionado,
+                horasALaFecha: seleccionada.tgPlaneadorActual || 0,
+                ciclosALaFecha: seleccionada.tgPlaneadorLandings || 0
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, aeronave: idSeleccionado, horasALaFecha: 0, ciclosALaFecha: 0 }));
+        }
+    };
+
     const aeronavesFiltradas = aeronaves.filter(a => 
         a.unidad && String(a.unidad).trim().toUpperCase() === unidadNavegacion.toUpperCase()
     );
@@ -118,10 +133,11 @@ const F13Component = () => {
             ...formData,
             horasALaFecha: Number(formData.horasALaFecha),
             horasDelDia: Number(formData.horasDelDia),
-            ciclos: Number(formData.ciclos),
+            ciclosALaFecha: Number(formData.ciclosALaFecha),
+            ciclos: Number(formData.ciclos || formData.aterrizajes),
             apu: Number(formData.apu),
             aterrizajes: Number(formData.aterrizajes),
-            esHistorico: Boolean(formData.esHistorico), // 👈 Se envía explícitamente en el payload
+            esHistorico: Boolean(formData.esHistorico),
             inspeccionDiaria: { 
                 realizada: !!formData.inspeccionDiaria?.trim(), 
                 firmaResponsable: formData.inspeccionDiaria?.trim() || "N/C", 
@@ -149,13 +165,14 @@ const F13Component = () => {
             alert(msj);
             
             setFormData({
-                fecha: '', aeronave: '', misionVuelo: '',
-                horasALaFecha: 0, horasDelDia: 0, ciclos: 0, apu: 0, aterrizajes: 1,
+                fecha: new Date().toISOString().split('T')[0], aeronave: '', misionVuelo: '',
+                horasALaFecha: 0, horasDelDia: 0, ciclosALaFecha: 0, ciclos: 0, apu: 0, aterrizajes: 1,
                 comandante: '', mecanico: '',
                 inspeccionDiaria: '', inspeccionPrevuelo: '', inspeccionPostvuelo: '',
                 esHistorico: false
             });
             fetchF13s();
+            fetchAeronaves();
         } catch (error) {
             alert("❌ Error: " + (error.response?.data?.msg || "Fallo al procesar el formulario F-13. Verifique su autenticación."));
         } finally {
@@ -174,6 +191,7 @@ const F13Component = () => {
                 await deleteF13(id);
                 alert("✅ Registro de F-13 eliminado y horas reajustadas.");
                 fetchF13s();
+                fetchAeronaves();
             } catch (error) {
                 console.error("Error al eliminar F-13:", error);
                 alert("❌ Error: " + (error.response?.data?.msg || "No se pudo eliminar el registro."));
@@ -213,7 +231,7 @@ const F13Component = () => {
             </div>
 
             <div style={styles.mainGrid}>
-                {/* FORMULARIO DE CARGA (IZQUIERDA) */}
+                {/* FORMULARIO DE CARGA */}
                 <div style={{ ...styles.card, display: puedeCargarF13 ? 'block' : 'none' }}>
                     <h2 style={styles.cardTitle}><Save size={18} /> Llenado de Formulario F-13</h2>
                     <form onSubmit={handleSubmit} style={styles.form}>
@@ -225,7 +243,7 @@ const F13Component = () => {
                             </div>
                             <div style={styles.group}>
                                 <label style={styles.label}>Aeronave en la Unidad</label>
-                                <select style={styles.input} value={formData.aeronave} onChange={e => setFormData({ ...formData, aeronave: e.target.value })} required>
+                                <select style={styles.input} value={formData.aeronave} onChange={e => handleAeronaveChange(e.target.value)} required>
                                     <option value="">Seleccionar aeronave...</option>
                                     {aeronavesDisponibles.map(a => {
                                         const idAeronave = a._id?.$oid || a._id;
@@ -248,14 +266,14 @@ const F13Component = () => {
                                 </select>
                             </div>
                             <div style={styles.group}>
-                                <label style={styles.label}>Aterrizajes</label>
-                                <input type="number" min="1" style={styles.input} value={formData.aterrizajes} onChange={e => setFormData({ ...formData, aterrizajes: e.target.value })} required />
+                                <label style={styles.label}>Aterrizajes (Landings)</label>
+                                <input type="number" min="1" style={styles.input} value={formData.aterrizajes} onChange={e => setFormData({ ...formData, aterrizajes: e.target.value, ciclos: e.target.value })} required />
                             </div>
                         </div>
 
                         <div style={styles.row}>
                             <div style={styles.group}>
-                                <label style={styles.label}>Horas a la Fecha (Anteriores)</label>
+                                <label style={styles.label}>Horas Previas (A la fecha)</label>
                                 <input type="number" step="0.1" min="0" style={styles.input} value={formData.horasALaFecha} onChange={e => setFormData({ ...formData, horasALaFecha: e.target.value })} required />
                             </div>
                             <div style={styles.group}>
@@ -266,11 +284,11 @@ const F13Component = () => {
 
                         <div style={styles.row}>
                             <div style={styles.group}>
-                                <label style={styles.label}>Ciclos</label>
-                                <input type="number" min="0" style={styles.input} value={formData.ciclos} onChange={e => setFormData({ ...formData, ciclos: e.target.value })} />
+                                <label style={styles.label}>Ciclos / Landings del Día</label>
+                                <input type="number" min="0" style={styles.input} value={formData.ciclos} onChange={e => setFormData({ ...formData, ciclos: e.target.value, aterrizajes: e.target.value })} />
                             </div>
                             <div style={styles.group}>
-                                <label style={styles.label}>APU</label>
+                                <label style={styles.label}>APU (Horas)</label>
                                 <input type="number" step="0.1" min="0" style={styles.input} value={formData.apu} onChange={e => setFormData({ ...formData, apu: e.target.value })} />
                             </div>
                         </div>
@@ -304,7 +322,6 @@ const F13Component = () => {
                             </div>
                         </div>
 
-                        {/* 📜 OPCIÓN CARGA HISTÓRICA */}
                         <div style={styles.historicoBox}>
                             <input 
                                 type="checkbox" 
@@ -327,7 +344,7 @@ const F13Component = () => {
                     </form>
                 </div>
 
-                {/* TABLA DE HISTORIAL (DERECHA) */}
+                {/* TABLA DE HISTORIAL */}
                 <div style={{ ...styles.card, flex: 1 }}>
                     <h2 style={styles.cardTitle}><Clock size={18} /> Libretas F-13 Registradas</h2>
                     <div style={styles.tableContainer}>
@@ -367,7 +384,7 @@ const F13Component = () => {
                                             <div style={styles.hsBadge}>{r.horasDelDia} hs</div>
                                             <div style={{ fontSize: '0.7rem', color: '#555', marginTop: '3px' }}>
                                                 Total: {r.horasTotales} hs <br />
-                                                Ciclos: {r.ciclos || 0} | APU: {r.apu || 0} hs
+                                                Ciclos: {r.ciclos || r.aterrizajes || 0} | APU: {r.apu || 0} hs
                                             </div>
                                         </td>
                                         <td style={styles.td}>

@@ -1,8 +1,6 @@
 const { Router } = require('express');
 const router = Router();
-
-// 1. Importamos el middleware con la ruta exacta (aseguramos minúsculas/mayúsculas del proyecto)
-const authMiddleware = require('../middleware/authMiddleware'); // 👈 O '../middlewares/authMiddleware' según se llame tu carpeta física
+const authMiddleware = require('../middleware/authMiddleware');
 
 const { 
     getAeronavesDisponibles, 
@@ -11,18 +9,22 @@ const {
     getF13s 
 } = require('../controllers/F13Controller');
 
-// 2. Un pequeño middleware puente para adaptar req.user a req.usuarioId que espera tu controlador de F13
+// Middleware adaptador unificado para extraer el JWT/User
+const protect = authMiddleware.protect || authMiddleware.verifyToken || authMiddleware;
+
 const adaptarUsuarioId = (req, res, next) => {
-    if (req.user && req.user._id) {
-        req.usuarioId = req.user._id; // Inyectamos req.usuarioId para que F13Controller no lance 401
+    const idUsuario = (req.user && req.user._id) || (req.usuario && req.usuario._id) || req.usuarioId;
+    if (idUsuario) {
+        req.usuarioId = idUsuario;
     }
     next();
 };
 
-// 3. Aplicamos de manera segura el middleware de autenticación y la adaptación de ID en las rutas correspondientes
-router.get('/', authMiddleware, getF13s); 
-router.get('/aeronaves-disponibles', authMiddleware, getAeronavesDisponibles);
-router.post('/nuevo', authMiddleware, adaptarUsuarioId, crearF13);
-router.delete('/eliminar/:id', authMiddleware, eliminarF13);
+router.use(protect);
+
+router.get('/', getF13s); 
+router.get('/aeronaves-disponibles', getAeronavesDisponibles);
+router.post('/nuevo', adaptarUsuarioId, crearF13);
+router.delete('/eliminar/:id', eliminarF13);
 
 module.exports = router;
