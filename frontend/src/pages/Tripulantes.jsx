@@ -349,7 +349,7 @@ const Tripulantes = () => {
 
                             {/* CAPACITACIONES */}
                             <div style={styles.sectionHeader}>
-                                <Star size={18} /> <span>APTITUDES TÁCTICAS ESPECIALES</span>
+                                <Star size={18} /> <span>APTITUDES TÁCTICAS ESPECIALES (Hs a partir del 2025)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>}
                             </div>
                             <div style={styles.tacticasContainer}>
