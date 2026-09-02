@@ -219,6 +219,28 @@ const EbmPage = () => {
 
     const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
 
+    // --- RENDERIZADOR AUXILIAR DE CELDA DE HORAS VOLADAS ---
+    const renderCeldaVoladas = (trimestreData) => {
+        const hsVoladas = Number(trimestreData?.hsVoladas || 0);
+        const esInstructor = trimestreData?.condicion === 'IE';
+
+        // Intentamos leer hsPiloto e hsInstructor o fallback según la condición
+        let hsPiloto = Number(trimestreData?.hsPiloto ?? (esInstructor ? 0 : hsVoladas));
+        let hsInstructor = Number(trimestreData?.hsInstructor ?? (esInstructor ? hsVoladas : 0));
+
+        return (
+            <td style={styles.tdVoladas}>
+                <div style={styles.totalPrincipal}>{formatearHoras(hsVoladas)} hs</div>
+                {esInstructor && (
+                    <div style={styles.subtextSutil}>
+                        <span>P: {formatearHoras(hsPiloto)}</span>
+                        <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(hsInstructor)}</span>
+                    </div>
+                )}
+            </td>
+        );
+    };
+
     if (loading) return <div style={styles.centerText}>Cargando Matriz de Exigencias EBM...</div>;
 
     return (
@@ -310,49 +332,25 @@ const EbmPage = () => {
                                                         </td>
 
                                                         {/* TRIMESTRE 1 */}
-                                                        <td style={styles.tdVoladas}>
-                                                            <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre1?.hsVoladas)} hs</div>
-                                                            <div style={styles.subtextSutil}>
-                                                                <span>P: {formatearHoras(p.trimestre1?.hsPiloto)}</span>
-                                                                <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre1?.hsInstructor)}</span>
-                                                            </div>
-                                                        </td>
+                                                        {renderCeldaVoladas(p.trimestre1)}
                                                         <td style={{...styles.tdFaltan, color: Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
                                                             {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1?.hsFaltantes)} hs`}
                                                         </td>
 
                                                         {/* TRIMESTRE 2 */}
-                                                        <td style={styles.tdVoladas}>
-                                                            <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre2?.hsVoladas)} hs</div>
-                                                            <div style={styles.subtextSutil}>
-                                                                <span>P: {formatearHoras(p.trimestre2?.hsPiloto)}</span>
-                                                                <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre2?.hsInstructor)}</span>
-                                                            </div>
-                                                        </td>
+                                                        {renderCeldaVoladas(p.trimestre2)}
                                                         <td style={{...styles.tdFaltan, color: Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
                                                             {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2?.hsFaltantes)} hs`}
                                                         </td>
 
                                                         {/* TRIMESTRE 3 */}
-                                                        <td style={styles.tdVoladas}>
-                                                            <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre3?.hsVoladas)} hs</div>
-                                                            <div style={styles.subtextSutil}>
-                                                                <span>P: {formatearHoras(p.trimestre3?.hsPiloto)}</span>
-                                                                <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre3?.hsInstructor)}</span>
-                                                            </div>
-                                                        </td>
+                                                        {renderCeldaVoladas(p.trimestre3)}
                                                         <td style={{...styles.tdFaltan, color: Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
                                                             {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3?.hsFaltantes)} hs`}
                                                         </td>
 
                                                         {/* TRIMESTRE 4 */}
-                                                        <td style={styles.tdVoladas}>
-                                                            <div style={styles.totalPrincipal}>{formatearHoras(p.trimestre4?.hsVoladas)} hs</div>
-                                                            <div style={styles.subtextSutil}>
-                                                                <span>P: {formatearHoras(p.trimestre4?.hsPiloto)}</span>
-                                                                <span style={{ marginLeft: '4px', color: '#0369a1' }}>I: {formatearHoras(p.trimestre4?.hsInstructor)}</span>
-                                                            </div>
-                                                        </td>
+                                                        {renderCeldaVoladas(p.trimestre4)}
                                                         <td style={{...styles.tdFaltan, color: Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
                                                             {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4?.hsFaltantes)} hs`}
                                                         </td>
