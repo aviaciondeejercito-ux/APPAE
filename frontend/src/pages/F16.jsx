@@ -35,8 +35,8 @@ const F16Page = () => {
         inicioAeFecha: '', inicioAeHs: '', tgPlaneadorActual: '', tgPlaneadorLandings: '',
         motorSn: '', motorTsn: '', motorCsnCso: '',
         motor2Sn: '', motor2Tsn: '', motor2CsnCso: '',
-        helice1Sn: '', helice1Tsn: '', helice1Ciclos: '', helice1Dur: '',
-        helice2Sn: '', helice2Tsn: '', helice2Ciclos: '', helice2Dur: '',
+        helice1Sn: '', helice1Tsn: '', helice1CsnCso: '', helice1Dur: '',
+        helice2Sn: '', helice2Tsn: '', helice2CsnCso: '', helice2Dur: '',
         vencimientoElt: '', vencimientoPitot: '', vencimientoTransponder: '',
         vencimientoSeguro: '', vencimientoAvionica: '', observacionesPopup: ''
     };
@@ -207,11 +207,11 @@ const F16Page = () => {
                 motor2CsnCso: aero.motor2CsnCso ?? '',
                 helice1Sn: aero.helice1Sn || '',
                 helice1Tsn: aero.helice1Tsn ?? '',
-                helice1Ciclos: aero.helice1Ciclos ?? '',
+                helice1CsnCso: aero.helice1CsnCso ?? '',
                 helice1Dur: aero.helice1Dur ?? '',
                 helice2Sn: aero.helice2Sn || '',
                 helice2Tsn: aero.helice2Tsn ?? '',
-                helice2Ciclos: aero.helice2Ciclos ?? '',
+                helice2CsnCso: aero.helice2CsnCso ?? '',
                 helice2Dur: aero.helice2Dur ?? '',
                 vencimientoElt: formatearFechaHtml(aero.vencimientoElt),
                 vencimientoPitot: formatearFechaHtml(aero.vencimientoPitot),
@@ -257,10 +257,10 @@ const F16Page = () => {
             motor2Tsn: cabecera.motor2Tsn === '' ? 0 : Number(cabecera.motor2Tsn),
             motor2CsnCso: cabecera.motor2CsnCso === '' ? 0 : Number(cabecera.motor2CsnCso),
             helice1Tsn: cabecera.helice1Tsn === '' ? 0 : Number(cabecera.helice1Tsn),
-            helice1Ciclos: cabecera.helice1Ciclos === '' ? 0 : Number(cabecera.helice1Ciclos),
+            helice1CsnCso: cabecera.helice1CsnCso === '' ? 0 : Number(cabecera.helice1CsnCso),
             helice1Dur: cabecera.helice1Dur === '' ? 0 : Number(cabecera.helice1Dur),
             helice2Tsn: cabecera.helice2Tsn === '' ? 0 : Number(cabecera.helice2Tsn),
-            helice2Ciclos: cabecera.helice2Ciclos === '' ? 0 : Number(cabecera.helice2Ciclos),
+            helice2CsnCso: cabecera.helice2CsnCso === '' ? 0 : Number(cabecera.helice2CsnCso),
             helice2Dur: cabecera.helice2Dur === '' ? 0 : Number(cabecera.helice2Dur),
             unidad: esAdminGlobal ? unidadNavegacion : usuarioSesion.elemento,
             compPlaneador, motores, helices,
@@ -677,8 +677,8 @@ const F16Page = () => {
                                     <input type="number" value={cabecera.helice1Tsn} onChange={e => handleCabeceraChange('helice1Tsn', e.target.value)} style={estiloCampoTotal} placeholder="0.0" />
                                 </div>
                                 <div style={styles.field}>
-                                    <label style={styles.label}>Ciclos Hélice 1</label>
-                                    <input type="number" value={cabecera.helice1Ciclos} onChange={e => handleCabeceraChange('helice1Ciclos', e.target.value)} style={estiloCampoTotal} placeholder="0" />
+                                    <label style={styles.label}>CSN/CSO Hélice 1</label>
+                                    <input type="number" value={cabecera.helice1CsnCso} onChange={e => handleCabeceraChange('helice1CsnCso', e.target.value)} style={estiloCampoTotal} placeholder="0" />
                                 </div>
                                 <div style={styles.field}>
                                     <label style={styles.label}>DUR Hélice 1</label>
@@ -708,8 +708,8 @@ const F16Page = () => {
                                         <input type="number" value={cabecera.helice2Tsn} onChange={e => handleCabeceraChange('helice2Tsn', e.target.value)} style={estiloCampoTotal} placeholder="0.0" />
                                     </div>
                                     <div style={styles.field}>
-                                        <label style={styles.label}>Ciclos Hélice 2</label>
-                                        <input type="number" value={cabecera.helice2Ciclos} onChange={e => handleCabeceraChange('helice2Ciclos', e.target.value)} style={estiloCampoTotal} placeholder="0" />
+                                        <label style={styles.label}>CSN/CSO Hélice 2</label>
+                                        <input type="number" value={cabecera.helice2CsnCso} onChange={e => handleCabeceraChange('helice2CsnCso', e.target.value)} style={estiloCampoTotal} placeholder="0" />
                                     </div>
                                     <div style={styles.field}>
                                         <label style={styles.label}>DUR Hélice 2</label>

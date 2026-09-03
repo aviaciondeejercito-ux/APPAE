@@ -107,7 +107,9 @@ export const createAircraft = async (req, res) => {
         payload.motor2CsnCso = parsearHs(payload.motor2CsnCso);
         
         payload.helice1Tsn = parsearHs(payload.helice1Tsn);
+        payload.helice1CsnCso = parsearHs(payload.helice1CsnCso);
         payload.helice2Tsn = parsearHs(payload.helice2Tsn);
+        payload.helice2CsnCso = parsearHs(payload.helice2CsnCso);
 
         // Sanitización de arrays
         if (payload.compPlaneador) {
@@ -159,8 +161,11 @@ export const updateAircraftStatus = async (req, res) => {
         if (campos.motorCsnCso !== undefined) aeronaveDoc.motorCsnCso = parsearHs(campos.motorCsnCso);
         if (campos.motor2Tsn !== undefined) aeronaveDoc.motor2Tsn = parsearHs(campos.motor2Tsn);
         if (campos.motor2CsnCso !== undefined) aeronaveDoc.motor2CsnCso = parsearHs(campos.motor2CsnCso);
+
         if (campos.helice1Tsn !== undefined) aeronaveDoc.helice1Tsn = parsearHs(campos.helice1Tsn);
+        if (campos.helice1CsnCso !== undefined) aeronaveDoc.helice1CsnCso = parsearHs(campos.helice1CsnCso);
         if (campos.helice2Tsn !== undefined) aeronaveDoc.helice2Tsn = parsearHs(campos.helice2Tsn);
+        if (campos.helice2CsnCso !== undefined) aeronaveDoc.helice2CsnCso = parsearHs(campos.helice2CsnCso);
 
         // Sanitización y actualización de componentes
         if (campos.compPlaneador) {
@@ -189,7 +194,7 @@ export const updateAircraftStatus = async (req, res) => {
             'compPlaneador', 'motores', 'helices', 
             'tgPlaneadorLandings', 'tgPlaneadorActual', 'inicioAeHs',
             'motorTsn', 'motorCsnCso', 'motor2Tsn', 'motor2CsnCso',
-            'helice1Tsn', 'helice2Tsn'
+            'helice1Tsn', 'helice1CsnCso', 'helice2Tsn', 'helice2CsnCso'
         ];
 
         Object.keys(campos).forEach(key => {

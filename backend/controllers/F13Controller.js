@@ -95,7 +95,7 @@ const getAeronavesDisponibles = async (req, res) => {
  */
 const crearF13 = async (req, res) => {
     try {
-        const { aeronave: idAeronave, horasDelDia, esHistorico } = req.body;
+        const { aeronave: idAeronave, horasDelDia, esHistorico, aterrizajes, ciclos, landings } = req.body;
 
         const aeronaveDoc = await Aeronave.findById(idAeronave);
         if (!aeronaveDoc) {
@@ -122,6 +122,8 @@ const crearF13 = async (req, res) => {
             });
         }
 
+        const ciclosIngresados = parsearHs(ciclos || aterrizajes || landings || 0);
+
         // A. Guardar el nuevo registro F-13 (se guarda la marca de esHistorico)
         const nuevoF13 = new F13({
             ...req.body,
@@ -141,23 +143,46 @@ const crearF13 = async (req, res) => {
         }
 
         // B. ACTUALIZAR MODELO AIRCRAFT (F-16) SOLO SI NO ES HISTÓRICO
-        // 1. Totales generales de cabecera
-        const tgPlaneadorPrevio = parsearHs(aeronaveDoc.tgPlaneadorActual);
-        const motorTsnPrevio = parsearHs(aeronaveDoc.motorTsn);
+        // 1. Planeador
+        aeronaveDoc.tgPlaneadorActual = Number((parsearHs(aeronaveDoc.tgPlaneadorActual) + hsAIncrementar).toFixed(2));
+        aeronaveDoc.tgPlaneadorLandings = Number((parsearHs(aeronaveDoc.tgPlaneadorLandings) + ciclosIngresados).toFixed(2));
 
-        aeronaveDoc.tgPlaneadorActual = Number((tgPlaneadorPrevio + hsAIncrementar).toFixed(2));
-        aeronaveDoc.motorTsn = Number((motorTsnPrevio + hsAIncrementar).toFixed(2));
+        // 2. Motores
+        aeronaveDoc.motorTsn = Number((parsearHs(aeronaveDoc.motorTsn) + hsAIncrementar).toFixed(2));
+        aeronaveDoc.motorCsnCso = Number((parsearHs(aeronaveDoc.motorCsnCso) + ciclosIngresados).toFixed(2));
+
+        if (aeronaveDoc.motor2Sn || aeronaveDoc.motor2Tsn !== undefined) {
+            aeronaveDoc.motor2Tsn = Number((parsearHs(aeronaveDoc.motor2Tsn) + hsAIncrementar).toFixed(2));
+            aeronaveDoc.motor2CsnCso = Number((parsearHs(aeronaveDoc.motor2CsnCso) + ciclosIngresados).toFixed(2));
+            aeronaveDoc.markModified('motor2Tsn');
+            aeronaveDoc.markModified('motor2CsnCso');
+        }
+
+        // 3. Hélices
+        aeronaveDoc.helice1Tsn = Number((parsearHs(aeronaveDoc.helice1Tsn) + hsAIncrementar).toFixed(2));
+        aeronaveDoc.helice1CsnCso = Number((parsearHs(aeronaveDoc.helice1CsnCso) + ciclosIngresados).toFixed(2));
+
+        if (aeronaveDoc.helice2Sn || aeronaveDoc.helice2Tsn !== undefined) {
+            aeronaveDoc.helice2Tsn = Number((parsearHs(aeronaveDoc.helice2Tsn) + hsAIncrementar).toFixed(2));
+            aeronaveDoc.helice2CsnCso = Number((parsearHs(aeronaveDoc.helice2CsnCso) + ciclosIngresados).toFixed(2));
+            aeronaveDoc.markModified('helice2Tsn');
+            aeronaveDoc.markModified('helice2CsnCso');
+        }
 
         aeronaveDoc.markModified('tgPlaneadorActual');
+        aeronaveDoc.markModified('tgPlaneadorLandings');
         aeronaveDoc.markModified('motorTsn');
+        aeronaveDoc.markModified('motorCsnCso');
+        aeronaveDoc.markModified('helice1Tsn');
+        aeronaveDoc.markModified('helice1CsnCso');
 
-        // 2. Componentes del Planeador
+        // 4. Componentes del Planeador
         if (Array.isArray(aeronaveDoc.compPlaneador)) {
             aeronaveDoc.compPlaneador.forEach(comp => actualizarHorasComponente(comp, hsAIncrementar));
             aeronaveDoc.markModified('compPlaneador');
         }
 
-        // 3. Componentes del Grupo Motopropulsor (Motores y Hélices)
+        // 5. Componentes del Grupo Motopropulsor (Motores y Hélices)
         ['motores', 'helices'].forEach(grupo => {
             if (Array.isArray(aeronaveDoc[grupo])) {
                 aeronaveDoc[grupo].forEach(item => {
@@ -199,7 +224,7 @@ const crearF13 = async (req, res) => {
 
         return res.status(201).json({
             ok: true,
-            msg: 'Formulario F-13 registrado exitosamente y horas impactadas en la F-16.',
+            msg: 'Formulario F-13 registrado exitosamente y horas/ciclos impactados en la F-16.',
             f13: f13Guardado
         });
 
@@ -230,11 +255,12 @@ const eliminarF13 = async (req, res) => {
 
         const idAeronave = f13AEliminar.aeronave;
         const horasARestar = Number(f13AEliminar.horasDelDia) || 0;
+        const ciclosARestar = parsearHs(f13AEliminar.ciclos || f13AEliminar.aterrizajes || f13AEliminar.landings || 0);
         const eraHistorico = Boolean(f13AEliminar.esHistorico);
 
         await F13.findByIdAndDelete(id);
 
-        // 📜 SI ERA HISTÓRICO: Solo se elimina el F-13 sin descontar horas de los componentes
+        // 📜 SI ERA HISTÓRICO: Solo se elimina el F-13 sin descontar horas/ciclos de los componentes
         if (eraHistorico) {
             return res.status(200).json({
                 ok: true,
@@ -242,18 +268,39 @@ const eliminarF13 = async (req, res) => {
             });
         }
 
-        if (horasARestar > 0) {
+        if (horasARestar > 0 || ciclosARestar > 0) {
             // Rollback en Aircraft (F-16)
             const aeronaveDoc = await Aeronave.findById(idAeronave);
             if (aeronaveDoc) {
-                const tgPlaneadorPrevio = parsearHs(aeronaveDoc.tgPlaneadorActual);
-                const motorTsnPrevio = parsearHs(aeronaveDoc.motorTsn);
+                aeronaveDoc.tgPlaneadorActual = Number(Math.max(0, parsearHs(aeronaveDoc.tgPlaneadorActual) - horasARestar).toFixed(2));
+                aeronaveDoc.tgPlaneadorLandings = Number(Math.max(0, parsearHs(aeronaveDoc.tgPlaneadorLandings) - ciclosARestar).toFixed(2));
 
-                aeronaveDoc.tgPlaneadorActual = Number(Math.max(0, tgPlaneadorPrevio - horasARestar).toFixed(2));
-                aeronaveDoc.motorTsn = Number(Math.max(0, motorTsnPrevio - horasARestar).toFixed(2));
+                aeronaveDoc.motorTsn = Number(Math.max(0, parsearHs(aeronaveDoc.motorTsn) - horasARestar).toFixed(2));
+                aeronaveDoc.motorCsnCso = Number(Math.max(0, parsearHs(aeronaveDoc.motorCsnCso) - ciclosARestar).toFixed(2));
+
+                if (aeronaveDoc.motor2Sn || aeronaveDoc.motor2Tsn !== undefined) {
+                    aeronaveDoc.motor2Tsn = Number(Math.max(0, parsearHs(aeronaveDoc.motor2Tsn) - horasARestar).toFixed(2));
+                    aeronaveDoc.motor2CsnCso = Number(Math.max(0, parsearHs(aeronaveDoc.motor2CsnCso) - ciclosARestar).toFixed(2));
+                    aeronaveDoc.markModified('motor2Tsn');
+                    aeronaveDoc.markModified('motor2CsnCso');
+                }
+
+                aeronaveDoc.helice1Tsn = Number(Math.max(0, parsearHs(aeronaveDoc.helice1Tsn) - horasARestar).toFixed(2));
+                aeronaveDoc.helice1CsnCso = Number(Math.max(0, parsearHs(aeronaveDoc.helice1CsnCso) - ciclosARestar).toFixed(2));
+
+                if (aeronaveDoc.helice2Sn || aeronaveDoc.helice2Tsn !== undefined) {
+                    aeronaveDoc.helice2Tsn = Number(Math.max(0, parsearHs(aeronaveDoc.helice2Tsn) - horasARestar).toFixed(2));
+                    aeronaveDoc.helice2CsnCso = Number(Math.max(0, parsearHs(aeronaveDoc.helice2CsnCso) - ciclosARestar).toFixed(2));
+                    aeronaveDoc.markModified('helice2Tsn');
+                    aeronaveDoc.markModified('helice2CsnCso');
+                }
 
                 aeronaveDoc.markModified('tgPlaneadorActual');
+                aeronaveDoc.markModified('tgPlaneadorLandings');
                 aeronaveDoc.markModified('motorTsn');
+                aeronaveDoc.markModified('motorCsnCso');
+                aeronaveDoc.markModified('helice1Tsn');
+                aeronaveDoc.markModified('helice1CsnCso');
 
                 if (Array.isArray(aeronaveDoc.compPlaneador)) {
                     aeronaveDoc.compPlaneador.forEach(comp => actualizarHorasComponente(comp, horasARestar, true));
@@ -301,7 +348,7 @@ const eliminarF13 = async (req, res) => {
 
         return res.status(200).json({
             ok: true,
-            msg: 'Formulario F-13 eliminado con éxito y horas reajustadas en la F-16.'
+            msg: 'Formulario F-13 eliminado con éxito y horas/ciclos reajustados en la F-16.'
         });
 
     } catch (error) {
