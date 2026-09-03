@@ -3,32 +3,33 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend
 } from 'recharts';
 
-// Servicio central de conexión
-import { EventService } from '../services/api';
+// Servicios de conexión
+import { EventService, getTripulantes } from '../services/api';
 
-// Colores institucionales
 const COLORS = ['#1b3a57', '#4a69bd', '#10ac84', '#f39c12', '#e74c3c', '#9b59b6', '#34495e', '#38ada9'];
 
-// Normalización para visualización en pantalla
 const normalizarTexto = (str) => {
     if (!str) return '';
-    return String(str)
-        .trim()
-        .toUpperCase()
-        .replace(/\s+/g, ' ');
+    return String(str).trim().toUpperCase().replace(/\s+/g, ' ');
 };
 
-// Normalización estricta para comparaciones (elimina espacios, guiones y guiones bajos)
 const normalizarClave = (str) => {
     if (!str) return '';
-    return String(str)
-        .toUpperCase()
-        .replace(/[\s_-]/g, '');
+    return String(str).toUpperCase().replace(/[\s_-]/g, '');
+};
+
+// Función auxiliar para determinar el estado de vencimiento
+const esCertificacionValida = (fechaVencimiento) => {
+    if (!fechaVencimiento) return false;
+    const hoy = new Date();
+    const fVenc = new Date(fechaVencimiento);
+    return fVenc >= hoy;
 };
 
 export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [vuelosData, setVuelosData] = useState(vuelosProps || []);
-    const [loading, setLoading] = useState(!vuelosProps || vuelosProps.length === 0);
+    const [tripulantesData, setTripulantesData] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
     const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
@@ -38,13 +39,10 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const rawUser = localStorage.getItem('usuario') || localStorage.getItem('user');
             const userObj = rawUser ? JSON.parse(rawUser) : {};
             
-            // Extracción exhaustiva del elemento/unidad en los distintos campos posibles
             const elem = userObj.elemento || userObj.unidad || userObj.unidadResponsable || userObj.element || localStorage.getItem('elemento') || '';
             const rol = userObj.role || userObj.rol || localStorage.getItem('role') || localStorage.getItem('rol') || 'USER';
             
             const rolNorm = normalizarClave(rol);
-            
-            // 🔒 RESTRICCIÓN: Únicamente roles que contengan 'ADMIN' son considerados administradores globales
             const esAdmin = rolNorm.includes('ADMIN');
             
             return {
@@ -68,90 +66,154 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         }
     }, [unidadUsuario, esAdminGlobal]);
 
-    // 🔄 3. CARGA DE DATOS DESDE EL BACKEND
+    // 🔄 3. CARGA DE DATOS DESDE EL BACKEND (VUELOS Y TRIPULANTES)
     useEffect(() => {
-        if (!vuelosProps || vuelosProps.length === 0) {
+        const cargarDatos = async () => {
             setLoading(true);
-            
-            const params = {};
-            if (!esAdminGlobal && unidadUsuario) {
-                params.unidad = unidadUsuario;
-            } else if (esAdminGlobal && unidadFiltro !== 'TODAS') {
-                params.unidad = unidadFiltro;
-            }
+            try {
+                // Carga de vuelos
+                const params = {};
+                if (!esAdminGlobal && unidadUsuario) {
+                    params.unidad = unidadUsuario;
+                } else if (esAdminGlobal && unidadFiltro !== 'TODAS') {
+                    params.unidad = unidadFiltro;
+                }
 
-            EventService.getVuelos(params)
-                .then(res => {
-                    const listaVuelos = res?.data || res || [];
-                    setVuelosData(Array.isArray(listaVuelos) ? listaVuelos : []);
-                })
-                .catch(err => {
-                    console.error("Error al recuperar planillas -12:", err);
-                })
-                .finally(() => {
-                    setLoading(false);
-                });
-        } else {
-            setVuelosData(vuelosProps);
-            setLoading(false);
-        }
+                const resVuelos = await EventService.getVuelos(params);
+                const listaVuelos = resVuelos?.data || resVuelos || [];
+                setVuelosData(Array.isArray(listaVuelos) ? listaVuelos : []);
+
+                // Carga de tripulantes / personal
+                const resTripulantes = await getTripulantes();
+                const listaTripulantes = resTripulantes?.data || resTripulantes || [];
+                setTripulantesData(Array.isArray(listaTripulantes) ? listaTripulantes : []);
+
+            } catch (err) {
+                console.error("Error al recuperar datos del dashboard:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        cargarDatos();
     }, [vuelosProps, unidadFiltro, esAdminGlobal, unidadUsuario]);
 
-    // 📌 4. UNIDADES ÚNICAS PARA SELECTOR
+    // 📌 4. UNIDADES Y MISIONES ÚNICAS PARA SELECTORES
     const listaUnidades = useMemo(() => {
         if (!esAdminGlobal) {
             return [unidadUsuario || 'MI UNIDAD'];
         }
 
-        const unidades = vuelosData.map(v => normalizarTexto(v.unidadResponsable)).filter(Boolean);
-        return ['TODAS', ...Array.from(new Set(unidades))];
-    }, [vuelosData, esAdminGlobal, unidadUsuario]);
+        const unidadesVuelos = vuelosData.map(v => normalizarTexto(v.unidadResponsable)).filter(Boolean);
+        const unidadesTrip = tripulantesData.map(t => normalizarTexto(t.elemento || t.unidad)).filter(Boolean);
+        
+        return ['TODAS', ...Array.from(new Set([...unidadesVuelos, ...unidadesTrip]))];
+    }, [vuelosData, tripulantesData, esAdminGlobal, unidadUsuario]);
 
     const listaMisiones = useMemo(() => {
         const misiones = vuelosData.map(v => v.tipoMision).filter(Boolean);
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
-    // 📌 5. FILTRADO ROBUSTO DE VUELOS (RESTRINGIDO POR ROL Y PROTEGIDO)
+    // 📌 5. FILTRADO ROBUSTO DE VUELOS
     const vuelosFiltrados = useMemo(() => {
-        // Para no-admins, se fuerza obligatoriamente la unidad del usuario
         const unidadObjetivo = esAdminGlobal ? unidadFiltro : (unidadUsuario || 'SIN_UNIDAD');
         const claveObjetivo = normalizarClave(unidadObjetivo);
 
-        const filtrados = vuelosData.filter(v => {
+        return vuelosData.filter(v => {
             const unidadVueloClave = normalizarClave(v.unidadResponsable);
             let pasaUnidad = false;
 
             if (esAdminGlobal && unidadFiltro === 'TODAS') {
                 pasaUnidad = true;
-            } else {
-                if (claveObjetivo !== '') {
-                    pasaUnidad = unidadVueloClave === claveObjetivo || 
-                                 unidadVueloClave.includes(claveObjetivo) || 
-                                 claveObjetivo.includes(unidadVueloClave);
-                } else {
-                    pasaUnidad = false;
-                }
+            } else if (claveObjetivo !== '') {
+                pasaUnidad = unidadVueloClave === claveObjetivo || 
+                             unidadVueloClave.includes(claveObjetivo) || 
+                             claveObjetivo.includes(unidadVueloClave);
             }
 
             const pasaMision = misionFiltro === 'TODAS' || v.tipoMision === misionFiltro;
-
             return pasaUnidad && pasaMision;
         });
+    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario]);
 
-        console.group("🔍 [DIAGNÓSTICO DASHBOARD]");
-        console.log("Objeto User recuperado:", userObjDebug);
-        console.log("Rol Detectado:", rawRol, "| ¿Es Admin Global?:", esAdminGlobal);
-        console.log("Unidad Usuario Detectada:", unidadUsuario);
-        console.log("Unidad Objetivo aplicada:", unidadObjetivo);
-        console.log("Vuelos origen:", vuelosData.length, "➔ Vuelos filtrados devueltos:", filtrados.length);
-        console.groupEnd();
+    // 📌 6. FILTRADO DE TRIPULANTES POR UNIDAD
+    const tripulantesFiltrados = useMemo(() => {
+        const unidadObjetivo = esAdminGlobal ? unidadFiltro : (unidadUsuario || 'SIN_UNIDAD');
+        const claveObjetivo = normalizarClave(unidadObjetivo);
 
-        return filtrados;
-    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario, rawRol, userObjDebug]);
+        return tripulantesData.filter(t => {
+            if (esAdminGlobal && unidadFiltro === 'TODAS') return true;
+            const unidadTripClave = normalizarClave(t.elemento || t.unidad);
+            return unidadTripClave === claveObjetivo || 
+                   unidadTripClave.includes(claveObjetivo) || 
+                   claveObjetivo.includes(unidadTripClave);
+        });
+    }, [tripulantesData, unidadFiltro, esAdminGlobal, unidadUsuario]);
 
     // ==========================================
-    // 📊 CÁLCULOS Y PROCESAMIENTO
+    // 📊 CÁLCULOS Y PROCESAMIENTO - TRIPULANTES
+    // ==========================================
+
+    const metricasTripulantes = useMemo(() => {
+        let simuladorAlDia = 0;
+        let simuladorVencido = 0;
+        
+        let crmAlDia = 0;
+        let crmVencido = 0;
+
+        let rorRealizado = 0;
+        let cargasPeligrosasRealizado = 0;
+        let seguridadOperacionalRealizado = 0;
+
+        tripulantesFiltrados.forEach(t => {
+            // Simulador
+            const vSim = t.certificaciones?.simulador?.vencimiento;
+            if (esCertificacionValida(vSim)) simuladorAlDia++;
+            else simuladorVencido++;
+
+            // CRM
+            const vCrm = t.certificaciones?.crm?.vencimiento;
+            if (esCertificacionValida(vCrm)) crmAlDia++;
+            else crmVencido++;
+
+            // Aptitudes Adicionales
+            const aptitudes = t.aptitudesAdicionales || [];
+            
+            const tieneROR = aptitudes.some(a => 
+                normalizarClave(a.tipo).includes('RADIOOPERADOR') || normalizarClave(a.tipo).includes('ROR')
+            );
+            if (tieneROR) rorRealizado++;
+
+            const tieneCargas = aptitudes.some(a => 
+                normalizarClave(a.tipo).includes('CARGASPELIGROSAS')
+            );
+            if (tieneCargas) cargasPeligrosasRealizado++;
+
+            const tieneSeguridad = aptitudes.some(a => 
+                normalizarClave(a.tipo).includes('SEGURIDADOPERACIONAL')
+            );
+            if (tieneSeguridad) seguridadOperacionalRealizado++;
+        });
+
+        return {
+            simulador: [
+                { name: 'Al Día', value: simuladorAlDia, color: '#10ac84' },
+                { name: 'Vencido / Sin Datos', value: simuladorVencido, color: '#e74c3c' }
+            ],
+            crm: [
+                { name: 'Al Día', value: crmAlDia, color: '#10ac84' },
+                { name: 'Vencido / Sin Datos', value: crmVencido, color: '#e74c3c' }
+            ],
+            rorRealizado,
+            cargasPeligrosasRealizado,
+            seguridadOperacionalRealizado,
+            totalTripulantes: tripulantesFiltrados.length
+        };
+    }, [tripulantesFiltrados]);
+
+    // ==========================================
+    // 📊 CÁLCULOS Y PROCESAMIENTO - VUELOS
     // ==========================================
 
     const totalHorasGenerales = useMemo(() => {
@@ -188,7 +250,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
-        
         const formatearNombre = (t) => {
             if (!t) return null;
             if (typeof t === 'string') return t;
@@ -232,7 +293,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     if (loading) {
         return (
             <div style={{ padding: '60px', textAlign: 'center', color: '#1b3a57', fontWeight: 'bold' }}>
-                🔄 Cargando base de datos de planillas -12...
+                🔄 Cargando datos operativos y legajos de personal...
             </div>
         );
     }
@@ -242,7 +303,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             {/* ENCABEZADO Y FILTROS */}
             <header style={styles.header}>
                 <div>
-                    <h2 style={{ margin: 0, color: '#1b3a57' }}>📊 Dashboard de Reportes de Vuelo (-12)</h2>
+                    <h2 style={{ margin: 0, color: '#1b3a57' }}>📊 Dashboard Operativo & Estado de Fuerza</h2>
                     <span style={styles.subtitle}>
                         {esAdminGlobal && unidadFiltro === 'TODAS' 
                             ? 'Resumen consolidado general (Vista Administrador Global)' 
@@ -284,7 +345,74 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
             </header>
 
-            {/* TARJETAS DE INDICADORES PRINCIPALES */}
+            {/* SECCIÓN 1: KPI DE PERSONAL Y CAPACITACIONES */}
+            <h3 style={styles.sectionHeader}>🎖️ Estado de Capacitación y Aptitudes del Personal ({metricasTripulantes.totalTripulantes} Tripulantes)</h3>
+            <div style={styles.kpiContainer}>
+                <div style={styles.kpiCard}>
+                    <span style={styles.kpiTitle}>CURSO ROR REALIZADO</span>
+                    <span style={styles.kpiValue}>{metricasTripulantes.rorRealizado} <span style={styles.kpiSubvalue}>/ {metricasTripulantes.totalTripulantes}</span></span>
+                </div>
+                <div style={styles.kpiCard}>
+                    <span style={styles.kpiTitle}>CARGAS PELIGROSAS REALIZADO</span>
+                    <span style={styles.kpiValue}>{metricasTripulantes.cargasPeligrosasRealizado} <span style={styles.kpiSubvalue}>/ {metricasTripulantes.totalTripulantes}</span></span>
+                </div>
+                <div style={styles.kpiCard}>
+                    <span style={styles.kpiTitle}>SEGURIDAD OPERACIONAL</span>
+                    <span style={styles.kpiValue}>{metricasTripulantes.seguridadOperacionalRealizado} <span style={styles.kpiSubvalue}>/ {metricasTripulantes.totalTripulantes}</span></span>
+                </div>
+            </div>
+
+            {/* GRILLA DE CERTIFICACIONES TÉCNICAS (SIMULADOR Y CRM) */}
+            <div style={{ ...styles.chartsGrid, marginBottom: '30px' }}>
+                <div style={styles.chartCard}>
+                    <h4 style={styles.chartTitle}>🖥️ Estado de Simulador de Vuelo</h4>
+                    <ResponsiveContainer width="100%" height={260}>
+                        <PieChart>
+                            <Pie
+                                data={metricasTripulantes.simulador}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={85}
+                                label={(entry) => `${entry.name}: ${entry.value}`}
+                            >
+                                {metricasTripulantes.simulador.map((entry, index) => (
+                                    <Cell key={`cell-sim-${index}`} fill={entry.color} />
+                                ))}
+                            </Pie>
+                            <Tooltip formatter={(value) => [`${value} Pilotos`, 'Cantidad']} />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+
+                <div style={styles.chartCard}>
+                    <h4 style={styles.chartTitle}>🧠 Estado de Certificación CRM</h4>
+                    <ResponsiveContainer width="100%" height={260}>
+                        <PieChart>
+                            <Pie
+                                data={metricasTripulantes.crm}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={85}
+                                label={(entry) => `${entry.name}: ${entry.value}`}
+                            >
+                                {metricasTripulantes.crm.map((entry, index) => (
+                                    <Cell key={`cell-crm-${index}`} fill={entry.color} />
+                                ))}
+                            </Pie>
+                            <Tooltip formatter={(value) => [`${value} Pilotos`, 'Cantidad']} />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
+            {/* SECCIÓN 2: KPI DE OPERACIONES Y VUELOS */}
+            <h3 style={styles.sectionHeader}>✈️ Resumen Operativo de Vuelos (-12)</h3>
             <div style={styles.kpiContainer}>
                 <div style={styles.kpiCard}>
                     <span style={styles.kpiTitle}>TOTAL HORAS VOLADAS</span>
@@ -304,13 +432,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
             </div>
 
-            {/* GRILLA DE GRÁFICOS (2 COLUMNAS / FILAS DE A 2) */}
+            {/* GRILLA DE GRÁFICOS DE VUELO */}
             <div style={styles.chartsGrid}>
-                
-                {/* 1. HORAS POR ELEMENTO APOYADO */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>🏢 Horas por Elemento Apoyado</h4>
-                    <ResponsiveContainer width="100%" height={320}>
+                    <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={horasPorElemento} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" />
@@ -321,10 +447,9 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </ResponsiveContainer>
                 </div>
 
-                {/* 2. HORAS POR TIPO DE MISIÓN */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>🎯 Horas por Misión</h4>
-                    <ResponsiveContainer width="100%" height={320}>
+                    <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                             <Pie
                                 data={horasPorMision}
@@ -332,7 +457,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                                 nameKey="name"
                                 cx="50%"
                                 cy="50%"
-                                outerRadius={100}
+                                outerRadius={95}
                                 label={(entry) => `${entry.name}: ${entry.value}h`}
                             >
                                 {horasPorMision.map((entry, index) => (
@@ -345,10 +470,9 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </ResponsiveContainer>
                 </div>
 
-                {/* 3. TOTAL DE HORAS POR PILOTO / COPILOTO */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>👨‍✈️ Top 10 Horas por Piloto / Copiloto</h4>
-                    <ResponsiveContainer width="100%" height={320}>
+                    <ResponsiveContainer width="100%" height={300}>
                         <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis type="number" />
@@ -359,10 +483,9 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </ResponsiveContainer>
                 </div>
 
-                {/* 4. DESTINOS EXTERNOS */}
                 <div style={styles.chartCard}>
                     <h4 style={styles.chartTitle}>🗺️ Destinos & Rutas (Excluye SADO ➔ SADO)</h4>
-                    <ResponsiveContainer width="100%" height={320}>
+                    <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={horasPorDestino} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis dataKey="ruta" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
@@ -372,7 +495,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
-
             </div>
         </div>
     );
@@ -383,7 +505,7 @@ const styles = {
         padding: '20px',
         backgroundColor: '#f8f9fa',
         borderRadius: '8px',
-        maxWidth: '1600px', // Ampliado para mejor aprovechamiento de pantallas anchas
+        maxWidth: '1600px',
         margin: '0 auto'
     },
     header: {
@@ -395,6 +517,15 @@ const styles = {
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: '15px'
+    },
+    sectionHeader: {
+        fontSize: '1rem',
+        color: '#1b3a57',
+        borderLeft: '4px solid #1b3a57',
+        paddingLeft: '10px',
+        marginBottom: '15px',
+        marginTop: '10px',
+        fontWeight: 'bold'
     },
     subtitle: {
         fontSize: '0.85rem',
@@ -427,7 +558,7 @@ const styles = {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
         gap: '15px',
-        marginBottom: '25px'
+        marginBottom: '20px'
     },
     kpiCard: {
         backgroundColor: '#ffffff',
@@ -449,9 +580,14 @@ const styles = {
         color: '#1b3a57',
         marginTop: '4px'
     },
+    kpiSubvalue: {
+        fontSize: '0.9rem',
+        color: '#94a3b8',
+        fontWeight: 'normal'
+    },
     chartsGrid: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)', // 💡 Forzado estricto a 2 columnas
+        gridTemplateColumns: 'repeat(2, 1fr)',
         gap: '20px'
     },
     chartCard: {
