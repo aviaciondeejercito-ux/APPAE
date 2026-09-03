@@ -96,7 +96,7 @@ export const createAircraft = async (req, res) => {
 
         if (payload.matricula) payload.matricula = payload.matricula.toUpperCase();
 
-        // Parseo seguro de acumuladores numéricos
+        // Parseo seguro de acumuladores numéricos del panel superior
         payload.inicioAeHs = parsearHs(payload.inicioAeHs);
         payload.tgPlaneadorActual = parsearHs(payload.tgPlaneadorActual);
         payload.tgPlaneadorLandings = parsearHs(payload.tgPlaneadorLandings);
@@ -106,9 +106,14 @@ export const createAircraft = async (req, res) => {
         payload.motor2Tsn = parsearHs(payload.motor2Tsn);
         payload.motor2CsnCso = parsearHs(payload.motor2CsnCso);
         
+        // HÉLICE 1 (TSN, DUR y Ciclos/CSN)
         payload.helice1Tsn = parsearHs(payload.helice1Tsn);
+        payload.helice1Dur = parsearHs(payload.helice1Dur);
         payload.helice1CsnCso = parsearHs(payload.helice1CsnCso);
+
+        // HÉLICE 2 (TSN, DUR y Ciclos/CSN)
         payload.helice2Tsn = parsearHs(payload.helice2Tsn);
+        payload.helice2Dur = parsearHs(payload.helice2Dur);
         payload.helice2CsnCso = parsearHs(payload.helice2CsnCso);
 
         // Sanitización de arrays
@@ -141,7 +146,7 @@ export const createAircraft = async (req, res) => {
     }
 };
 
-// 4. ACTUALIZAR AERONAVE O ESTADO
+// 4. ACTUALIZAR AERONAVE O ESTADO (AQUÍ SE GUARDAN Y PERSISTEN TODOS LOS CAMPOS)
 export const updateAircraftStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -152,22 +157,67 @@ export const updateAircraftStatus = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Aeronave no encontrada' });
         }
 
-        // Asignación explícita de campos numéricos parseados
-        if (campos.tgPlaneadorActual !== undefined) aeronaveDoc.tgPlaneadorActual = parsearHs(campos.tgPlaneadorActual);
-        if (campos.tgPlaneadorLandings !== undefined) aeronaveDoc.tgPlaneadorLandings = parsearHs(campos.tgPlaneadorLandings);
-        if (campos.inicioAeHs !== undefined) aeronaveDoc.inicioAeHs = parsearHs(campos.inicioAeHs);
+        // --- PLANEADOR ---
+        if (campos.tgPlaneadorActual !== undefined) {
+            aeronaveDoc.tgPlaneadorActual = parsearHs(campos.tgPlaneadorActual);
+            aeronaveDoc.markModified('tgPlaneadorActual');
+        }
+        if (campos.tgPlaneadorLandings !== undefined) {
+            aeronaveDoc.tgPlaneadorLandings = parsearHs(campos.tgPlaneadorLandings);
+            aeronaveDoc.markModified('tgPlaneadorLandings');
+        }
+        if (campos.inicioAeHs !== undefined) {
+            aeronaveDoc.inicioAeHs = parsearHs(campos.inicioAeHs);
+            aeronaveDoc.markModified('inicioAeHs');
+        }
         
-        if (campos.motorTsn !== undefined) aeronaveDoc.motorTsn = parsearHs(campos.motorTsn);
-        if (campos.motorCsnCso !== undefined) aeronaveDoc.motorCsnCso = parsearHs(campos.motorCsnCso);
-        if (campos.motor2Tsn !== undefined) aeronaveDoc.motor2Tsn = parsearHs(campos.motor2Tsn);
-        if (campos.motor2CsnCso !== undefined) aeronaveDoc.motor2CsnCso = parsearHs(campos.motor2CsnCso);
+        // --- MOTORES ---
+        if (campos.motorTsn !== undefined) {
+            aeronaveDoc.motorTsn = parsearHs(campos.motorTsn);
+            aeronaveDoc.markModified('motorTsn');
+        }
+        if (campos.motorCsnCso !== undefined) {
+            aeronaveDoc.motorCsnCso = parsearHs(campos.motorCsnCso);
+            aeronaveDoc.markModified('motorCsnCso');
+        }
+        if (campos.motor2Tsn !== undefined) {
+            aeronaveDoc.motor2Tsn = parsearHs(campos.motor2Tsn);
+            aeronaveDoc.markModified('motor2Tsn');
+        }
+        if (campos.motor2CsnCso !== undefined) {
+            aeronaveDoc.motor2CsnCso = parsearHs(campos.motor2CsnCso);
+            aeronaveDoc.markModified('motor2CsnCso');
+        }
 
-        if (campos.helice1Tsn !== undefined) aeronaveDoc.helice1Tsn = parsearHs(campos.helice1Tsn);
-        if (campos.helice1CsnCso !== undefined) aeronaveDoc.helice1CsnCso = parsearHs(campos.helice1CsnCso);
-        if (campos.helice2Tsn !== undefined) aeronaveDoc.helice2Tsn = parsearHs(campos.helice2Tsn);
-        if (campos.helice2CsnCso !== undefined) aeronaveDoc.helice2CsnCso = parsearHs(campos.helice2CsnCso);
+        // --- HÉLICE 1 (ASIGNACIÓN Y MARKMODIFIED EXPLÍCITO) ---
+        if (campos.helice1Tsn !== undefined) {
+            aeronaveDoc.helice1Tsn = parsearHs(campos.helice1Tsn);
+            aeronaveDoc.markModified('helice1Tsn');
+        }
+        if (campos.helice1Dur !== undefined) {
+            aeronaveDoc.helice1Dur = parsearHs(campos.helice1Dur);
+            aeronaveDoc.markModified('helice1Dur');
+        }
+        if (campos.helice1CsnCso !== undefined) {
+            aeronaveDoc.helice1CsnCso = parsearHs(campos.helice1CsnCso);
+            aeronaveDoc.markModified('helice1CsnCso');
+        }
 
-        // Sanitización y actualización de componentes
+        // --- HÉLICE 2 (ASIGNACIÓN Y MARKMODIFIED EXPLÍCITO) ---
+        if (campos.helice2Tsn !== undefined) {
+            aeronaveDoc.helice2Tsn = parsearHs(campos.helice2Tsn);
+            aeronaveDoc.markModified('helice2Tsn');
+        }
+        if (campos.helice2Dur !== undefined) {
+            aeronaveDoc.helice2Dur = parsearHs(campos.helice2Dur);
+            aeronaveDoc.markModified('helice2Dur');
+        }
+        if (campos.helice2CsnCso !== undefined) {
+            aeronaveDoc.helice2CsnCso = parsearHs(campos.helice2CsnCso);
+            aeronaveDoc.markModified('helice2CsnCso');
+        }
+
+        // --- SUBCOMPONENTES Y ARRAYS ---
         if (campos.compPlaneador) {
             aeronaveDoc.compPlaneador = sanitizarComponentes(campos.compPlaneador);
             aeronaveDoc.markModified('compPlaneador');
@@ -189,12 +239,13 @@ export const updateAircraftStatus = async (req, res) => {
             aeronaveDoc.markModified('helices');
         }
 
-        // Lista completa de campos ya tratados manualmente que deben omitirse en la copia masiva
+        // Lista completa de todos los acumuladores tratados manualmente
         const camposExcluidos = [
             'compPlaneador', 'motores', 'helices', 
             'tgPlaneadorLandings', 'tgPlaneadorActual', 'inicioAeHs',
             'motorTsn', 'motorCsnCso', 'motor2Tsn', 'motor2CsnCso',
-            'helice1Tsn', 'helice1CsnCso', 'helice2Tsn', 'helice2CsnCso'
+            'helice1Tsn', 'helice1Dur', 'helice1CsnCso',
+            'helice2Tsn', 'helice2Dur', 'helice2CsnCso'
         ];
 
         Object.keys(campos).forEach(key => {
