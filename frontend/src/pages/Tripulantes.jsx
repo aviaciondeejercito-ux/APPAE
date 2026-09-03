@@ -33,7 +33,7 @@ const Tripulantes = () => {
 
     // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS v3.6 ---
     const obtenerTotalesDinamicos = () => {
-        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0, aterrizajes: 0 };
+        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
         if (!seleccionado) return totales;
 
         if (seleccionado.totalesHistoricos) {
@@ -41,7 +41,6 @@ const Tripulantes = () => {
             totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
             totales.nocturno = Number(seleccionado.totalesHistoricos.vueloNocturno || 0);
             totales.nvg = Number(seleccionado.totalesHistoricos.vueloVisual || 0);
-            totales.aterrizajes = Number(seleccionado.totalesHistoricos.aterrizajes || 0);
         } else if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
             seleccionado.habilitaciones.forEach(h => {
                 totales.visual += Number(h.hsVisual || 0);
@@ -117,8 +116,7 @@ const Tripulantes = () => {
                 vueloDiurno: seleccionado.totalesHistoricos?.vueloDiurno || 0,
                 vueloNocturno: seleccionado.totalesHistoricos?.vueloNocturno || 0,
                 vueloInstrumental: seleccionado.totalesHistoricos?.vueloInstrumental || 0,
-                vueloVisual: seleccionado.totalesHistoricos?.vueloVisual || 0,
-                aterrizajes: seleccionado.totalesHistoricos?.aterrizajes || 0
+                vueloVisual: seleccionado.totalesHistoricos?.vueloVisual || 0
             });
         } else if (type === 'habilitacion') {
             setFormData({ 
@@ -205,8 +203,7 @@ const Tripulantes = () => {
                 });
 
                 const nuevosTotales = { 
-                    vueloDiurno: 0, vueloNocturno: 0, vueloInstrumental: 0, vueloVisual: 0, 
-                    aterrizajes: seleccionado.totalesHistoricos?.aterrizajes || 0 
+                    vueloDiurno: 0, vueloNocturno: 0, vueloInstrumental: 0, vueloVisual: 0
                 };
                 Object.values(mapaSdA).forEach(sistema => {
                     nuevosTotales.vueloDiurno += sistema.v;
@@ -322,7 +319,6 @@ const Tripulantes = () => {
                                 <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{horasDinamicas.instrumental.toFixed(1)} hs</span></div>
                                 <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{horasDinamicas.nvg.toFixed(1)} hs</span></div>
                                 <div style={{...styles.statCard, backgroundColor: '#eef6fc', borderColor: '#3498db'}}><span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span><span style={{...styles.statValue, color: '#2980b9'}}>{totalGeneralHoras.toFixed(1)} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>ATERRIZAJES</span><span style={styles.statValue}>{horasDinamicas.aterrizajes}</span></div>
                             </div>
 
                             <div style={styles.sectionHeader}>
@@ -452,8 +448,6 @@ const Tripulantes = () => {
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.vueloInstrumental || 0} onChange={e => setFormData({...formData, vueloInstrumental: Number(e.target.value)})} required />
                                         <label style={styles.label}>Horas NVG Generales</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.vueloVisual || 0} onChange={e => setFormData({...formData, vueloVisual: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Aterrizajes Generales</label>
-                                        <input type="number" style={styles.formInput} value={formData.aterrizajes || 0} onChange={e => setFormData({...formData, aterrizajes: Number(e.target.value)})} required />
                                     </div>
                                 )}
 
