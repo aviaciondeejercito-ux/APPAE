@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Navigation } from 'lucide-react';
+import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Navigation, Calculator, Bookmark } from 'lucide-react';
 import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
 
 const Tripulantes = () => {
@@ -27,6 +27,7 @@ const Tripulantes = () => {
     const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002", "T-41"];
     const rolesVuelo = ['Cursante','Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
     const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
+    const aptitudesAdicionalesOp = ["Curso Radiooperador Restringido", "Capacitacion de Seguridad Operacional", "Capacitacion de Cargas Peligrosas"];
 
     useEffect(() => { fetchPersonal(); }, []);
 
@@ -58,6 +59,7 @@ const Tripulantes = () => {
         return totales;
     };
     const horasDinamicas = obtenerTotalesDinamicos();
+    const totalGeneralHoras = Math.round((horasDinamicas.visual + horasDinamicas.instrumental + horasDinamicas.nocturno + horasDinamicas.nvg) * 10) / 10;
 
     const fetchPersonal = async () => {
         try {
@@ -106,7 +108,9 @@ const Tripulantes = () => {
                 psicofisicoUltimaFecha: seleccionado.certificaciones?.psicofisico?.ultimaFecha?.split('T')[0] || '',
                 psicofisicoVencimiento: seleccionado.certificaciones?.psicofisico?.vencimiento?.split('T')[0] || '',
                 crmUltimaFecha: seleccionado.certificaciones?.crm?.ultimaFecha?.split('T')[0] || '',
-                crmVencimiento: seleccionado.certificaciones?.crm?.vencimiento?.split('T')[0] || ''
+                crmVencimiento: seleccionado.certificaciones?.crm?.vencimiento?.split('T')[0] || '',
+                simuladorUltimaFecha: seleccionado.certificaciones?.simulador?.ultimaFecha?.split('T')[0] || '',
+                simuladorVencimiento: seleccionado.certificaciones?.simulador?.vencimiento?.split('T')[0] || ''
             });
         } else if (type === 'horas') {
             setFormData({
@@ -123,6 +127,8 @@ const Tripulantes = () => {
             });
         } else if (type === 'capacitacion') {
             setFormData({ tipo: '', fechaAdquisicion: '', horasAcreditadas: 0, observaciones: '' });
+        } else if (type === 'aptitudAdicional') {
+            setFormData({ tipo: '', fechaAdquisicion: '', observaciones: '' });
         }
         setShowEditModal(true);
     };
@@ -144,6 +150,10 @@ const Tripulantes = () => {
                             crm: { 
                                 ultimaFecha: formData.crmUltimaFecha || null,
                                 vencimiento: formData.crmVencimiento || null 
+                            },
+                            simulador: {
+                                ultimaFecha: formData.simuladorUltimaFecha || null,
+                                vencimiento: formData.simuladorVencimiento || null
                             }
                         }
                     });
@@ -162,6 +172,8 @@ const Tripulantes = () => {
                     });
                 } else if (modalType === 'capacitacion') {
                     await API.post(`/tripulantes/${seleccionado._id}/capacitacion`, formData);
+                } else if (modalType === 'aptitudAdicional') {
+                    await API.post(`/tripulantes/${seleccionado._id}/aptitud-adicional`, formData);
                 }
             }
             setShowAltaModal(false);
@@ -182,7 +194,6 @@ const Tripulantes = () => {
             if (type === 'habilitacion') {
                 updatedData.habilitaciones = seleccionado.habilitaciones.filter(h => h._id !== itemId);
                 
-                // Algoritmo de Consolidación por Máximos (Sincro Backend v3.6)
                 const mapaSdA = {};
                 updatedData.habilitaciones.forEach(h => {
                     const sda = h.aeronave;
@@ -208,6 +219,8 @@ const Tripulantes = () => {
 
             } else if (type === 'capacitacion') {
                 updatedData.capacitacionesEspeciales = seleccionado.capacitacionesEspeciales.filter(c => c._id !== itemId);
+            } else if (type === 'aptitudAdicional') {
+                updatedData.aptitudesAdicionales = seleccionado.aptitudesAdicionales.filter(a => a._id !== itemId);
             }
             
             await updateTripulante(seleccionado._id, updatedData);
@@ -288,6 +301,15 @@ const Tripulantes = () => {
                                         {getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).label}
                                     </div>
                                 </div>
+                                <div style={styles.statCard}>
+                                    <span style={styles.statLabel}>SIMULADOR</span>
+                                    <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.simulador?.vencimiento).color}}>
+                                        {seleccionado.certificaciones?.simulador?.vencimiento ? new Date(seleccionado.certificaciones.simulador.vencimiento).toLocaleDateString() : 'S/D'}
+                                    </span>
+                                    <div style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.simulador?.vencimiento).color}}>
+                                        {getEstadoVencimiento(seleccionado.certificaciones?.simulador?.vencimiento).label}
+                                    </div>
+                                </div>
                             </div>
 
                             <div style={styles.sectionHeader}>
@@ -295,10 +317,11 @@ const Tripulantes = () => {
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
                             </div>
                             <div style={styles.gridStats}>
-                                <div style={styles.statCard}><span style={styles.statLabel}>VISUAL</span><span style={styles.statValue}>{horasDinamicas.visual} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>NOCTURNO</span><span style={styles.statValue}>{horasDinamicas.nocturno} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{horasDinamicas.instrumental} hs</span></div>
-                                <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{horasDinamicas.nvg} hs</span></div>
+                                <div style={styles.statCard}><span style={styles.statLabel}>VISUAL</span><span style={styles.statValue}>{horasDinamicas.visual.toFixed(1)} hs</span></div>
+                                <div style={styles.statCard}><span style={styles.statLabel}>NOCTURNO</span><span style={styles.statValue}>{horasDinamicas.nocturno.toFixed(1)} hs</span></div>
+                                <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{horasDinamicas.instrumental.toFixed(1)} hs</span></div>
+                                <div style={styles.statCard}><span style={styles.statLabel}>NVG</span><span style={styles.statValue}>{horasDinamicas.nvg.toFixed(1)} hs</span></div>
+                                <div style={{...styles.statCard, backgroundColor: '#eef6fc', borderColor: '#3498db'}}><span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span><span style={{...styles.statValue, color: '#2980b9'}}>{totalGeneralHoras.toFixed(1)} hs</span></div>
                                 <div style={styles.statCard}><span style={styles.statLabel}>ATERRIZAJES</span><span style={styles.statValue}>{horasDinamicas.aterrizajes}</span></div>
                             </div>
 
@@ -316,14 +339,14 @@ const Tripulantes = () => {
                                             </div>
                                             <div style={styles.habTimeInfo}>
                                                  <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
-                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {h.totalHorasSistema || 0} HS</div>
+                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {Number(h.totalHorasSistema || 0).toFixed(1)} HS</div>
                                             </div>
                                         </div>
                                         <div style={styles.habDesgloseGrid}>
-                                            <div style={styles.desgloseItem}><Eye size={12} /> <span>{h.hsVisual || 0}</span></div>
-                                            <div style={styles.desgloseItem}><Activity size={12} /> <span>{h.hsInstrumental || 0}</span></div>
-                                            <div style={styles.desgloseItem}><Moon size={12} /> <span>{h.hsNocturno || 0}</span></div>
-                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{h.hsNVG || 0}</span></div>
+                                            <div style={styles.desgloseItem}><Eye size={12} /> <span>{Number(h.hsVisual || 0).toFixed(1)}</span></div>
+                                            <div style={styles.desgloseItem}><Activity size={12} /> <span>{Number(h.hsInstrumental || 0).toFixed(1)}</span></div>
+                                            <div style={styles.desgloseItem}><Moon size={12} /> <span>{Number(h.hsNocturno || 0).toFixed(1)}</span></div>
+                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{Number(h.hsNVG || 0).toFixed(1)}</span></div>
                                         </div>
                                         {esGestorOperativo && <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>}
                                     </div>
@@ -342,8 +365,26 @@ const Tripulantes = () => {
                                             {esGestorOperativo && <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
                                         </div>
                                         <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
-                                            <span>{c.horasAcreditadas || 0} hs</span>
+                                            <span>{Number(c.horasAcreditadas || 0).toFixed(1)} hs</span>
                                             <span>{c.fechaAdquisicion ? new Date(c.fechaAdquisicion).toLocaleDateString() : ''}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div style={styles.sectionHeader}>
+                                <Bookmark size={18} /> <span>APTITUDES ADICIONALES</span>
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('aptitudAdicional')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>}
+                            </div>
+                            <div style={styles.tacticasContainer}>
+                                {seleccionado.aptitudesAdicionales?.map((a, i) => (
+                                    <div key={a._id || i} style={{...styles.tacticaBadge, backgroundColor: '#2c3e50'}}>
+                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', width: '100%'}}>
+                                            <div style={{fontWeight: 'bold', fontSize: '0.75rem'}}>{a.tipo}</div>
+                                            {esGestorOperativo && <button onClick={() => deleteSubItem('aptitudAdicional', a._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
+                                        </div>
+                                        <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
+                                            <span>{a.fechaAdquisicion ? new Date(a.fechaAdquisicion).toLocaleDateString() : ''}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -388,10 +429,16 @@ const Tripulantes = () => {
                                         <input type="date" style={styles.formInput} value={formData.psicofisicoUltimaFecha || ''} onChange={e => setFormData({...formData, psicofisicoUltimaFecha: e.target.value})} />
                                         <label style={styles.label}>Vencimiento Psicofísico</label>
                                         <input type="date" style={styles.formInput} value={formData.psicofisicoVencimiento || ''} onChange={e => setFormData({...formData, psicofisicoVencimiento: e.target.value})} />
+                                        
                                         <label style={styles.label}>Última Fecha CRM</label>
                                         <input type="date" style={styles.formInput} value={formData.crmUltimaFecha || ''} onChange={e => setFormData({...formData, crmUltimaFecha: e.target.value})} />
                                         <label style={styles.label}>Vencimiento CRM</label>
                                         <input type="date" style={styles.formInput} value={formData.crmVencimiento || ''} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
+                                        
+                                        <label style={styles.label}>Última Fecha Simulador</label>
+                                        <input type="date" style={styles.formInput} value={formData.simuladorUltimaFecha || ''} onChange={e => setFormData({...formData, simuladorUltimaFecha: e.target.value})} />
+                                        <label style={styles.label}>Vencimiento Simulador</label>
+                                        <input type="date" style={styles.formInput} value={formData.simuladorVencimiento || ''} onChange={e => setFormData({...formData, simuladorVencimiento: e.target.value})} />
                                     </div>
                                 )}
 
@@ -443,6 +490,19 @@ const Tripulantes = () => {
                                         </select>
                                         <label style={styles.label}>Horas Acreditadas</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.horasAcreditadas || 0} onChange={e => setFormData({...formData, horasAcreditadas: Number(e.target.value)})} required />
+                                        <label style={styles.label}>Fecha Adquisición</label>
+                                        <input type="date" style={styles.formInput} value={formData.fechaAdquisicion || ''} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
+                                        <label style={styles.label}>Observaciones</label>
+                                        <input type="text" placeholder="Opcional..." style={styles.formInput} value={formData.observaciones || ''} onChange={e => setFormData({...formData, observaciones: e.target.value})} />
+                                    </div>
+                                )}
+
+                                {modalType === 'aptitudAdicional' && (
+                                    <div style={styles.formCol}>
+                                        <label style={styles.label}>Aptitud Adicional</label>
+                                        <select style={styles.formInput} value={formData.tipo || ''} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
+                                            <option value="">Seleccionar...</option>{aptitudesAdicionalesOp.map(a => <option key={a} value={a}>{a}</option>)}
+                                        </select>
                                         <label style={styles.label}>Fecha Adquisición</label>
                                         <input type="date" style={styles.formInput} value={formData.fechaAdquisicion || ''} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />
                                         <label style={styles.label}>Observaciones</label>
