@@ -11,11 +11,17 @@ const PROCEDIMIENTOS_INICIALES = {
 
 const GRADOS_OFICIALES = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
 
+// Función comparadora segura para Mongo IDs / Strings
+const mismoId = (id1, id2) => {
+    if (!id1 || !id2) return false;
+    return String(id1).trim() === String(id2).trim();
+};
+
 const TrainingFormPage = () => {
     const [vuelosUnidad, setVuelosUnidad] = useState([]);
     const [vueloSeleccionado, setVueloSeleccionado] = useState(null);
     const [oficialesDelVuelo, setOficialesDelVuelo] = useState([]);
-    const [registrosCargados, setRegistrosCargados] = useState([]); // Almacena planillas guardadas
+    const [registrosCargados, setRegistrosCargados] = useState([]);
     
     const [oficialesUnidad, setOficialesUnidad] = useState([]);
     const [tripulanteId, setTripulanteId] = useState('');
@@ -35,7 +41,6 @@ const TrainingFormPage = () => {
     const cargarDatosUnidad = async () => {
         setCargando(true);
         try {
-            // 1. Vuelos
             const resVuelos = await getVuelos();
             const todosVuelos = resVuelos.data?.data || resVuelos.data || [];
             const vuelosFiltrados = todosVuelos.filter(v => {
@@ -45,7 +50,6 @@ const TrainingFormPage = () => {
             });
             setVuelosUnidad(vuelosFiltrados);
 
-            // 2. Tripulantes
             const resTrip = await getTripulantes();
             const todosTrip = resTrip.data?.data || resTrip.data || [];
             const oficialesFiltrados = todosTrip.filter(t => {
@@ -55,7 +59,6 @@ const TrainingFormPage = () => {
             });
             setOficialesUnidad(oficialesFiltrados);
 
-            // 3. Planillas de entrenamiento cargadas
             const resTrain = await API.get('/entrenamientos');
             setRegistrosCargados(resTrain.data?.data || resTrain.data || []);
 
@@ -74,7 +77,7 @@ const TrainingFormPage = () => {
         const fechaFormateada = vuelo.fecha ? new Date(vuelo.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
         setVueloSeleccionado({
-            id: vuelo._id,
+            id: String(vuelo._id || vuelo.id),
             fecha: fechaFormateada,
             aeronave: vuelo.aeronave || 'S/D',
             matricula: vuelo.matricula || 'S/D',
@@ -110,11 +113,11 @@ const TrainingFormPage = () => {
         setProcedimientos(prev => ({ ...prev, [key]: Math.max(0, parseInt(val) || 0) }));
     };
 
-    // Al seleccionar oficial, si ya tiene planilla en este vuelo, se autocompleta para EDITAR
     const seleccionarOficial = (id) => {
         setTripulanteId(id);
-        const t = oficialesDelVuelo.find(x => (x._id || x.id) === id) || 
-                  oficialesUnidad.find(x => (x._id || x.id) === id);
+        
+        const t = oficialesDelVuelo.find(x => mismoId(x._id || x.id, id)) || 
+                  oficialesUnidad.find(x => mismoId(x._id || x.id, id));
         
         if (t) {
             setTripulanteNombre(`${t.grado || ''} ${t.apellido || ''} ${t.nombre || ''}`.trim());
@@ -122,8 +125,9 @@ const TrainingFormPage = () => {
             setTripulanteNombre('');
         }
 
-        // Buscar si ya existe entrenamiento para este Vuelo + Oficial
-        const existente = registrosCargados.find(r => r.vueloId === vueloSeleccionado.id && r.tripulanteId === id);
+        // Buscar si ya existe entrenamiento cargado para este Vuelo + Oficial
+        const existente = registrosCargados.find(r => mismoId(r.vueloId, vueloSeleccionado?.id) && mismoId(r.tripulanteId, id));
+        
         if (existente) {
             setProcedimientos({ ...PROCEDIMIENTOS_INICIALES, ...existente.procedimientos });
             setEsEdicion(true);
@@ -151,14 +155,26 @@ const TrainingFormPage = () => {
 
         try {
             const res = await guardarEntrenamiento(payload);
+            const respuestaData = res.data?.data || res.data;
+
             if (res.data?.success || res.status === 200 || res.status === 201) {
                 alert(esEdicion ? "Planilla actualizada correctamente." : "Planilla registrada con éxito.");
+                
+                // Actualizar lista local de registros inmediatamente
+                setRegistrosCargados(prev => {
+                    const filtrados = prev.filter(r => !(mismoId(r.vueloId, vueloSeleccionado.id) && mismoId(r.tripulanteId, tripulanteId)));
+                    return [...filtrados, respuestaData];
+                });
+
+                // Resetear estado del formulario
                 setVueloSeleccionado(null);
                 setOficialesDelVuelo([]);
                 setTripulanteId('');
                 setTripulanteNombre('');
                 setProcedimientos(PROCEDIMIENTOS_INICIALES);
-                cargarDatosUnidad(); // Recargar datos para refrescar tildes
+                
+                // Refrescar sincronizadamente
+                cargarDatosUnidad();
             }
         } catch (e) {
             console.error("Error al guardar entrenamiento:", e);
@@ -186,15 +202,16 @@ const TrainingFormPage = () => {
                     ) : (
                         <div style={styles.vuelosList}>
                             {vuelosUnidad.map((v) => {
+                                const idVueloStr = String(v._id || v.id);
                                 const fechaFormat = v.fecha ? new Date(v.fecha).toISOString().split('T')[0] : 'S/D';
-                                const esElSeleccionado = vueloSeleccionado?.id === v._id;
+                                const esElSeleccionado = mismoId(vueloSeleccionado?.id, idVueloStr);
 
-                                // Verificar si este vuelo ya tiene al menos una planilla registrada
-                                const tienePlanilla = registrosCargados.some(r => r.vueloId === v._id);
+                                // Verificación segura por String ID
+                                const tienePlanilla = registrosCargados.some(r => mismoId(r.vueloId, idVueloStr));
 
                                 return (
                                     <div 
-                                        key={v._id} 
+                                        key={idVueloStr} 
                                         onClick={() => seleccionarVueloParaCargar(v)}
                                         style={esElSeleccionado ? styles.vueloCardActive : styles.vueloCard}
                                     >
@@ -252,8 +269,8 @@ const TrainingFormPage = () => {
                                     {oficialesDelVuelo.length > 0 && (
                                         <optgroup label="Oficiales de este Vuelo">
                                             {oficialesDelVuelo.map(o => {
-                                                const id = o._id || o.id;
-                                                const yaCargado = registrosCargados.some(r => r.vueloId === vueloSeleccionado.id && r.tripulanteId === id);
+                                                const id = String(o._id || o.id);
+                                                const yaCargado = registrosCargados.some(r => mismoId(r.vueloId, vueloSeleccionado.id) && mismoId(r.tripulanteId, id));
                                                 return (
                                                     <option key={id} value={id}>
                                                         [{o.rolEnVuelo}] {o.grado} {o.apellido} {o.nombre} {yaCargado ? ' (✅ Cargado)' : ''}
@@ -264,8 +281,8 @@ const TrainingFormPage = () => {
                                     )}
                                     <optgroup label={`Otros Oficiales de la Unidad (${userUnidad})`}>
                                         {oficialesUnidad.map(t => {
-                                            const id = t._id || t.id;
-                                            const yaCargado = registrosCargados.some(r => r.vueloId === vueloSeleccionado.id && r.tripulanteId === id);
+                                            const id = String(t._id || t.id);
+                                            const yaCargado = registrosCargados.some(r => mismoId(r.vueloId, vueloSeleccionado.id) && mismoId(r.tripulanteId, id));
                                             return (
                                                 <option key={id} value={id}>
                                                     {t.grado} {t.apellido} {t.nombre} {yaCargado ? ' (✅ Cargado)' : ''}
