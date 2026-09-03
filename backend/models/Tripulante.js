@@ -31,12 +31,18 @@ const tripulanteSchema = new mongoose.Schema({
   capacitacionesEspeciales: [{
     tipo: { type: String },
     fechaAdquisicion: { type: Date },
-    horasAcreditadas: { type: Number, default: 0 }, // <--- Asegurado para acumulación de misiones tácticas
+    horasAcreditadas: { type: Number, default: 0 },
+    observaciones: String
+  }],
+  aptitudesAdicionales: [{
+    tipo: { type: String, required: true },
+    fechaAdquisicion: { type: Date },
     observaciones: String
   }],
   certificaciones: {
     psicofisico: { ultimaFecha: { type: Date }, vencimiento: { type: Date } },
-    crm: { ultimaFecha: { type: Date }, vencimiento: { type: Date } }
+    crm: { ultimaFecha: { type: Date }, vencimiento: { type: Date } },
+    simulador: { ultimaFecha: { type: Date }, vencimiento: { type: Date } }
   },
   totalesHistoricos: {
     vueloDiurno: { type: Number, default: 0 },
@@ -55,7 +61,7 @@ const tripulanteSchema = new mongoose.Schema({
   strict: false 
 });
 
-// Virtual inteligente: Calcula el total general de horas acumuladas sumando cada SdA de forma dinámica
+// Virtual inteligente: Calcula el total general de horas acumuladas sumando cada SdA de forma dinámica[cite: 16]
 tripulanteSchema.virtual('totalVueloGeneral').get(function() {
   if (!this.habilitaciones) return 0;
   return this.habilitaciones.reduce((acc, h) => acc + (h.totalHorasSistema || 0), 0);

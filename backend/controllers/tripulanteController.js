@@ -14,7 +14,7 @@ const obtenerUnidadLimpia = (userOrBody) => {
     return String(u).trim().toUpperCase();
 };
 
-// 1. Crear Tripulante
+// 1. Crear Tripulante[cite: 17]
 exports.crearTripulante = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -38,7 +38,7 @@ exports.crearTripulante = async (req, res) => {
             nombre: req.body.nombre ? req.body.nombre.toUpperCase().trim() : "",
             elemento: unidadDestino,
             unidad: unidadDestino,
-            activo: true, // Forzamos la bandera explícita de activación para el borrado lógico v3.6
+            activo: true, // Forzamos la bandera explícita de activación para el borrado lógico v3.6[cite: 17]
             ultimoEditor: usuarioLogueado._id,
             fechaUltimaModificacion: Date.now()
         };
@@ -62,7 +62,7 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Gestionar Habilitación SdA (Algoritmo de Consolación por Máximos preservado)
+// 2. Gestionar Habilitación SdA (Algoritmo de Consolación por Máximos preservado)[cite: 17]
 exports.gestionarHabilitacion = async (req, res) => {
     try {
         const { id } = req.params;
@@ -115,7 +115,7 @@ exports.gestionarHabilitacion = async (req, res) => {
             });
         }
 
-        // --- RECALCULO GENERAL DINÁMICO v3.6 ---
+        // --- RECALCULO GENERAL DINÁMICO v3.6 ---[cite: 17]
         const mapaSdA = {};
         tripulante.habilitaciones.forEach(hab => {
             const sda = hab.aeronave;
@@ -159,7 +159,7 @@ exports.gestionarHabilitacion = async (req, res) => {
     }
 };
 
-// 3. Agregar Capacitación Especial
+// 3. Agregar Capacitación Especial[cite: 17]
 exports.agregarCapacitacion = async (req, res) => {
     try {
         const { id } = req.params;
@@ -177,11 +177,7 @@ exports.agregarCapacitacion = async (req, res) => {
             return res.status(403).json({ mensaje: "No autorizado para agregar capacitaciones" });
         }
 
-        // Metemos la capacitación especial al subdocumento
         tripulante.capacitacionesEspeciales.push(req.body);
-
-        // NOTA v3.6: Ya no incrementamos directamente totalesHistoricos de vuelos generales aquí 
-        // para evitar inflar artificialmente las horas base desvinculadas de un SdA certificado.
 
         tripulante.ultimoEditor = usuarioLogueado._id;
         tripulante.fechaUltimaModificacion = Date.now();
@@ -202,7 +198,51 @@ exports.agregarCapacitacion = async (req, res) => {
     }
 };
 
-// 4. Obtener Tripulantes (Acumula horas ÚNICAMENTE en Capacitaciones Tácticas)
+// 4. Agregar Aptitud Adicional
+exports.agregarAptitudAdicional = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const usuarioLogueado = req.user;
+        const tripulante = await Tripulante.findById(id);
+        
+        if (!tripulante || tripulante.activo === false) {
+            return res.status(404).json({ mensaje: "Tripulante no encontrado" });
+        }
+
+        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
+        const unidadTripulante = obtenerUnidadLimpia(tripulante);
+
+        if (!['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OPERACIONES', 'JEFE'].includes(roleBase) || (roleBase !== 'ADMIN' && miUnidad !== unidadTripulante)) {
+            return res.status(403).json({ mensaje: "No autorizado para agregar aptitudes adicionales" });
+        }
+
+        if (!tripulante.aptitudesAdicionales) {
+            tripulante.aptitudesAdicionales = [];
+        }
+
+        tripulante.aptitudesAdicionales.push(req.body);
+
+        tripulante.ultimoEditor = usuarioLogueado._id;
+        tripulante.fechaUltimaModificacion = Date.now();
+        await tripulante.save();
+
+        await Auditoria.create({
+            usuarioId: usuarioLogueado._id,
+            usuarioNombre: `${usuarioLogueado.grado} ${usuarioLogueado.apellido}`,
+            usuarioUnidad: miUnidad,
+            accion: 'MODIFICACION',
+            entidadAfectada: `Aptitud Adicional: ${req.body.tipo} para ${tripulante.apellido}`,
+            entidadId: tripulante._id
+        });
+
+        res.status(200).json({ mensaje: "Aptitud adicional añadida con éxito", tripulante });
+    } catch (error) {
+        res.status(400).json({ mensaje: "Error al agregar aptitud adicional", error: error.message });
+    }
+};
+
+// 5. Obtener Tripulantes[cite: 17]
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -210,7 +250,6 @@ exports.obtenerTripulantes = async (req, res) => {
         const roleBase = String(miRol).toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
-        // Solo mostramos aquellos que sigan de alta (evita documentos rotos)
         let filtro = { activo: { $ne: false } };
 
         if (!['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase)) {
@@ -230,7 +269,6 @@ exports.obtenerTripulantes = async (req, res) => {
 
         const idsTripulantes = tripulantes.map(t => t._id);
 
-        // Consultamos la bitácora de vuelos para sumar únicamente por Capacitación Táctica
         const vuelos = await Vuelo.find({
             $or: [
                 { piloto: { $in: idsTripulantes } },
@@ -239,8 +277,7 @@ exports.obtenerTripulantes = async (req, res) => {
             ]
         }).lean();
 
-        // Acumulador exclusivo para tareas / capacitaciones tácticas
-        const mapaHorasTácticas = {}; // Guarda { "pilotoId_TIPOMISION": hsTotales }
+        const mapaHorasTácticas = {};
 
         vuelos.forEach(v => {
             const hsVuelo = Number(v.horasVoladas || 0);
@@ -259,8 +296,6 @@ exports.obtenerTripulantes = async (req, res) => {
             acumularTáctica(v.instructor);
         });
 
-        // Inyectamos horas calculadas SÓLO en capacitacionesEspeciales.
-        // Las habilitaciones quedan 100% intactas tal cual vienen de la base de datos.
         const tripulantesConHoras = tripulantes.map(t => {
             const tIdStr = t._id.toString();
 
@@ -290,7 +325,7 @@ exports.obtenerTripulantes = async (req, res) => {
     }
 };
 
-// 5. Actualizar Tripulante (General)
+// 6. Actualizar Tripulante (General)[cite: 17]
 exports.actualizarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
@@ -344,7 +379,7 @@ exports.actualizarTripulante = async (req, res) => {
     }
 };
 
-// 6. Eliminar Tripulante (BLINDADO CON BORRADO LÓGICO ESTÁNDAR v3.6)
+// 7. Eliminar Tripulante[cite: 17]
 exports.eliminarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
@@ -371,9 +406,6 @@ exports.eliminarTripulante = async (req, res) => {
             });
         }
 
-        // --- SOLUCIÓN DE INTEGRIDAD CRÍTICA v3.6 ---
-        // Aplicamos borrado lógico mudando la bandera a inactivo. 
-        // Esto previene que se rompa el populate() en los vuelos históricos donde participó este tripulante.
         tripulante.activo = false;
         tripulante.ultimoEditor = usuarioLogueado._id;
         tripulante.fechaUltimaModificacion = Date.now();
@@ -395,7 +427,7 @@ exports.eliminarTripulante = async (req, res) => {
     }
 };
 
-// 7. Buscar Tripulante
+// 8. Buscar Tripulante[cite: 17]
 exports.buscarTripulante = async (req, res) => {
     try {
         const { termino } = req.params;
@@ -403,7 +435,6 @@ exports.buscarTripulante = async (req, res) => {
         const roleBase = String(usuario.rol || usuario.role || '').toUpperCase().replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuario);
         
-        // Excluimos de la búsqueda a aquellos dados de baja lógica
         let query = {
             activo: { $ne: false },
             $or: [
