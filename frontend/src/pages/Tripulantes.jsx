@@ -31,17 +31,13 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS v3.6 ---
+    // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS (SUMA REFLEJO) ---
     const obtenerTotalesDinamicos = () => {
         const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
         if (!seleccionado) return totales;
 
-        if (seleccionado.totalesHistoricos) {
-            totales.visual = Number(seleccionado.totalesHistoricos.vueloDiurno || 0);
-            totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
-            totales.nocturno = Number(seleccionado.totalesHistoricos.vueloNocturno || 0);
-            totales.nvg = Number(seleccionado.totalesHistoricos.vueloVisual || 0);
-        } else if (seleccionado.habilitaciones && seleccionado.habilitaciones.length > 0) {
+        // 1. Suma dinámica proveniente de los badges/habilitaciones cargadas
+        if (Array.isArray(seleccionado.habilitaciones)) {
             seleccionado.habilitaciones.forEach(h => {
                 totales.visual += Number(h.hsVisual || 0);
                 totales.instrumental += Number(h.hsInstrumental || 0);
@@ -49,7 +45,16 @@ const Tripulantes = () => {
                 totales.nvg += Number(h.hsNVG || 0);
             });
         }
-        
+
+        // 2. Suma de horas base provenientes de la base de datos (totalesHistoricos)
+        if (seleccionado.totalesHistoricos) {
+            totales.visual += Number(seleccionado.totalesHistoricos.vueloDiurno || 0);
+            totales.instrumental += Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
+            totales.nocturno += Number(seleccionado.totalesHistoricos.vueloNocturno || 0);
+            totales.nvg += Number(seleccionado.totalesHistoricos.vueloVisual || 0);
+        }
+
+        // Redondeo decimal seguro
         totales.visual = Math.round(totales.visual * 10) / 10;
         totales.instrumental = Math.round(totales.instrumental * 10) / 10;
         totales.nocturno = Math.round(totales.nocturno * 10) / 10;
@@ -57,6 +62,7 @@ const Tripulantes = () => {
 
         return totales;
     };
+
     const horasDinamicas = obtenerTotalesDinamicos();
     const totalGeneralHoras = Math.round((horasDinamicas.visual + horasDinamicas.instrumental + horasDinamicas.nocturno + horasDinamicas.nvg) * 10) / 10;
 
@@ -191,29 +197,6 @@ const Tripulantes = () => {
             
             if (type === 'habilitacion') {
                 updatedData.habilitaciones = seleccionado.habilitaciones.filter(h => h._id !== itemId);
-                
-                const mapaSdA = {};
-                updatedData.habilitaciones.forEach(h => {
-                    const sda = h.aeronave;
-                    if (!mapaSdA[sda]) mapaSdA[sda] = { v: 0, i: 0, n: 0, nvg: 0 };
-                    mapaSdA[sda].v = Math.max(mapaSdA[sda].v, Number(h.hsVisual || 0));
-                    mapaSdA[sda].i = Math.max(mapaSdA[sda].i, Number(h.hsInstrumental || 0));
-                    mapaSdA[sda].n = Math.max(mapaSdA[sda].n, Number(h.hsNocturno || 0));
-                    mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(h.hsNVG || 0));
-                });
-
-                const nuevosTotales = { 
-                    vueloDiurno: 0, vueloNocturno: 0, vueloInstrumental: 0, vueloVisual: 0
-                };
-                Object.values(mapaSdA).forEach(sistema => {
-                    nuevosTotales.vueloDiurno += sistema.v;
-                    nuevosTotales.vueloNocturno += sistema.n;
-                    nuevosTotales.vueloInstrumental += sistema.i;
-                    nuevosTotales.vueloVisual += sistema.nvg;
-                });
-                
-                updatedData.totalesHistoricos = nuevosTotales;
-
             } else if (type === 'capacitacion') {
                 updatedData.capacitacionesEspeciales = seleccionado.capacitacionesEspeciales.filter(c => c._id !== itemId);
             } else if (type === 'aptitudAdicional') {
@@ -309,8 +292,9 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
+                            {/* 🔴 CUADRADOS SUPERIORES DE TOTALES (REFLEJO DINÁMICO) */}
                             <div style={styles.sectionHeader}>
-                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES CONSOLIDADOS v3.6)</span>
+                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES CONSOLIDADOS DINÁMICOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
                             </div>
                             <div style={styles.gridStats}>
@@ -321,32 +305,38 @@ const Tripulantes = () => {
                                 <div style={{...styles.statCard, backgroundColor: '#eef6fc', borderColor: '#3498db'}}><span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span><span style={{...styles.statValue, color: '#2980b9'}}>{totalGeneralHoras.toFixed(1)} hs</span></div>
                             </div>
 
+                            {/* 🟢 HABILITACIONES POR SISTEMA DE ARMAS (BADGES DE ABAJO) */}
                             <div style={styles.sectionHeader}>
                                 <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>}
                             </div>
                             <div style={styles.habilitacionesList}>
-                                {seleccionado.habilitaciones?.map((h, i) => (
-                                    <div key={h._id || i} style={styles.habItem}>
-                                        <div style={styles.habInfoMain}>
-                                            <div style={styles.habTitleGroup}>
-                                                <strong style={styles.habAeronave}>{h.aeronave}</strong>
-                                                <span style={styles.habRol}>{h.rolActual}</span>
+                                {seleccionado.habilitaciones?.map((h, i) => {
+                                    // Cálculo individual por badge
+                                    const totalIndividualSdA = (Number(h.hsVisual || 0) + Number(h.hsInstrumental || 0) + Number(h.hsNocturno || 0) + Number(h.hsNVG || 0)).toFixed(1);
+                                    
+                                    return (
+                                        <div key={h._id || i} style={styles.habItem}>
+                                            <div style={styles.habInfoMain}>
+                                                <div style={styles.habTitleGroup}>
+                                                    <strong style={styles.habAeronave}>{h.aeronave}</strong>
+                                                    <span style={styles.habRol}>{h.rolActual}</span>
+                                                </div>
+                                                <div style={styles.habTimeInfo}>
+                                                     <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
+                                                     <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {totalIndividualSdA} HS TOTAL</div>
+                                                </div>
                                             </div>
-                                            <div style={styles.habTimeInfo}>
-                                                 <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
-                                                 <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {Number(h.totalHorasSistema || 0).toFixed(1)} HS</div>
+                                            <div style={styles.habDesgloseGrid}>
+                                                <div style={styles.desgloseItem}><Eye size={12} /> <span>{Number(h.hsVisual || 0).toFixed(1)}</span></div>
+                                                <div style={styles.desgloseItem}><Activity size={12} /> <span>{Number(h.hsInstrumental || 0).toFixed(1)}</span></div>
+                                                <div style={styles.desgloseItem}><Moon size={12} /> <span>{Number(h.hsNocturno || 0).toFixed(1)}</span></div>
+                                                <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{Number(h.hsNVG || 0).toFixed(1)}</span></div>
                                             </div>
+                                            {esGestorOperativo && <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>}
                                         </div>
-                                        <div style={styles.habDesgloseGrid}>
-                                            <div style={styles.desgloseItem}><Eye size={12} /> <span>{Number(h.hsVisual || 0).toFixed(1)}</span></div>
-                                            <div style={styles.desgloseItem}><Activity size={12} /> <span>{Number(h.hsInstrumental || 0).toFixed(1)}</span></div>
-                                            <div style={styles.desgloseItem}><Moon size={12} /> <span>{Number(h.hsNocturno || 0).toFixed(1)}</span></div>
-                                            <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{Number(h.hsNVG || 0).toFixed(1)}</span></div>
-                                        </div>
-                                        {esGestorOperativo && <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>}
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             <div style={styles.sectionHeader}>
@@ -440,13 +430,13 @@ const Tripulantes = () => {
 
                                 {modalType === 'horas' && (
                                     <div style={styles.formCol}>
-                                        <label style={styles.label}>Horas Visual Generales</label>
+                                        <label style={styles.label}>Horas Visual Base (DB)</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.vueloDiurno || 0} onChange={e => setFormData({...formData, vueloDiurno: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Horas Nocturno Generales</label>
+                                        <label style={styles.label}>Horas Nocturno Base (DB)</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.vueloNocturno || 0} onChange={e => setFormData({...formData, vueloNocturno: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Horas Instrumental Generales</label>
+                                        <label style={styles.label}>Horas Instrumental Base (DB)</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.vueloInstrumental || 0} onChange={e => setFormData({...formData, vueloInstrumental: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Horas NVG Generales</label>
+                                        <label style={styles.label}>Horas NVG Base (DB)</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.vueloVisual || 0} onChange={e => setFormData({...formData, vueloVisual: Number(e.target.value)})} required />
                                     </div>
                                 )}
