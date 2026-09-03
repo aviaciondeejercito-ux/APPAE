@@ -9,7 +9,11 @@ const trainingSchema = new mongoose.Schema({
         type: Date, 
         required: [true, 'La fecha del vuelo es obligatoria'] 
     },
-    // Se cambia required por default para evitar colapsos si no se envía la ruta
+    unidad: { 
+        type: String, 
+        default: 'S/D',
+        trim: true 
+    },
     origen: { 
         type: String, 
         default: 'S/D',
@@ -28,9 +32,7 @@ const trainingSchema = new mongoose.Schema({
         type: String, 
         required: [true, 'El nombre del tripulante es obligatorio'] 
     },
-    
     procedimientos: {
-        // Exigencias Visuales
         despegueNormal: { type: Number, default: 0, min: 0 },
         despegueMinimaDistancia: { type: Number, default: 0, min: 0 },
         aterrizajeNormal: { type: Number, default: 0, min: 0 },
@@ -40,14 +42,10 @@ const trainingSchema = new mongoose.Schema({
         toqueYMotor: { type: Number, default: 0, min: 0 },
         circuitoTransitoVisual: { type: Number, default: 0, min: 0 },
         escapeGoAround: { type: Number, default: 0, min: 0 },
-        
-        // Exigencias IFR
         partidaEstandarizadaIFR: { type: Number, default: 0, min: 0 },
         arriboEstandarizadoIFR: { type: Number, default: 0, min: 0 },
         aproxNoPrecision: { type: Number, default: 0, min: 0 },
         aproxPrecision: { type: Number, default: 0, min: 0 },
-        
-        // Exigencias Nocturnas
         despegueNocturno: { type: Number, default: 0, min: 0 },
         aterrizajeNocturno: { type: Number, default: 0, min: 0 },
         circuitoTransitoNocturno: { type: Number, default: 0, min: 0 }

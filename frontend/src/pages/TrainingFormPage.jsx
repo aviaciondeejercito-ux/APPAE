@@ -11,7 +11,6 @@ const PROCEDIMIENTOS_INICIALES = {
 
 const GRADOS_OFICIALES = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
 
-// Función comparadora segura para Mongo IDs / Strings
 const mismoId = (id1, id2) => {
     if (!id1 || !id2) return false;
     return String(id1).trim() === String(id2).trim();
@@ -59,7 +58,8 @@ const TrainingFormPage = () => {
             });
             setOficialesUnidad(oficialesFiltrados);
 
-            const resTrain = await API.get('/entrenamientos');
+            // CORRECCIÓN CLAVE: La ruta correcta es /training (definida en server.js)
+            const resTrain = await API.get('/training');
             setRegistrosCargados(resTrain.data?.data || resTrain.data || []);
 
         } catch (error) {
@@ -125,7 +125,6 @@ const TrainingFormPage = () => {
             setTripulanteNombre('');
         }
 
-        // Buscar si ya existe entrenamiento cargado para este Vuelo + Oficial
         const existente = registrosCargados.find(r => mismoId(r.vueloId, vueloSeleccionado?.id) && mismoId(r.tripulanteId, id));
         
         if (existente) {
@@ -145,6 +144,7 @@ const TrainingFormPage = () => {
         const payload = {
             vueloId: vueloSeleccionado.id,
             vueloFecha: vueloSeleccionado.fecha,
+            unidad: userUnidad, // Se envía la unidad explícitamente
             origen: vueloSeleccionado.desde || 'S/D',
             destino: vueloSeleccionado.hasta || 'S/D',
             tripulanteId,
@@ -160,20 +160,17 @@ const TrainingFormPage = () => {
             if (res.data?.success || res.status === 200 || res.status === 201) {
                 alert(esEdicion ? "Planilla actualizada correctamente." : "Planilla registrada con éxito.");
                 
-                // Actualizar lista local de registros inmediatamente
                 setRegistrosCargados(prev => {
                     const filtrados = prev.filter(r => !(mismoId(r.vueloId, vueloSeleccionado.id) && mismoId(r.tripulanteId, tripulanteId)));
                     return [...filtrados, respuestaData];
                 });
 
-                // Resetear estado del formulario
                 setVueloSeleccionado(null);
                 setOficialesDelVuelo([]);
                 setTripulanteId('');
                 setTripulanteNombre('');
                 setProcedimientos(PROCEDIMIENTOS_INICIALES);
                 
-                // Refrescar sincronizadamente
                 cargarDatosUnidad();
             }
         } catch (e) {
@@ -206,8 +203,9 @@ const TrainingFormPage = () => {
                                 const fechaFormat = v.fecha ? new Date(v.fecha).toISOString().split('T')[0] : 'S/D';
                                 const esElSeleccionado = mismoId(vueloSeleccionado?.id, idVueloStr);
 
-                                // Verificación segura por String ID
-                                const tienePlanilla = registrosCargados.some(r => mismoId(r.vueloId, idVueloStr));
+                                // Buscar todas las planillas cargadas para este vuelo
+                                const planillasDelVuelo = registrosCargados.filter(r => mismoId(r.vueloId, idVueloStr));
+                                const tienePlanilla = planillasDelVuelo.length > 0;
 
                                 return (
                                     <div 
@@ -225,15 +223,15 @@ const TrainingFormPage = () => {
                                             <b>Misión:</b> {v.tipoMision || v.mision} | <b>Ruta:</b> {v.desde} ➔ {v.hasta}
                                         </div>
                                         
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem' }}>
+                                        {/* DETALLE DE PLANILLAS Y TRIPULANTES CARGADOS */}
+                                        <div style={{ marginTop: '6px', paddingTop: '4px', borderTop: '1px dashed #e0e0e0', fontSize: '0.7rem' }}>
                                             {tienePlanilla ? (
-                                                <span style={{ color: '#27ae60', fontWeight: 'bold' }}>✅ Planilla Cargada</span>
+                                                <div style={{ color: '#27ae60', fontWeight: 'bold' }}>
+                                                    ✅ Cargado: {planillasDelVuelo.map(p => p.tripulanteNombre).join(', ')}
+                                                </div>
                                             ) : (
-                                                <span style={{ color: '#e67e22' }}>⏳ Pendiente</span>
+                                                <div style={{ color: '#e67e22' }}>⏳ Pendiente de Carga</div>
                                             )}
-                                            <span style={{ color: esElSeleccionado ? '#2980b9' : '#95a5a6', fontWeight: esElSeleccionado ? 'bold' : 'normal' }}>
-                                                {esElSeleccionado ? '🟢 Seleccionado' : '👉 Clic para Cargar/Editar'}
-                                            </span>
                                         </div>
                                     </div>
                                 );
@@ -257,7 +255,6 @@ const TrainingFormPage = () => {
                                 )}
                             </div>
                             
-                            {/* SELECCIÓN DE OFICIAL */}
                             <div style={{ marginBottom: '15px' }}>
                                 <label style={styles.label}>👤 Seleccionar Oficial a Evaluar / Editar:</label>
                                 <select 
@@ -293,7 +290,6 @@ const TrainingFormPage = () => {
                                 </select>
                             </div>
 
-                            {/* MANIOBRAS */}
                             <div style={styles.grid3}>
                                 <div style={{ ...styles.subCard, borderTop: '3px solid #27ae60' }}>
                                     <h4 style={{ color: '#27ae60', margin: '0 0 8px 0', fontSize: '0.8rem' }}>🛩️ EXIGENCIAS VISUALES</h4>
