@@ -21,29 +21,36 @@ const formatearHs = (val) => {
 
 /**
  * Auxiliar para procesar y actualizar un componente individual de F-16 (Aircraft)
+ * Soporta actualización incremental y decremento (rollback) de Horas (H) y Ciclos (CC/LDG)
  */
-const actualizarHorasComponente = (comp, hs, esRollback = false) => {
+const actualizarHorasComponente = (comp, hs, ciclos = 0, esRollback = false) => {
     const factor = esRollback ? -1 : 1;
     
     // 1. Horas del estado actual del componente (TSO/TSHMI/TSN)
     comp.estadoActual = Number(Math.max(0, (comp.estadoActual || 0) + (hs * factor)).toFixed(2));
 
-    // 2. Sub-renglones TSN / CSN (Suma horas voladas)
+    // 2. Sub-renglones TSN / CSN (Suma horas y ciclos volados)
     if (Array.isArray(comp.tsnCsnRenglones)) {
         comp.tsnCsnRenglones.forEach(r => {
             if (r.unidad === 'H') {
                 const actual = parsearHs(r.valor);
                 r.valor = formatearHs(actual + (hs * factor));
+            } else if (['CC', 'LDG'].includes(r.unidad)) {
+                const actual = parsearHs(r.valor);
+                r.valor = formatearHs(actual + (ciclos * factor));
             }
         });
     }
 
-    // 3. Sub-renglones de Disponibilidades (Restan al volar, suman en rollback)
+    // 3. Sub-renglones de Disponibilidades (Restan al volar/ciclar, suman en rollback)
     if (Array.isArray(comp.disponibilidades)) {
         comp.disponibilidades.forEach(d => {
             if (d.unidad === 'H') {
                 const actual = parsearHs(d.valor);
                 d.valor = formatearHs(actual - (hs * factor));
+            } else if (['CC', 'LDG'].includes(d.unidad)) {
+                const actual = parsearHs(d.valor);
+                d.valor = formatearHs(actual - (ciclos * factor));
             }
         });
     }
@@ -158,14 +165,17 @@ const crearF13 = async (req, res) => {
             aeronaveDoc.markModified('motor2CsnCso');
         }
 
-        // 3. Hélices
+        // 3. Hélices (se incrementan TSN, DUR y CSN/CSO)
         aeronaveDoc.helice1Tsn = Number((parsearHs(aeronaveDoc.helice1Tsn) + hsAIncrementar).toFixed(2));
+        aeronaveDoc.helice1Dur = Number((parsearHs(aeronaveDoc.helice1Dur) + hsAIncrementar).toFixed(2));
         aeronaveDoc.helice1CsnCso = Number((parsearHs(aeronaveDoc.helice1CsnCso) + ciclosIngresados).toFixed(2));
 
         if (aeronaveDoc.helice2Sn || aeronaveDoc.helice2Tsn !== undefined) {
             aeronaveDoc.helice2Tsn = Number((parsearHs(aeronaveDoc.helice2Tsn) + hsAIncrementar).toFixed(2));
+            aeronaveDoc.helice2Dur = Number((parsearHs(aeronaveDoc.helice2Dur) + hsAIncrementar).toFixed(2));
             aeronaveDoc.helice2CsnCso = Number((parsearHs(aeronaveDoc.helice2CsnCso) + ciclosIngresados).toFixed(2));
             aeronaveDoc.markModified('helice2Tsn');
+            aeronaveDoc.markModified('helice2Dur');
             aeronaveDoc.markModified('helice2CsnCso');
         }
 
@@ -174,11 +184,12 @@ const crearF13 = async (req, res) => {
         aeronaveDoc.markModified('motorTsn');
         aeronaveDoc.markModified('motorCsnCso');
         aeronaveDoc.markModified('helice1Tsn');
+        aeronaveDoc.markModified('helice1Dur');
         aeronaveDoc.markModified('helice1CsnCso');
 
         // 4. Componentes del Planeador
         if (Array.isArray(aeronaveDoc.compPlaneador)) {
-            aeronaveDoc.compPlaneador.forEach(comp => actualizarHorasComponente(comp, hsAIncrementar));
+            aeronaveDoc.compPlaneador.forEach(comp => actualizarHorasComponente(comp, hsAIncrementar, ciclosIngresados));
             aeronaveDoc.markModified('compPlaneador');
         }
 
@@ -187,7 +198,7 @@ const crearF13 = async (req, res) => {
             if (Array.isArray(aeronaveDoc[grupo])) {
                 aeronaveDoc[grupo].forEach(item => {
                     if (Array.isArray(item.componentes)) {
-                        item.componentes.forEach(comp => actualizarHorasComponente(comp, hsAIncrementar));
+                        item.componentes.forEach(comp => actualizarHorasComponente(comp, hsAIncrementar, ciclosIngresados));
                     }
                 });
                 aeronaveDoc.markModified(grupo);
@@ -224,7 +235,7 @@ const crearF13 = async (req, res) => {
 
         return res.status(201).json({
             ok: true,
-            msg: 'Formulario F-13 registrado exitosamente y horas/ciclos impactados en la F-16.',
+            msg: 'Formulario F-13 registrado exitosamente y horas/ciclos/DUR impactados en la F-16.',
             f13: f13Guardado
         });
 
@@ -285,13 +296,17 @@ const eliminarF13 = async (req, res) => {
                     aeronaveDoc.markModified('motor2CsnCso');
                 }
 
+                // Rollback en Hélices (TSN, DUR y CSN/CSO)
                 aeronaveDoc.helice1Tsn = Number(Math.max(0, parsearHs(aeronaveDoc.helice1Tsn) - horasARestar).toFixed(2));
+                aeronaveDoc.helice1Dur = Number(Math.max(0, parsearHs(aeronaveDoc.helice1Dur) - horasARestar).toFixed(2));
                 aeronaveDoc.helice1CsnCso = Number(Math.max(0, parsearHs(aeronaveDoc.helice1CsnCso) - ciclosARestar).toFixed(2));
 
                 if (aeronaveDoc.helice2Sn || aeronaveDoc.helice2Tsn !== undefined) {
                     aeronaveDoc.helice2Tsn = Number(Math.max(0, parsearHs(aeronaveDoc.helice2Tsn) - horasARestar).toFixed(2));
+                    aeronaveDoc.helice2Dur = Number(Math.max(0, parsearHs(aeronaveDoc.helice2Dur) - horasARestar).toFixed(2));
                     aeronaveDoc.helice2CsnCso = Number(Math.max(0, parsearHs(aeronaveDoc.helice2CsnCso) - ciclosARestar).toFixed(2));
                     aeronaveDoc.markModified('helice2Tsn');
+                    aeronaveDoc.markModified('helice2Dur');
                     aeronaveDoc.markModified('helice2CsnCso');
                 }
 
@@ -300,10 +315,11 @@ const eliminarF13 = async (req, res) => {
                 aeronaveDoc.markModified('motorTsn');
                 aeronaveDoc.markModified('motorCsnCso');
                 aeronaveDoc.markModified('helice1Tsn');
+                aeronaveDoc.markModified('helice1Dur');
                 aeronaveDoc.markModified('helice1CsnCso');
 
                 if (Array.isArray(aeronaveDoc.compPlaneador)) {
-                    aeronaveDoc.compPlaneador.forEach(comp => actualizarHorasComponente(comp, horasARestar, true));
+                    aeronaveDoc.compPlaneador.forEach(comp => actualizarHorasComponente(comp, horasARestar, ciclosARestar, true));
                     aeronaveDoc.markModified('compPlaneador');
                 }
 
@@ -311,7 +327,7 @@ const eliminarF13 = async (req, res) => {
                     if (Array.isArray(aeronaveDoc[grupo])) {
                         aeronaveDoc[grupo].forEach(item => {
                             if (Array.isArray(item.componentes)) {
-                                item.componentes.forEach(comp => actualizarHorasComponente(comp, horasARestar, true));
+                                item.componentes.forEach(comp => actualizarHorasComponente(comp, horasARestar, ciclosARestar, true));
                             }
                         });
                         aeronaveDoc.markModified(grupo);
@@ -348,7 +364,7 @@ const eliminarF13 = async (req, res) => {
 
         return res.status(200).json({
             ok: true,
-            msg: 'Formulario F-13 eliminado con éxito y horas/ciclos reajustados en la F-16.'
+            msg: 'Formulario F-13 eliminado con éxito y horas/ciclos/DUR reajustados en la F-16.'
         });
 
     } catch (error) {
