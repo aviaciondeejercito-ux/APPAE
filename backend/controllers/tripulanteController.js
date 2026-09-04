@@ -4,7 +4,7 @@ const Vuelo = require('../models/Vuelo');
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
- * ESTÁNDAR: SINCRO JOKER v3.6 (Alineado con Consolidación Dinámica X + Y)
+ * ESTÁNDAR: SINCRO JOKER v3.6 (Consolidación Dinámica X + Y Corregida)
  */
 
 // Función auxiliar para normalizar la unidad/elemento
@@ -328,19 +328,18 @@ exports.obtenerTripulantes = async (req, res) => {
                 });
             }
 
-            // Suma Dinámica Capacitaciones Especiales
+            // Suma Dinámica Capacitaciones Especiales (Base X + Vuelos Y)
             if (Array.isArray(t.capacitacionesEspeciales) && t.capacitacionesEspeciales.length > 0) {
                 t.capacitacionesEspeciales = t.capacitacionesEspeciales.map(cap => {
                     const tipoCap = (cap.tipo || '').trim().toUpperCase();
                     const key = `${tIdStr}_${tipoCap}`;
 
-                    const hsVoladasEnTipo = mapaHorasTácticas[key] !== undefined 
-                        ? mapaHorasTácticas[key] 
-                        : Number(cap.horasAcreditadas || 0);
+                    const hsBase = Number(cap.horasAcreditadas || 0);
+                    const hsVuelo = mapaHorasTácticas[key] || 0;
 
                     return {
                         ...cap,
-                        horasAcreditadas: Math.round(hsVoladasEnTipo * 10) / 10
+                        horasAcreditadas: Math.round((hsBase + hsVuelo) * 10) / 10
                     };
                 });
             }
