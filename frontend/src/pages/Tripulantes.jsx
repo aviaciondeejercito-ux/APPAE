@@ -43,10 +43,10 @@ const Tripulantes = () => {
 
         if (Array.isArray(seleccionado.habilitaciones)) {
             const sumaSdA = seleccionado.habilitaciones.reduce((acc, h) => ({
-                visual: acc.visual + Number(h.hsVisual || 0),
-                instrumental: acc.instrumental + Number(h.hsInstrumental || 0),
-                nocturno: acc.nocturno + Number(h.hsNocturno || 0),
-                nvg: acc.nvg + Number(h.hsNVG || 0)
+                visual: acc.visual + Number(h.hsVisual || h.vueloDiurno || 0),
+                instrumental: acc.instrumental + Number(h.hsInstrumental || h.vueloInstrumental || 0),
+                nocturno: acc.nocturno + Number(h.hsNocturno || h.vueloNocturno || 0),
+                nvg: acc.nvg + Number(h.hsNVG || h.vueloNVG || 0)
             }), { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 });
             console.log("Suma directa únicamente de SdA:", sumaSdA);
         }
@@ -54,10 +54,10 @@ const Tripulantes = () => {
         // 1. Suma dinámica proveniente de las habilitaciones procesadas
         if (Array.isArray(seleccionado.habilitaciones)) {
             seleccionado.habilitaciones.forEach(h => {
-                totales.visual += Number(h.hsVisual || 0);
-                totales.instrumental += Number(h.hsInstrumental || 0);
-                totales.nocturno += Number(h.hsNocturno || 0);
-                totales.nvg += Number(h.hsNVG || 0);
+                totales.visual += Number(h.hsVisual || h.vueloDiurno || 0);
+                totales.instrumental += Number(h.hsInstrumental || h.vueloInstrumental || 0);
+                totales.nocturno += Number(h.hsNocturno || h.vueloNocturno || 0);
+                totales.nvg += Number(h.hsNVG || h.vueloNVG || 0);
             });
         }
 
@@ -322,18 +322,21 @@ const Tripulantes = () => {
                                 <div style={{...styles.statCard, backgroundColor: '#eef6fc', borderColor: '#3498db'}}><span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span><span style={{...styles.statValue, color: '#2980b9'}}>{totalGeneralHoras.toFixed(1)} hs</span></div>
                             </div>
 
-                            {/* HABILITACIONES POR SISTEMA DE ARMAS (DINÁMICO) */}
+                            {/* HABILITACIONES POR SISTEMA DE ARMAS (DINÁMICO - CORREGIDO) */}
                             <div style={styles.sectionHeader}>
                                 <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>}
                             </div>
                             <div style={styles.habilitacionesList}>
                                 {seleccionado.habilitaciones?.map((h, i) => {
-                                    const v = Number(h.hsVisual || 0);
-                                    const inst = Number(h.hsInstrumental || 0);
-                                    const noc = Number(h.hsNocturno || 0);
-                                    const nvg = Number(h.hsNVG || 0);
-                                    const totalSdA = Number(h.totalHorasSistema || (v + inst + noc + nvg)).toFixed(1);
+                                    // Lectura segura con fallback entre nombres de propiedades posibles
+                                    const v = Number(h.hsVisual !== undefined ? h.hsVisual : (h.vueloDiurno || 0));
+                                    const inst = Number(h.hsInstrumental !== undefined ? h.hsInstrumental : (h.vueloInstrumental || 0));
+                                    const noc = Number(h.hsNocturno !== undefined ? h.hsNocturno : (h.vueloNocturno || 0));
+                                    const nvg = Number(h.hsNVG !== undefined ? h.hsNVG : (h.vueloNVG || 0));
+                                    
+                                    // Cálculo exacto en tiempo real del Total por SdA
+                                    const totalSdA = (v + inst + noc + nvg).toFixed(1);
                                     
                                     return (
                                         <div key={h._id || i} style={styles.habItem}>
@@ -343,17 +346,34 @@ const Tripulantes = () => {
                                                     <span style={styles.habRol}>{h.rolActual}</span>
                                                 </div>
                                                 <div style={styles.habTimeInfo}>
-                                                     <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
-                                                     <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {totalSdA} HS TOTAL</div>
+                                                     <div style={styles.habBadge}>
+                                                        <Calendar size={12} /> 
+                                                        {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años
+                                                     </div>
+                                                     <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}>
+                                                        <Clock size={12} /> {totalSdA} HS TOTAL
+                                                     </div>
                                                 </div>
                                             </div>
                                             <div style={styles.habDesgloseGrid}>
-                                                <div style={styles.desgloseItem} title="Visual"><Eye size={12} /> <span>{v.toFixed(1)}</span></div>
-                                                <div style={styles.desgloseItem} title="Instrumental"><Activity size={12} /> <span>{inst.toFixed(1)}</span></div>
-                                                <div style={styles.desgloseItem} title="Nocturno"><Moon size={12} /> <span>{noc.toFixed(1)}</span></div>
-                                                <div style={styles.desgloseItem} title="NVG"><ShieldCheck size={12} /> <span>{nvg.toFixed(1)}</span></div>
+                                                <div style={styles.desgloseItem} title="Visual (Diurno)">
+                                                    <Eye size={12} /> <span>{v.toFixed(1)}</span>
+                                                </div>
+                                                <div style={styles.desgloseItem} title="Instrumental">
+                                                    <Activity size={12} /> <span>{inst.toFixed(1)}</span>
+                                                </div>
+                                                <div style={styles.desgloseItem} title="Nocturno">
+                                                    <Moon size={12} /> <span>{noc.toFixed(1)}</span>
+                                                </div>
+                                                <div style={styles.desgloseItem} title="NVG">
+                                                    <ShieldCheck size={12} /> <span>{nvg.toFixed(1)}</span>
+                                                </div>
                                             </div>
-                                            {esGestorOperativo && <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>}
+                                            {esGestorOperativo && (
+                                                <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}>
+                                                    <Trash2 size={16}/>
+                                                </button>
+                                            )}
                                         </div>
                                     );
                                 })}
