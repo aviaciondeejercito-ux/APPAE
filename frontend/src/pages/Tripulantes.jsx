@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Navigation, Calculator, Bookmark } from 'lucide-react';
 import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
 
+const redondearHs = (num) => Math.round((Number(num) || 0) * 10) / 10;
+
 const Tripulantes = () => {
     const [busqueda, setBusqueda] = useState('');
     const [seleccionado, setSeleccionado] = useState(null);
@@ -31,22 +33,13 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- LECTURA DE HORAS CONSOLIDADAS (FUENTE DE VERDAD EN BD) ---
+    // --- LECTURA Y CONSOLIDACIÓN DE HORAS (ACUMULA TODOS LOS SDA Y BASE HISTÓRICA) ---
     const obtenerTotalesHistoricos = () => {
         if (!seleccionado) return { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
 
-        // Priorizamos los totales históricos ya procesados en la Base de Datos
-        if (seleccionado.totalesHistoricos) {
-            return {
-                visual: Math.round(Number(seleccionado.totalesHistoricos.vueloDiurno ?? seleccionado.totalesHistoricos.vueloVisual ?? 0) * 10) / 10,
-                instrumental: Math.round(Number(seleccionado.totalesHistoricos.vueloInstrumental ?? 0) * 10) / 10,
-                nocturno: Math.round(Number(seleccionado.totalesHistoricos.vueloNocturno ?? 0) * 10) / 10,
-                nvg: Math.round(Number(seleccionado.totalesHistoricos.vueloNVG ?? 0) * 10) / 10
-            };
-        }
+        let totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
 
-        // Fallback: Si no hay totales históricos, sumamos las habilitaciones
-        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
+        // 1. Sumar todas las habilitaciones/badges SdA registradas
         if (Array.isArray(seleccionado.habilitaciones) && seleccionado.habilitaciones.length > 0) {
             seleccionado.habilitaciones.forEach(h => {
                 totales.visual += Number(h.hsVisual ?? 0);
@@ -54,18 +47,26 @@ const Tripulantes = () => {
                 totales.nocturno += Number(h.hsNocturno ?? 0);
                 totales.nvg += Number(h.hsNVG ?? 0);
             });
-        } 
+        }
+
+        // 2. Si no hay habilitaciones, utilizar totalesHistoricos de la BD
+        if (seleccionado.habilitaciones?.length === 0 && seleccionado.totalesHistoricos) {
+            totales.visual = Number(seleccionado.totalesHistoricos.vueloDiurno ?? seleccionado.totalesHistoricos.vueloVisual ?? 0);
+            totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental ?? 0);
+            totales.nocturno = Number(seleccionado.totalesHistoricos.vueloNocturno ?? 0);
+            totales.nvg = Number(seleccionado.totalesHistoricos.vueloNVG ?? 0);
+        }
 
         return {
-            visual: Math.round(totales.visual * 10) / 10,
-            instrumental: Math.round(totales.instrumental * 10) / 10,
-            nocturno: Math.round(totales.nocturno * 10) / 10,
-            nvg: Math.round(totales.nvg * 10) / 10
+            visual: redondearHs(totales.visual),
+            instrumental: redondearHs(totales.instrumental),
+            nocturno: redondearHs(totales.nocturno),
+            nvg: redondearHs(totales.nvg)
         };
     };
 
     const horasTotales = obtenerTotalesHistoricos();
-    const totalGeneralHoras = Math.round((horasTotales.visual + horasTotales.instrumental + horasTotales.nocturno + horasTotales.nvg) * 10) / 10;
+    const totalGeneralHoras = redondearHs(horasTotales.visual + horasTotales.instrumental + horasTotales.nocturno + horasTotales.nvg);
 
     const fetchPersonal = async () => {
         try {
@@ -293,9 +294,9 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* TOTALES CONSOLIDADOS (DESDE DB) */}
+                            {/* TOTALES CONSOLIDADOS */}
                             <div style={styles.sectionHeader}>
-                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES HISTÓRICOS)</span>
+                                <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES HISTÓRICOS CONSOLIDADOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
                             </div>
                             <div style={styles.gridStats}>
@@ -317,7 +318,7 @@ const Tripulantes = () => {
                                     const inst = Number(h.hsInstrumental ?? 0);
                                     const noc = Number(h.hsNocturno ?? 0);
                                     const nvg = Number(h.hsNVG ?? 0);
-                                    const totalSdA = (v + inst + noc + nvg).toFixed(1);
+                                    const totalSdA = redondearHs(v + inst + noc + nvg).toFixed(1);
                                     
                                     return (
                                         <div key={h._id || i} style={styles.habItem}>
