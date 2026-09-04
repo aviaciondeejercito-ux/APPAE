@@ -27,7 +27,10 @@ const Tripulantes = () => {
     const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
     const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
     const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002", "T-41"];
-    const rolesVuelo = ['Cursante','Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
+    
+    // Todos los roles extraídos de la interfaz
+    const rolesVuelo = ['Cursante', 'Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
+    
     const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
     const aptitudesAdicionalesOp = ["Curso Radiooperador Restringido", "Capacitacion de Seguridad Operacional", "Capacitacion de Cargas Peligrosas"];
 
@@ -45,7 +48,7 @@ const Tripulantes = () => {
         }
     };
 
-    // --- CÁLCULO DINÁMICO DE HORAS FILTRADAS POR ROL Y SdA ---
+    // --- CÁLCULO DE HORAS POR ROL Y SdA (LIBRETA SUPERIOR) ---
     const calcularDesgloseVuelos = (tripulanteId, aeronave, rol) => {
         if (!vuelos || vuelos.length === 0 || !tripulanteId) {
             return { v: 0, inst: 0, noc: 0, nvg: 0 };
@@ -60,13 +63,16 @@ const Tripulantes = () => {
         vuelos.forEach(vuelo => {
             if ((vuelo.aeronave || '').trim().toUpperCase() !== sdaNorm) return;
 
-            // Verificar coincidencia entre el ID y la función desempeñada en el vuelo
             let coincide = false;
-            if (rolNorm === 'PILOTO' && (vuelo.piloto?._id || vuelo.piloto) === idStr) coincide = true;
-            if (rolNorm === 'COPILOTO' && (vuelo.copiloto?._id || vuelo.copiloto) === idStr) coincide = true;
-            if (rolNorm === 'INSTRUCTOR' && (vuelo.instructor?._id || vuelo.instructor) === idStr) coincide = true;
-            if (rolNorm === 'MECÁNICO' && ((vuelo.mecanico?._id || vuelo.mecanico) === idStr || (vuelo.segundoMecanico?._id || vuelo.segundoMecanico) === idStr)) coincide = true;
-            if (rolNorm === 'MECANICO' && ((vuelo.mecanico?._id || vuelo.mecanico) === idStr || (vuelo.segundoMecanico?._id || vuelo.segundoMecanico) === idStr)) coincide = true;
+            const checkId = (f) => (f?._id || f) === idStr;
+
+            if (rolNorm === 'PILOTO' && checkId(vuelo.piloto)) coincide = true;
+            if (rolNorm === 'COPILOTO' && checkId(vuelo.copiloto)) coincide = true;
+            if (rolNorm === 'INSTRUCTOR' && checkId(vuelo.instructor)) coincide = true;
+            if (rolNorm === 'CURSANTE' && checkId(vuelo.cursante)) coincide = true;
+            if (rolNorm === 'NORMALIZADOR' && checkId(vuelo.normalizador)) coincide = true;
+            if (rolNorm === 'INSPECTOR' && checkId(vuelo.inspector)) coincide = true;
+            if ((rolNorm === 'MECÁNICO' || rolNorm === 'MECANICO') && (checkId(vuelo.mecanico) || checkId(vuelo.segundoMecanico))) coincide = true;
 
             if (coincide) {
                 const hs = Number(vuelo.horasVoladas || 0);
@@ -85,7 +91,34 @@ const Tripulantes = () => {
         return { v, inst, noc, nvg };
     };
 
-    // --- LECTURA Y CONSOLIDACIÓN DE HORAS ---
+    // --- CÁLCULO INDEPENDIENTE EXCLUSIVO PARA CAPACITACIONES TÁCTICAS ---
+    const calcularHorasCapacitacionTactica = (tripulanteId, tipoCapacitacion) => {
+        if (!vuelos || vuelos.length === 0 || !tripulanteId || !tipoCapacitacion) return 0;
+
+        const idStr = tripulanteId.toString();
+        const tipoNorm = tipoCapacitacion.trim().toUpperCase();
+        let totalHsBD = 0;
+
+        vuelos.forEach(vuelo => {
+            const misionVuelo = (vuelo.tipoMision || vuelo.capacitacionTactica || vuelo.mision || '').trim().toUpperCase();
+            
+            if (misionVuelo.includes(tipoNorm) || tipoNorm.includes(misionVuelo)) {
+                const participo = [
+                    vuelo.piloto, vuelo.copiloto, vuelo.instructor, 
+                    vuelo.mecanico, vuelo.segundoMecanico, vuelo.cursante, 
+                    vuelo.normalizador, vuelo.inspector
+                ].some(f => (f?._id || f) === idStr);
+
+                if (participo) {
+                    totalHsBD += Number(vuelo.horasVoladas || 0);
+                }
+            }
+        });
+
+        return totalHsBD;
+    };
+
+    // --- LECTURA Y CONSOLIDACIÓN DE HORAS (SECCIÓN SUPERIOR INDEPENDIENTE) ---
     const obtenerTotalesHistoricos = () => {
         if (!seleccionado) return { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
 
@@ -346,7 +379,7 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* TOTALES CONSOLIDADOS */}
+                            {/* TOTALES CONSOLIDADOS - SIN CAMBIOS, INDEPENDIENTES */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES HISTÓRICOS CONSOLIDADOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
@@ -359,7 +392,7 @@ const Tripulantes = () => {
                                 <div style={{...styles.statCard, backgroundColor: '#eef6fc', borderColor: '#3498db'}}><span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span><span style={{...styles.statValue, color: '#2980b9'}}>{totalGeneralHoras.toFixed(1)} hs</span></div>
                             </div>
 
-                            {/* HABILITACIONES POR SISTEMA DE ARMAS */}
+                            {/* HABILITACIONES POR SISTEMA DE ARMAS - SIN CAMBIOS, INDEPENDIENTES */}
                             <div style={styles.sectionHeader}>
                                 <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>}
@@ -415,23 +448,29 @@ const Tripulantes = () => {
                                 })}
                             </div>
 
+                            {/* APTITUDES TÁCTICAS ESPECIALES - CÁLCULO TOTALMENTE INDEPENDIENTE */}
                             <div style={styles.sectionHeader}>
                                 <Star size={18} /> <span>APTITUDES TÁCTICAS ESPECIALES</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>}
                             </div>
                             <div style={styles.tacticasContainer}>
-                                {seleccionado.capacitacionesEspeciales?.map((c, i) => (
-                                    <div key={c._id || i} style={styles.tacticaBadge}>
-                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', width: '100%'}}>
-                                            <div style={{fontWeight: 'bold', fontSize: '0.75rem'}}>{c.tipo}</div>
-                                            {esGestorOperativo && <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
+                                {seleccionado.capacitacionesEspeciales?.map((c, i) => {
+                                    const hsBD = calcularHorasCapacitacionTactica(seleccionado._id, c.tipo);
+                                    const totalCapacitacionHs = redondearHs(Number(c.horasAcreditadas || 0) + hsBD);
+
+                                    return (
+                                        <div key={c._id || i} style={styles.tacticaBadge}>
+                                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', width: '100%'}}>
+                                                <div style={{fontWeight: 'bold', fontSize: '0.75rem'}}>{c.tipo}</div>
+                                                {esGestorOperativo && <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
+                                            </div>
+                                            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
+                                                <span>{totalCapacitacionHs.toFixed(1)} hs</span>
+                                                <span>{c.fechaAdquisicion ? new Date(c.fechaAdquisicion).toLocaleDateString() : ''}</span>
+                                            </div>
                                         </div>
-                                        <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
-                                            <span>{Number(c.horasAcreditadas || 0).toFixed(1)} hs</span>
-                                            <span>{c.fechaAdquisicion ? new Date(c.fechaAdquisicion).toLocaleDateString() : ''}</span>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             <div style={styles.sectionHeader}>
