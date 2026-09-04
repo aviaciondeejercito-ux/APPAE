@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, FileText, ChevronRight, UserPlus, AlertCircle, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Navigation, Calculator, Bookmark } from 'lucide-react';
+import { Search, User, ChevronRight, UserPlus, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Bookmark } from 'lucide-react';
 import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
 
 const redondearHs = (num) => Math.round((Number(num) || 0) * 10) / 10;
@@ -8,6 +8,7 @@ const Tripulantes = () => {
     const [busqueda, setBusqueda] = useState('');
     const [seleccionado, setSeleccionado] = useState(null);
     const [personal, setPersonal] = useState([]);
+    const [vuelos, setVuelos] = useState([]);
     const [loading, setLoading] = useState(true);
     
     const [showAltaModal, setShowAltaModal] = useState(false);
@@ -20,7 +21,6 @@ const Tripulantes = () => {
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_-]/g, '');
     const userUnidad = localStorage.getItem('elemento')?.trim().toUpperCase() || localStorage.getItem('unidad')?.trim().toUpperCase() || '';
 
-    const esAdmin = roleNormalizado === 'ADMIN';
     const esGestorOperativo = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
     const puedeEliminarPersonal = ['ADMIN', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
 
@@ -31,25 +31,76 @@ const Tripulantes = () => {
     const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
     const aptitudesAdicionalesOp = ["Curso Radiooperador Restringido", "Capacitacion de Seguridad Operacional", "Capacitacion de Cargas Peligrosas"];
 
-    useEffect(() => { fetchPersonal(); }, []);
+    useEffect(() => { 
+        fetchPersonal(); 
+        fetchVuelos();
+    }, []);
 
-    // --- LECTURA Y CONSOLIDACIÓN DE HORAS (ACUMULA TODOS LOS SDA Y BASE HISTÓRICA) ---
+    const fetchVuelos = async () => {
+        try {
+            const res = await API.get('/vuelos');
+            setVuelos(res.data || []);
+        } catch (error) {
+            console.error("❌ Error al cargar historial de vuelos:", error);
+        }
+    };
+
+    // --- CÁLCULO DINÁMICO DE HORAS FILTRADAS POR ROL Y SdA ---
+    const calcularDesgloseVuelos = (tripulanteId, aeronave, rol) => {
+        if (!vuelos || vuelos.length === 0 || !tripulanteId) {
+            return { v: 0, inst: 0, noc: 0, nvg: 0 };
+        }
+
+        const idStr = tripulanteId.toString();
+        const sdaNorm = (aeronave || '').trim().toUpperCase();
+        const rolNorm = (rol || '').trim().toUpperCase();
+
+        let v = 0, inst = 0, noc = 0, nvg = 0;
+
+        vuelos.forEach(vuelo => {
+            if ((vuelo.aeronave || '').trim().toUpperCase() !== sdaNorm) return;
+
+            // Verificar coincidencia entre el ID y la función desempeñada en el vuelo
+            let coincide = false;
+            if (rolNorm === 'PILOTO' && (vuelo.piloto?._id || vuelo.piloto) === idStr) coincide = true;
+            if (rolNorm === 'COPILOTO' && (vuelo.copiloto?._id || vuelo.copiloto) === idStr) coincide = true;
+            if (rolNorm === 'INSTRUCTOR' && (vuelo.instructor?._id || vuelo.instructor) === idStr) coincide = true;
+            if (rolNorm === 'MECÁNICO' && ((vuelo.mecanico?._id || vuelo.mecanico) === idStr || (vuelo.segundoMecanico?._id || vuelo.segundoMecanico) === idStr)) coincide = true;
+            if (rolNorm === 'MECANICO' && ((vuelo.mecanico?._id || vuelo.mecanico) === idStr || (vuelo.segundoMecanico?._id || vuelo.segundoMecanico) === idStr)) coincide = true;
+
+            if (coincide) {
+                const hs = Number(vuelo.horasVoladas || 0);
+                const esNocturno = vuelo.condicion === 'Nocturno';
+                const esInstrumental = vuelo.reglasVuelo === 'IFR';
+                const esNVG = vuelo.usoNVG === true;
+                const esVisual = !esNocturno && !esInstrumental && !esNVG;
+
+                if (esVisual) v += hs;
+                if (esInstrumental) inst += hs;
+                if (esNocturno && !esNVG) noc += hs;
+                if (esNVG) nvg += hs;
+            }
+        });
+
+        return { v, inst, noc, nvg };
+    };
+
+    // --- LECTURA Y CONSOLIDACIÓN DE HORAS ---
     const obtenerTotalesHistoricos = () => {
         if (!seleccionado) return { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
 
         let totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
 
-        // 1. Sumar todas las habilitaciones/badges SdA registradas
         if (Array.isArray(seleccionado.habilitaciones) && seleccionado.habilitaciones.length > 0) {
             seleccionado.habilitaciones.forEach(h => {
-                totales.visual += Number(h.hsVisual ?? 0);
-                totales.instrumental += Number(h.hsInstrumental ?? 0);
-                totales.nocturno += Number(h.hsNocturno ?? 0);
-                totales.nvg += Number(h.hsNVG ?? 0);
+                const hsEfectivas = calcularDesgloseVuelos(seleccionado._id, h.aeronave, h.rolActual);
+                totales.visual += Number(h.hsVisual ?? 0) + hsEfectivas.v;
+                totales.instrumental += Number(h.hsInstrumental ?? 0) + hsEfectivas.inst;
+                totales.nocturno += Number(h.hsNocturno ?? 0) + hsEfectivas.noc;
+                totales.nvg += Number(h.hsNVG ?? 0) + hsEfectivas.nvg;
             });
         }
 
-        // 2. Si no hay habilitaciones, utilizar totalesHistoricos de la BD
         if (seleccionado.habilitaciones?.length === 0 && seleccionado.totalesHistoricos) {
             totales.visual = Number(seleccionado.totalesHistoricos.vueloDiurno ?? seleccionado.totalesHistoricos.vueloVisual ?? 0);
             totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental ?? 0);
@@ -185,6 +236,7 @@ const Tripulantes = () => {
             setShowAltaModal(false);
             setShowEditModal(false);
             await fetchPersonal();
+            await fetchVuelos();
         } catch (error) { 
             console.error(error);
             alert("Error en la operación del legajo. Verifique jurisdicción de unidad."); 
@@ -314,10 +366,12 @@ const Tripulantes = () => {
                             </div>
                             <div style={styles.habilitacionesList}>
                                 {seleccionado.habilitaciones?.map((h, i) => {
-                                    const v = Number(h.hsVisual ?? 0);
-                                    const inst = Number(h.hsInstrumental ?? 0);
-                                    const noc = Number(h.hsNocturno ?? 0);
-                                    const nvg = Number(h.hsNVG ?? 0);
+                                    const hsEfectivas = calcularDesgloseVuelos(seleccionado._id, h.aeronave, h.rolActual);
+
+                                    const v = Number(h.hsVisual ?? 0) + hsEfectivas.v;
+                                    const inst = Number(h.hsInstrumental ?? 0) + hsEfectivas.inst;
+                                    const noc = Number(h.hsNocturno ?? 0) + hsEfectivas.noc;
+                                    const nvg = Number(h.hsNVG ?? 0) + hsEfectivas.nvg;
                                     const totalSdA = redondearHs(v + inst + noc + nvg).toFixed(1);
                                     
                                     return (
