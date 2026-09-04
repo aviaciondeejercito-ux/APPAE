@@ -100,9 +100,29 @@ const Tripulantes = () => {
         let totalHsBD = 0;
 
         vuelos.forEach(vuelo => {
-            const misionVuelo = (vuelo.tipoMision || vuelo.capacitacionTactica || vuelo.mision || '').trim().toUpperCase();
-            
-            if (misionVuelo.includes(tipoNorm) || tipoNorm.includes(misionVuelo)) {
+            // Construir un arreglo con todas las aptitudes/misiones asociadas al vuelo
+            let aptitudesVuelo = [];
+
+            if (Array.isArray(vuelo.aptitudesTacticas)) {
+                aptitudesVuelo = vuelo.aptitudesTacticas.map(a => String(a).trim().toUpperCase());
+            } else if (Array.isArray(vuelo.mision)) {
+                aptitudesVuelo = vuelo.mision.map(a => String(a).trim().toUpperCase());
+            } else {
+                const rawMision = String(vuelo.tipoMision || vuelo.capacitacionTactica || vuelo.mision || '').trim().toUpperCase();
+                if (rawMision) {
+                    aptitudesVuelo = rawMision.split(',').map(a => a.trim());
+                }
+            }
+
+            // Reglas implícitas según condiciones operativas del vuelo
+            if (vuelo.reglasVuelo === 'IFR') aptitudesVuelo.push('IFR');
+            if (vuelo.usoNVG === true) aptitudesVuelo.push('NVG');
+            if (vuelo.condicion === 'Nocturno' && !vuelo.usoNVG) aptitudesVuelo.push('VISUAL NOCTURNO');
+
+            // Verificar coincidencia sin exclusión mutua
+            const coincide = aptitudesVuelo.some(apt => apt === tipoNorm || apt.includes(tipoNorm) || tipoNorm.includes(apt));
+
+            if (coincide) {
                 const participo = [
                     vuelo.piloto, vuelo.copiloto, vuelo.instructor, 
                     vuelo.mecanico, vuelo.segundoMecanico, vuelo.cursante, 
