@@ -31,12 +31,12 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS (SUMA REFLEJO) ---
+    // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS ---
     const obtenerTotalesDinamicos = () => {
         const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
         if (!seleccionado) return totales;
 
-        // 1. Suma dinámica proveniente de los badges/habilitaciones cargadas
+        // 1. Suma dinámica proveniente de las habilitaciones procesadas (Base X + Vuelos Y)
         if (Array.isArray(seleccionado.habilitaciones)) {
             seleccionado.habilitaciones.forEach(h => {
                 totales.visual += Number(h.hsVisual || 0);
@@ -46,7 +46,7 @@ const Tripulantes = () => {
             });
         }
 
-        // 2. Suma de horas base provenientes de la base de datos (totalesHistoricos)
+        // 2. Suma de horas base o históricas si existen
         if (seleccionado.totalesHistoricos) {
             totales.visual += Number(seleccionado.totalesHistoricos.vueloDiurno || 0);
             totales.instrumental += Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
@@ -292,7 +292,7 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* 🔴 CUADRADOS SUPERIORES DE TOTALES (REFLEJO DINÁMICO) */}
+                            {/* TOTALES CONSOLIDADOS DINÁMICOS */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES CONSOLIDADOS DINÁMICOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
@@ -305,15 +305,18 @@ const Tripulantes = () => {
                                 <div style={{...styles.statCard, backgroundColor: '#eef6fc', borderColor: '#3498db'}}><span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span><span style={{...styles.statValue, color: '#2980b9'}}>{totalGeneralHoras.toFixed(1)} hs</span></div>
                             </div>
 
-                            {/* 🟢 HABILITACIONES POR SISTEMA DE ARMAS (BADGES DE ABAJO) */}
+                            {/* HABILITACIONES POR SISTEMA DE ARMAS (DINÁMICO) */}
                             <div style={styles.sectionHeader}>
                                 <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>}
                             </div>
                             <div style={styles.habilitacionesList}>
                                 {seleccionado.habilitaciones?.map((h, i) => {
-                                    // Cálculo individual por badge
-                                    const totalIndividualSdA = (Number(h.hsVisual || 0) + Number(h.hsInstrumental || 0) + Number(h.hsNocturno || 0) + Number(h.hsNVG || 0)).toFixed(1);
+                                    const v = Number(h.hsVisual || 0);
+                                    const inst = Number(h.hsInstrumental || 0);
+                                    const noc = Number(h.hsNocturno || 0);
+                                    const nvg = Number(h.hsNVG || 0);
+                                    const totalSdA = Number(h.totalHorasSistema || (v + inst + noc + nvg)).toFixed(1);
                                     
                                     return (
                                         <div key={h._id || i} style={styles.habItem}>
@@ -324,14 +327,14 @@ const Tripulantes = () => {
                                                 </div>
                                                 <div style={styles.habTimeInfo}>
                                                      <div style={styles.habBadge}><Calendar size={12} /> {h.fechaHabilitacion ? Math.floor((new Date() - new Date(h.fechaHabilitacion)) / (1000 * 60 * 60 * 24 * 365.25)) : 0} años</div>
-                                                     <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {totalIndividualSdA} HS TOTAL</div>
+                                                     <div style={{...styles.habBadge, backgroundColor: '#1b3a57', color: 'white'}}><Clock size={12} /> {totalSdA} HS TOTAL</div>
                                                 </div>
                                             </div>
                                             <div style={styles.habDesgloseGrid}>
-                                                <div style={styles.desgloseItem}><Eye size={12} /> <span>{Number(h.hsVisual || 0).toFixed(1)}</span></div>
-                                                <div style={styles.desgloseItem}><Activity size={12} /> <span>{Number(h.hsInstrumental || 0).toFixed(1)}</span></div>
-                                                <div style={styles.desgloseItem}><Moon size={12} /> <span>{Number(h.hsNocturno || 0).toFixed(1)}</span></div>
-                                                <div style={styles.desgloseItem}><ShieldCheck size={12} /> <span>{Number(h.hsNVG || 0).toFixed(1)}</span></div>
+                                                <div style={styles.desgloseItem} title="Visual"><Eye size={12} /> <span>{v.toFixed(1)}</span></div>
+                                                <div style={styles.desgloseItem} title="Instrumental"><Activity size={12} /> <span>{inst.toFixed(1)}</span></div>
+                                                <div style={styles.desgloseItem} title="Nocturno"><Moon size={12} /> <span>{noc.toFixed(1)}</span></div>
+                                                <div style={styles.desgloseItem} title="NVG"><ShieldCheck size={12} /> <span>{nvg.toFixed(1)}</span></div>
                                             </div>
                                             {esGestorOperativo && <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}><Trash2 size={16}/></button>}
                                         </div>
@@ -451,13 +454,13 @@ const Tripulantes = () => {
                                         <select style={styles.formInput} value={formData.rolActual || ''} onChange={e => setFormData({...formData, rolActual: e.target.value})} required>
                                             <option value="">Rol...</option>{rolesVuelo.map(r => <option key={r} value={r}>{r}</option>)}
                                         </select>
-                                        <label style={styles.label}>Hs Visual SdA</label>
+                                        <label style={styles.label}>Hs Visual Base (X)</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.hsVisual || 0} onChange={e => setFormData({...formData, hsVisual: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Hs Nocturno SdA</label>
+                                        <label style={styles.label}>Hs Nocturno Base (X)</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.hsNocturno || 0} onChange={e => setFormData({...formData, hsNocturno: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Hs Instrumental SdA</label>
+                                        <label style={styles.label}>Hs Instrumental Base (X)</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.hsInstrumental || 0} onChange={e => setFormData({...formData, hsInstrumental: Number(e.target.value)})} required />
-                                        <label style={styles.label}>Hs NVG SdA</label>
+                                        <label style={styles.label}>Hs NVG Base (X)</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.hsNVG || 0} onChange={e => setFormData({...formData, hsNVG: Number(e.target.value)})} required />
                                         <label style={styles.label}>Fecha Aptitud Inicial</label>
                                         <input type="date" style={styles.formInput} value={formData.fechaHabilitacion || ''} onChange={e => setFormData({...formData, fechaHabilitacion: e.target.value})} required />
@@ -472,7 +475,7 @@ const Tripulantes = () => {
                                         <select style={styles.formInput} value={formData.tipo || ''} onChange={e => setFormData({...formData, tipo: e.target.value})} required>
                                             <option value="">Seleccionar...</option>{capacitacionesTacticas.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
-                                        <label style={styles.label}>Horas Acreditadas</label>
+                                        <label style={styles.label}>Horas Acreditadas Iniciales</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.horasAcreditadas || 0} onChange={e => setFormData({...formData, horasAcreditadas: Number(e.target.value)})} required />
                                         <label style={styles.label}>Fecha Adquisición</label>
                                         <input type="date" style={styles.formInput} value={formData.fechaAdquisicion || ''} onChange={e => setFormData({...formData, fechaAdquisicion: e.target.value})} required />

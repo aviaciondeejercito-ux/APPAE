@@ -4,17 +4,17 @@ const Vuelo = require('../models/Vuelo');
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
- * ESTÁNDAR: SINCRO JOKER v3.6 (Alineado con Consolidación por Máximos y Borrado Seguro)
+ * ESTÁNDAR: SINCRO JOKER v3.6 (Alineado con Consolidación Dinámica X + Y)
  */
 
-// Función auxiliar para normalizar la unidad/elemento sin romper el código
+// Función auxiliar para normalizar la unidad/elemento
 const obtenerUnidadLimpia = (userOrBody) => {
     if (!userOrBody) return "";
     const u = userOrBody.elemento || userOrBody.unidad || "";
     return String(u).trim().toUpperCase();
 };
 
-// 1. Crear Tripulante[cite: 17]
+// 1. Crear Tripulante
 exports.crearTripulante = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -38,7 +38,7 @@ exports.crearTripulante = async (req, res) => {
             nombre: req.body.nombre ? req.body.nombre.toUpperCase().trim() : "",
             elemento: unidadDestino,
             unidad: unidadDestino,
-            activo: true, // Forzamos la bandera explícita de activación para el borrado lógico v3.6[cite: 17]
+            activo: true,
             ultimoEditor: usuarioLogueado._id,
             fechaUltimaModificacion: Date.now()
         };
@@ -62,7 +62,7 @@ exports.crearTripulante = async (req, res) => {
     }
 };
 
-// 2. Gestionar Habilitación SdA (Algoritmo de Consolación por Máximos preservado)[cite: 17]
+// 2. Gestionar Habilitación SdA (Asignación manual de base X)
 exports.gestionarHabilitacion = async (req, res) => {
     try {
         const { id } = req.params;
@@ -115,30 +115,6 @@ exports.gestionarHabilitacion = async (req, res) => {
             });
         }
 
-        // --- RECALCULO GENERAL DINÁMICO v3.6 ---[cite: 17]
-        const mapaSdA = {};
-        tripulante.habilitaciones.forEach(hab => {
-            const sda = hab.aeronave;
-            if (!mapaSdA[sda]) mapaSdA[sda] = { v: 0, i: 0, n: 0, nvg: 0 };
-            mapaSdA[sda].v = Math.max(mapaSdA[sda].v, Number(hab.hsVisual || 0));
-            mapaSdA[sda].i = Math.max(mapaSdA[sda].i, Number(hab.hsInstrumental || 0));
-            mapaSdA[sda].n = Math.max(mapaSdA[sda].n, Number(hab.hsNocturno || 0));
-            mapaSdA[sda].nvg = Math.max(mapaSdA[sda].nvg, Number(hab.hsNVG || 0));
-        });
-
-        const realesTotales = { v: 0, i: 0, n: 0, nvg: 0 };
-        Object.values(mapaSdA).forEach(sistema => {
-            realesTotales.v += sistema.v;
-            realesTotales.i += sistema.i;
-            realesTotales.n += sistema.n;
-            realesTotales.nvg += sistema.nvg;
-        });
-
-        tripulante.totalesHistoricos.vueloDiurno = realesTotales.v;
-        tripulante.totalesHistoricos.vueloInstrumental = realesTotales.i;
-        tripulante.totalesHistoricos.vueloNocturno = realesTotales.n;
-        tripulante.totalesHistoricos.vueloVisual = realesTotales.nvg;
-
         tripulante.ultimoEditor = usuarioLogueado._id;
         tripulante.fechaUltimaModificacion = Date.now();
         await tripulante.save();
@@ -150,16 +126,16 @@ exports.gestionarHabilitacion = async (req, res) => {
             accion: 'MODIFICACION',
             entidadAfectada: `Habilitación SdA: ${aeronave} (${rolActual}) - ${tripulante.apellido}`,
             entidadId: tripulante._id,
-            detalles: `Actualización manual de capacidades bajo estándar consolidado v3.6`
+            detalles: `Actualización manual de base inicial X`
         });
 
-        res.status(200).json({ mensaje: "Habilitación y totales actualizados con éxito", tripulante });
+        res.status(200).json({ mensaje: "Habilitación registrada con éxito", tripulante });
     } catch (error) {
         res.status(400).json({ mensaje: "Error al gestionar habilitación", error: error.message });
     }
 };
 
-// 3. Agregar Capacitación Especial[cite: 17]
+// 3. Agregar Capacitación Especial
 exports.agregarCapacitacion = async (req, res) => {
     try {
         const { id } = req.params;
@@ -242,7 +218,7 @@ exports.agregarAptitudAdicional = async (req, res) => {
     }
 };
 
-// 5. Obtener Tripulantes[cite: 17]
+// 5. Obtener Tripulantes (Cálculo Dinámico X + Y por SdA y Capacitaciones)
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -269,37 +245,91 @@ exports.obtenerTripulantes = async (req, res) => {
 
         const idsTripulantes = tripulantes.map(t => t._id);
 
+        // Traer los vuelos en los que interviene el personal
         const vuelos = await Vuelo.find({
             $or: [
                 { piloto: { $in: idsTripulantes } },
                 { copiloto: { $in: idsTripulantes } },
-                { instructor: { $in: idsTripulantes } }
+                { instructor: { $in: idsTripulantes } },
+                { mecanico: { $in: idsTripulantes } },
+                { segundoMecanico: { $in: idsTripulantes } }
             ]
         }).lean();
 
-        const mapaHorasTácticas = {};
+        // Mapeos dinámicos
+        const mapaHorasSdA = {};     // Key: "tripulanteId_aeronave_rol"
+        const mapaHorasTácticas = {}; // Key: "tripulanteId_tipoMision"
 
         vuelos.forEach(v => {
             const hsVuelo = Number(v.horasVoladas || 0);
+            const aeronave = (v.aeronave || '').trim().toUpperCase();
             const tipoMision = (v.tipoMision || v.tarea || v.naturaleza || v.tipo || '').trim().toUpperCase();
 
-            if (!tipoMision) return;
+            const esNocturno = v.condicion === 'Nocturno';
+            const esIFR = v.reglasVuelo === 'IFR';
+            const esNVG = v.usoNVG === true;
+            const esVisual = !esNocturno && !esIFR && !esNVG;
 
-            const acumularTáctica = (pilotoId) => {
-                if (!pilotoId) return;
-                const keyTactica = `${pilotoId.toString()}_${tipoMision}`;
-                mapaHorasTácticas[keyTactica] = (mapaHorasTácticas[keyTactica] || 0) + hsVuelo;
+            const procesarParticipante = (id, rol) => {
+                if (!id) return;
+                const idStr = id.toString();
+
+                // 1. Acumulador SdA (Y)
+                const keySdA = `${idStr}_${aeronave}_${rol}`;
+                if (!mapaHorasSdA[keySdA]) {
+                    mapaHorasSdA[keySdA] = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
+                }
+                if (esVisual) mapaHorasSdA[keySdA].visual += hsVuelo;
+                if (esIFR) mapaHorasSdA[keySdA].instrumental += hsVuelo;
+                if (esNocturno && !esNVG) mapaHorasSdA[keySdA].nocturno += hsVuelo;
+                if (esNVG) mapaHorasSdA[keySdA].nvg += hsVuelo;
+
+                // 2. Acumulador Táctico/Capacitaciones
+                if (tipoMision) {
+                    const keyTactica = `${idStr}_${tipoMision}`;
+                    mapaHorasTácticas[keyTactica] = (mapaHorasTácticas[keyTactica] || 0) + hsVuelo;
+                }
             };
 
-            acumularTáctica(v.piloto);
-            acumularTáctica(v.copiloto);
-            acumularTáctica(v.instructor);
+            procesarParticipante(v.piloto, 'Piloto');
+            procesarParticipante(v.copiloto, 'Copiloto');
+            procesarParticipante(v.instructor, 'Instructor');
+            procesarParticipante(v.mecanico, 'Mecánico');
+            procesarParticipante(v.segundoMecanico, 'Mecánico');
         });
 
-        const tripulantesConHoras = tripulantes.map(t => {
+        // Ensamblado Final Dinámico
+        const tripulantesProcesados = tripulantes.map(t => {
             const tIdStr = t._id.toString();
 
-            if (t.capacitacionesEspeciales && t.capacitacionesEspeciales.length > 0) {
+            // Suma Dinámica SdA: Base X + Vuelos Y
+            if (Array.isArray(t.habilitaciones)) {
+                t.habilitaciones = t.habilitaciones.map(hab => {
+                    const aeronave = (hab.aeronave || '').trim().toUpperCase();
+                    const rol = (hab.rolActual || '').trim();
+                    const key = `${tIdStr}_${aeronave}_${rol}`;
+
+                    const hsExtra = mapaHorasSdA[key] || { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
+
+                    const vis = Number(hab.hsVisual || 0) + hsExtra.visual;
+                    const inst = Number(hab.hsInstrumental || 0) + hsExtra.instrumental;
+                    const noc = Number(hab.hsNocturno || 0) + hsExtra.nocturno;
+                    const nvg = Number(hab.hsNVG || 0) + hsExtra.nvg;
+                    const totalSdA = vis + inst + noc + nvg;
+
+                    return {
+                        ...hab,
+                        hsVisual: Math.round(vis * 10) / 10,
+                        hsInstrumental: Math.round(inst * 10) / 10,
+                        hsNocturno: Math.round(noc * 10) / 10,
+                        hsNVG: Math.round(nvg * 10) / 10,
+                        totalHorasSistema: Math.round(totalSdA * 10) / 10
+                    };
+                });
+            }
+
+            // Suma Dinámica Capacitaciones Especiales
+            if (Array.isArray(t.capacitacionesEspeciales) && t.capacitacionesEspeciales.length > 0) {
                 t.capacitacionesEspeciales = t.capacitacionesEspeciales.map(cap => {
                     const tipoCap = (cap.tipo || '').trim().toUpperCase();
                     const key = `${tIdStr}_${tipoCap}`;
@@ -318,14 +348,14 @@ exports.obtenerTripulantes = async (req, res) => {
             return t;
         });
 
-        res.status(200).json(tripulantesConHoras);
+        res.status(200).json(tripulantesProcesados);
     } catch (error) {
         console.error("❌ ERROR 500 EN OBTENER_TRIPULANTES:", error);
         res.status(500).json({ mensaje: "Error al obtener tripulantes", detalle: error.message });
     }
 };
 
-// 6. Actualizar Tripulante (General)[cite: 17]
+// 6. Actualizar Tripulante
 exports.actualizarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
@@ -379,7 +409,7 @@ exports.actualizarTripulante = async (req, res) => {
     }
 };
 
-// 7. Eliminar Tripulante[cite: 17]
+// 7. Eliminar Tripulante (Baja lógica)
 exports.eliminarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
@@ -427,7 +457,7 @@ exports.eliminarTripulante = async (req, res) => {
     }
 };
 
-// 8. Buscar Tripulante[cite: 17]
+// 8. Buscar Tripulante
 exports.buscarTripulante = async (req, res) => {
     try {
         const { termino } = req.params;

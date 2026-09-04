@@ -162,10 +162,7 @@ function App() {
     const puedeVerF16 = esAdmin || esOfTecnica; 
     const puedeVerProgMantenimiento = esAdmin || esOfTecnica;
     
-    const puedeVerECAE = esAdmin || (
-        esElementoECAE && (esOperaciones || esBoss || esDirector || esJefe || esPersonal)
-    );
-
+    const puedeVerECAE = esAdmin 
     const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos || puedeVerDashboardVuelos || puedeVerVencimientosPilotos || puedeVerEntrenamiento;
     const puedeVerGrupoOfTecnica = puedeVerF13 || puedeVerF16 || puedeVerProgMantenimiento;
     const puedeVerGrupoOTO = puedeVerStats || puedeVerOpEnDesarrollo;
