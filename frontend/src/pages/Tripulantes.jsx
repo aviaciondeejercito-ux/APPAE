@@ -31,42 +31,41 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS Y DEBUG ---
-    // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS Y DEBUG ---
-const obtenerTotalesDinamicos = () => {
-    const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
-    if (!seleccionado) return totales;
+    // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS Y DEBUG (CORREGIDO) ---
+    const obtenerTotalesDinamicos = () => {
+        const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
+        if (!seleccionado) return totales;
 
-    // 1. Si existen habilitaciones, el Total General debe ser la SUMA DIRECTA de todos los Badges
-    if (Array.isArray(seleccionado.habilitaciones) && seleccionado.habilitaciones.length > 0) {
-        seleccionado.habilitaciones.forEach(h => {
-            const v = Number(h.hsVisual !== undefined ? h.hsVisual : (h.vueloDiurno || 0));
-            const inst = Number(h.hsInstrumental !== undefined ? h.hsInstrumental : (h.vueloInstrumental || 0));
-            const noc = Number(h.hsNocturno !== undefined ? h.hsNocturno : (h.vueloNocturno || 0));
-            const nvg = Number(h.hsNVG !== undefined ? h.hsNVG : (h.vueloNVG || 0));
+        // 1. Si existen habilitaciones, sumamos directamente las propiedades unificadas del backend
+        if (Array.isArray(seleccionado.habilitaciones) && seleccionado.habilitaciones.length > 0) {
+            seleccionado.habilitaciones.forEach(h => {
+                const v = Number(h.hsVisual ?? h.vueloDiurno ?? h.vueloVisual ?? 0);
+                const inst = Number(h.hsInstrumental ?? h.vueloInstrumental ?? 0);
+                const noc = Number(h.hsNocturno ?? h.vueloNocturno ?? 0);
+                const nvg = Number(h.hsNVG ?? h.vueloNVG ?? 0);
 
-            totales.visual += v;
-            totales.instrumental += inst;
-            totales.nocturno += noc;
-            totales.nvg += nvg;
-        });
-    } 
-    // 2. Solo si NO existen habilitaciones registradas, se leen los totales históricos base
-    else if (seleccionado.totalesHistoricos) {
-        totales.visual = Number(seleccionado.totalesHistoricos.vueloDiurno || 0);
-        totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
-        totales.nocturno = Number(seleccionado.totalesHistoricos.vueloNocturno || 0);
-        totales.nvg = Number(seleccionado.totalesHistoricos.vueloNVG || seleccionado.totalesHistoricos.vueloVisual || 0);
-    }
+                totales.visual += v;
+                totales.instrumental += inst;
+                totales.nocturno += noc;
+                totales.nvg += nvg;
+            });
+        } 
+        // 2. Si NO existen habilitaciones registradas, leemos directamente el acumulado histórico corregido
+        else if (seleccionado.totalesHistoricos) {
+            totales.visual = Number(seleccionado.totalesHistoricos.vueloDiurno ?? seleccionado.totalesHistoricos.vueloVisual ?? 0);
+            totales.instrumental = Number(seleccionado.totalesHistoricos.vueloInstrumental ?? 0);
+            totales.nocturno = Number(seleccionado.totalesHistoricos.vueloNocturno ?? 0);
+            totales.nvg = Number(seleccionado.totalesHistoricos.vueloNVG ?? 0);
+        }
 
-    // Redondeo decimal seguro a 1 decimal
-    return {
-        visual: Math.round(totales.visual * 10) / 10,
-        instrumental: Math.round(totales.instrumental * 10) / 10,
-        nocturno: Math.round(totales.nocturno * 10) / 10,
-        nvg: Math.round(totales.nvg * 10) / 10
+        // Redondeo seguro a 1 decimal
+        return {
+            visual: Math.round(totales.visual * 10) / 10,
+            instrumental: Math.round(totales.instrumental * 10) / 10,
+            nocturno: Math.round(totales.nocturno * 10) / 10,
+            nvg: Math.round(totales.nvg * 10) / 10
+        };
     };
-};
 
     const horasDinamicas = obtenerTotalesDinamicos();
     const totalGeneralHoras = Math.round((horasDinamicas.visual + horasDinamicas.instrumental + horasDinamicas.nocturno + horasDinamicas.nvg) * 10) / 10;
@@ -127,7 +126,7 @@ const obtenerTotalesDinamicos = () => {
                 vueloDiurno: seleccionado.totalesHistoricos?.vueloDiurno || 0,
                 vueloNocturno: seleccionado.totalesHistoricos?.vueloNocturno || 0,
                 vueloInstrumental: seleccionado.totalesHistoricos?.vueloInstrumental || 0,
-                vueloNVG: seleccionado.totalesHistoricos?.vueloNVG || seleccionado.totalesHistoricos?.vueloVisual || 0
+                vueloNVG: seleccionado.totalesHistoricos?.vueloNVG || 0
             });
         } else if (type === 'habilitacion') {
             setFormData({ 
@@ -317,13 +316,13 @@ const obtenerTotalesDinamicos = () => {
                             </div>
                             <div style={styles.habilitacionesList}>
                                 {seleccionado.habilitaciones?.map((h, i) => {
-                                    // Lectura segura con fallback entre nombres de propiedades posibles
-                                    const v = Number(h.hsVisual !== undefined ? h.hsVisual : (h.vueloDiurno || 0));
-                                    const inst = Number(h.hsInstrumental !== undefined ? h.hsInstrumental : (h.vueloInstrumental || 0));
-                                    const noc = Number(h.hsNocturno !== undefined ? h.hsNocturno : (h.vueloNocturno || 0));
-                                    const nvg = Number(h.hsNVG !== undefined ? h.hsNVG : (h.vueloNVG || 0));
+                                    // Lectura normalizada de las horas por SdA
+                                    const v = Number(h.hsVisual ?? h.vueloDiurno ?? h.vueloVisual ?? 0);
+                                    const inst = Number(h.hsInstrumental ?? h.vueloInstrumental ?? 0);
+                                    const noc = Number(h.hsNocturno ?? h.vueloNocturno ?? 0);
+                                    const nvg = Number(h.hsNVG ?? h.vueloNVG ?? 0);
                                     
-                                    // Cálculo exacto en tiempo real del Total por SdA
+                                    // Total del Sistema de Armas actual
                                     const totalSdA = (v + inst + noc + nvg).toFixed(1);
                                     
                                     return (

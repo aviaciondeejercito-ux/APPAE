@@ -4,14 +4,24 @@ const Vuelo = require('../models/Vuelo');
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
- * ESTÁNDAR: SINCRO JOKER v3.6 (Consolidación Dinámica X + Y Corregida)
+ * ESTÁNDAR: SINCRO JOKER v3.7 (Consolidación Dinámica X + Y Refactorizada)
  */
+
+// Función auxiliar para normalizar cadenas
+const normalizarTexto = (texto) => {
+    if (!texto) return "";
+    return String(texto)
+        .trim()
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, ""); // Remueve acentos
+};
 
 // Función auxiliar para normalizar la unidad/elemento
 const obtenerUnidadLimpia = (userOrBody) => {
     if (!userOrBody) return "";
     const u = userOrBody.elemento || userOrBody.unidad || "";
-    return String(u).trim().toUpperCase();
+    return normalizarTexto(u);
 };
 
 // 1. Crear Tripulante
@@ -21,7 +31,7 @@ exports.crearTripulante = async (req, res) => {
         const unidadDestino = obtenerUnidadLimpia(req.body);
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
-        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = normalizarTexto(usuarioLogueado.rol || usuarioLogueado.role).replace(/[\s_-]/g, '');
         
         const esMando = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase);
         const esGestorUnidad = ['OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleBase);
@@ -34,8 +44,8 @@ exports.crearTripulante = async (req, res) => {
 
         const datosNuevoTripulante = {
             ...req.body,
-            apellido: req.body.apellido ? req.body.apellido.toUpperCase().trim() : "",
-            nombre: req.body.nombre ? req.body.nombre.toUpperCase().trim() : "",
+            apellido: req.body.apellido ? normalizarTexto(req.body.apellido) : "",
+            nombre: req.body.nombre ? normalizarTexto(req.body.nombre) : "",
             elemento: unidadDestino,
             unidad: unidadDestino,
             activo: true,
@@ -78,7 +88,7 @@ exports.gestionarHabilitacion = async (req, res) => {
             return res.status(404).json({ mensaje: "Tripulante no disponible o inactivo" });
         }
 
-        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = normalizarTexto(usuarioLogueado.rol || usuarioLogueado.role).replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
         const unidadTripulante = obtenerUnidadLimpia(tripulante);
 
@@ -89,14 +99,17 @@ exports.gestionarHabilitacion = async (req, res) => {
             return res.status(403).json({ mensaje: "No autorizado para modificar este legajo" });
         }
 
-        const v = Number(hsVisual || 0);
-        const i = Number(hsInstrumental || 0);
-        const n = Number(hsNocturno || 0);
-        const nvg = Number(hsNVG || 0);
-        const totalSdA = v + i + n + nvg;
+        const v = Math.round(Number(hsVisual || 0) * 10) / 10;
+        const i = Math.round(Number(hsInstrumental || 0) * 10) / 10;
+        const n = Math.round(Number(hsNocturno || 0) * 10) / 10;
+        const nvg = Math.round(Number(hsNVG || 0) * 10) / 10;
+        const totalSdA = Math.round((v + i + n + nvg) * 10) / 10;
+
+        const aeroNorm = normalizarTexto(aeronave);
+        const rolNorm = normalizarTexto(rolActual);
 
         const index = tripulante.habilitaciones.findIndex(h => 
-            h.aeronave === aeronave && h.rolActual === rolActual
+            normalizarTexto(h.aeronave) === aeroNorm && normalizarTexto(h.rolActual) === rolNorm
         );
 
         if (index !== -1) {
@@ -145,7 +158,7 @@ exports.agregarCapacitacion = async (req, res) => {
             return res.status(404).json({ mensaje: "Tripulante no encontrado" });
         }
 
-        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = normalizarTexto(usuarioLogueado.rol || usuarioLogueado.role).replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
         const unidadTripulante = obtenerUnidadLimpia(tripulante);
 
@@ -185,7 +198,7 @@ exports.agregarAptitudAdicional = async (req, res) => {
             return res.status(404).json({ mensaje: "Tripulante no encontrado" });
         }
 
-        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = normalizarTexto(usuarioLogueado.rol || usuarioLogueado.role).replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
         const unidadTripulante = obtenerUnidadLimpia(tripulante);
 
@@ -218,12 +231,12 @@ exports.agregarAptitudAdicional = async (req, res) => {
     }
 };
 
-// 5. Obtener Tripulantes (Cálculo Dinámico X + Y por SdA y Capacitaciones)
+// 5. Obtener Tripulantes (Cálculo Dinámico X + Y Consolidado)
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
         const miRol = usuarioLogueado.rol || usuarioLogueado.role || '';
-        const roleBase = String(miRol).toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = normalizarTexto(miRol).replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         let filtro = { activo: { $ne: false } };
@@ -232,7 +245,7 @@ exports.obtenerTripulantes = async (req, res) => {
             if (!miUnidad) return res.status(200).json([]);
             filtro.$or = [{ elemento: miUnidad }, { unidad: miUnidad }];
         } else if (req.query.unidad && req.query.unidad !== 'all') {
-            const unidadQuery = req.query.unidad.toUpperCase().trim();
+            const unidadQuery = normalizarTexto(req.query.unidad);
             filtro.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }];
         }
 
@@ -245,7 +258,7 @@ exports.obtenerTripulantes = async (req, res) => {
 
         const idsTripulantes = tripulantes.map(t => t._id);
 
-        // Traer los vuelos en los que interviene el personal
+        // Traer vuelos del personal
         const vuelos = await Vuelo.find({
             $or: [
                 { piloto: { $in: idsTripulantes } },
@@ -262,27 +275,39 @@ exports.obtenerTripulantes = async (req, res) => {
 
         vuelos.forEach(v => {
             const hsVuelo = Number(v.horasVoladas || 0);
-            const aeronave = (v.aeronave || '').trim().toUpperCase();
-            const tipoMision = (v.tipoMision || v.tarea || v.naturaleza || v.tipo || '').trim().toUpperCase();
+            const aeronave = normalizarTexto(v.aeronave);
+            const tipoMision = normalizarTexto(v.tipoMision || v.tarea || v.naturaleza || v.tipo);
 
-            const esNocturno = v.condicion === 'Nocturno';
-            const esIFR = v.reglasVuelo === 'IFR';
-            const esNVG = v.usoNVG === true;
-            const esVisual = !esNocturno && !esIFR && !esNVG;
+            const condicionNorm = normalizarTexto(v.condicion);
+            const reglasNorm = normalizarTexto(v.reglasVuelo);
+
+            const esNVG = v.usoNVG === true || condicionNorm.includes('NVG');
+            const esNocturno = condicionNorm.includes('NOCTURNO') || esNVG;
+            const esIFR = reglasNorm.includes('IFR');
+            const esVisual = !esIFR && !esNocturno;
 
             const procesarParticipante = (id, rol) => {
                 if (!id) return;
                 const idStr = id.toString();
+                const rolNorm = normalizarTexto(rol);
 
                 // 1. Acumulador SdA (Y)
-                const keySdA = `${idStr}_${aeronave}_${rol}`;
+                const keySdA = `${idStr}_${aeronave}_${rolNorm}`;
                 if (!mapaHorasSdA[keySdA]) {
                     mapaHorasSdA[keySdA] = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
                 }
-                if (esVisual) mapaHorasSdA[keySdA].visual += hsVuelo;
-                if (esIFR) mapaHorasSdA[keySdA].instrumental += hsVuelo;
-                if (esNocturno && !esNVG) mapaHorasSdA[keySdA].nocturno += hsVuelo;
-                if (esNVG) mapaHorasSdA[keySdA].nvg += hsVuelo;
+
+                if (esNVG) {
+                    mapaHorasSdA[keySdA].nvg += hsVuelo;
+                } else if (esNocturno) {
+                    mapaHorasSdA[keySdA].nocturno += hsVuelo;
+                }
+
+                if (esIFR) {
+                    mapaHorasSdA[keySdA].instrumental += hsVuelo;
+                } else if (esVisual) {
+                    mapaHorasSdA[keySdA].visual += hsVuelo;
+                }
 
                 // 2. Acumulador Táctico/Capacitaciones
                 if (tipoMision) {
@@ -302,36 +327,56 @@ exports.obtenerTripulantes = async (req, res) => {
         const tripulantesProcesados = tripulantes.map(t => {
             const tIdStr = t._id.toString();
 
+            let totalVisualGeneral = 0;
+            let totalInstrumentalGeneral = 0;
+            let totalNocturnoGeneral = 0;
+            let totalNVGGeneral = 0;
+
             // Suma Dinámica SdA: Base X + Vuelos Y
             if (Array.isArray(t.habilitaciones)) {
                 t.habilitaciones = t.habilitaciones.map(hab => {
-                    const aeronave = (hab.aeronave || '').trim().toUpperCase();
-                    const rol = (hab.rolActual || '').trim();
+                    const aeronave = normalizarTexto(hab.aeronave);
+                    const rol = normalizarTexto(hab.rolActual);
                     const key = `${tIdStr}_${aeronave}_${rol}`;
 
                     const hsExtra = mapaHorasSdA[key] || { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
 
-                    const vis = Number(hab.hsVisual || 0) + hsExtra.visual;
-                    const inst = Number(hab.hsInstrumental || 0) + hsExtra.instrumental;
-                    const noc = Number(hab.hsNocturno || 0) + hsExtra.nocturno;
-                    const nvg = Number(hab.hsNVG || 0) + hsExtra.nvg;
-                    const totalSdA = vis + inst + noc + nvg;
+                    const vis = Math.round((Number(hab.hsVisual || 0) + hsExtra.visual) * 10) / 10;
+                    const inst = Math.round((Number(hab.hsInstrumental || 0) + hsExtra.instrumental) * 10) / 10;
+                    const noc = Math.round((Number(hab.hsNocturno || 0) + hsExtra.nocturno) * 10) / 10;
+                    const nvg = Math.round((Number(hab.hsNVG || 0) + hsExtra.nvg) * 10) / 10;
+                    const totalSdA = Math.round((vis + inst + noc + nvg) * 10) / 10;
+
+                    totalVisualGeneral += vis;
+                    totalInstrumentalGeneral += inst;
+                    totalNocturnoGeneral += noc;
+                    totalNVGGeneral += nvg;
 
                     return {
                         ...hab,
-                        hsVisual: Math.round(vis * 10) / 10,
-                        hsInstrumental: Math.round(inst * 10) / 10,
-                        hsNocturno: Math.round(noc * 10) / 10,
-                        hsNVG: Math.round(nvg * 10) / 10,
-                        totalHorasSistema: Math.round(totalSdA * 10) / 10
+                        hsVisual: vis,
+                        hsInstrumental: inst,
+                        hsNocturno: noc,
+                        hsNVG: nvg,
+                        totalHorasSistema: totalSdA
                     };
                 });
             }
 
+            // Recalculamos totalesHistoricos dinámicamente para la vista
+            t.totalesHistoricos = {
+                vueloVisual: Math.round(totalVisualGeneral * 10) / 10,
+                vueloDiurno: Math.round(totalVisualGeneral * 10) / 10,
+                vueloInstrumental: Math.round(totalInstrumentalGeneral * 10) / 10,
+                vueloNocturno: Math.round((totalNocturnoGeneral + totalNVGGeneral) * 10) / 10,
+                vueloNVG: Math.round(totalNVGGeneral * 10) / 10,
+                aterrizajes: t.totalesHistoricos?.aterrizajes || 0
+            };
+
             // Suma Dinámica Capacitaciones Especiales (Base X + Vuelos Y)
             if (Array.isArray(t.capacitacionesEspeciales) && t.capacitacionesEspeciales.length > 0) {
                 t.capacitacionesEspeciales = t.capacitacionesEspeciales.map(cap => {
-                    const tipoCap = (cap.tipo || '').trim().toUpperCase();
+                    const tipoCap = normalizarTexto(cap.tipo);
                     const key = `${tIdStr}_${tipoCap}`;
 
                     const hsBase = Number(cap.horasAcreditadas || 0);
@@ -359,7 +404,7 @@ exports.actualizarTripulante = async (req, res) => {
     try {
         const { id } = req.params;
         const usuarioLogueado = req.user;
-        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = normalizarTexto(usuarioLogueado.rol || usuarioLogueado.role).replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         const tripulantePrevio = await Tripulante.findById(id);
@@ -384,8 +429,8 @@ exports.actualizarTripulante = async (req, res) => {
         
         if (req.body.unidad || req.body.elemento) {
             const u = req.body.elemento || req.body.unidad;
-            req.body.elemento = u.toUpperCase().trim();
-            req.body.unidad = u.toUpperCase().trim();
+            req.body.elemento = normalizarTexto(u);
+            req.body.unidad = normalizarTexto(u);
         }
 
         const actualizado = await Tripulante.findByIdAndUpdate(
@@ -414,7 +459,7 @@ exports.eliminarTripulante = async (req, res) => {
         const { id } = req.params;
         const usuarioLogueado = req.user;
         
-        const roleBase = String(usuarioLogueado.rol || usuarioLogueado.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = normalizarTexto(usuarioLogueado.rol || usuarioLogueado.role).replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuarioLogueado);
 
         const tripulante = await Tripulante.findById(id);
@@ -461,7 +506,7 @@ exports.buscarTripulante = async (req, res) => {
     try {
         const { termino } = req.params;
         const usuario = req.user;
-        const roleBase = String(usuario.rol || usuario.role || '').toUpperCase().replace(/[\s_-]/g, '');
+        const roleBase = normalizarTexto(usuario.rol || usuario.role).replace(/[\s_-]/g, '');
         const miUnidad = obtenerUnidadLimpia(usuario);
         
         let query = {
