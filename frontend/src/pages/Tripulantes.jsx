@@ -31,12 +31,27 @@ const Tripulantes = () => {
 
     useEffect(() => { fetchPersonal(); }, []);
 
-    // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS ---
+    // --- CÓMPUTO DINÁMICO DE HORAS CONSOLIDADAS Y DEBUG ---
     const obtenerTotalesDinamicos = () => {
         const totales = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
         if (!seleccionado) return totales;
 
-        // 1. Suma dinámica proveniente de las habilitaciones procesadas (Base X + Vuelos Y)
+        // DEBUG: Imprimir la estructura real en la consola de F12
+        console.log("=== DEBUG TRIPULANTE SELECCIONADO ===");
+        console.log("Totales Historicos:", seleccionado.totalesHistoricos);
+        console.log("Habilitaciones (SdA):", seleccionado.habilitaciones);
+
+        if (Array.isArray(seleccionado.habilitaciones)) {
+            const sumaSdA = seleccionado.habilitaciones.reduce((acc, h) => ({
+                visual: acc.visual + Number(h.hsVisual || 0),
+                instrumental: acc.instrumental + Number(h.hsInstrumental || 0),
+                nocturno: acc.nocturno + Number(h.hsNocturno || 0),
+                nvg: acc.nvg + Number(h.hsNVG || 0)
+            }), { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 });
+            console.log("Suma directa únicamente de SdA:", sumaSdA);
+        }
+
+        // 1. Suma dinámica proveniente de las habilitaciones procesadas
         if (Array.isArray(seleccionado.habilitaciones)) {
             seleccionado.habilitaciones.forEach(h => {
                 totales.visual += Number(h.hsVisual || 0);
@@ -51,7 +66,7 @@ const Tripulantes = () => {
             totales.visual += Number(seleccionado.totalesHistoricos.vueloDiurno || 0);
             totales.instrumental += Number(seleccionado.totalesHistoricos.vueloInstrumental || 0);
             totales.nocturno += Number(seleccionado.totalesHistoricos.vueloNocturno || 0);
-            totales.nvg += Number(seleccionado.totalesHistoricos.vueloVisual || 0);
+            totales.nvg += Number(seleccionado.totalesHistoricos.vueloNVG || seleccionado.totalesHistoricos.nvg || 0);
         }
 
         // Redondeo decimal seguro
@@ -59,6 +74,8 @@ const Tripulantes = () => {
         totales.instrumental = Math.round(totales.instrumental * 10) / 10;
         totales.nocturno = Math.round(totales.nocturno * 10) / 10;
         totales.nvg = Math.round(totales.nvg * 10) / 10;
+
+        console.log("Totales calculados finales para la vista:", totales);
 
         return totales;
     };
@@ -122,7 +139,7 @@ const Tripulantes = () => {
                 vueloDiurno: seleccionado.totalesHistoricos?.vueloDiurno || 0,
                 vueloNocturno: seleccionado.totalesHistoricos?.vueloNocturno || 0,
                 vueloInstrumental: seleccionado.totalesHistoricos?.vueloInstrumental || 0,
-                vueloVisual: seleccionado.totalesHistoricos?.vueloVisual || 0
+                vueloNVG: seleccionado.totalesHistoricos?.vueloNVG || seleccionado.totalesHistoricos?.vueloVisual || 0
             });
         } else if (type === 'habilitacion') {
             setFormData({ 
@@ -440,7 +457,7 @@ const Tripulantes = () => {
                                         <label style={styles.label}>Horas Instrumental Base (DB)</label>
                                         <input type="number" step="0.1" style={styles.formInput} value={formData.vueloInstrumental || 0} onChange={e => setFormData({...formData, vueloInstrumental: Number(e.target.value)})} required />
                                         <label style={styles.label}>Horas NVG Base (DB)</label>
-                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloVisual || 0} onChange={e => setFormData({...formData, vueloVisual: Number(e.target.value)})} required />
+                                        <input type="number" step="0.1" style={styles.formInput} value={formData.vueloNVG || 0} onChange={e => setFormData({...formData, vueloNVG: Number(e.target.value)})} required />
                                     </div>
                                 )}
 
