@@ -1,10 +1,11 @@
 const Tripulante = require('../models/Tripulante');
 const Auditoria = require('../models/Auditoria');
-const Vuelo = require('../models/Vuelo'); 
+// Ya no es necesario requerir Vuelo aquí porque no lo consultamos en este controlador
+// const Vuelo = require('../models/Vuelo'); 
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
- * ESTÁNDAR: SINCRO JOKER v3.7 (Consolidación Dinámica X + Y Refactorizada)
+ * ESTÁNDAR: SINCRO JOKER v3.7 (Refactorizado - Fuente de verdad en BD)
  */
 
 // Función auxiliar para normalizar cadenas
@@ -231,7 +232,7 @@ exports.agregarAptitudAdicional = async (req, res) => {
     }
 };
 
-// 5. Obtener Tripulantes (Cálculo Dinámico X + Y Consolidado)
+// 5. Obtener Tripulantes (Optimizado: La BD ya es la fuente de verdad)
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -241,6 +242,7 @@ exports.obtenerTripulantes = async (req, res) => {
 
         let filtro = { activo: { $ne: false } };
 
+        // Filtro por permisos y unidad
         if (!['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleBase)) {
             if (!miUnidad) return res.status(200).json([]);
             filtro.$or = [{ elemento: miUnidad }, { unidad: miUnidad }];
@@ -249,150 +251,13 @@ exports.obtenerTripulantes = async (req, res) => {
             filtro.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }];
         }
 
+        // Se trae la información directa y limpia de la BD
         const tripulantes = await Tripulante.find(filtro)
             .populate('ultimoEditor', 'grado apellido')
             .sort({ apellido: 1 })
             .lean();
 
-        if (!tripulantes.length) return res.status(200).json([]);
-
-        const idsTripulantes = tripulantes.map(t => t._id);
-
-        // Traer vuelos del personal
-        const vuelos = await Vuelo.find({
-            $or: [
-                { piloto: { $in: idsTripulantes } },
-                { copiloto: { $in: idsTripulantes } },
-                { instructor: { $in: idsTripulantes } },
-                { mecanico: { $in: idsTripulantes } },
-                { segundoMecanico: { $in: idsTripulantes } }
-            ]
-        }).lean();
-
-        // Mapeos dinámicos
-        const mapaHorasSdA = {};     // Key: "tripulanteId_aeronave_rol"
-        const mapaHorasTácticas = {}; // Key: "tripulanteId_tipoMision"
-
-        vuelos.forEach(v => {
-            const hsVuelo = Number(v.horasVoladas || 0);
-            const aeronave = normalizarTexto(v.aeronave);
-            const tipoMision = normalizarTexto(v.tipoMision || v.tarea || v.naturaleza || v.tipo);
-
-            const condicionNorm = normalizarTexto(v.condicion);
-            const reglasNorm = normalizarTexto(v.reglasVuelo);
-
-            const esNVG = v.usoNVG === true || condicionNorm.includes('NVG');
-            const esNocturno = condicionNorm.includes('NOCTURNO') || esNVG;
-            const esIFR = reglasNorm.includes('IFR');
-            const esVisual = !esIFR && !esNocturno;
-
-            const procesarParticipante = (id, rol) => {
-                if (!id) return;
-                const idStr = id.toString();
-                const rolNorm = normalizarTexto(rol);
-
-                // 1. Acumulador SdA (Y)
-                const keySdA = `${idStr}_${aeronave}_${rolNorm}`;
-                if (!mapaHorasSdA[keySdA]) {
-                    mapaHorasSdA[keySdA] = { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
-                }
-
-                if (esNVG) {
-                    mapaHorasSdA[keySdA].nvg += hsVuelo;
-                } else if (esNocturno) {
-                    mapaHorasSdA[keySdA].nocturno += hsVuelo;
-                }
-
-                if (esIFR) {
-                    mapaHorasSdA[keySdA].instrumental += hsVuelo;
-                } else if (esVisual) {
-                    mapaHorasSdA[keySdA].visual += hsVuelo;
-                }
-
-                // 2. Acumulador Táctico/Capacitaciones
-                if (tipoMision) {
-                    const keyTactica = `${idStr}_${tipoMision}`;
-                    mapaHorasTácticas[keyTactica] = (mapaHorasTácticas[keyTactica] || 0) + hsVuelo;
-                }
-            };
-
-            procesarParticipante(v.piloto, 'Piloto');
-            procesarParticipante(v.copiloto, 'Copiloto');
-            procesarParticipante(v.instructor, 'Instructor');
-            procesarParticipante(v.mecanico, 'Mecánico');
-            procesarParticipante(v.segundoMecanico, 'Mecánico');
-        });
-
-        // Ensamblado Final Dinámico
-        const tripulantesProcesados = tripulantes.map(t => {
-            const tIdStr = t._id.toString();
-
-            let totalVisualGeneral = 0;
-            let totalInstrumentalGeneral = 0;
-            let totalNocturnoGeneral = 0;
-            let totalNVGGeneral = 0;
-
-            // Suma Dinámica SdA: Base X + Vuelos Y
-            if (Array.isArray(t.habilitaciones)) {
-                t.habilitaciones = t.habilitaciones.map(hab => {
-                    const aeronave = normalizarTexto(hab.aeronave);
-                    const rol = normalizarTexto(hab.rolActual);
-                    const key = `${tIdStr}_${aeronave}_${rol}`;
-
-                    const hsExtra = mapaHorasSdA[key] || { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
-
-                    const vis = Math.round((Number(hab.hsVisual || 0) + hsExtra.visual) * 10) / 10;
-                    const inst = Math.round((Number(hab.hsInstrumental || 0) + hsExtra.instrumental) * 10) / 10;
-                    const noc = Math.round((Number(hab.hsNocturno || 0) + hsExtra.nocturno) * 10) / 10;
-                    const nvg = Math.round((Number(hab.hsNVG || 0) + hsExtra.nvg) * 10) / 10;
-                    const totalSdA = Math.round((vis + inst + noc + nvg) * 10) / 10;
-
-                    totalVisualGeneral += vis;
-                    totalInstrumentalGeneral += inst;
-                    totalNocturnoGeneral += noc;
-                    totalNVGGeneral += nvg;
-
-                    return {
-                        ...hab,
-                        hsVisual: vis,
-                        hsInstrumental: inst,
-                        hsNocturno: noc,
-                        hsNVG: nvg,
-                        totalHorasSistema: totalSdA
-                    };
-                });
-            }
-
-            // Recalculamos totalesHistoricos dinámicamente para la vista
-            t.totalesHistoricos = {
-                vueloVisual: Math.round(totalVisualGeneral * 10) / 10,
-                vueloDiurno: Math.round(totalVisualGeneral * 10) / 10,
-                vueloInstrumental: Math.round(totalInstrumentalGeneral * 10) / 10,
-                vueloNocturno: Math.round((totalNocturnoGeneral + totalNVGGeneral) * 10) / 10,
-                vueloNVG: Math.round(totalNVGGeneral * 10) / 10,
-                aterrizajes: t.totalesHistoricos?.aterrizajes || 0
-            };
-
-            // Suma Dinámica Capacitaciones Especiales (Base X + Vuelos Y)
-            if (Array.isArray(t.capacitacionesEspeciales) && t.capacitacionesEspeciales.length > 0) {
-                t.capacitacionesEspeciales = t.capacitacionesEspeciales.map(cap => {
-                    const tipoCap = normalizarTexto(cap.tipo);
-                    const key = `${tIdStr}_${tipoCap}`;
-
-                    const hsBase = Number(cap.horasAcreditadas || 0);
-                    const hsVuelo = mapaHorasTácticas[key] || 0;
-
-                    return {
-                        ...cap,
-                        horasAcreditadas: Math.round((hsBase + hsVuelo) * 10) / 10
-                    };
-                });
-            }
-
-            return t;
-        });
-
-        res.status(200).json(tripulantesProcesados);
+        res.status(200).json(tripulantes || []);
     } catch (error) {
         console.error("❌ ERROR 500 EN OBTENER_TRIPULANTES:", error);
         res.status(500).json({ mensaje: "Error al obtener tripulantes", detalle: error.message });
