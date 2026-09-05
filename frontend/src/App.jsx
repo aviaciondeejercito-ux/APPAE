@@ -150,7 +150,7 @@ function App() {
     const puedeVerDashboardVuelos = esAdmin || esOperaciones || esJefe; 
 
     const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esPersonal;
-    const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
+    const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerEstadoAeronaves = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerCarga = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
