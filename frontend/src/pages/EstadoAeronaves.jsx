@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAircrafts, updateAircraftStatus } from '../services/api'; // Asegúrate de tener exportada la función PUT/update
+import { getAircrafts, updateAircraftStatus } from '../services/api';
 
 const EstadoAeronaves = () => {
     const [aircrafts, setAircrafts] = useState([]);
@@ -22,11 +22,8 @@ const EstadoAeronaves = () => {
     const esMandoPorLista = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(roleUpper);
     const isMandoEstrategico = esAdminPorContenido || esMandoPorLista || userElemento === 'COMANDO';
 
-    // 🔒 PERMISO DE EDICIÓN EXCLUSIVO: Oficina Técnica, S4 y Mando Estratégico
-    const puedeEditar = [
-        'ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 
-        'OFICINATECNICA', 'OFICINA_TECNICA', 'S4', 'S4UNIDAD', 'S4_UNIDAD'
-    ].includes(roleUpper);
+    // 🔒 PERMISO DE EDICIÓN EXCLUSIVO: Únicamente Oficina Técnica
+    const puedeEditar = ['OFICINATECNICA', 'OFICINA_TECNICA'].includes(roleUpper);
 
     useEffect(() => {
         fetchData();
@@ -75,7 +72,6 @@ const EstadoAeronaves = () => {
     // 📖 ABRIR MODAL
     const handleOpenModal = (air) => {
         setSelectedNote(air);
-        // Clonamos la aeronave para editar sin mutar el estado principal
         setFormData(JSON.parse(JSON.stringify(air)));
     };
 
@@ -87,6 +83,7 @@ const EstadoAeronaves = () => {
 
     // ✏️ MANEJADOR DE CAMBIOS EN FORMULARIO
     const handleChangeForm = (field, value) => {
+        if (!puedeEditar) return;
         setFormData(prev => ({
             ...prev,
             [field]: value
@@ -95,6 +92,7 @@ const EstadoAeronaves = () => {
 
     // ✏️ EDICIÓN DE DISPONIBILIDAD DEL COMPONENTE PRINCIPAL (PLANEADOR)
     const handleCompPlaneadorDispChange = (val) => {
+        if (!puedeEditar) return;
         setFormData(prev => {
             const copyComp = [...(prev.compPlaneador || [])];
             if (copyComp.length === 0) {
@@ -115,7 +113,7 @@ const EstadoAeronaves = () => {
         setSaving(true);
         try {
             await updateAircraftStatus(formData._id, formData);
-            await fetchData(); // Recargar datos frescos
+            await fetchData();
             handleCloseModal();
         } catch (err) {
             console.error("Error al guardar aeronave:", err);
@@ -218,7 +216,7 @@ const EstadoAeronaves = () => {
                                                                 color: 'white'
                                                             }}
                                                         >
-                                                            👁️ {puedeEditar ? 'Ver / Editar' : 'Ver'}
+                                                            👁️ {puedeEditar ? 'Editar' : 'Ver'}
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -315,7 +313,6 @@ const EstadoAeronaves = () => {
                             <div style={styles.infoSection}>
                                 <h5 style={styles.sectionTitle}>⚙️ Planta Motriz y Componentes</h5>
                                 
-                                {/* Motores */}
                                 {formData.motores && formData.motores.length > 0 ? (
                                     formData.motores.map((m, i) => (
                                         <div key={i} style={styles.subInfoBox}>
@@ -338,7 +335,6 @@ const EstadoAeronaves = () => {
                                     </div>
                                 )}
 
-                                {/* Hélices */}
                                 {formData.helices && formData.helices.length > 0 ? (
                                     formData.helices.map((h, i) => (
                                         <div key={i} style={{...styles.subInfoBox, marginTop: '8px'}}>
