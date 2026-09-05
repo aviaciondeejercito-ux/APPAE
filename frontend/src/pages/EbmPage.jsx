@@ -278,18 +278,21 @@ const EbmPage = () => {
         let totalPiloto = 0;
         let totalInstructor = 0;
         let totalGeneral = 0;
+        let totalFaltantes = 0;
 
         [1, 2, 3, 4].forEach(num => {
             const t = p[`trimestre${num}`] || {};
             totalPiloto += Number(t.hsPiloto || 0);
             totalInstructor += Number(t.hsInstructor || 0);
             totalGeneral += Number(t.hsVoladas || 0);
+            totalFaltantes += Number(t.hsFaltantes || 0);
         });
 
         return {
             totalPiloto: Math.round(totalPiloto * 10) / 10,
             totalInstructor: Math.round(totalInstructor * 10) / 10,
-            totalGeneral: Math.round(totalGeneral * 10) / 10
+            totalGeneral: Math.round(totalGeneral * 10) / 10,
+            totalFaltantes: Math.round(totalFaltantes * 10) / 10
         };
     };
 
@@ -359,11 +362,12 @@ const EbmPage = () => {
                                 <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>2do Trimestre</th>
                                 <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>3er Trimestre</th>
                                 <th style={{...styles.th, textAlign: 'center'}} colSpan={2}>4to Trimestre</th>
+                                <th style={{...styles.th, textAlign: 'center', backgroundColor: '#0f2942'}} colSpan={2}>Total Anual</th>
                             </tr>
                         </thead>
                         <tbody>
                             {!haySdaSeleccionado ? (
-                                <tr><td colSpan={10} style={styles.noDataRow}>💡 Seleccione un Sistema de Armas arriba para listar y parametrizar las tripulaciones.</td></tr>
+                                <tr><td colSpan={12} style={styles.noDataRow}>💡 Seleccione un Sistema de Armas arriba para listar y parametrizar las tripulaciones.</td></tr>
                             ) : (
                                 todosLosSdas.map(sda => {
                                     if (!sdasVisibles[sda] || !matrizSda[sda] || matrizSda[sda].length === 0) return null;
@@ -392,6 +396,7 @@ const EbmPage = () => {
                                                         </select>
                                                     </td>
                                                 ))}
+                                                <td colSpan={2} style={{...styles.sdaGroupSelectorCell, backgroundColor: '#cbd5e1'}}></td>
                                             </tr>
 
                                             {matrizSda[sda].map(p => {
@@ -436,11 +441,24 @@ const EbmPage = () => {
                                                             <td style={{...styles.tdFaltan, color: Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
                                                                 {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4.hsFaltantes)} hs`}
                                                             </td>
+
+                                                            {/* NUEVA COLUMNA TOTAL ANUAL */}
+                                                            <td style={{...styles.tdVoladas, fontWeight: 'bold', backgroundColor: '#f0f9ff', color: '#0369a1'}}>
+                                                                {formatearHoras(totalesAnuales.totalGeneral)} hs
+                                                            </td>
+                                                            <td style={{
+                                                                ...styles.tdFaltan, 
+                                                                fontWeight: 'bold',
+                                                                backgroundColor: '#f0f9ff',
+                                                                color: totalesAnuales.totalFaltantes <= 0 ? '#16a34a' : '#ed6c02'
+                                                            }}>
+                                                                {totalesAnuales.totalFaltantes <= 0 ? '✔ OK' : `${formatearHoras(totalesAnuales.totalFaltantes)} hs`}
+                                                            </td>
                                                         </tr>
 
                                                         {estaDesplegado && (
                                                             <tr style={styles.configExpandedRow}>
-                                                                <td colSpan={10} style={styles.configExpandedCell}>
+                                                                <td colSpan={12} style={styles.configExpandedCell}>
                                                                     <div style={styles.panelConfigFlex}>
                                                                         {[1, 2, 3, 4].map(num => {
                                                                             const trimData = p[`trimestre${num}`] || {};
