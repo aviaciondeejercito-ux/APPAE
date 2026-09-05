@@ -64,7 +64,7 @@ const Tripulantes = () => {
             if ((vuelo.aeronave || '').trim().toUpperCase() !== sdaNorm) return;
 
             let coincide = false;
-            const checkId = (f) => (f?._id || f) === idStr;
+            const checkId = (f) => (f?._id || f)?.toString() === idStr;
 
             if (rolNorm === 'PILOTO' && checkId(vuelo.piloto)) coincide = true;
             if (rolNorm === 'COPILOTO' && checkId(vuelo.copiloto)) coincide = true;
@@ -100,34 +100,41 @@ const Tripulantes = () => {
         let totalHsBD = 0;
 
         vuelos.forEach(vuelo => {
-            // Construir un arreglo con todas las aptitudes/misiones asociadas al vuelo
             let aptitudesVuelo = [];
 
-            if (Array.isArray(vuelo.aptitudesTacticas)) {
-                aptitudesVuelo = vuelo.aptitudesTacticas.map(a => String(a).trim().toUpperCase());
-            } else if (Array.isArray(vuelo.mision)) {
-                aptitudesVuelo = vuelo.mision.map(a => String(a).trim().toUpperCase());
-            } else {
-                const rawMision = String(vuelo.tipoMision || vuelo.capacitacionTactica || vuelo.mision || '').trim().toUpperCase();
-                if (rawMision) {
-                    aptitudesVuelo = rawMision.split(',').map(a => a.trim());
-                }
+            // 1. Misión principal o capacitaciones
+            const tipoMision = String(vuelo.tipoMision || vuelo.capacitacionTactica || vuelo.mision || '').trim().toUpperCase();
+            if (tipoMision) {
+                aptitudesVuelo.push(tipoMision);
             }
 
-            // Reglas implícitas según condiciones operativas del vuelo
-            if (vuelo.reglasVuelo === 'IFR') aptitudesVuelo.push('IFR');
-            if (vuelo.usoNVG === true) aptitudesVuelo.push('NVG');
-            if (vuelo.condicion === 'Nocturno' && !vuelo.usoNVG) aptitudesVuelo.push('VISUAL NOCTURNO');
+            // 2. Arreglo explícito de aptitudes tácticas (si existe)
+            if (Array.isArray(vuelo.aptitudesTacticas)) {
+                vuelo.aptitudesTacticas.forEach(a => aptitudesVuelo.push(String(a).trim().toUpperCase()));
+            }
 
-            // Verificar coincidencia sin exclusión mutua
-            const coincide = aptitudesVuelo.some(apt => apt === tipoNorm || apt.includes(tipoNorm) || tipoNorm.includes(apt));
+            // 3. Evaluar reglas operativas independientes (IFR, NVG y Nocturno)
+            if (String(vuelo.reglasVuelo).trim().toUpperCase() === 'IFR') {
+                aptitudesVuelo.push('IFR');
+            }
+            if (vuelo.usoNVG === true || String(vuelo.usoNVG).toLowerCase() === 'true') {
+                aptitudesVuelo.push('NVG');
+            }
+            if (String(vuelo.condicion).trim().toUpperCase() === 'NOCTURNO') {
+                aptitudesVuelo.push('VISUAL NOCTURNO');
+            }
+
+            // 4. Verificar coincidencia semántica
+            const coincide = aptitudesVuelo.some(apt => 
+                apt === tipoNorm || apt.includes(tipoNorm) || tipoNorm.includes(apt)
+            );
 
             if (coincide) {
                 const participo = [
                     vuelo.piloto, vuelo.copiloto, vuelo.instructor, 
                     vuelo.mecanico, vuelo.segundoMecanico, vuelo.cursante, 
                     vuelo.normalizador, vuelo.inspector
-                ].some(f => (f?._id || f) === idStr);
+                ].some(f => (f?._id || f)?.toString() === idStr);
 
                 if (participo) {
                     totalHsBD += Number(vuelo.horasVoladas || 0);
@@ -138,7 +145,7 @@ const Tripulantes = () => {
         return totalHsBD;
     };
 
-    // --- LECTURA Y CONSOLIDACIÓN DE HORAS (SECCIÓN SUPERIOR INDEPENDIENTE) ---
+    // --- LECTURA Y CONSOLIDACIÓN DE HORAS ---
     const obtenerTotalesHistoricos = () => {
         if (!seleccionado) return { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
 
@@ -399,7 +406,7 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* TOTALES CONSOLIDADOS - SIN CAMBIOS, INDEPENDIENTES */}
+                            {/* TOTALES CONSOLIDADOS */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES HISTÓRICOS CONSOLIDADOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
@@ -412,7 +419,7 @@ const Tripulantes = () => {
                                 <div style={{...styles.statCard, backgroundColor: '#eef6fc', borderColor: '#3498db'}}><span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span><span style={{...styles.statValue, color: '#2980b9'}}>{totalGeneralHoras.toFixed(1)} hs</span></div>
                             </div>
 
-                            {/* HABILITACIONES POR SISTEMA DE ARMAS - SIN CAMBIOS, INDEPENDIENTES */}
+                            {/* HABILITACIONES POR SISTEMA DE ARMAS */}
                             <div style={styles.sectionHeader}>
                                 <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>}
@@ -468,7 +475,7 @@ const Tripulantes = () => {
                                 })}
                             </div>
 
-                            {/* APTITUDES TÁCTICAS ESPECIALES - CÁLCULO TOTALMENTE INDEPENDIENTE */}
+                            {/* APTITUDES TÁCTICAS ESPECIALES */}
                             <div style={styles.sectionHeader}>
                                 <Star size={18} /> <span>APTITUDES TÁCTICAS ESPECIALES</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>}
