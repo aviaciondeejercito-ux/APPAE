@@ -21,9 +21,19 @@ const CONFIG_HORAS_EBM = {
 const determinarTipoAeronave = (sda) => {
     if (!sda) return 'AVION';
     const sdaUpper = sda.toUpperCase();
-    const palabrasHelicopteros = ['UH', 'BELL', 'PUMA', 'AB206', 'AB-206', 'HUEY', 'AS332', 'AS350', 'HA-1'];
+    const palabrasHelicopteros = ['UH', 'BELL', 'PUMA', 'AB206', 'AB-206', 'HUEY', 'AS332', 'AS350', 'HA-1', '407'];
     if (palabrasHelicopteros.some(p => sdaUpper.includes(p))) return 'HELICOPTERO';
     return 'AVION';
+};
+
+// --- OBTENER TRIMESTRE DE UNA FECHA DE VUELO ---
+const obtenerTrimestreDeFecha = (fechaStr) => {
+    if (!fechaStr) return 1;
+    const mes = new Date(fechaStr).getUTCMonth(); // 0 a 11
+    if (mes >= 0 && mes <= 2) return 1;
+    if (mes >= 3 && mes <= 5) return 2;
+    if (mes >= 6 && mes <= 8) return 3;
+    return 4;
 };
 
 // --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---
@@ -86,38 +96,80 @@ const EbmPage = () => {
         try {
             setLoading(true);
             const response = await getPlanificacionEbm();
-            const dataBackend = response.data || [];
+            
+            // Backend puede devolver { personal: [...], vuelos: [...] } o un array combinado
+            const personalRaw = response.data?.personal || response.data?.pilotos || (Array.isArray(response.data) ? response.data : []);
+            const vuelosRaw = response.data?.vuelos || [];
 
-            const dataNormalizada = dataBackend.map(p => {
-                const pModificado = { ...p };
-                const tipoAeronave = determinarTipoAeronave(p.aeronave);
+            // 1. MAPEAR Y ACUMULAR VUELOS CRUDOS POR PILOTO Y TRIMESTRE
+            const acumuladoVuelos = {};
+
+            vuelosRaw.forEach(vuelo => {
+                const horas = Number(vuelo.horasVoladas || 0);
+                const trimestre = obtenerTrimestreDeFecha(vuelo.fecha);
                 
+                // Normalizamos IDs
+                const idPiloto = typeof vuelo.piloto === 'object' ? vuelo.piloto?._id : vuelo.piloto;
+                const idCopiloto = typeof vuelo.copiloto === 'object' ? vuelo.copiloto?._id : vuelo.copiloto;
+                const idInstructor = typeof vuelo.instructor === 'object' ? vuelo.instructor?._id : vuelo.instructor;
+
+                const sumarHorasTripulante = (id, rol) => {
+                    if (!id) return;
+                    if (!acumuladoVuelos[id]) {
+                        acumuladoVuelos[id] = { 1: { p:0, i:0 }, 2: { p:0, i:0 }, 3: { p:0, i:0 }, 4: { p:0, i:0 } };
+                    }
+                    if (rol === 'instructor') {
+                        acumuladoVuelos[id][trimestre].i += horas;
+                    } else {
+                        acumuladoVuelos[id][trimestre].p += horas;
+                    }
+                };
+
+                sumarHorasTripulante(idPiloto, 'piloto');
+                sumarHorasTripulante(idCopiloto, 'copiloto');
+                sumarHorasTripulante(idInstructor, 'instructor');
+            });
+
+            // 2. UNIFICAR CON EL PERSONAL Y CALCULAR EXIGENCIAS FALTANTES
+            const dataNormalizada = personalRaw.map(p => {
+                const pModificado = { ...p };
+                const tipoAeronave = determinarTipoAeronave(p.aeronave || p.sda);
+                const hsVuelosPiloto = acumuladoVuelos[p._id] || { 1: { p:0, i:0 }, 2: { p:0, i:0 }, 3: { p:0, i:0 }, 4: { p:0, i:0 } };
+
                 [1, 2, 3, 4].forEach(num => {
                     const keyTrimestre = `trimestre${num}`;
-                    if (pModificado[keyTrimestre]) {
-                        const cond = pModificado[keyTrimestre].condicion || 'CP';
-                        const tipo = pModificado[keyTrimestre].tipoEbm || 'A';
-                        
-                        const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
-                        const restantes = reqHs - Number(pModificado[keyTrimestre].hsVoladas || 0);
-                        
-                        pModificado[keyTrimestre] = {
-                            ...pModificado[keyTrimestre],
-                            hsFaltantes: restantes > 0 ? Math.round(restantes * 10) / 10 : 0
-                        };
-                    }
+                    const trimOriginal = pModificado[keyTrimestre] || {};
+                    
+                    const hsPiloto = hsVuelosPiloto[num].p + Number(trimOriginal.hsPiloto || 0);
+                    const hsInstructor = hsVuelosPiloto[num].i + Number(trimOriginal.hsInstructor || 0);
+                    const hsVoladas = hsPiloto + hsInstructor;
+
+                    const cond = trimOriginal.condicion || 'CP';
+                    const tipo = trimOriginal.tipoEbm || 'A';
+                    
+                    const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
+                    const restantes = reqHs - hsVoladas;
+                    
+                    pModificado[keyTrimestre] = {
+                        condicion: cond,
+                        tipoEbm: tipo,
+                        hsPiloto: Math.round(hsPiloto * 10) / 10,
+                        hsInstructor: Math.round(hsInstructor * 10) / 10,
+                        hsVoladas: Math.round(hsVoladas * 10) / 10,
+                        hsFaltantes: restantes > 0 ? Math.round(restantes * 10) / 10 : 0
+                    };
                 });
                 return pModificado;
             });
 
             const dataJurisdiccion = esMandoEstrategico ? dataNormalizada : dataNormalizada.filter(p => {
-                const unidadPiloto = p.elemento || p.unidad;
+                const unidadPiloto = p.elemento || p.unidad || p.unidadResponsable;
                 return unidadPiloto && unidadPiloto.trim().toUpperCase() === userUnidad;
             });
 
             setTodoElPersonal(dataJurisdiccion);
 
-            const elementosUnicos = [...new Set(dataJurisdiccion.map(p => (p.elemento || p.unidad || '').trim().toUpperCase()).filter(Boolean))].sort();
+            const elementosUnicos = [...new Set(dataJurisdiccion.map(p => (p.elemento || p.unidad || p.unidadResponsable || '').trim().toUpperCase()).filter(Boolean))].sort();
             setTodosLosElementos(elementosUnicos);
             
             setElementoSeleccionado(esMandoEstrategico ? 'TODOS' : userUnidad);
@@ -132,7 +184,6 @@ const EbmPage = () => {
     const toggleSdaVisible = (sda) => { setSdasVisibles(prev => ({ ...prev, [sda]: !prev[sda] })); };
     const toggleFilaDesplegada = (id) => { setFilasDesplegadas(prev => ({ ...prev, [id]: !prev[id] })); };
 
-    // --- APLICAR TIPO DE TRIMESTRE GENERAL PARA EL SDA ---
     const handleAplicarTipoSda = (sdaTarget, trimestreNum, nuevoTipoEbm) => {
         if (!esGestorOperativo) return;
 
@@ -156,7 +207,6 @@ const EbmPage = () => {
         setTodoElPersonal(actualizarLista);
     };
 
-    // --- GENERACIÓN E IMPRESIÓN DE PDF A4 HORIZONTAL ---
     const exportarPdfHorizontal = async () => {
         if (!pdfRef.current) return;
         try {
@@ -172,21 +222,19 @@ const EbmPage = () => {
 
             const imgData = canvas.toDataURL('image/png');
             
-            // Hoja A4 Horizontal (Landscape: 297mm x 210mm)
             const pdf = new jsPDF('landscape', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
 
-            const imgWidth = pdfWidth - 20; // 10mm de margen a cada lado
+            const imgWidth = pdfWidth - 20;
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
             let heightLeft = imgHeight;
-            let position = 10; // Margen superior inicial
+            let position = 10;
 
             pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
             heightLeft -= (pdfHeight - 20);
 
-            // Control de múltiples páginas
             while (heightLeft > 0) {
                 position = heightLeft - imgHeight + 10;
                 pdf.addPage();
@@ -350,7 +398,6 @@ const EbmPage = () => {
                 </div>
             </div>
 
-            {/* CONTENEDOR CAPTURADO PARA EL PDF */}
             <div ref={pdfRef} style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px' }}>
                 <div style={styles.tableWrapper}>
                     <table style={styles.mainTable}>
@@ -442,7 +489,6 @@ const EbmPage = () => {
                                                                 {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4.hsFaltantes)} hs`}
                                                             </td>
 
-                                                            {/* NUEVA COLUMNA TOTAL ANUAL */}
                                                             <td style={{...styles.tdVoladas, fontWeight: 'bold', backgroundColor: '#f0f9ff', color: '#0369a1'}}>
                                                                 {formatearHoras(totalesAnuales.totalGeneral)} hs
                                                             </td>
