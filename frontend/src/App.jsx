@@ -245,7 +245,7 @@ function App() {
                                                 onClick={() => setView('entrenamientoDashboard')} 
                                                 style={{...styles.dropdownItem, backgroundColor: view === 'entrenamientoDashboard' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
                                             >
-                                                📊 Dashboard Entrenamiento
+                                                📊 Estadisticas de Entrenamiento
                                             </button>
                                         </>
                                     )}
@@ -270,7 +270,7 @@ function App() {
                                             onClick={() => setView('dashboardVuelos')} 
                                             style={{...styles.dropdownItem, backgroundColor: view === 'dashboardVuelos' ? 'rgba(255,255,255,0.1)' : 'transparent'}}
                                         >
-                                            📊 Dashboard Horas Vuelo
+                                            📊 Estadisticas de Horas de  Vuelo
                                         </button>
                                     )}
                                 </NavDropdown>
