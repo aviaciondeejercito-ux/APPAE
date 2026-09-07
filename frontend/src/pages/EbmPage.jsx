@@ -86,9 +86,10 @@ const EbmPage = () => {
         const sdas = [...new Set(filtrados.map(p => p.aeronave).filter(Boolean))];
         setTodosLosSdas(sdas);
 
+        // Se inicializan OCULTOS (false) por defecto
         setSdasVisibles(prev => {
             const nuevo = { ...prev };
-            sdas.forEach(sda => { if (nuevo[sda] === undefined) nuevo[sda] = true; });
+            sdas.forEach(sda => { if (nuevo[sda] === undefined) nuevo[sda] = false; });
             return nuevo;
         });
 
