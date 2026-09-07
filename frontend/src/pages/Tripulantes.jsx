@@ -194,6 +194,7 @@ const Tripulantes = () => {
         }
     };
 
+    // --- IMPRESIÓN EXCLUSIVA DEL LEGAJO SELECCIONADO ---
     const handleImprimirLegajo = () => {
         window.print();
     };
@@ -325,14 +326,17 @@ const Tripulantes = () => {
 
     return (
         <div style={styles.dashboardContainer}>
+            {/* REGLAS CSS EXCLUSIVAS PARA LA IMPRESIÓN DEL LEGAJO */}
             <style>
                 {`
                     @media print {
-                        .no-printable, body * {
+                        body * {
+                            visibility: hidden !important;
+                        }
+                        .no-printable, .no-print-btn {
                             display: none !important;
                         }
                         .printable-area, .printable-area * {
-                            display: block !important;
                             visibility: visible !important;
                         }
                         .printable-area {
@@ -340,15 +344,15 @@ const Tripulantes = () => {
                             left: 0 !important;
                             top: 0 !important;
                             width: 100% !important;
-                            padding: 0 !important;
                             margin: 0 !important;
-                        }
-                        .printable-area .no-print-btn {
-                            display: none !important;
+                            padding: 0 !important;
+                            box-shadow: none !important;
+                            border: none !important;
                         }
                         .printable-area .grid-stats-print {
                             display: grid !important;
                             grid-template-columns: repeat(4, 1fr) !important;
+                            gap: 10px !important;
                         }
                         .printable-area .flex-print {
                             display: flex !important;
@@ -357,6 +361,7 @@ const Tripulantes = () => {
                 `}
             </style>
 
+            {/* BARRA LATERAL (OCULTA EN IMPRESIÓN) */}
             <div style={styles.sidebar} className="no-printable">
                 {esGestorOperativo && (
                     <div style={styles.altaBox}>
@@ -384,8 +389,10 @@ const Tripulantes = () => {
                 </div>
             </div>
 
+            {/* VISTA PRINCIPAL */}
             <div style={styles.mainView}>
                 {seleccionado ? (
+                    /* ÁREA IMPRIMIBLE */
                     <div style={styles.legajoCard} className="printable-area">
                         <div style={styles.legajoHeader} className="flex-print">
                             <div style={styles.avatar}><User size={35} color="white" /></div>
@@ -557,6 +564,7 @@ const Tripulantes = () => {
                 )}
             </div>
 
+            {/* MODALES DE EDICIÓN Y ALTA (OCULTOS EN IMPRESIÓN) */}
             {(showAltaModal || showEditModal) && (
                 <div style={styles.overlay} className="no-printable">
                     <div style={styles.modal}>
