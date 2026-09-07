@@ -28,7 +28,6 @@ const Tripulantes = () => {
     const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
     const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002", "T-41"];
     
-    // Todos los roles extraídos de la interfaz
     const rolesVuelo = ['Cursante', 'Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
     
     const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
@@ -326,7 +325,6 @@ const Tripulantes = () => {
 
     return (
         <div style={styles.dashboardContainer}>
-            {/* REGLAS DE IMPRESIÓN DIRECTAS */}
             <style>
                 {`
                     @media print {
@@ -444,7 +442,6 @@ const Tripulantes = () => {
                                 </div>
                             </div>
 
-                            {/* TOTALES CONSOLIDADOS */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES HISTÓRICOS CONSOLIDADOS)</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall} className="no-print-btn"><Edit3 size={14}/></button>}
@@ -457,7 +454,6 @@ const Tripulantes = () => {
                                 <div style={{...styles.statCard, backgroundColor: '#eef6fc', borderColor: '#3498db'}}><span style={{...styles.statLabel, color: '#1b3a57'}}>TOTAL GENERAL</span><span style={{...styles.statValue, color: '#2980b9'}}>{totalGeneralHoras.toFixed(1)} hs</span></div>
                             </div>
 
-                            {/* HABILITACIONES POR SISTEMA DE ARMAS */}
                             <div style={styles.sectionHeader}>
                                 <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall} className="no-print-btn"><PlusCircle size={14}/> AGREGAR SdA</button>}
@@ -513,7 +509,6 @@ const Tripulantes = () => {
                                 })}
                             </div>
 
-                            {/* APTITUDES TÁCTICAS ESPECIALES */}
                             <div style={styles.sectionHeader}>
                                 <Star size={18} /> <span>APTITUDES TÁCTICAS ESPECIALES</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall} className="no-print-btn"><PlusCircle size={14}/> REGISTRAR</button>}
