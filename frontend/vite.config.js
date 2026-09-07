@@ -7,26 +7,43 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Eleva el límite de precaché a 5 MB para evitar el error de build en Render
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}']
+      },
       manifest: {
-        name: 'Sistema Aviación de Ejército',
-        short_name: 'Sistema AE',
-        description: 'Aplicación Operativa Offline-First de Aviación de Ejército',
-        theme_color: '#1a202c',
-        background_color: '#1a202c',
+        name: 'APPAE - Aviación de Ejército',
+        short_name: 'APPAE',
+        description: 'Sistema de Gestión Operativa y Legajos de Vuelo',
+        theme_color: '#1b3a57',
+        background_color: '#f5f6fa',
         display: 'standalone',
         icons: [
           {
-            src: 'https://cdn-icons-png.flaticon.com/512/3063/3063822.png', // Ícono genérico temporal
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
             sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
+            type: 'image/png'
           }
         ]
-      },
-      workbox: {
-        // Almacena los archivos CSS, JS e HTML creados por Vite
-        globPatterns: ['**/*.{js,css,html}']
       }
     })
-  ]
+  ],
+  build: {
+    // Separa las librerías de interfaz pesadas en chunks independientes
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-icons': ['lucide-react']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
+  }
 });
