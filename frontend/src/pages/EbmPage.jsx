@@ -348,6 +348,30 @@ const EbmPage = () => {
         };
     };
 
+    // --- RENDERIZADO VISUAL DISCRIMINADO PARA INSTRUCTORES ---
+    const renderCeldaHorasVoladas = (trimData) => {
+        const esInstructor = trimData?.condicion === 'IE';
+        const total = Number(trimData?.hsVoladas || 0);
+        const hsPiloto = Number(trimData?.hsPiloto || 0);
+        const hsInstructor = Number(trimData?.hsInstructor || 0);
+
+        if (!esInstructor) {
+            return <span>{formatearHoras(total)} hs</span>;
+        }
+
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: '1.1' }}>
+                <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8' }}>
+                    {formatearHoras(total)}
+                </span>
+                <div style={{ fontSize: '10px', marginTop: '2px', display: 'flex', gap: '5px' }}>
+                    <span><b style={{ color: '#000' }}>I</b> <span style={{ color: '#1d4ed8' }}>{formatearHoras(hsInstructor)}</span></span>
+                    <span><b style={{ color: '#000' }}>P</b> <span style={{ color: '#1d4ed8' }}>{formatearHoras(hsPiloto)}</span></span>
+                </div>
+            </div>
+        );
+    };
+
     const haySdaSeleccionado = Object.values(sdasVisibles).some(v => v === true);
 
     if (loading) return <div style={styles.centerText}>Cargando Matriz de Exigencias EBM...</div>;
@@ -485,6 +509,7 @@ const EbmPage = () => {
                                                     const estaDesplegado = !!filasDesplegadas[p._id];
                                                     const rotacionValida = verificarRotacionCorrecta(p);
                                                     const totalesAnuales = calcularTotalesAnuales(p);
+                                                    const esAlgúnTrimestreInstructor = [1, 2, 3, 4].some(num => p[`trimestre${num}`]?.condicion === 'IE');
 
                                                     return (
                                                         <React.Fragment key={p._id}>
@@ -504,28 +529,54 @@ const EbmPage = () => {
                                                                         T4: {p.trimestre4?.condicion}-{p.trimestre4?.tipoEbm}
                                                                     </div>
                                                                 </td>
-                                                                <td style={styles.tdVoladas}>{formatearHoras(p.trimestre1?.hsVoladas)} hs</td>
+
+                                                                {/* TRIMESTRE 1 */}
+                                                                <td style={styles.tdVoladas}>
+                                                                    {renderCeldaHorasVoladas(p.trimestre1)}
+                                                                </td>
                                                                 <td style={{...styles.tdFaltan, color: Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                                    {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1.hsFaltantes)} hs`}
+                                                                    {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1?.hsFaltantes)} hs`}
                                                                 </td>
 
-                                                                <td style={styles.tdVoladas}>{formatearHoras(p.trimestre2?.hsVoladas)} hs</td>
+                                                                {/* TRIMESTRE 2 */}
+                                                                <td style={styles.tdVoladas}>
+                                                                    {renderCeldaHorasVoladas(p.trimestre2)}
+                                                                </td>
                                                                 <td style={{...styles.tdFaltan, color: Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                                    {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2.hsFaltantes)} hs`}
+                                                                    {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2?.hsFaltantes)} hs`}
                                                                 </td>
 
-                                                                <td style={styles.tdVoladas}>{formatearHoras(p.trimestre3?.hsVoladas)} hs</td>
+                                                                {/* TRIMESTRE 3 */}
+                                                                <td style={styles.tdVoladas}>
+                                                                    {renderCeldaHorasVoladas(p.trimestre3)}
+                                                                </td>
                                                                 <td style={{...styles.tdFaltan, color: Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                                    {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3.hsFaltantes)} hs`}
+                                                                    {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3?.hsFaltantes)} hs`}
                                                                 </td>
 
-                                                                <td style={styles.tdVoladas}>{formatearHoras(p.trimestre4?.hsVoladas)} hs</td>
+                                                                {/* TRIMESTRE 4 */}
+                                                                <td style={styles.tdVoladas}>
+                                                                    {renderCeldaHorasVoladas(p.trimestre4)}
+                                                                </td>
                                                                 <td style={{...styles.tdFaltan, color: Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                                    {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4.hsFaltantes)} hs`}
+                                                                    {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4?.hsFaltantes)} hs`}
                                                                 </td>
 
+                                                                {/* TOTAL ANUAL VOLADO */}
                                                                 <td style={{...styles.tdVoladas, fontWeight: 'bold', backgroundColor: '#f0f9ff', color: '#0369a1'}}>
-                                                                    {formatearHoras(totalesAnuales.totalGeneral)} hs
+                                                                    {esAlgúnTrimestreInstructor ? (
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: '1.1' }}>
+                                                                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#0369a1' }}>
+                                                                                {formatearHoras(totalesAnuales.totalGeneral)}
+                                                                            </span>
+                                                                            <div style={{ fontSize: '10px', marginTop: '2px', display: 'flex', gap: '5px' }}>
+                                                                                <span><b style={{ color: '#000' }}>I</b> <span style={{ color: '#0369a1' }}>{formatearHoras(totalesAnuales.totalInstructor)}</span></span>
+                                                                                <span><b style={{ color: '#000' }}>P</b> <span style={{ color: '#0369a1' }}>{formatearHoras(totalesAnuales.totalPiloto)}</span></span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span>{formatearHoras(totalesAnuales.totalGeneral)} hs</span>
+                                                                    )}
                                                                 </td>
                                                                 <td style={{
                                                                     ...styles.tdFaltan, 
@@ -677,7 +728,7 @@ const styles = {
     tdCenter: { padding: '10px', textAlign: 'center' },
     tdName: { padding: '12px 15px', fontWeight: 'bold', fontSize: '13px', color: '#334155' },
     miniSubtext: { fontSize: '10px', color: '#64748b', marginTop: '3px', fontFamily: 'monospace' },
-    tdVoladas: { padding: '12px 10px', fontSize: '12px', textAlign: 'center', backgroundColor: '#fafafa', borderRight: '1px solid #f1f5f9' },
+    tdVoladas: { padding: '10px', fontSize: '12px', textAlign: 'center', backgroundColor: '#fafafa', borderRight: '1px solid #f1f5f9' },
     tdFaltan: { padding: '12px 10px', fontSize: '12px', textAlign: 'center', fontWeight: 'bold', borderRight: '1px solid #e2e8f0' },
     btnConfig: { background: 'none', border: 'none', fontSize: '15px', cursor: 'pointer', padding: '4px' },
     configExpandedRow: { backgroundColor: '#f8fafc', borderLeft: '5px solid #1b3a57' },
