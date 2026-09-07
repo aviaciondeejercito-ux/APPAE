@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, ChevronRight, UserPlus, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Bookmark } from 'lucide-react';
+import { Search, User, ChevronRight, UserPlus, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Bookmark, Printer } from 'lucide-react';
 import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
 
 const redondearHs = (num) => Math.round((Number(num) || 0) * 10) / 10;
@@ -102,18 +102,15 @@ const Tripulantes = () => {
         vuelos.forEach(vuelo => {
             let aptitudesVuelo = [];
 
-            // 1. Misión principal o capacitaciones
             const tipoMision = String(vuelo.tipoMision || vuelo.capacitacionTactica || vuelo.mision || '').trim().toUpperCase();
             if (tipoMision) {
                 aptitudesVuelo.push(tipoMision);
             }
 
-            // 2. Arreglo explícito de aptitudes tácticas (si existe)
             if (Array.isArray(vuelo.aptitudesTacticas)) {
                 vuelo.aptitudesTacticas.forEach(a => aptitudesVuelo.push(String(a).trim().toUpperCase()));
             }
 
-            // 3. Evaluar reglas operativas independientes (IFR, NVG y Nocturno)
             if (String(vuelo.reglasVuelo).trim().toUpperCase() === 'IFR') {
                 aptitudesVuelo.push('IFR');
             }
@@ -124,7 +121,6 @@ const Tripulantes = () => {
                 aptitudesVuelo.push('VISUAL NOCTURNO');
             }
 
-            // 4. Verificar coincidencia semántica
             const coincide = aptitudesVuelo.some(apt => 
                 apt === tipoNorm || apt.includes(tipoNorm) || tipoNorm.includes(apt)
             );
@@ -197,6 +193,10 @@ const Tripulantes = () => {
         } finally { 
             setLoading(false); 
         }
+    };
+
+    const handleImprimirLegajo = () => {
+        window.print();
     };
 
     const handleEliminarTripulante = async (id) => {
@@ -326,7 +326,40 @@ const Tripulantes = () => {
 
     return (
         <div style={styles.dashboardContainer}>
-            <div style={styles.sidebar}>
+            {/* REGLAS DE IMPRESIÓN DIRECTAS */}
+            <style>
+                {`
+                    @media print {
+                        .no-printable, body * {
+                            display: none !important;
+                        }
+                        .printable-area, .printable-area * {
+                            display: block !important;
+                            visibility: visible !important;
+                        }
+                        .printable-area {
+                            position: absolute !important;
+                            left: 0 !important;
+                            top: 0 !important;
+                            width: 100% !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                        }
+                        .printable-area .no-print-btn {
+                            display: none !important;
+                        }
+                        .printable-area .grid-stats-print {
+                            display: grid !important;
+                            grid-template-columns: repeat(4, 1fr) !important;
+                        }
+                        .printable-area .flex-print {
+                            display: flex !important;
+                        }
+                    }
+                `}
+            </style>
+
+            <div style={styles.sidebar} className="no-printable">
                 {esGestorOperativo && (
                     <div style={styles.altaBox}>
                         <button style={styles.btnAlta} onClick={() => { setFormData({ grado: '', apellido: '', nombre: '', unidad: userUnidad }); setShowAltaModal(true); }}>
@@ -355,17 +388,22 @@ const Tripulantes = () => {
 
             <div style={styles.mainView}>
                 {seleccionado ? (
-                    <div style={styles.legajoCard}>
-                        <div style={styles.legajoHeader}>
+                    <div style={styles.legajoCard} className="printable-area">
+                        <div style={styles.legajoHeader} className="flex-print">
                             <div style={styles.avatar}><User size={35} color="white" /></div>
                             <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <h2 style={styles.legajoTitle}>{seleccionado.grado} {seleccionado.apellido}, {seleccionado.nombre}</h2>
-                                    {puedeEliminarPersonal && (
-                                        <button onClick={() => handleEliminarTripulante(seleccionado._id)} style={styles.btnDelete}>
-                                            <Trash2 size={22}/>
+                                    <div style={{ display: 'flex', gap: '10px' }} className="no-print-btn">
+                                        <button onClick={handleImprimirLegajo} style={styles.btnPrint} title="Imprimir Legajo de Vuelo">
+                                            <Printer size={18} /> <span>Imprimir Legajo</span>
                                         </button>
-                                    )}
+                                        {puedeEliminarPersonal && (
+                                            <button onClick={() => handleEliminarTripulante(seleccionado._id)} style={styles.btnDelete}>
+                                                <Trash2 size={22}/>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                                 <span style={styles.legajoSubtitle}>{seleccionado.elemento || seleccionado.unidad}</span>
                             </div>
@@ -374,9 +412,9 @@ const Tripulantes = () => {
                         <div style={styles.legajoBody}>
                             <div style={styles.sectionHeader}>
                                 <ShieldCheck size={18} /> <span>CERTIFICACIONES TÉCNICAS</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall} className="no-print-btn"><Edit3 size={14}/></button>}
                             </div>
-                            <div style={styles.gridStats}>
+                            <div style={styles.gridStats} className="grid-stats-print">
                                 <div style={styles.statCard}>
                                     <span style={styles.statLabel}>PSICOFÍSICO</span>
                                     <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).color}}>
@@ -409,9 +447,9 @@ const Tripulantes = () => {
                             {/* TOTALES CONSOLIDADOS */}
                             <div style={styles.sectionHeader}>
                                 <Clock size={18} /> <span>LIBRETA DE VUELO (TOTALES HISTÓRICOS CONSOLIDADOS)</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall}><Edit3 size={14}/></button>}
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('horas')} style={styles.btnEditSmall} className="no-print-btn"><Edit3 size={14}/></button>}
                             </div>
-                            <div style={styles.gridStats}>
+                            <div style={styles.gridStats} className="grid-stats-print">
                                 <div style={styles.statCard}><span style={styles.statLabel}>VISUAL</span><span style={styles.statValue}>{horasTotales.visual.toFixed(1)} hs</span></div>
                                 <div style={styles.statCard}><span style={styles.statLabel}>NOCTURNO</span><span style={styles.statValue}>{horasTotales.nocturno.toFixed(1)} hs</span></div>
                                 <div style={styles.statCard}><span style={styles.statLabel}>INSTRUMENTAL</span><span style={styles.statValue}>{horasTotales.instrumental.toFixed(1)} hs</span></div>
@@ -422,7 +460,7 @@ const Tripulantes = () => {
                             {/* HABILITACIONES POR SISTEMA DE ARMAS */}
                             <div style={styles.sectionHeader}>
                                 <Award size={18} /> <span>HABILITACIONES POR SISTEMA DE ARMAS</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> AGREGAR SdA</button>}
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('habilitacion')} style={styles.btnAddSmall} className="no-print-btn"><PlusCircle size={14}/> AGREGAR SdA</button>}
                             </div>
                             <div style={styles.habilitacionesList}>
                                 {seleccionado.habilitaciones?.map((h, i) => {
@@ -435,7 +473,7 @@ const Tripulantes = () => {
                                     const totalSdA = redondearHs(v + inst + noc + nvg).toFixed(1);
                                     
                                     return (
-                                        <div key={h._id || i} style={styles.habItem}>
+                                        <div key={h._id || i} style={styles.habItem} className="flex-print">
                                             <div style={styles.habInfoMain}>
                                                 <div style={styles.habTitleGroup}>
                                                     <strong style={styles.habAeronave}>{h.aeronave}</strong>
@@ -466,7 +504,7 @@ const Tripulantes = () => {
                                                 </div>
                                             </div>
                                             {esGestorOperativo && (
-                                                <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete}>
+                                                <button onClick={() => deleteSubItem('habilitacion', h._id)} style={styles.btnIconDelete} className="no-print-btn">
                                                     <Trash2 size={16}/>
                                                 </button>
                                             )}
@@ -478,7 +516,7 @@ const Tripulantes = () => {
                             {/* APTITUDES TÁCTICAS ESPECIALES */}
                             <div style={styles.sectionHeader}>
                                 <Star size={18} /> <span>APTITUDES TÁCTICAS ESPECIALES</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>}
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('capacitacion')} style={styles.btnAddSmall} className="no-print-btn"><PlusCircle size={14}/> REGISTRAR</button>}
                             </div>
                             <div style={styles.tacticasContainer}>
                                 {seleccionado.capacitacionesEspeciales?.map((c, i) => {
@@ -489,7 +527,7 @@ const Tripulantes = () => {
                                         <div key={c._id || i} style={styles.tacticaBadge}>
                                             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', width: '100%'}}>
                                                 <div style={{fontWeight: 'bold', fontSize: '0.75rem'}}>{c.tipo}</div>
-                                                {esGestorOperativo && <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
+                                                {esGestorOperativo && <button onClick={() => deleteSubItem('capacitacion', c._id)} style={styles.btnIconDeleteWhite} className="no-print-btn"><X size={12}/></button>}
                                             </div>
                                             <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
                                                 <span>{totalCapacitacionHs.toFixed(1)} hs</span>
@@ -502,14 +540,14 @@ const Tripulantes = () => {
 
                             <div style={styles.sectionHeader}>
                                 <Bookmark size={18} /> <span>APTITUDES ADICIONALES</span>
-                                {esGestorOperativo && <button onClick={() => handleOpenEdit('aptitudAdicional')} style={styles.btnAddSmall}><PlusCircle size={14}/> REGISTRAR</button>}
+                                {esGestorOperativo && <button onClick={() => handleOpenEdit('aptitudAdicional')} style={styles.btnAddSmall} className="no-print-btn"><PlusCircle size={14}/> REGISTRAR</button>}
                             </div>
                             <div style={styles.tacticasContainer}>
                                 {seleccionado.aptitudesAdicionales?.map((a, i) => (
                                     <div key={a._id || i} style={{...styles.tacticaBadge, backgroundColor: '#2c3e50'}}>
                                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', width: '100%'}}>
                                             <div style={{fontWeight: 'bold', fontSize: '0.75rem'}}>{a.tipo}</div>
-                                            {esGestorOperativo && <button onClick={() => deleteSubItem('aptitudAdicional', a._id)} style={styles.btnIconDeleteWhite}><X size={12}/></button>}
+                                            {esGestorOperativo && <button onClick={() => deleteSubItem('aptitudAdicional', a._id)} style={styles.btnIconDeleteWhite} className="no-print-btn"><X size={12}/></button>}
                                         </div>
                                         <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '4px', fontSize: '0.65rem', opacity: 0.9}}>
                                             <span>{a.fechaAdquisicion ? new Date(a.fechaAdquisicion).toLocaleDateString() : ''}</span>
@@ -520,12 +558,12 @@ const Tripulantes = () => {
                         </div>
                     </div>
                 ) : (
-                    <div style={styles.emptyState}><User size={60} color="#dcdde1" /><h3>Monitor de Legajos Digitales AE</h3></div>
+                    <div style={styles.emptyState} className="no-printable"><User size={60} color="#dcdde1" /><h3>Monitor de Legajos Digitales AE</h3></div>
                 )}
             </div>
 
             {(showAltaModal || showEditModal) && (
-                <div style={styles.overlay}>
+                <div style={styles.overlay} className="no-printable">
                     <div style={styles.modal}>
                         <div style={styles.modalHeader}>
                             <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{showAltaModal ? 'Incorporación de Personal' : `Gestión de ${modalType.toUpperCase()}`}</h3>
@@ -689,6 +727,7 @@ const styles = {
     tacticaBadge: { background: '#1b3a57', color: 'white', padding: '8px 12px', borderRadius: '8px', minWidth: '140px' },
     btnEditSmall: { background: 'none', border: 'none', color: '#3498db', cursor: 'pointer', marginLeft: '10px' },
     btnAddSmall: { background: '#27ae60', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', marginLeft: 'auto' },
+    btnPrint: { backgroundColor: 'white', color: '#1b3a57', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
     btnDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', transition: '0.2s', padding: '5px', borderRadius: '5px' },
     btnIconDelete: { background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', opacity: 0.6 },
     emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#7f8c8d', gap: '10px' },
