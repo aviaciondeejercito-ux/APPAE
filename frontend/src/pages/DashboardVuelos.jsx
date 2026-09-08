@@ -209,7 +209,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.visitas - a.visitas);
     }, [vuelosFiltrados]);
 
-    // 🖨️ FUNCIÓN DE IMPRESIÓN / EXPORTACIÓN A PDF
     const handleImprimir = () => {
         window.print();
     };
@@ -224,45 +223,75 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
     return (
         <div style={styles.container}>
-            {/* 🖨️ INYECCIÓN DE ESTILOS CSS EXCLUSIVOS PARA IMPRESIÓN (BLANCO Y NEGRO) */}
+            {/* 🖨️ ESTILOS CSS DE IMPRESIÓN - ALTO CONTRASTE Y NEGRO MONOCROMÁTICO */}
             <style>{`
                 @media print {
-                    /* Ocultar elementos de navegación o innecesarios al imprimir */
                     .no-print, button, select {
                         display: none !important;
                     }
-                    
-                    /* Forzar que todo el contenido y SVG pase a escala de grises y alto contraste */
-                    body, div, span, h2, h3, h4, svg {
-                        filter: grayscale(100%) !important;
+
+                    /* Fondo blanco estricto y texto negro puro */
+                    body, div, container {
+                        background-color: #ffffff !important;
                         color: #000000 !important;
-                        background: #ffffff !important;
                     }
 
-                    /* Desbloquear contenedores con scroll para que salgan completos en papel */
+                    /* Todos los textos del Dashboard a negro puro */
+                    h2, h3, h4, span, label, p {
+                        color: #000000 !important;
+                        text-shadow: none !important;
+                    }
+
+                    /* Forzar que las barras de Recharts se rellenen en negro sólido */
+                    .recharts-bar-rectangle path {
+                        fill: #000000 !important;
+                        stroke: #000000 !important;
+                    }
+
+                    /* Forzar que el área de perfil sea sombra negra limpia */
+                    .recharts-area-area {
+                        fill: #000000 !important;
+                        fill-opacity: 0.25 !important;
+                    }
+
+                    .recharts-area-curve {
+                        stroke: #000000 !important;
+                        stroke-width: 2px !important;
+                    }
+
+                    /* Rejillas y ejes a negro/gris oscuro para máxima visibilidad */
+                    .recharts-cartesian-grid-line {
+                        stroke: #666666 !important;
+                    }
+
+                    .recharts-text {
+                        fill: #000000 !important;
+                        font-weight: bold !important;
+                    }
+
+                    /* Tarjetas de KPI y gráficos con borde negro grueso */
+                    .chart-card-print, .kpi-card-print {
+                        border: 2px solid #000000 !important;
+                        box-shadow: none !important;
+                        background: #ffffff !important;
+                        page-break-inside: avoid;
+                        break-inside: avoid;
+                        margin-bottom: 15px !important;
+                    }
+
+                    .kpi-card-print {
+                        border-left: 6px solid #000000 !important;
+                    }
+
+                    /* Extender contenedores con scroll para imprimir la lista completa */
                     .scroll-container {
                         max-height: none !important;
                         overflow: visible !important;
                     }
 
-                    /* Ajustes de diseño de página */
                     @page {
                         size: A4 portrait;
-                        margin: 1.5cm;
-                    }
-
-                    /* Forzar saltos de página limpios en la grilla */
-                    .chart-card-print {
-                        page-break-inside: avoid;
-                        break-inside: avoid;
-                        border: 1px solid #000 !important;
-                        box-shadow: none !important;
-                        margin-bottom: 20px !important;
-                    }
-
-                    .kpi-card-print {
-                        border: 1px solid #000 !important;
-                        box-shadow: none !important;
+                        margin: 1cm;
                     }
                 }
             `}</style>
@@ -279,12 +308,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
 
                 <div style={styles.filtrosBar}>
-                    {/* 🖨️ BOTÓN IMPRIMIR / PDF */}
                     <button 
                         onClick={handleImprimir}
                         style={styles.btnPrint}
                         className="no-print"
-                        title="Imprimir o Guardar en PDF (Escala de grises)"
+                        title="Imprimir o Guardar en PDF (Optimizado para Blanco y Negro)"
                     >
                         🖨️ Exportar / Imprimir PDF
                     </button>
@@ -446,7 +474,7 @@ const styles = {
     filtroGroup: { display: 'flex', flexDirection: 'column', gap: '2px' },
     label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#1b3a57' },
     select: { padding: '5px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: '600', color: '#1b3a57' },
-    btnPrint: { backgroundColor: '#1b3a57', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer', transition: 'background-color 0.2s' },
+    btnPrint: { backgroundColor: '#1b3a57', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer' },
     kpiContainer: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' },
     kpiCard: { backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', borderLeft: '4px solid #1b3a57', display: 'flex', flexDirection: 'column' },
     kpiTitle: { fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' },
