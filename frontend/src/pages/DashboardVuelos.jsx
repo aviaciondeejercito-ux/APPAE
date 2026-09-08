@@ -131,22 +131,34 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return vuelosFiltrados.reduce((acc, v) => acc + (Number(v.pesoCarga) || 0), 0);
     }, [vuelosFiltrados]);
 
-    const actividadPorFecha = useMemo(() => {
+    // 📈 PERFIL DE ACTIVIDAD AGRUPADO POR MES
+    const actividadPorMes = useMemo(() => {
         const mapa = {};
         vuelosFiltrados.forEach(v => {
             const rawFecha = v.fecha || v.fechaVuelo || v.createdAt;
             if (!rawFecha) return;
-            const fechaKey = String(rawFecha).substring(0, 10);
-            mapa[fechaKey] = (mapa[fechaKey] || 0) + 1;
+            
+            // Extraer formato Año-Mes (Ej: "2026-08")
+            const mesKey = String(rawFecha).substring(0, 7); 
+            mapa[mesKey] = (mapa[mesKey] || 0) + 1;
         });
 
+        const mesesNombre = [
+            'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 
+            'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+        ];
+
         return Object.entries(mapa)
-            .map(([fecha, vuelos]) => ({
-                fecha,
-                fechaFormatted: fecha.split('-').reverse().join('/'),
-                vuelos
-            }))
-            .sort((a, b) => a.fecha.localeCompare(b.fecha));
+            .map(([mesKey, vuelos]) => {
+                const [anio, mes] = mesKey.split('-');
+                const numMes = parseInt(mes, 10) - 1;
+                return {
+                    mesKey,
+                    mesFormatted: `${mesesNombre[numMes] || mes} ${anio}`,
+                    vuelos
+                };
+            })
+            .sort((a, b) => a.mesKey.localeCompare(b.mesKey));
     }, [vuelosFiltrados]);
 
     const horasPorElemento = useMemo(() => {
@@ -171,7 +183,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.value - a.value);
     }, [vuelosFiltrados]);
 
-    // Acotamos a Top 10 en impresión vía CSS/JS o acotando datos si es muy largo
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         const formatearNombre = (t) => {
@@ -223,15 +234,13 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
     return (
         <div style={styles.container} className="dashboard-print-container">
-            {/* 🖨️ ESTILOS CSS RESTRUCTURADOS PARA IMPRESIÓN PÁGINA A PÁGINA */}
+            {/* 🖨️ ESTILOS CSS RESTRUCTURADOS PARA IMPRESIÓN Y PDF EN ESCALA DE NEGROS */}
             <style>{`
                 @media print {
-                    /* Ocultar elementos innecesarios */
                     .no-print, button, select {
                         display: none !important;
                     }
 
-                    /* Configuración Global de la Hoja A4 */
                     @page {
                         size: A4 portrait;
                         margin: 12mm 10mm;
@@ -245,12 +254,10 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         padding: 0 !important;
                     }
 
-                    /* Modificación de Grilla: Pasar de 2 columnas a 1 columna por tarjeta */
                     .charts-grid-print {
                         display: block !important;
                     }
 
-                    /* Control de Estructura por Tarjeta */
                     .chart-card-print {
                         width: 100% !important;
                         max-width: 100% !important;
@@ -260,25 +267,21 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         margin-bottom: 20px !important;
                         padding: 10px !important;
                         box-sizing: border-box !important;
-                        
-                        /* Evita que un gráfico se corte a la mitad entre 2 hojas */
                         page-break-inside: avoid !important;
                         break-inside: avoid !important;
                     }
 
-                    /* Forzar altura fija para que los gráficos no se estiren verticalmente */
                     .scroll-container-print {
-                        max-height: 320px !important;
-                        height: 320px !important;
+                        max-height: 280px !important;
+                        height: 280px !important;
                         overflow: hidden !important;
                     }
 
                     .recharts-responsive-container {
-                        max-height: 280px !important;
-                        height: 280px !important;
+                        max-height: 250px !important;
+                        height: 250px !important;
                     }
 
-                    /* KPIs compactos en horizontal */
                     .kpi-container-print {
                         display: flex !important;
                         flex-direction: row !important;
@@ -297,7 +300,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         padding: 8px !important;
                     }
 
-                    /* Colores a negro absoluto */
                     h2, h3, h4, span, label, p {
                         color: #000000 !important;
                     }
@@ -309,7 +311,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                     .recharts-area-area {
                         fill: #000000 !important;
-                        fill-opacity: 0.2 !important;
+                        fill-opacity: 0.25 !important;
                     }
 
                     .recharts-area-curve {
@@ -404,11 +406,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
             </div>
 
-            {/* 📈 PERFIL DE ACTIVIDAD EN EL TIEMPO */}
+            {/* 📈 PERFIL DE ACTIVIDAD AGRUPADO POR MES */}
             <div style={{ ...styles.chartCard, marginBottom: '20px' }} className="chart-card-print">
-                <h4 style={styles.chartTitle}>📈 Perfil Temporal de Actividad (Cantidad de Vuelos por Fecha)</h4>
+                <h4 style={styles.chartTitle}>📈 Actividad Mensual (Cantidad de Vuelos por Mes)</h4>
                 <ResponsiveContainer width="100%" height={220}>
-                    <AreaChart data={actividadPorFecha} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <AreaChart data={actividadPorMes} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                         <defs>
                             <linearGradient id="colorVuelos" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#1b3a57" stopOpacity={0.8}/>
@@ -416,11 +418,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="fechaFormatted" tick={{ fontSize: 10 }} />
+                        <XAxis dataKey="mesFormatted" tick={{ fontSize: 11, fontWeight: 'bold' }} />
                         <YAxis allowDecimals={false} />
                         <Tooltip 
-                            formatter={(value) => [`${value} vuelos`, 'Cantidad de Vuelos']}
-                            labelFormatter={(label) => `Fecha: ${label}`}
+                            formatter={(value) => [`${value} vuelos`, 'Total del Mes']}
+                            labelFormatter={(label) => `Período: ${label}`}
                         />
                         <Area 
                             type="monotone" 
