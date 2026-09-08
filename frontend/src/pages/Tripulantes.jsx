@@ -31,7 +31,14 @@ const Tripulantes = () => {
     const rolesVuelo = ['Cursante', 'Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
     
     const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
-    const aptitudesAdicionalesOp = ["Curso Radiooperador Restringido", "Capacitacion de Seguridad Operacional", "Capacitacion de Cargas Peligrosas"];
+    
+    // OPCIONES ACTUALIZADAS SEGÚN REQUERIMIENTO
+    const aptitudesAdicionalesOp = [
+        "Radio Operador Restringido", 
+        "Facilitador de CRM", 
+        "Facilitador de Factores Humanos", 
+        "Instructor de Simulador"
+    ];
 
     useEffect(() => { 
         fetchPersonal(); 
@@ -47,7 +54,7 @@ const Tripulantes = () => {
         }
     };
 
-    // --- CÁLCULO DE HORAS POR ROL Y SdA (LIBRETA SUPERIOR) ---
+    // --- CÁLCULO DE HORAS POR ROL Y SdA ---
     const calcularDesgloseVuelos = (tripulanteId, aeronave, rol) => {
         if (!vuelos || vuelos.length === 0 || !tripulanteId) {
             return { v: 0, inst: 0, noc: 0, nvg: 0 };
@@ -90,7 +97,6 @@ const Tripulantes = () => {
         return { v, inst, noc, nvg };
     };
 
-    // --- CÁLCULO INDEPENDIENTE EXCLUSIVO PARA CAPACITACIONES TÁCTICAS ---
     const calcularHorasCapacitacionTactica = (tripulanteId, tipoCapacitacion) => {
         if (!vuelos || vuelos.length === 0 || !tripulanteId || !tipoCapacitacion) return 0;
 
@@ -140,7 +146,6 @@ const Tripulantes = () => {
         return totalHsBD;
     };
 
-    // --- LECTURA Y CONSOLIDACIÓN DE HORAS ---
     const obtenerTotalesHistoricos = () => {
         if (!seleccionado) return { visual: 0, instrumental: 0, nocturno: 0, nvg: 0 };
 
@@ -194,7 +199,6 @@ const Tripulantes = () => {
         }
     };
 
-    // --- IMPRESIÓN EXCLUSIVA DEL LEGAJO SELECCIONADO ---
     const handleImprimirLegajo = () => {
         window.print();
     };
@@ -227,6 +231,10 @@ const Tripulantes = () => {
                 psicofisicoVencimiento: seleccionado.certificaciones?.psicofisico?.vencimiento?.split('T')[0] || '',
                 crmUltimaFecha: seleccionado.certificaciones?.crm?.ultimaFecha?.split('T')[0] || '',
                 crmVencimiento: seleccionado.certificaciones?.crm?.vencimiento?.split('T')[0] || '',
+                factoresHumanosUltimaFecha: seleccionado.certificaciones?.factoresHumanos?.ultimaFecha?.split('T')[0] || '',
+                factoresHumanosVencimiento: seleccionado.certificaciones?.factoresHumanos?.vencimiento?.split('T')[0] || '',
+                cargasPeligrosasUltimaFecha: seleccionado.certificaciones?.cargasPeligrosas?.ultimaFecha?.split('T')[0] || '',
+                cargasPeligrosasVencimiento: seleccionado.certificaciones?.cargasPeligrosas?.vencimiento?.split('T')[0] || '',
                 simuladorUltimaFecha: seleccionado.certificaciones?.simulador?.ultimaFecha?.split('T')[0] || '',
                 simuladorVencimiento: seleccionado.certificaciones?.simulador?.vencimiento?.split('T')[0] || ''
             });
@@ -267,6 +275,14 @@ const Tripulantes = () => {
                             crm: { 
                                 ultimaFecha: formData.crmUltimaFecha || null,
                                 vencimiento: formData.crmVencimiento || null 
+                            },
+                            factoresHumanos: { 
+                                ultimaFecha: formData.factoresHumanosUltimaFecha || null,
+                                vencimiento: formData.factoresHumanosVencimiento || null 
+                            },
+                            cargasPeligrosas: { 
+                                ultimaFecha: formData.cargasPeligrosasUltimaFecha || null,
+                                vencimiento: formData.cargasPeligrosasVencimiento || null 
                             },
                             simulador: {
                                 ultimaFecha: formData.simuladorUltimaFecha || null,
@@ -326,42 +342,25 @@ const Tripulantes = () => {
 
     return (
         <div style={styles.dashboardContainer}>
-            {/* REGLAS CSS EXCLUSIVAS PARA LA IMPRESIÓN DEL LEGAJO */}
             <style>
                 {`
                     @media print {
-                        body * {
-                            visibility: hidden !important;
-                        }
-                        .no-printable, .no-print-btn {
-                            display: none !important;
-                        }
-                        .printable-area, .printable-area * {
-                            visibility: visible !important;
-                        }
+                        body * { visibility: hidden !important; }
+                        .no-printable, .no-print-btn { display: none !important; }
+                        .printable-area, .printable-area * { visibility: visible !important; }
                         .printable-area {
-                            position: absolute !important;
-                            left: 0 !important;
-                            top: 0 !important;
-                            width: 100% !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            box-shadow: none !important;
-                            border: none !important;
+                            position: absolute !important; left: 0 !important; top: 0 !important;
+                            width: 100% !important; margin: 0 !important; padding: 0 !important;
+                            box-shadow: none !important; border: none !important;
                         }
                         .printable-area .grid-stats-print {
-                            display: grid !important;
-                            grid-template-columns: repeat(4, 1fr) !important;
-                            gap: 10px !important;
+                            display: grid !important; grid-template-columns: repeat(5, 1fr) !important; gap: 8px !important;
                         }
-                        .printable-area .flex-print {
-                            display: flex !important;
-                        }
+                        .printable-area .flex-print { display: flex !important; }
                     }
                 `}
             </style>
 
-            {/* BARRA LATERAL (OCULTA EN IMPRESIÓN) */}
             <div style={styles.sidebar} className="no-printable">
                 {esGestorOperativo && (
                     <div style={styles.altaBox}>
@@ -389,10 +388,8 @@ const Tripulantes = () => {
                 </div>
             </div>
 
-            {/* VISTA PRINCIPAL */}
             <div style={styles.mainView}>
                 {seleccionado ? (
-                    /* ÁREA IMPRIMIBLE */
                     <div style={styles.legajoCard} className="printable-area">
                         <div style={styles.legajoHeader} className="flex-print">
                             <div style={styles.avatar}><User size={35} color="white" /></div>
@@ -419,6 +416,8 @@ const Tripulantes = () => {
                                 <ShieldCheck size={18} /> <span>CERTIFICACIONES TÉCNICAS</span>
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall} className="no-print-btn"><Edit3 size={14}/></button>}
                             </div>
+                            
+                            {/* GRID DE CERTIFICACIONES ACTUALIZADO */}
                             <div style={styles.gridStats} className="grid-stats-print">
                                 <div style={styles.statCard}>
                                     <span style={styles.statLabel}>PSICOFÍSICO</span>
@@ -429,6 +428,7 @@ const Tripulantes = () => {
                                         {getEstadoVencimiento(seleccionado.certificaciones?.psicofisico?.vencimiento).label}
                                     </div>
                                 </div>
+
                                 <div style={styles.statCard}>
                                     <span style={styles.statLabel}>CRM</span>
                                     <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).color}}>
@@ -438,6 +438,27 @@ const Tripulantes = () => {
                                         {getEstadoVencimiento(seleccionado.certificaciones?.crm?.vencimiento).label}
                                     </div>
                                 </div>
+
+                                <div style={styles.statCard}>
+                                    <span style={styles.statLabel}>FACTORES HUMANOS</span>
+                                    <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.factoresHumanos?.vencimiento).color}}>
+                                        {seleccionado.certificaciones?.factoresHumanos?.vencimiento ? new Date(seleccionado.certificaciones.factoresHumanos.vencimiento).toLocaleDateString() : 'S/D'}
+                                    </span>
+                                    <div style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.factoresHumanos?.vencimiento).color}}>
+                                        {getEstadoVencimiento(seleccionado.certificaciones?.factoresHumanos?.vencimiento).label}
+                                    </div>
+                                </div>
+
+                                <div style={styles.statCard}>
+                                    <span style={styles.statLabel}>CARGAS PELIGROSAS</span>
+                                    <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.cargasPeligrosas?.vencimiento).color}}>
+                                        {seleccionado.certificaciones?.cargasPeligrosas?.vencimiento ? new Date(seleccionado.certificaciones.cargasPeligrosas.vencimiento).toLocaleDateString() : 'S/D'}
+                                    </span>
+                                    <div style={{...styles.statusTag, backgroundColor: getEstadoVencimiento(seleccionado.certificaciones?.cargasPeligrosas?.vencimiento).color}}>
+                                        {getEstadoVencimiento(seleccionado.certificaciones?.cargasPeligrosas?.vencimiento).label}
+                                    </div>
+                                </div>
+
                                 <div style={styles.statCard}>
                                     <span style={styles.statLabel}>SIMULADOR</span>
                                     <span style={{...styles.statValue, color: getEstadoVencimiento(seleccionado.certificaciones?.simulador?.vencimiento).color}}>
@@ -564,7 +585,6 @@ const Tripulantes = () => {
                 )}
             </div>
 
-            {/* MODALES DE EDICIÓN Y ALTA (OCULTOS EN IMPRESIÓN) */}
             {(showAltaModal || showEditModal) && (
                 <div style={styles.overlay} className="no-printable">
                     <div style={styles.modal}>
@@ -604,6 +624,16 @@ const Tripulantes = () => {
                                         <label style={styles.label}>Vencimiento CRM</label>
                                         <input type="date" style={styles.formInput} value={formData.crmVencimiento || ''} onChange={e => setFormData({...formData, crmVencimiento: e.target.value})} />
                                         
+                                        <label style={styles.label}>Última Fecha Factores Humanos</label>
+                                        <input type="date" style={styles.formInput} value={formData.factoresHumanosUltimaFecha || ''} onChange={e => setFormData({...formData, factoresHumanosUltimaFecha: e.target.value})} />
+                                        <label style={styles.label}>Vencimiento Factores Humanos</label>
+                                        <input type="date" style={styles.formInput} value={formData.factoresHumanosVencimiento || ''} onChange={e => setFormData({...formData, factoresHumanosVencimiento: e.target.value})} />
+
+                                        <label style={styles.label}>Última Fecha Cargas Peligrosas</label>
+                                        <input type="date" style={styles.formInput} value={formData.cargasPeligrosasUltimaFecha || ''} onChange={e => setFormData({...formData, cargasPeligrosasUltimaFecha: e.target.value})} />
+                                        <label style={styles.label}>Vencimiento Cargas Peligrosas</label>
+                                        <input type="date" style={styles.formInput} value={formData.cargasPeligrosasVencimiento || ''} onChange={e => setFormData({...formData, cargasPeligrosasVencimiento: e.target.value})} />
+
                                         <label style={styles.label}>Última Fecha Simulador</label>
                                         <input type="date" style={styles.formInput} value={formData.simuladorUltimaFecha || ''} onChange={e => setFormData({...formData, simuladorUltimaFecha: e.target.value})} />
                                         <label style={styles.label}>Vencimiento Simulador</label>
@@ -713,7 +743,7 @@ const styles = {
     sectionHeader: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 'bold', color: '#1b3a57', borderBottom: '2px solid #f1f2f6', paddingBottom: '10px', marginBottom: '20px', marginTop: '30px' },
     gridStats: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '15px' },
     statCard: { padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '10px', border: '1px solid #eee', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' },
-    statLabel: { fontSize: '0.65rem', color: '#7f8c8d', fontWeight: 'bold', textTransform: 'uppercase' },
+    statLabel: { fontSize: '0.65rem', color: '#7f8c8d', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center' },
     statValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1b3a57' },
     statusTag: { fontSize: '0.6rem', color: 'white', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', marginTop: '5px' },
     habilitacionesList: { display: 'flex', flexDirection: 'column', gap: '10px' },

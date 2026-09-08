@@ -1,5 +1,11 @@
 const mongoose = require('mongoose');
 
+// Esquema reusable para las certificaciones con fechas de control
+const certFechaSchema = new mongoose.Schema({
+  ultimaFecha: { type: Date, default: null },
+  vencimiento: { type: Date, default: null }
+}, { _id: false });
+
 const tripulanteSchema = new mongoose.Schema({
   apellido: { type: String, required: true, trim: true },
   nombre: { type: String, required: true, trim: true },
@@ -40,15 +46,18 @@ const tripulanteSchema = new mongoose.Schema({
     observaciones: String
   }],
   certificaciones: {
-    psicofisico: { ultimaFecha: { type: Date }, vencimiento: { type: Date } },
-    crm: { ultimaFecha: { type: Date }, vencimiento: { type: Date } },
-    simulador: { ultimaFecha: { type: Date }, vencimiento: { type: Date } }
+    psicofisico: { type: certFechaSchema, default: {} },
+    crm: { type: certFechaSchema, default: {} },
+    factoresHumanos: { type: certFechaSchema, default: {} },
+    cargasPeligrosas: { type: certFechaSchema, default: {} },
+    simulador: { type: certFechaSchema, default: {} }
   },
   totalesHistoricos: {
     vueloDiurno: { type: Number, default: 0 },
     vueloNocturno: { type: Number, default: 0 },
     vueloInstrumental: { type: Number, default: 0 },
     vueloVisual: { type: Number, default: 0 },
+    vueloNVG: { type: Number, default: 0 },
     aterrizajes: { type: Number, default: 0 }
   },
   ultimoEditor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -61,7 +70,7 @@ const tripulanteSchema = new mongoose.Schema({
   strict: false 
 });
 
-// Virtual inteligente: Calcula el total general de horas acumuladas sumando cada SdA de forma dinámica[cite: 16]
+// Virtual inteligente: Calcula el total general de horas acumuladas sumando cada SdA de forma dinámica
 tripulanteSchema.virtual('totalVueloGeneral').get(function() {
   if (!this.habilitaciones) return 0;
   return this.habilitaciones.reduce((acc, h) => acc + (h.totalHorasSistema || 0), 0);

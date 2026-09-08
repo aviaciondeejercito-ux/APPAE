@@ -1,7 +1,5 @@
 const Tripulante = require('../models/Tripulante');
 const Auditoria = require('../models/Auditoria');
-// Ya no es necesario requerir Vuelo aquí porque no lo consultamos en este controlador
-// const Vuelo = require('../models/Vuelo'); 
 
 /**
  * CONTROLADOR DE TRIPULANTES - GESTIÓN DE LEGAJOS AE
@@ -232,7 +230,7 @@ exports.agregarAptitudAdicional = async (req, res) => {
     }
 };
 
-// 5. Obtener Tripulantes (Optimizado: La BD ya es la fuente de verdad)
+// 5. Obtener Tripulantes
 exports.obtenerTripulantes = async (req, res) => {
     try {
         const usuarioLogueado = req.user;
@@ -251,7 +249,6 @@ exports.obtenerTripulantes = async (req, res) => {
             filtro.$or = [{ elemento: unidadQuery }, { unidad: unidadQuery }];
         }
 
-        // Se trae la información directa y limpia de la BD
         const tripulantes = await Tripulante.find(filtro)
             .populate('ultimoEditor', 'grado apellido')
             .sort({ apellido: 1 })
@@ -282,24 +279,26 @@ exports.actualizarTripulante = async (req, res) => {
             return res.status(403).json({ mensaje: "Acceso denegado: Jurisdicción cruzada no permitida" });
         }
 
-        const cambiosRealizados = {};
-        for (const key in req.body) {
-            if (JSON.stringify(tripulantePrevio[key]) !== JSON.stringify(req.body[key])) {
-                cambiosRealizados[key] = { anterior: tripulantePrevio[key], nuevo: req.body[key] };
-            }
+        const updateData = { ...req.body };
+        updateData.ultimoEditor = usuarioLogueado._id;
+        updateData.fechaUltimaModificacion = Date.now();
+
+        if (updateData.unidad || updateData.elemento) {
+            const u = updateData.elemento || updateData.unidad;
+            updateData.elemento = normalizarTexto(u);
+            updateData.unidad = normalizarTexto(u);
         }
 
-        req.body.ultimoEditor = usuarioLogueado._id;
-        req.body.fechaUltimaModificacion = Date.now();
-        
-        if (req.body.unidad || req.body.elemento) {
-            const u = req.body.elemento || req.body.unidad;
-            req.body.elemento = normalizarTexto(u);
-            req.body.unidad = normalizarTexto(u);
+        // Si se actualizan certificaciones, se asegura la preservación/fusión por cada clave
+        if (updateData.certificaciones) {
+            updateData.certificaciones = {
+                ...tripulantePrevio.certificaciones?.toObject?.() || tripulantePrevio.certificaciones,
+                ...updateData.certificaciones
+            };
         }
 
         const actualizado = await Tripulante.findByIdAndUpdate(
-            id, { $set: req.body }, { new: true, runValidators: true }
+            id, { $set: updateData }, { new: true, runValidators: true }
         );
 
         await Auditoria.create({
@@ -309,7 +308,7 @@ exports.actualizarTripulante = async (req, res) => {
             accion: 'MODIFICACION',
             entidadAfectada: `Tripulante: ${actualizado.grado} ${actualizado.apellido}`,
             entidadId: actualizado._id,
-            cambios: cambiosRealizados 
+            cambios: { payloadRecibido: req.body }
         });
 
         res.status(200).json(actualizado);
