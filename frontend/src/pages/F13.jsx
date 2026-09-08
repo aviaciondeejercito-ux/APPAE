@@ -46,7 +46,7 @@ const F13Component = () => {
         "Sanitario", "Rappel", "Fast Rope", "Carga Extterna", "Helibalde", 
         "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", 
         "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR", 
-        "Instruccion", "Calificacion"
+        "Instruccion", "Calificacion", "Mantenimiento"
     ];
 
     useEffect(() => {
