@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  AreaChart, Area
 } from 'recharts';
 
 // Servicios de conexión
 import { EventService } from '../services/api';
-
-const COLORS = ['#1b3a57', '#4a69bd', '#10ac84', '#f39c12', '#e74c3c', '#9b59b6', '#34495e', '#38ada9'];
 
 const normalizarTexto = (str) => {
     if (!str) return '';
@@ -132,6 +131,25 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return vuelosFiltrados.reduce((acc, v) => acc + (Number(v.pesoCarga) || 0), 0);
     }, [vuelosFiltrados]);
 
+    // 📈 PERFIL DE ACTIVIDAD EN EL TIEMPO
+    const actividadPorFecha = useMemo(() => {
+        const mapa = {};
+        vuelosFiltrados.forEach(v => {
+            const rawFecha = v.fecha || v.fechaVuelo || v.createdAt;
+            if (!rawFecha) return;
+            const fechaKey = String(rawFecha).substring(0, 10);
+            mapa[fechaKey] = (mapa[fechaKey] || 0) + 1;
+        });
+
+        return Object.entries(mapa)
+            .map(([fecha, vuelos]) => ({
+                fecha,
+                fechaFormatted: fecha.split('-').reverse().join('/'),
+                vuelos
+            }))
+            .sort((a, b) => a.fecha.localeCompare(b.fecha));
+    }, [vuelosFiltrados]);
+
     const horasPorElemento = useMemo(() => {
         const mapa = {};
         vuelosFiltrados.forEach(v => {
@@ -149,10 +167,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const hs = Number(v.horasVoladas) || 0;
             mapa[mision] = (mapa[mision] || 0) + hs;
         });
-        return Object.entries(mapa).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
+        return Object.entries(mapa)
+            .map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }))
+            .sort((a, b) => b.value - a.value);
     }, [vuelosFiltrados]);
 
-    // 👨‍✈️ TODOS LOS PILOTOS / COPILOTOS (SIN LÍMITE)
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         const formatearNombre = (t) => {
@@ -175,10 +194,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.horas - a.horas);
     }, [vuelosFiltrados]);
 
-    // 📍 TODOS LOS AERÓDROMOS VISITADOS (SIN LÍMITE)
     const visitasPorAerodromo = useMemo(() => {
         const mapa = {};
-
         vuelosFiltrados.forEach(v => {
             const origen = (v.desde || '').trim().toUpperCase();
             const destino = (v.hasta || '').trim().toUpperCase();
@@ -192,6 +209,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.visitas - a.visitas);
     }, [vuelosFiltrados]);
 
+    // 🖨️ FUNCIÓN DE IMPRESIÓN / EXPORTACIÓN A PDF
+    const handleImprimir = () => {
+        window.print();
+    };
+
     if (loading) {
         return (
             <div style={{ padding: '60px', textAlign: 'center', color: '#1b3a57', fontWeight: 'bold' }}>
@@ -202,6 +224,49 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
     return (
         <div style={styles.container}>
+            {/* 🖨️ INYECCIÓN DE ESTILOS CSS EXCLUSIVOS PARA IMPRESIÓN (BLANCO Y NEGRO) */}
+            <style>{`
+                @media print {
+                    /* Ocultar elementos de navegación o innecesarios al imprimir */
+                    .no-print, button, select {
+                        display: none !important;
+                    }
+                    
+                    /* Forzar que todo el contenido y SVG pase a escala de grises y alto contraste */
+                    body, div, span, h2, h3, h4, svg {
+                        filter: grayscale(100%) !important;
+                        color: #000000 !important;
+                        background: #ffffff !important;
+                    }
+
+                    /* Desbloquear contenedores con scroll para que salgan completos en papel */
+                    .scroll-container {
+                        max-height: none !important;
+                        overflow: visible !important;
+                    }
+
+                    /* Ajustes de diseño de página */
+                    @page {
+                        size: A4 portrait;
+                        margin: 1.5cm;
+                    }
+
+                    /* Forzar saltos de página limpios en la grilla */
+                    .chart-card-print {
+                        page-break-inside: avoid;
+                        break-inside: avoid;
+                        border: 1px solid #000 !important;
+                        box-shadow: none !important;
+                        margin-bottom: 20px !important;
+                    }
+
+                    .kpi-card-print {
+                        border: 1px solid #000 !important;
+                        box-shadow: none !important;
+                    }
+                }
+            `}</style>
+
             {/* ENCABEZADO Y FILTROS */}
             <header style={styles.header}>
                 <div>
@@ -214,6 +279,16 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
 
                 <div style={styles.filtrosBar}>
+                    {/* 🖨️ BOTÓN IMPRIMIR / PDF */}
+                    <button 
+                        onClick={handleImprimir}
+                        style={styles.btnPrint}
+                        className="no-print"
+                        title="Imprimir o Guardar en PDF (Escala de grises)"
+                    >
+                        🖨️ Exportar / Imprimir PDF
+                    </button>
+
                     <div style={styles.filtroGroup}>
                         <label style={styles.label}>Unidad Responsable:</label>
                         <select 
@@ -250,27 +325,57 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             {/* RESUMEN OPERATIVO DE VUELOS */}
             <h3 style={styles.sectionHeader}>✈️ Muestreo y Métricas de Operaciones Aéreas</h3>
             <div style={styles.kpiContainer}>
-                <div style={styles.kpiCard}>
+                <div style={styles.kpiCard} className="kpi-card-print">
                     <span style={styles.kpiTitle}>TOTAL HORAS VOLADAS</span>
                     <span style={styles.kpiValue}>{totalHorasGenerales.toFixed(1)} hs</span>
                 </div>
-                <div style={styles.kpiCard}>
+                <div style={styles.kpiCard} className="kpi-card-print">
                     <span style={styles.kpiTitle}>VUELOS REGISTRADOS</span>
                     <span style={styles.kpiValue}>{vuelosFiltrados.length}</span>
                 </div>
-                <div style={styles.kpiCard}>
+                <div style={styles.kpiCard} className="kpi-card-print">
                     <span style={styles.kpiTitle}>PASAJEROS TRANSPORTADOS</span>
                     <span style={styles.kpiValue}>{totalPasajeros} pax</span>
                 </div>
-                <div style={styles.kpiCard}>
+                <div style={styles.kpiCard} className="kpi-card-print">
                     <span style={styles.kpiTitle}>CARGA TRANSPORTADA</span>
                     <span style={styles.kpiValue}>{totalCargaKg} kg</span>
                 </div>
             </div>
 
-            {/* GRILLA DE GRÁFICOS DE VUELO */}
+            {/* 📈 PERFIL DE ACTIVIDAD EN EL TIEMPO */}
+            <div style={{ ...styles.chartCard, marginBottom: '20px' }} className="chart-card-print">
+                <h4 style={styles.chartTitle}>📈 Perfil Temporal de Actividad (Cantidad de Vuelos por Fecha)</h4>
+                <ResponsiveContainer width="100%" height={260}>
+                    <AreaChart data={actividadPorFecha} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="colorVuelos" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#1b3a57" stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor="#1b3a57" stopOpacity={0.05}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="fechaFormatted" tick={{ fontSize: 11 }} />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip 
+                            formatter={(value) => [`${value} vuelos`, 'Cantidad de Vuelos']}
+                            labelFormatter={(label) => `Fecha: ${label}`}
+                        />
+                        <Area 
+                            type="monotone" 
+                            dataKey="vuelos" 
+                            stroke="#1b3a57" 
+                            strokeWidth={2}
+                            fillOpacity={1} 
+                            fill="url(#colorVuelos)" 
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+
+            {/* GRILLA DE GRÁFICOS RESTANTES */}
             <div style={styles.chartsGrid}>
-                <div style={styles.chartCard}>
+                <div style={styles.chartCard} className="chart-card-print">
                     <h4 style={styles.chartTitle}>🏢 Horas por Elemento Apoyado</h4>
                     <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={horasPorElemento} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
@@ -283,35 +388,26 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </ResponsiveContainer>
                 </div>
 
-                <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>🎯 Horas por Misión</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                            <Pie
-                                data={horasPorMision}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={95}
-                                label={(entry) => `${entry.name}: ${entry.value}h`}
-                            >
-                                {horasPorMision.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip formatter={(value) => [`${value} hs`, 'Horas']} />
-                            <Legend />
-                        </PieChart>
-                    </ResponsiveContainer>
+                <div style={styles.chartCard} className="chart-card-print">
+                    <h4 style={styles.chartTitle}>🎯 Horas por Misión ({horasPorMision.length})</h4>
+                    <div className="scroll-container" style={{ width: '100%', maxHeight: '300px', overflowY: 'auto' }}>
+                        <ResponsiveContainer width="100%" height={Math.max(280, horasPorMision.length * 35)}>
+                            <BarChart layout="vertical" data={horasPorMision} margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} interval={0} />
+                                <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
+                                <Bar dataKey="value" fill="#10ac84" radius={[0, 4, 4, 0]} barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
 
-                {/* TRIPULANTES (BARRAS HORIZONTALES - ALTURA ADAPTABLE Y SCROLLING) */}
-                <div style={styles.chartCard}>
+                <div style={styles.chartCard} className="chart-card-print">
                     <h4 style={styles.chartTitle}>👨‍✈️ Horas por Piloto / Copiloto ({horasPorTripulante.length})</h4>
-                    <div style={{ width: '100%', maxHeight: '400px', overflowY: 'auto' }}>
+                    <div className="scroll-container" style={{ width: '100%', maxHeight: '400px', overflowY: 'auto' }}>
                         <ResponsiveContainer width="100%" height={Math.max(300, horasPorTripulante.length * 35)}>
-                            <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 70, bottom: 5 }}>
+                            <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" />
                                 <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} interval={0} />
@@ -322,10 +418,9 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </div>
                 </div>
 
-                {/* AERÓDROMOS (BARRAS HORIZONTALES - ALTURA ADAPTABLE Y SCROLLING) */}
-                <div style={styles.chartCard}>
+                <div style={styles.chartCard} className="chart-card-print">
                     <h4 style={styles.chartTitle}>📍 Frecuencia de Operaciones por Aeródromo ({visitasPorAerodromo.length})</h4>
-                    <div style={{ width: '100%', maxHeight: '400px', overflowY: 'auto' }}>
+                    <div className="scroll-container" style={{ width: '100%', maxHeight: '400px', overflowY: 'auto' }}>
                         <ResponsiveContainer width="100%" height={Math.max(300, visitasPorAerodromo.length * 35)}>
                             <BarChart layout="vertical" data={visitasPorAerodromo} margin={{ top: 5, right: 30, left: 60, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
@@ -347,10 +442,11 @@ const styles = {
     header: { marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' },
     sectionHeader: { fontSize: '1rem', color: '#1b3a57', borderLeft: '4px solid #1b3a57', paddingLeft: '10px', marginBottom: '15px', marginTop: '10px', fontWeight: 'bold' },
     subtitle: { fontSize: '0.85rem', color: '#64748b' },
-    filtrosBar: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
+    filtrosBar: { display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' },
     filtroGroup: { display: 'flex', flexDirection: 'column', gap: '2px' },
     label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#1b3a57' },
     select: { padding: '5px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: '600', color: '#1b3a57' },
+    btnPrint: { backgroundColor: '#1b3a57', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer', transition: 'background-color 0.2s' },
     kpiContainer: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' },
     kpiCard: { backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', borderLeft: '4px solid #1b3a57', display: 'flex', flexDirection: 'column' },
     kpiTitle: { fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' },
