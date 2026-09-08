@@ -13,7 +13,7 @@ const getBaseURL = () => {
     
     const isProduction = window.location.hostname !== 'localhost';
     return isProduction 
-        ? 'https://aviaciondeejercito-ux.onrender.com/api' 
+        ? 'https://appae.onrender.com/api' 
         : 'http://localhost:5000/api';
 };
 
@@ -87,6 +87,7 @@ export const agregarAptitud = (id, data) => API.post(`/tripulantes/${id}/aptitud
 /**
  * 📋 SERVICIOS DE CONTROL DE ENTRENAMIENTO DE TRIPULANTES
  */
+export const getEntrenamientos = () => API.get('/training');
 export const guardarEntrenamiento = (data) => API.post('/training', data);
 export const getDashboardEntrenamiento = () => API.get('/training/dashboard-stats');
 
@@ -385,6 +386,7 @@ const EventService = {
     gestionarHabilitacion,
     agregarCapacitacion,
     agregarAptitud,
+    getEntrenamientos,
     guardarEntrenamiento,
     getDashboardEntrenamiento,
     registrarInstruccion,

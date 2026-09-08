@@ -54,24 +54,37 @@ const rolesGestion = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'OP
 const rolesConsulta = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'USER', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
 const rolesBaja = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OPERACIONES', 'JEFE'];
 
+// MAPPING SEGURO DE HANDLERS PARA EVITAR CAÍDAS (404 / 500) SI FALTA ALGUNA FUNCIÓN EN EL CONTROLLER
+const getHandler = (fnName) => {
+    if (typeof tripulanteController[fnName] === 'function') {
+        return tripulanteController[fnName];
+    }
+    return (req, res) => {
+        res.status(501).json({
+            success: false,
+            message: `La funcionalidad [${fnName}] no está implementada aún en tripulanteController.`
+        });
+    };
+};
+
 router.use(protect);
 
 // 1. RUTAS BASE
 router.route('/')
-    .get(authorize(...rolesConsulta), tripulanteController.obtenerTripulantes)
-    .post(authorize(...rolesGestion), tripulanteController.crearTripulante); 
+    .get(authorize(...rolesConsulta), getHandler('obtenerTripulantes'))
+    .post(authorize(...rolesGestion), getHandler('crearTripulante')); 
 
-// 2. BUSQUEDA Y DETALLE INDIVIDUAL
-router.get('/buscar/:termino', authorize(...rolesConsulta), tripulanteController.buscarTripulante);
+// 2. BÚSQUEDA Y DETALLE INDIVIDUAL
+router.get('/buscar/:termino', authorize(...rolesConsulta), getHandler('buscarTripulante'));
 
 router.route('/:id')
-    .get(authorize(...rolesConsulta), tripulanteController.obtenerTripulantePorId) // 👈 RUTA AGREGADA (Evita 404)
-    .put(authorize(...rolesGestion), verificarJurisdiccionTripulante, tripulanteController.actualizarTripulante) 
-    .delete(authorize(...rolesBaja), verificarJurisdiccionTripulante, tripulanteController.eliminarTripulante); 
+    .get(authorize(...rolesConsulta), getHandler('obtenerTripulantePorId'))
+    .put(authorize(...rolesGestion), verificarJurisdiccionTripulante, getHandler('actualizarTripulante')) 
+    .delete(authorize(...rolesBaja), verificarJurisdiccionTripulante, getHandler('eliminarTripulante')); 
 
-// 3. SUBDOCUMENTOS Y REGISTROS
-router.post('/:id/habilitacion', authorize(...rolesGestion), verificarJurisdiccionTripulante, tripulanteController.gestionarHabilitacion);
-router.post('/:id/capacitacion', authorize(...rolesGestion), verificarJurisdiccionTripulante, tripulanteController.agregarCapacitacion);
-router.post('/:id/aptitudes', authorize(...rolesGestion), verificarJurisdiccionTripulante, tripulanteController.agregarAptitudAdicional);
+// 3. SUBDOCUMENTOS Y REGISTROS HISTÓRICOS
+router.post('/:id/habilitacion', authorize(...rolesGestion), verificarJurisdiccionTripulante, getHandler('gestionarHabilitacion'));
+router.post('/:id/capacitacion', authorize(...rolesGestion), verificarJurisdiccionTripulante, getHandler('agregarCapacitacion'));
+router.post('/:id/aptitudes', authorize(...rolesGestion), verificarJurisdiccionTripulante, getHandler('agregarAptitudAdicional'));
 
 module.exports = router;
