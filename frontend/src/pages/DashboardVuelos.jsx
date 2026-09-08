@@ -175,23 +175,27 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .slice(0, 10);
     }, [vuelosFiltrados]);
 
-    const horasPorDestino = useMemo(() => {
+    // 🔄 NUEVA LÓGICA: FRECUENCIA DE OPERACIONES POR AERÓDROMO
+    const visitasPorAerodromo = useMemo(() => {
         const mapa = {};
+
         vuelosFiltrados.forEach(v => {
             const origen = (v.desde || '').trim().toUpperCase();
             const destino = (v.hasta || '').trim().toUpperCase();
 
-            if (origen === 'SADO' && destino === 'SADO') return;
-
-            const ruta = `${origen || 'S/D'} ➔ ${destino || 'S/D'}`;
-            const hs = Number(v.horasVoladas) || 0;
-            mapa[ruta] = (mapa[ruta] || 0) + hs;
+            // Suma una visita por cada despegue/aterrizaje registrado
+            if (origen) {
+                mapa[origen] = (mapa[origen] || 0) + 1;
+            }
+            if (destino) {
+                mapa[destino] = (mapa[destino] || 0) + 1;
+            }
         });
 
         return Object.entries(mapa)
-            .map(([ruta, horas]) => ({ ruta, horas: Number(horas.toFixed(1)) }))
-            .sort((a, b) => b.horas - a.horas)
-            .slice(0, 8);
+            .map(([aerodromo, visitas]) => ({ aerodromo, visitas }))
+            .sort((a, b) => b.visitas - a.visitas)
+            .slice(0, 8); // Muestra los 8 aeródromos más frecuentados
     }, [vuelosFiltrados]);
 
     if (loading) {
@@ -322,14 +326,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
 
                 <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>🗺️ Destinos & Rutas (Excluye SADO ➔ SADO)</h4>
+                    <h4 style={styles.chartTitle}>📍 Frecuencia de Operaciones por Aeródromo</h4>
                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={horasPorDestino} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
+                        <BarChart data={visitasPorAerodromo} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="ruta" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
-                            <Bar dataKey="horas" fill="#38ada9" radius={[4, 4, 0, 0]} />
+                            <XAxis dataKey="aerodromo" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
+                            <YAxis allowDecimals={false} />
+                            <Tooltip formatter={(value) => [`${value} operaciones`, 'Visitas / Operaciones']} />
+                            <Bar dataKey="visitas" fill="#38ada9" radius={[4, 4, 0, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
