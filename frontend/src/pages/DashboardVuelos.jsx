@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 
 // Servicios de conexión
-import { EventService, getTripulantes } from '../services/api';
+import { EventService } from '../services/api';
 
 const COLORS = ['#1b3a57', '#4a69bd', '#10ac84', '#f39c12', '#e74c3c', '#9b59b6', '#34495e', '#38ada9'];
 
@@ -18,23 +18,14 @@ const normalizarClave = (str) => {
     return String(str).toUpperCase().replace(/[\s_-]/g, '');
 };
 
-// Función auxiliar para determinar el estado de vencimiento
-const esCertificacionValida = (fechaVencimiento) => {
-    if (!fechaVencimiento) return false;
-    const hoy = new Date();
-    const fVenc = new Date(fechaVencimiento);
-    return fVenc >= hoy;
-};
-
 export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [vuelosData, setVuelosData] = useState(vuelosProps || []);
-    const [tripulantesData, setTripulantesData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
     const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
-    // 👤 1. DETECTAR Y NORMALIZAR EL USUARIO ACTUAL
-    const { unidadUsuario, esAdminGlobal, rawRol, userObjDebug } = useMemo(() => {
+    // 👤 DETECTAR Y NORMALIZAR EL USUARIO ACTUAL
+    const { unidadUsuario, esAdminGlobal } = useMemo(() => {
         try {
             const rawUser = localStorage.getItem('usuario') || localStorage.getItem('user');
             const userObj = rawUser ? JSON.parse(rawUser) : {};
@@ -47,17 +38,15 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             
             return {
                 unidadUsuario: normalizarTexto(elem),
-                esAdminGlobal: esAdmin,
-                rawRol: rol,
-                userObjDebug: userObj
+                esAdminGlobal: esAdmin
             };
         } catch (e) {
             console.error("Error crítico al leer datos de sesión:", e);
-            return { unidadUsuario: '', esAdminGlobal: false, rawRol: 'USER', userObjDebug: {} };
+            return { unidadUsuario: '', esAdminGlobal: false };
         }
     }, []);
 
-    // 📌 2. SINCRO DE FILTRO INICIAL POR ROL
+    // 📌 SINCRO DE FILTRO INICIAL POR ROL
     useEffect(() => {
         if (!esAdminGlobal && unidadUsuario) {
             setUnidadFiltro(unidadUsuario);
@@ -66,12 +55,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         }
     }, [unidadUsuario, esAdminGlobal]);
 
-    // 🔄 3. CARGA DE DATOS DESDE EL BACKEND (VUELOS Y TRIPULANTES)
+    // 🔄 CARGA DE DATOS DE VUELOS
     useEffect(() => {
         const cargarDatos = async () => {
             setLoading(true);
             try {
-                // Carga de vuelos
                 const params = {};
                 if (!esAdminGlobal && unidadUsuario) {
                     params.unidad = unidadUsuario;
@@ -82,14 +70,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 const resVuelos = await EventService.getVuelos(params);
                 const listaVuelos = resVuelos?.data || resVuelos || [];
                 setVuelosData(Array.isArray(listaVuelos) ? listaVuelos : []);
-
-                // Carga de tripulantes / personal
-                const resTripulantes = await getTripulantes();
-                const listaTripulantes = resTripulantes?.data || resTripulantes || [];
-                setTripulantesData(Array.isArray(listaTripulantes) ? listaTripulantes : []);
-
             } catch (err) {
-                console.error("Error al recuperar datos del dashboard:", err);
+                console.error("Error al recuperar datos del dashboard de vuelos:", err);
             } finally {
                 setLoading(false);
             }
@@ -98,24 +80,21 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         cargarDatos();
     }, [vuelosProps, unidadFiltro, esAdminGlobal, unidadUsuario]);
 
-    // 📌 4. UNIDADES Y MISIONES ÚNICAS PARA SELECTORES
+    // 📌 UNIDADES Y MISIONES ÚNICAS PARA SELECTORES
     const listaUnidades = useMemo(() => {
         if (!esAdminGlobal) {
             return [unidadUsuario || 'MI UNIDAD'];
         }
-
         const unidadesVuelos = vuelosData.map(v => normalizarTexto(v.unidadResponsable)).filter(Boolean);
-        const unidadesTrip = tripulantesData.map(t => normalizarTexto(t.elemento || t.unidad)).filter(Boolean);
-        
-        return ['TODAS', ...Array.from(new Set([...unidadesVuelos, ...unidadesTrip]))];
-    }, [vuelosData, tripulantesData, esAdminGlobal, unidadUsuario]);
+        return ['TODAS', ...Array.from(new Set(unidadesVuelos))];
+    }, [vuelosData, esAdminGlobal, unidadUsuario]);
 
     const listaMisiones = useMemo(() => {
         const misiones = vuelosData.map(v => v.tipoMision).filter(Boolean);
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
-    // 📌 5. FILTRADO ROBUSTO DE VUELOS
+    // 📌 FILTRADO ROBUSTO DE VUELOS
     const vuelosFiltrados = useMemo(() => {
         const unidadObjetivo = esAdminGlobal ? unidadFiltro : (unidadUsuario || 'SIN_UNIDAD');
         const claveObjetivo = normalizarClave(unidadObjetivo);
@@ -136,81 +115,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             return pasaUnidad && pasaMision;
         });
     }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario]);
-
-    // 📌 6. FILTRADO DE TRIPULANTES POR UNIDAD
-    const tripulantesFiltrados = useMemo(() => {
-        const unidadObjetivo = esAdminGlobal ? unidadFiltro : (unidadUsuario || 'SIN_UNIDAD');
-        const claveObjetivo = normalizarClave(unidadObjetivo);
-
-        return tripulantesData.filter(t => {
-            if (esAdminGlobal && unidadFiltro === 'TODAS') return true;
-            const unidadTripClave = normalizarClave(t.elemento || t.unidad);
-            return unidadTripClave === claveObjetivo || 
-                   unidadTripClave.includes(claveObjetivo) || 
-                   claveObjetivo.includes(unidadTripClave);
-        });
-    }, [tripulantesData, unidadFiltro, esAdminGlobal, unidadUsuario]);
-
-    // ==========================================
-    // 📊 CÁLCULOS Y PROCESAMIENTO - TRIPULANTES
-    // ==========================================
-
-    const metricasTripulantes = useMemo(() => {
-        let simuladorAlDia = 0;
-        let simuladorVencido = 0;
-        
-        let crmAlDia = 0;
-        let crmVencido = 0;
-
-        let rorRealizado = 0;
-        let cargasPeligrosasRealizado = 0;
-        let seguridadOperacionalRealizado = 0;
-
-        tripulantesFiltrados.forEach(t => {
-            // Simulador
-            const vSim = t.certificaciones?.simulador?.vencimiento;
-            if (esCertificacionValida(vSim)) simuladorAlDia++;
-            else simuladorVencido++;
-
-            // CRM
-            const vCrm = t.certificaciones?.crm?.vencimiento;
-            if (esCertificacionValida(vCrm)) crmAlDia++;
-            else crmVencido++;
-
-            // Aptitudes Adicionales
-            const aptitudes = t.aptitudesAdicionales || [];
-            
-            const tieneROR = aptitudes.some(a => 
-                normalizarClave(a.tipo).includes('RADIOOPERADOR') || normalizarClave(a.tipo).includes('ROR')
-            );
-            if (tieneROR) rorRealizado++;
-
-            const tieneCargas = aptitudes.some(a => 
-                normalizarClave(a.tipo).includes('CARGASPELIGROSAS')
-            );
-            if (tieneCargas) cargasPeligrosasRealizado++;
-
-            const tieneSeguridad = aptitudes.some(a => 
-                normalizarClave(a.tipo).includes('SEGURIDADOPERACIONAL')
-            );
-            if (tieneSeguridad) seguridadOperacionalRealizado++;
-        });
-
-        return {
-            simulador: [
-                { name: 'Al Día', value: simuladorAlDia, color: '#10ac84' },
-                { name: 'Vencido / Sin Datos', value: simuladorVencido, color: '#e74c3c' }
-            ],
-            crm: [
-                { name: 'Al Día', value: crmAlDia, color: '#10ac84' },
-                { name: 'Vencido / Sin Datos', value: crmVencido, color: '#e74c3c' }
-            ],
-            rorRealizado,
-            cargasPeligrosasRealizado,
-            seguridadOperacionalRealizado,
-            totalTripulantes: tripulantesFiltrados.length
-        };
-    }, [tripulantesFiltrados]);
 
     // ==========================================
     // 📊 CÁLCULOS Y PROCESAMIENTO - VUELOS
@@ -293,7 +197,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     if (loading) {
         return (
             <div style={{ padding: '60px', textAlign: 'center', color: '#1b3a57', fontWeight: 'bold' }}>
-                🔄 Cargando datos operativos y legajos de personal...
+                🔄 Cargando datos operativos de vuelos...
             </div>
         );
     }
@@ -303,7 +207,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             {/* ENCABEZADO Y FILTROS */}
             <header style={styles.header}>
                 <div>
-                    <h2 style={{ margin: 0, color: '#1b3a57' }}>📊 Dashboard Operativo & Estado de Fuerza</h2>
+                    <h2 style={{ margin: 0, color: '#1b3a57' }}>📊 Dashboard Operativo de Vuelos</h2>
                     <span style={styles.subtitle}>
                         {esAdminGlobal && unidadFiltro === 'TODAS' 
                             ? 'Resumen consolidado general (Vista Administrador Global)' 
@@ -345,74 +249,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
             </header>
 
-            {/* SECCIÓN 1: KPI DE PERSONAL Y CAPACITACIONES */}
-            <h3 style={styles.sectionHeader}>🎖️ Estado de Capacitación y Aptitudes del Personal ({metricasTripulantes.totalTripulantes} Tripulantes)</h3>
-            <div style={styles.kpiContainer}>
-                <div style={styles.kpiCard}>
-                    <span style={styles.kpiTitle}>CURSO ROR REALIZADO</span>
-                    <span style={styles.kpiValue}>{metricasTripulantes.rorRealizado} <span style={styles.kpiSubvalue}>/ {metricasTripulantes.totalTripulantes}</span></span>
-                </div>
-                <div style={styles.kpiCard}>
-                    <span style={styles.kpiTitle}>CARGAS PELIGROSAS REALIZADO</span>
-                    <span style={styles.kpiValue}>{metricasTripulantes.cargasPeligrosasRealizado} <span style={styles.kpiSubvalue}>/ {metricasTripulantes.totalTripulantes}</span></span>
-                </div>
-                <div style={styles.kpiCard}>
-                    <span style={styles.kpiTitle}>SEGURIDAD OPERACIONAL</span>
-                    <span style={styles.kpiValue}>{metricasTripulantes.seguridadOperacionalRealizado} <span style={styles.kpiSubvalue}>/ {metricasTripulantes.totalTripulantes}</span></span>
-                </div>
-            </div>
-
-            {/* GRILLA DE CERTIFICACIONES TÉCNICAS (SIMULADOR Y CRM) */}
-            <div style={{ ...styles.chartsGrid, marginBottom: '30px' }}>
-                <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>🖥️ Estado de Simulador de Vuelo</h4>
-                    <ResponsiveContainer width="100%" height={260}>
-                        <PieChart>
-                            <Pie
-                                data={metricasTripulantes.simulador}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={85}
-                                label={(entry) => `${entry.name}: ${entry.value}`}
-                            >
-                                {metricasTripulantes.simulador.map((entry, index) => (
-                                    <Cell key={`cell-sim-${index}`} fill={entry.color} />
-                                ))}
-                            </Pie>
-                            <Tooltip formatter={(value) => [`${value} Pilotos`, 'Cantidad']} />
-                            <Legend />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-
-                <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>🧠 Estado de Certificación CRM</h4>
-                    <ResponsiveContainer width="100%" height={260}>
-                        <PieChart>
-                            <Pie
-                                data={metricasTripulantes.crm}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={85}
-                                label={(entry) => `${entry.name}: ${entry.value}`}
-                            >
-                                {metricasTripulantes.crm.map((entry, index) => (
-                                    <Cell key={`cell-crm-${index}`} fill={entry.color} />
-                                ))}
-                            </Pie>
-                            <Tooltip formatter={(value) => [`${value} Pilotos`, 'Cantidad']} />
-                            <Legend />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
-            {/* SECCIÓN 2: KPI DE OPERACIONES Y VUELOS */}
-            <h3 style={styles.sectionHeader}>✈️ Resumen Operativo de Vuelos (-12)</h3>
+            {/* RESUMEN OPERATIVO DE VUELOS */}
+            <h3 style={styles.sectionHeader}>✈️ Muestreo y Métricas de Operaciones Aéreas</h3>
             <div style={styles.kpiContainer}>
                 <div style={styles.kpiCard}>
                     <span style={styles.kpiTitle}>TOTAL HORAS VOLADAS</span>
@@ -501,105 +339,19 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 }
 
 const styles = {
-    container: {
-        padding: '20px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '8px',
-        maxWidth: '1600px',
-        margin: '0 auto'
-    },
-    header: {
-        marginBottom: '20px',
-        borderBottom: '2px solid #e2e8f0',
-        paddingBottom: '12px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '15px'
-    },
-    sectionHeader: {
-        fontSize: '1rem',
-        color: '#1b3a57',
-        borderLeft: '4px solid #1b3a57',
-        paddingLeft: '10px',
-        marginBottom: '15px',
-        marginTop: '10px',
-        fontWeight: 'bold'
-    },
-    subtitle: {
-        fontSize: '0.85rem',
-        color: '#64748b'
-    },
-    filtrosBar: {
-        display: 'flex',
-        gap: '12px',
-        flexWrap: 'wrap'
-    },
-    filtroGroup: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2px'
-    },
-    label: {
-        fontSize: '0.7rem',
-        fontWeight: 'bold',
-        color: '#1b3a57'
-    },
-    select: {
-        padding: '5px 10px',
-        borderRadius: '4px',
-        border: '1px solid #cbd5e1',
-        fontSize: '0.8rem',
-        fontWeight: '600',
-        color: '#1b3a57'
-    },
-    kpiContainer: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '15px',
-        marginBottom: '20px'
-    },
-    kpiCard: {
-        backgroundColor: '#ffffff',
-        padding: '16px',
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-        borderLeft: '4px solid #1b3a57',
-        display: 'flex',
-        flexDirection: 'column'
-    },
-    kpiTitle: {
-        fontSize: '0.7rem',
-        color: '#64748b',
-        fontWeight: 'bold'
-    },
-    kpiValue: {
-        fontSize: '1.5rem',
-        fontWeight: 'bold',
-        color: '#1b3a57',
-        marginTop: '4px'
-    },
-    kpiSubvalue: {
-        fontSize: '0.9rem',
-        color: '#94a3b8',
-        fontWeight: 'normal'
-    },
-    chartsGrid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: '20px'
-    },
-    chartCard: {
-        backgroundColor: '#ffffff',
-        padding: '18px',
-        borderRadius: '8px',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.06)'
-    },
-    chartTitle: {
-        margin: '0 0 15px 0',
-        fontSize: '0.9rem',
-        color: '#1b3a57',
-        fontWeight: 'bold'
-    }
+    container: { padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', maxWidth: '1600px', margin: '0 auto' },
+    header: { marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' },
+    sectionHeader: { fontSize: '1rem', color: '#1b3a57', borderLeft: '4px solid #1b3a57', paddingLeft: '10px', marginBottom: '15px', marginTop: '10px', fontWeight: 'bold' },
+    subtitle: { fontSize: '0.85rem', color: '#64748b' },
+    filtrosBar: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
+    filtroGroup: { display: 'flex', flexDirection: 'column', gap: '2px' },
+    label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#1b3a57' },
+    select: { padding: '5px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: '600', color: '#1b3a57' },
+    kpiContainer: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' },
+    kpiCard: { backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', borderLeft: '4px solid #1b3a57', display: 'flex', flexDirection: 'column' },
+    kpiTitle: { fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' },
+    kpiValue: { fontSize: '1.5rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '4px' },
+    chartsGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' },
+    chartCard: { backgroundColor: '#ffffff', padding: '18px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' },
+    chartTitle: { margin: '0 0 15px 0', fontSize: '0.9rem', color: '#1b3a57', fontWeight: 'bold' }
 };
