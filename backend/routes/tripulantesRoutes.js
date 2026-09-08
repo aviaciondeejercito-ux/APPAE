@@ -85,6 +85,6 @@ router.route('/:id')
 // 3. SUBDOCUMENTOS Y REGISTROS HISTÓRICOS
 router.post('/:id/habilitacion', authorize(...rolesGestion), verificarJurisdiccionTripulante, getHandler('gestionarHabilitacion'));
 router.post('/:id/capacitacion', authorize(...rolesGestion), verificarJurisdiccionTripulante, getHandler('agregarCapacitacion'));
-router.post('/:id/aptitudes', authorize(...rolesGestion), verificarJurisdiccionTripulante, getHandler('agregarAptitudAdicional'));
+router.post('/:id/aptitud-adicional', authorize(...rolesGestion), verificarJurisdiccionTripulante, getHandler('agregarAptitudAdicional'));
 
 module.exports = router;
