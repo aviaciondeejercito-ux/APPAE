@@ -4,15 +4,10 @@ const tripulanteController = require('../controllers/tripulanteController');
 const { protect } = require('../middleware/authMiddleware'); 
 const Tripulante = require('../models/Tripulante');
 
-/**
- * MIDDLEWARE INTERNO DE AUTORIZACIÓN - SINCRO JOKER v3.7
- * Valida roles eliminando guiones y espacios para asegurar consistencia.
- */
 const authorize = (...rolesPermitidos) => {
     return (req, res, next) => {
         const rawRole = req.user?.rol || req.user?.role || '';
         const userRole = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
-        
         const permitidosLimpios = rolesPermitidos.map(r => r.toUpperCase().replace(/[\s_-]/g, ''));
         
         if (!userRole || !permitidosLimpios.includes(userRole)) {
@@ -25,17 +20,11 @@ const authorize = (...rolesPermitidos) => {
     };
 };
 
-/**
- * MIDDLEWARE DE CONTROL DE FRONTERA DE UNIDAD (ESTÁNDAR v3.7)
- * Permite paso libre a roles estratégicos (ADMIN, BOSS, DIRECTOR, OTO)
- * y bloquea cruzamientos entre unidades para gestores operativos.
- */
 const verificarJurisdiccionTripulante = async (req, res, next) => {
     try {
         const rawRole = req.user?.rol || req.user?.role || '';
         const userRole = String(rawRole).toUpperCase().replace(/[\s_-]/g, '');
 
-        // Mandos estratégicos con jurisdicción global
         if (['ADMIN', 'BOSS', 'DIRECTOR', 'OTO'].includes(userRole)) {
             return next();
         }
@@ -51,7 +40,7 @@ const verificarJurisdiccionTripulante = async (req, res, next) => {
         if (unidadUsuario !== unidadTripulante) {
             return res.status(403).json({ 
                 success: false, 
-                message: `ACCESO DENEGADO: Tu perfil asignado a [${unidadUsuario}] no tiene jurisdicción sobre el legajo de [${unidadTripulante}].` 
+                message: `ACCESO DENEGADO: Tu perfil asignado a [${unidadUsuario}] no tiene jurisdicción sobre [${unidadTripulante}].` 
             });
         }
 
@@ -61,55 +50,28 @@ const verificarJurisdiccionTripulante = async (req, res, next) => {
     }
 };
 
-// GRUPOS DE ACCESO
 const rolesGestion = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE'];
 const rolesConsulta = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'USER', 'OFICINA_TECNICA', 'OPERACIONES', 'JEFE', 'LOGISTICO', 'PERSONAL'];
 const rolesBaja = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'OPERACIONES', 'JEFE'];
 
-// PROTECCIÓN GLOBAL: Requiere token JWT activo
 router.use(protect);
 
-/**
- * 1. RUTAS BASE: /api/tripulantes
- */
+// 1. RUTAS BASE
 router.route('/')
     .get(authorize(...rolesConsulta), tripulanteController.obtenerTripulantes)
     .post(authorize(...rolesGestion), tripulanteController.crearTripulante); 
 
-/**
- * 2. GESTIÓN DE HABILITACIONES INTERNAS (SdA / ROL)
- */
-router.post('/:id/habilitacion', 
-    authorize(...rolesGestion), 
-    verificarJurisdiccionTripulante,
-    tripulanteController.gestionarHabilitacion
-);
-
-/**
- * 3. BÚSQUEDA Y GESTIÓN INDIVIDUAL
- */
-router.get('/buscar/:termino', 
-    authorize(...rolesConsulta), 
-    tripulanteController.buscarTripulante
-);
+// 2. BUSQUEDA Y DETALLE INDIVIDUAL
+router.get('/buscar/:termino', authorize(...rolesConsulta), tripulanteController.buscarTripulante);
 
 router.route('/:id')
+    .get(authorize(...rolesConsulta), tripulanteController.obtenerTripulantePorId) // 👈 RUTA AGREGADA (Evita 404)
     .put(authorize(...rolesGestion), verificarJurisdiccionTripulante, tripulanteController.actualizarTripulante) 
     .delete(authorize(...rolesBaja), verificarJurisdiccionTripulante, tripulanteController.eliminarTripulante); 
 
-/**
- * 4. SUBDOCUMENTOS: CAPACITACIONES Y APTITUDES
- */
-router.post('/:id/capacitacion', 
-    authorize(...rolesGestion), 
-    verificarJurisdiccionTripulante,
-    tripulanteController.agregarCapacitacion
-);
-
-router.post('/:id/aptitudes', 
-    authorize(...rolesGestion), 
-    verificarJurisdiccionTripulante,
-    tripulanteController.agregarAptitudAdicional
-);
+// 3. SUBDOCUMENTOS Y REGISTROS
+router.post('/:id/habilitacion', authorize(...rolesGestion), verificarJurisdiccionTripulante, tripulanteController.gestionarHabilitacion);
+router.post('/:id/capacitacion', authorize(...rolesGestion), verificarJurisdiccionTripulante, tripulanteController.agregarCapacitacion);
+router.post('/:id/aptitudes', authorize(...rolesGestion), verificarJurisdiccionTripulante, tripulanteController.agregarAptitudAdicional);
 
 module.exports = router;
