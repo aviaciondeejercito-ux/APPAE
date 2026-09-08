@@ -131,7 +131,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return vuelosFiltrados.reduce((acc, v) => acc + (Number(v.pesoCarga) || 0), 0);
     }, [vuelosFiltrados]);
 
-    // 📈 PERFIL DE ACTIVIDAD EN EL TIEMPO
     const actividadPorFecha = useMemo(() => {
         const mapa = {};
         vuelosFiltrados.forEach(v => {
@@ -172,6 +171,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.value - a.value);
     }, [vuelosFiltrados]);
 
+    // Acotamos a Top 10 en impresión vía CSS/JS o acotando datos si es muy largo
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         const formatearNombre = (t) => {
@@ -222,36 +222,94 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     }
 
     return (
-        <div style={styles.container}>
-            {/* 🖨️ ESTILOS CSS DE IMPRESIÓN - ALTO CONTRASTE Y NEGRO MONOCROMÁTICO */}
+        <div style={styles.container} className="dashboard-print-container">
+            {/* 🖨️ ESTILOS CSS RESTRUCTURADOS PARA IMPRESIÓN PÁGINA A PÁGINA */}
             <style>{`
                 @media print {
+                    /* Ocultar elementos innecesarios */
                     .no-print, button, select {
                         display: none !important;
                     }
 
-                    /* Fondo blanco estricto y texto negro puro */
-                    body, div, container {
+                    /* Configuración Global de la Hoja A4 */
+                    @page {
+                        size: A4 portrait;
+                        margin: 12mm 10mm;
+                    }
+
+                    html, body, .dashboard-print-container {
                         background-color: #ffffff !important;
                         color: #000000 !important;
+                        width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
                     }
 
-                    /* Todos los textos del Dashboard a negro puro */
+                    /* Modificación de Grilla: Pasar de 2 columnas a 1 columna por tarjeta */
+                    .charts-grid-print {
+                        display: block !important;
+                    }
+
+                    /* Control de Estructura por Tarjeta */
+                    .chart-card-print {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        border: 1.5px solid #000000 !important;
+                        box-shadow: none !important;
+                        background: #ffffff !important;
+                        margin-bottom: 20px !important;
+                        padding: 10px !important;
+                        box-sizing: border-box !important;
+                        
+                        /* Evita que un gráfico se corte a la mitad entre 2 hojas */
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                    }
+
+                    /* Forzar altura fija para que los gráficos no se estiren verticalmente */
+                    .scroll-container-print {
+                        max-height: 320px !important;
+                        height: 320px !important;
+                        overflow: hidden !important;
+                    }
+
+                    .recharts-responsive-container {
+                        max-height: 280px !important;
+                        height: 280px !important;
+                    }
+
+                    /* KPIs compactos en horizontal */
+                    .kpi-container-print {
+                        display: flex !important;
+                        flex-direction: row !important;
+                        justify-content: space-between !important;
+                        gap: 10px !important;
+                        margin-bottom: 15px !important;
+                        page-break-inside: avoid !important;
+                    }
+
+                    .kpi-card-print {
+                        flex: 1 !important;
+                        border: 1.5px solid #000000 !important;
+                        border-left: 5px solid #000000 !important;
+                        box-shadow: none !important;
+                        background: #ffffff !important;
+                        padding: 8px !important;
+                    }
+
+                    /* Colores a negro absoluto */
                     h2, h3, h4, span, label, p {
                         color: #000000 !important;
-                        text-shadow: none !important;
                     }
 
-                    /* Forzar que las barras de Recharts se rellenen en negro sólido */
                     .recharts-bar-rectangle path {
                         fill: #000000 !important;
                         stroke: #000000 !important;
                     }
 
-                    /* Forzar que el área de perfil sea sombra negra limpia */
                     .recharts-area-area {
                         fill: #000000 !important;
-                        fill-opacity: 0.25 !important;
+                        fill-opacity: 0.2 !important;
                     }
 
                     .recharts-area-curve {
@@ -259,39 +317,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         stroke-width: 2px !important;
                     }
 
-                    /* Rejillas y ejes a negro/gris oscuro para máxima visibilidad */
                     .recharts-cartesian-grid-line {
-                        stroke: #666666 !important;
+                        stroke: #888888 !important;
                     }
 
                     .recharts-text {
                         fill: #000000 !important;
                         font-weight: bold !important;
-                    }
-
-                    /* Tarjetas de KPI y gráficos con borde negro grueso */
-                    .chart-card-print, .kpi-card-print {
-                        border: 2px solid #000000 !important;
-                        box-shadow: none !important;
-                        background: #ffffff !important;
-                        page-break-inside: avoid;
-                        break-inside: avoid;
-                        margin-bottom: 15px !important;
-                    }
-
-                    .kpi-card-print {
-                        border-left: 6px solid #000000 !important;
-                    }
-
-                    /* Extender contenedores con scroll para imprimir la lista completa */
-                    .scroll-container {
-                        max-height: none !important;
-                        overflow: visible !important;
-                    }
-
-                    @page {
-                        size: A4 portrait;
-                        margin: 1cm;
+                        font-size: 10px !important;
                     }
                 }
             `}</style>
@@ -312,7 +345,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         onClick={handleImprimir}
                         style={styles.btnPrint}
                         className="no-print"
-                        title="Imprimir o Guardar en PDF (Optimizado para Blanco y Negro)"
+                        title="Imprimir o Guardar en PDF"
                     >
                         🖨️ Exportar / Imprimir PDF
                     </button>
@@ -352,7 +385,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
             {/* RESUMEN OPERATIVO DE VUELOS */}
             <h3 style={styles.sectionHeader}>✈️ Muestreo y Métricas de Operaciones Aéreas</h3>
-            <div style={styles.kpiContainer}>
+            <div style={styles.kpiContainer} className="kpi-container-print">
                 <div style={styles.kpiCard} className="kpi-card-print">
                     <span style={styles.kpiTitle}>TOTAL HORAS VOLADAS</span>
                     <span style={styles.kpiValue}>{totalHorasGenerales.toFixed(1)} hs</span>
@@ -374,7 +407,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             {/* 📈 PERFIL DE ACTIVIDAD EN EL TIEMPO */}
             <div style={{ ...styles.chartCard, marginBottom: '20px' }} className="chart-card-print">
                 <h4 style={styles.chartTitle}>📈 Perfil Temporal de Actividad (Cantidad de Vuelos por Fecha)</h4>
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={220}>
                     <AreaChart data={actividadPorFecha} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                         <defs>
                             <linearGradient id="colorVuelos" x1="0" y1="0" x2="0" y2="1">
@@ -383,7 +416,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="fechaFormatted" tick={{ fontSize: 11 }} />
+                        <XAxis dataKey="fechaFormatted" tick={{ fontSize: 10 }} />
                         <YAxis allowDecimals={false} />
                         <Tooltip 
                             formatter={(value) => [`${value} vuelos`, 'Cantidad de Vuelos']}
@@ -402,13 +435,13 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             </div>
 
             {/* GRILLA DE GRÁFICOS RESTANTES */}
-            <div style={styles.chartsGrid}>
+            <div style={styles.chartsGrid} className="charts-grid-print">
                 <div style={styles.chartCard} className="chart-card-print">
                     <h4 style={styles.chartTitle}>🏢 Horas por Elemento Apoyado</h4>
-                    <ResponsiveContainer width="100%" height={300}>
+                    <ResponsiveContainer width="100%" height={250}>
                         <BarChart data={horasPorElemento} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" />
+                            <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-20} textAnchor="end" />
                             <YAxis />
                             <Tooltip formatter={(value) => [`${value} hs`, 'Horas']} />
                             <Bar dataKey="value" fill="#1b3a57" radius={[4, 4, 0, 0]} />
@@ -418,14 +451,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                 <div style={styles.chartCard} className="chart-card-print">
                     <h4 style={styles.chartTitle}>🎯 Horas por Misión ({horasPorMision.length})</h4>
-                    <div className="scroll-container" style={{ width: '100%', maxHeight: '300px', overflowY: 'auto' }}>
-                        <ResponsiveContainer width="100%" height={Math.max(280, horasPorMision.length * 35)}>
+                    <div className="scroll-container-print" style={{ width: '100%', maxHeight: '250px', overflowY: 'auto' }}>
+                        <ResponsiveContainer width="100%" height={250}>
                             <BarChart layout="vertical" data={horasPorMision} margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" />
-                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} interval={0} />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} interval={0} />
                                 <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
-                                <Bar dataKey="value" fill="#10ac84" radius={[0, 4, 4, 0]} barSize={20} />
+                                <Bar dataKey="value" fill="#10ac84" radius={[0, 4, 4, 0]} barSize={15} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -433,14 +466,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                 <div style={styles.chartCard} className="chart-card-print">
                     <h4 style={styles.chartTitle}>👨‍✈️ Horas por Piloto / Copiloto ({horasPorTripulante.length})</h4>
-                    <div className="scroll-container" style={{ width: '100%', maxHeight: '400px', overflowY: 'auto' }}>
-                        <ResponsiveContainer width="100%" height={Math.max(300, horasPorTripulante.length * 35)}>
-                            <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
+                    <div className="scroll-container-print" style={{ width: '100%', maxHeight: '250px', overflowY: 'auto' }}>
+                        <ResponsiveContainer width="100%" height={250}>
+                            <BarChart layout="vertical" data={horasPorTripulante.slice(0, 10)} margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" />
-                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} interval={0} />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} interval={0} />
                                 <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
-                                <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} barSize={20} />
+                                <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} barSize={15} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -448,14 +481,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                 <div style={styles.chartCard} className="chart-card-print">
                     <h4 style={styles.chartTitle}>📍 Frecuencia de Operaciones por Aeródromo ({visitasPorAerodromo.length})</h4>
-                    <div className="scroll-container" style={{ width: '100%', maxHeight: '400px', overflowY: 'auto' }}>
-                        <ResponsiveContainer width="100%" height={Math.max(300, visitasPorAerodromo.length * 35)}>
-                            <BarChart layout="vertical" data={visitasPorAerodromo} margin={{ top: 5, right: 30, left: 60, bottom: 5 }}>
+                    <div className="scroll-container-print" style={{ width: '100%', maxHeight: '250px', overflowY: 'auto' }}>
+                        <ResponsiveContainer width="100%" height={250}>
+                            <BarChart layout="vertical" data={visitasPorAerodromo.slice(0, 10)} margin={{ top: 5, right: 30, left: 60, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" allowDecimals={false} />
-                                <YAxis dataKey="aerodromo" type="category" tick={{ fontSize: 11 }} interval={0} />
+                                <YAxis dataKey="aerodromo" type="category" tick={{ fontSize: 10 }} interval={0} />
                                 <Tooltip formatter={(value) => [`${value} operaciones`, 'Visitas / Operaciones']} />
-                                <Bar dataKey="visitas" fill="#38ada9" radius={[0, 4, 4, 0]} barSize={20} />
+                                <Bar dataKey="visitas" fill="#38ada9" radius={[0, 4, 4, 0]} barSize={15} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
