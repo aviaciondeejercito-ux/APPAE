@@ -152,6 +152,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return Object.entries(mapa).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
     }, [vuelosFiltrados]);
 
+    // 👨‍✈️ TODOS LOS PILOTOS / COPILOTOS (SIN LÍMITE)
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         const formatearNombre = (t) => {
@@ -171,11 +172,10 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
         return Object.entries(mapa)
             .map(([name, horas]) => ({ name, horas: Number(horas.toFixed(1)) }))
-            .sort((a, b) => b.horas - a.horas)
-            .slice(0, 10);
+            .sort((a, b) => b.horas - a.horas);
     }, [vuelosFiltrados]);
 
-    // 🔄 NUEVA LÓGICA: FRECUENCIA DE OPERACIONES POR AERÓDROMO
+    // 📍 TODOS LOS AERÓDROMOS VISITADOS (SIN LÍMITE)
     const visitasPorAerodromo = useMemo(() => {
         const mapa = {};
 
@@ -183,19 +183,13 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const origen = (v.desde || '').trim().toUpperCase();
             const destino = (v.hasta || '').trim().toUpperCase();
 
-            // Suma una visita por cada despegue/aterrizaje registrado
-            if (origen) {
-                mapa[origen] = (mapa[origen] || 0) + 1;
-            }
-            if (destino) {
-                mapa[destino] = (mapa[destino] || 0) + 1;
-            }
+            if (origen) mapa[origen] = (mapa[origen] || 0) + 1;
+            if (destino) mapa[destino] = (mapa[destino] || 0) + 1;
         });
 
         return Object.entries(mapa)
             .map(([aerodromo, visitas]) => ({ aerodromo, visitas }))
-            .sort((a, b) => b.visitas - a.visitas)
-            .slice(0, 8); // Muestra los 8 aeródromos más frecuentados
+            .sort((a, b) => b.visitas - a.visitas);
     }, [vuelosFiltrados]);
 
     if (loading) {
@@ -312,30 +306,36 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </ResponsiveContainer>
                 </div>
 
+                {/* TRIPULANTES (BARRAS HORIZONTALES - ALTURA ADAPTABLE Y SCROLLING) */}
                 <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>👨‍✈️ Top 10 Horas por Piloto / Copiloto</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                            <XAxis type="number" />
-                            <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} />
-                            <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
-                            <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    <h4 style={styles.chartTitle}>👨‍✈️ Horas por Piloto / Copiloto ({horasPorTripulante.length})</h4>
+                    <div style={{ width: '100%', maxHeight: '400px', overflowY: 'auto' }}>
+                        <ResponsiveContainer width="100%" height={Math.max(300, horasPorTripulante.length * 35)}>
+                            <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 30, left: 70, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} interval={0} />
+                                <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
+                                <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
 
+                {/* AERÓDROMOS (BARRAS HORIZONTALES - ALTURA ADAPTABLE Y SCROLLING) */}
                 <div style={styles.chartCard}>
-                    <h4 style={styles.chartTitle}>📍 Frecuencia de Operaciones por Aeródromo</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={visitasPorAerodromo} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="aerodromo" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
-                            <YAxis allowDecimals={false} />
-                            <Tooltip formatter={(value) => [`${value} operaciones`, 'Visitas / Operaciones']} />
-                            <Bar dataKey="visitas" fill="#38ada9" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    <h4 style={styles.chartTitle}>📍 Frecuencia de Operaciones por Aeródromo ({visitasPorAerodromo.length})</h4>
+                    <div style={{ width: '100%', maxHeight: '400px', overflowY: 'auto' }}>
+                        <ResponsiveContainer width="100%" height={Math.max(300, visitasPorAerodromo.length * 35)}>
+                            <BarChart layout="vertical" data={visitasPorAerodromo} margin={{ top: 5, right: 30, left: 60, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" allowDecimals={false} />
+                                <YAxis dataKey="aerodromo" type="category" tick={{ fontSize: 11 }} interval={0} />
+                                <Tooltip formatter={(value) => [`${value} operaciones`, 'Visitas / Operaciones']} />
+                                <Bar dataKey="visitas" fill="#38ada9" radius={[0, 4, 4, 0]} barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
             </div>
         </div>
