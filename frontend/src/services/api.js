@@ -82,7 +82,7 @@ export const deleteTripulante = (id) => API.delete(`/tripulantes/${id}`);
 // 🚀 SUBMÓDULOS DE REGISTRO E HISTORIAL DE TRIPULANTE
 export const gestionarHabilitacion = (id, data) => API.post(`/tripulantes/${id}/habilitacion`, data);
 export const agregarCapacitacion = (id, data) => API.post(`/tripulantes/${id}/capacitacion`, data);
-export const agregarAptitud = (id, data) => API.post(`/tripulantes/${id}/aptitudes`, data);
+export const agregarAptitud = (id, data) => API.post(`/tripulantes/${id}/aptitud-adicional`, data);
 
 /**
  * 📋 SERVICIOS DE CONTROL DE ENTRENAMIENTO DE TRIPULANTES
