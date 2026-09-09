@@ -23,8 +23,12 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
     const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
+    // 🆕 ESTADOS PARA FECHAS Y SISTEMA DE ARMAS
+    const [fechaDesde, setFechaDesde] = useState('');
+    const [fechaHasta, setFechaHasta] = useState('');
+    const [sistemaArmasFiltro, setSistemaArmasFiltro] = useState('TODOS');
+
     // 🎛️ ESTADOS PARA EL MODO Y FILTRO DEL GRÁFICO MENSUAL
-    // MODO: 'vuelos' | 'horas' | 'elemento'
     const [modoGraficoMes, setModoGraficoMes] = useState('vuelos'); 
     const [elementoApoyadoFiltro, setElementoApoyadoFiltro] = useState('TODOS');
 
@@ -84,7 +88,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         cargarDatos();
     }, [vuelosProps, unidadFiltro, esAdminGlobal, unidadUsuario]);
 
-    // 📌 UNIDADES Y MISIONES ÚNICAS PARA SELECTORES
+    // 📌 UNIDADES, MISIONES Y SISTEMAS DE ARMAS ÚNICOS PARA SELECTORES
     const listaUnidades = useMemo(() => {
         if (!esAdminGlobal) {
             return [unidadUsuario || 'MI UNIDAD'];
@@ -98,6 +102,15 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
+    // 🆕 LISTA DE SISTEMAS DE ARMAS
+    const listaSistemasArmas = useMemo(() => {
+        const sdaList = vuelosData
+            .map(v => v.sistemaArma || v.sistemaArmas || v.sdda || v.sistemadeArmas)
+            .filter(Boolean)
+            .map(s => normalizarTexto(s));
+        return ['TODOS', ...Array.from(new Set(sdaList))];
+    }, [vuelosData]);
+
     // 🏢 LISTA DINÁMICA DE ELEMENTOS APOYADOS PARA EL SELECTOR SECUNDARIO
     const listaElementosApoyados = useMemo(() => {
         const elementos = vuelosData
@@ -106,12 +119,13 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return ['TODOS', ...Array.from(new Set(elementos))];
     }, [vuelosData]);
 
-    // 📌 FILTRADO ROBUSTO DE VUELOS
+    // 📌 FILTRADO ROBUSTO DE VUELOS (INCLUYE UNIDAD, MISIÓN, SISTEMA DE ARMAS Y FECHAS)
     const vuelosFiltrados = useMemo(() => {
         const unidadObjetivo = esAdminGlobal ? unidadFiltro : (unidadUsuario || 'SIN_UNIDAD');
         const claveObjetivo = normalizarClave(unidadObjetivo);
 
         return vuelosData.filter(v => {
+            // 1. Filtro por Unidad
             const unidadVueloClave = normalizarClave(v.unidadResponsable);
             let pasaUnidad = false;
 
@@ -123,10 +137,26 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                              claveObjetivo.includes(unidadVueloClave);
             }
 
+            // 2. Filtro por Misión
             const pasaMision = misionFiltro === 'TODAS' || v.tipoMision === misionFiltro;
-            return pasaUnidad && pasaMision;
+
+            // 3. Filtro por Sistema de Armas
+            const sdaVuelo = normalizarTexto(v.sistemaArma || v.sistemaArmas || v.sdda || v.sistemadeArmas);
+            const pasaSda = sistemaArmasFiltro === 'TODOS' || sdaVuelo === sistemaArmasFiltro;
+
+            // 4. Filtro por Fechas
+            const rawFecha = v.fecha || v.fechaVuelo || v.createdAt;
+            let pasaFecha = true;
+
+            if (rawFecha) {
+                const fechaVueloStr = String(rawFecha).substring(0, 10); // Formato YYYY-MM-DD
+                if (fechaDesde && fechaVueloStr < fechaDesde) pasaFecha = false;
+                if (fechaHasta && fechaVueloStr > fechaHasta) pasaFecha = false;
+            }
+
+            return pasaUnidad && pasaMision && pasaSda && pasaFecha;
         });
-    }, [vuelosData, unidadFiltro, misionFiltro, esAdminGlobal, unidadUsuario]);
+    }, [vuelosData, unidadFiltro, misionFiltro, sistemaArmasFiltro, fechaDesde, fechaHasta, esAdminGlobal, unidadUsuario]);
 
     // ==========================================
     // 📊 CÁLCULOS Y PROCESAMIENTO - VUELOS
@@ -152,7 +182,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const rawFecha = v.fecha || v.fechaVuelo || v.createdAt;
             if (!rawFecha) return;
 
-            // Filtro dinámico por Elemento Apoyado si está activo el modo
             if (modoGraficoMes === 'elemento' && elementoApoyadoFiltro !== 'TODOS') {
                 const elemActual = normalizarTexto(v.elementoApoyado);
                 if (elemActual !== elementoApoyadoFiltro) return;
@@ -179,7 +208,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 const [anio, mes] = mesKey.split('-');
                 const numMes = parseInt(mes, 10) - 1;
                 
-                // Determinar el valor que grafica Recharts según el modo activo
                 let valorFinal = data.vuelos;
                 if (modoGraficoMes === 'horas' || modoGraficoMes === 'elemento') {
                     valorFinal = Number(data.horas.toFixed(1));
@@ -255,6 +283,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.visitas - a.visitas);
     }, [vuelosFiltrados]);
 
+    const handleLimpiarFechas = () => {
+        setFechaDesde('');
+        setFechaHasta('');
+    };
+
     const handleImprimir = () => {
         window.print();
     };
@@ -272,7 +305,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             {/* 🖨️ ESTILOS CSS PARA IMPRESIÓN */}
             <style>{`
                 @media print {
-                    .no-print, button, select {
+                    .no-print, button, select, input {
                         display: none !important;
                     }
 
@@ -405,6 +438,20 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         </select>
                     </div>
 
+                    {/* 🆕 FILTRO SISTEMA DE ARMAS */}
+                    <div style={styles.filtroGroup}>
+                        <label style={styles.label}>Sistema de Armas:</label>
+                        <select 
+                            value={sistemaArmasFiltro} 
+                            onChange={(e) => setSistemaArmasFiltro(e.target.value)}
+                            style={styles.select}
+                        >
+                            {listaSistemasArmas.map((s, i) => (
+                                <option key={i} value={s}>{s}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div style={styles.filtroGroup}>
                         <label style={styles.label}>Tipo Misión:</label>
                         <select 
@@ -417,6 +464,38 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                             ))}
                         </select>
                     </div>
+
+                    {/* 🆕 FILTRO DE FECHAS (ENTRE FECHAS / HISTÓRICO) */}
+                    <div style={styles.filtroGroup}>
+                        <label style={styles.label}>Desde:</label>
+                        <input 
+                            type="date" 
+                            value={fechaDesde} 
+                            onChange={(e) => setFechaDesde(e.target.value)}
+                            style={styles.inputDate}
+                        />
+                    </div>
+
+                    <div style={styles.filtroGroup}>
+                        <label style={styles.label}>Hasta:</label>
+                        <input 
+                            type="date" 
+                            value={fechaHasta} 
+                            onChange={(e) => setFechaHasta(e.target.value)}
+                            style={styles.inputDate}
+                        />
+                    </div>
+
+                    {(fechaDesde || fechaHasta) && (
+                        <button 
+                            onClick={handleLimpiarFechas}
+                            style={styles.btnResetDates}
+                            className="no-print"
+                            title="Ver todo el histórico"
+                        >
+                            🔄 General
+                        </button>
+                    )}
                 </div>
             </header>
 
@@ -587,6 +666,8 @@ const styles = {
     filtroGroup: { display: 'flex', flexDirection: 'column', gap: '2px' },
     label: { fontSize: '0.7rem', fontWeight: 'bold', color: '#1b3a57' },
     select: { padding: '5px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: '600', color: '#1b3a57' },
+    inputDate: { padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: '600', color: '#1b3a57' },
+    btnResetDates: { backgroundColor: '#e2e8f0', color: '#1b3a57', border: '1px solid #cbd5e1', padding: '5px 10px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', alignSelf: 'flex-end' },
     btnPrint: { backgroundColor: '#1b3a57', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer' },
     kpiContainer: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' },
     kpiCard: { backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', borderLeft: '4px solid #1b3a57', display: 'flex', flexDirection: 'column' },

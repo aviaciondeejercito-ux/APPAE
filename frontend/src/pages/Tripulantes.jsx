@@ -32,7 +32,6 @@ const Tripulantes = () => {
     
     const capacitacionesTacticas = ["Transporte de Personal", "Transporte de Carga", "Sanitario", "Rappel", "Fast Rope", "Carga Externa", "Helibalde", "NVG", "Lanzamiento de Paracaidistas", "Lanzamiento de Carga", "Lanzamiento de Buzos", "Tiro Aereo", "Visual Nocturno", "IFR"];
     
-    // OPCIONES ACTUALIZADAS SEGÚN REQUERIMIENTO
     const aptitudesAdicionalesOp = [
         "Radio Operador Restringido", 
         "Facilitador de CRM", 
@@ -54,7 +53,6 @@ const Tripulantes = () => {
         }
     };
 
-    // --- CÁLCULO DE HORAS POR ROL Y SdA ---
     const calcularDesgloseVuelos = (tripulanteId, aeronave, rol) => {
         if (!vuelos || vuelos.length === 0 || !tripulanteId) {
             return { v: 0, inst: 0, noc: 0, nvg: 0 };
@@ -342,21 +340,114 @@ const Tripulantes = () => {
 
     return (
         <div style={styles.dashboardContainer}>
+            {/* ESTILOS DE IMPRESIÓN OPTIMIZADOS EN MONOCROMO Y ALTO CONTRASTE */}
             <style>
                 {`
                     @media print {
                         body * { visibility: hidden !important; }
                         .no-printable, .no-print-btn { display: none !important; }
                         .printable-area, .printable-area * { visibility: visible !important; }
+                        
                         .printable-area {
-                            position: absolute !important; left: 0 !important; top: 0 !important;
-                            width: 100% !important; margin: 0 !important; padding: 0 !important;
-                            box-shadow: none !important; border: none !important;
+                            position: absolute !important; 
+                            left: 0 !important; 
+                            top: 0 !important;
+                            width: 100% !important; 
+                            margin: 0 !important; 
+                            padding: 10px !important;
+                            box-shadow: none !important; 
+                            border: none !important;
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
                         }
+
+                        /* Header general */
+                        .printable-area div[style*="legajoHeader"] {
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
+                            border: 2px solid #000000 !important;
+                            border-radius: 8px !important;
+                            padding: 15px !important;
+                        }
+
+                        .printable-area h2, 
+                        .printable-area span, 
+                        .printable-area strong, 
+                        .printable-area div {
+                            color: #000000 !important;
+                        }
+
+                        /* Avatar monocromo */
+                        .printable-area div[style*="avatar"] {
+                            background-color: #ffffff !important;
+                            border: 2px solid #000000 !important;
+                        }
+
+                        .printable-area div[style*="avatar"] svg {
+                            stroke: #000000 !important;
+                        }
+
+                        /* Secciones e íconos */
+                        .printable-area div[style*="sectionHeader"] {
+                            border-bottom: 2px solid #000000 !important;
+                            color: #000000 !important;
+                        }
+
+                        .printable-area div[style*="sectionHeader"] svg {
+                            stroke: #000000 !important;
+                        }
+
+                        /* Grillas e Ítems */
                         .printable-area .grid-stats-print {
-                            display: grid !important; grid-template-columns: repeat(5, 1fr) !important; gap: 8px !important;
+                            display: grid !important; 
+                            grid-template-columns: repeat(5, 1fr) !important; 
+                            gap: 8px !important;
                         }
-                        .printable-area .flex-print { display: flex !important; }
+
+                        .printable-area div[style*="statCard"] {
+                            background-color: #ffffff !important;
+                            border: 1.5px solid #000000 !important;
+                            border-radius: 6px !important;
+                        }
+
+                        /* Etiquetas de estado (Vencimientos) */
+                        .printable-area div[style*="statusTag"] {
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
+                            border: 1px solid #000000 !important;
+                            font-weight: bold !important;
+                        }
+
+                        /* Habilitaciones e ítems */
+                        .printable-area div[style*="habItem"] {
+                            background-color: #ffffff !important;
+                            border: 1px solid #000000 !important;
+                            border-radius: 6px !important;
+                        }
+
+                        .printable-area div[style*="habBadge"] {
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
+                            border: 1px solid #000000 !important;
+                            font-weight: bold !important;
+                        }
+
+                        /* Tarjetas Tácticas / Adicionales Oscuras corregidas */
+                        .printable-area div[style*="tacticaBadge"] {
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
+                            border: 1.5px solid #000000 !important;
+                            border-radius: 6px !important;
+                        }
+
+                        .printable-area div[style*="tacticaBadge"] * {
+                            color: #000000 !important;
+                            font-weight: bold !important;
+                        }
+
+                        .printable-area .flex-print { 
+                            display: flex !important; 
+                        }
                     }
                 `}
             </style>
@@ -417,7 +508,6 @@ const Tripulantes = () => {
                                 {esGestorOperativo && <button onClick={() => handleOpenEdit('certificaciones')} style={styles.btnEditSmall} className="no-print-btn"><Edit3 size={14}/></button>}
                             </div>
                             
-                            {/* GRID DE CERTIFICACIONES ACTUALIZADO */}
                             <div style={styles.gridStats} className="grid-stats-print">
                                 <div style={styles.statCard}>
                                     <span style={styles.statLabel}>PSICOFÍSICO</span>
