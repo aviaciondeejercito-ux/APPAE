@@ -23,10 +23,13 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
     const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
-    // 🆕 ESTADOS PARA FECHAS Y SISTEMA DE ARMAS
+    // ESTADOS PARA FECHAS Y SISTEMA DE ARMAS
     const [fechaDesde, setFechaDesde] = useState('');
     const [fechaHasta, setFechaHasta] = useState('');
     const [sistemaArmasFiltro, setSistemaArmasFiltro] = useState('TODOS');
+
+    // 🆕 ESTADO PARA FILTRO POR MATRÍCULA
+    const [matriculaFiltro, setMatriculaFiltro] = useState('TODAS');
 
     // 🎛️ ESTADOS PARA EL MODO Y FILTRO DEL GRÁFICO MENSUAL
     const [modoGraficoMes, setModoGraficoMes] = useState('vuelos'); 
@@ -102,13 +105,21 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
-    // 🆕 LISTA DE SISTEMAS DE ARMAS
     const listaSistemasArmas = useMemo(() => {
         const sdaList = vuelosData
             .map(v => v.sistemaArma || v.sistemaArmas || v.sdda || v.sistemadeArmas)
             .filter(Boolean)
             .map(s => normalizarTexto(s));
         return ['TODOS', ...Array.from(new Set(sdaList))];
+    }, [vuelosData]);
+
+    // 🆕 LISTA DINÁMICA DE MATRÍCULAS ÚNICAS
+    const listaMatriculas = useMemo(() => {
+        const matriculasList = vuelosData
+            .map(v => v.matricula || v.tailNumber || v.aeronaveMatricula || v.aeronave)
+            .filter(Boolean)
+            .map(m => normalizarTexto(m));
+        return ['TODAS', ...Array.from(new Set(matriculasList))];
     }, [vuelosData]);
 
     // 🏢 LISTA DINÁMICA DE ELEMENTOS APOYADOS PARA EL SELECTOR SECUNDARIO
@@ -119,7 +130,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return ['TODOS', ...Array.from(new Set(elementos))];
     }, [vuelosData]);
 
-    // 📌 FILTRADO ROBUSTO DE VUELOS (INCLUYE UNIDAD, MISIÓN, SISTEMA DE ARMAS Y FECHAS)
+    // 📌 FILTRADO ROBUSTO COMBINADO DE VUELOS (UNIDAD + MISIÓN + SISTEMA DE ARMAS + MATRÍCULA + FECHAS)
     const vuelosFiltrados = useMemo(() => {
         const unidadObjetivo = esAdminGlobal ? unidadFiltro : (unidadUsuario || 'SIN_UNIDAD');
         const claveObjetivo = normalizarClave(unidadObjetivo);
@@ -144,7 +155,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             const sdaVuelo = normalizarTexto(v.sistemaArma || v.sistemaArmas || v.sdda || v.sistemadeArmas);
             const pasaSda = sistemaArmasFiltro === 'TODOS' || sdaVuelo === sistemaArmasFiltro;
 
-            // 4. Filtro por Fechas
+            // 4. 🆕 Filtro por Matrícula
+            const matVuelo = normalizarTexto(v.matricula || v.tailNumber || v.aeronaveMatricula || v.aeronave);
+            const pasaMatricula = matriculaFiltro === 'TODAS' || matVuelo === matriculaFiltro;
+
+            // 5. Filtro por Fechas
             const rawFecha = v.fecha || v.fechaVuelo || v.createdAt;
             let pasaFecha = true;
 
@@ -154,9 +169,9 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 if (fechaHasta && fechaVueloStr > fechaHasta) pasaFecha = false;
             }
 
-            return pasaUnidad && pasaMision && pasaSda && pasaFecha;
+            return pasaUnidad && pasaMision && pasaSda && pasaMatricula && pasaFecha;
         });
-    }, [vuelosData, unidadFiltro, misionFiltro, sistemaArmasFiltro, fechaDesde, fechaHasta, esAdminGlobal, unidadUsuario]);
+    }, [vuelosData, unidadFiltro, misionFiltro, sistemaArmasFiltro, matriculaFiltro, fechaDesde, fechaHasta, esAdminGlobal, unidadUsuario]);
 
     // ==========================================
     // 📊 CÁLCULOS Y PROCESAMIENTO - VUELOS
@@ -438,7 +453,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         </select>
                     </div>
 
-                    {/* 🆕 FILTRO SISTEMA DE ARMAS */}
+                    {/* FILTRO SISTEMA DE ARMAS */}
                     <div style={styles.filtroGroup}>
                         <label style={styles.label}>Sistema de Armas:</label>
                         <select 
@@ -448,6 +463,20 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         >
                             {listaSistemasArmas.map((s, i) => (
                                 <option key={i} value={s}>{s}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* 🆕 FILTRO POR MATRÍCULA */}
+                    <div style={styles.filtroGroup}>
+                        <label style={styles.label}>Matrícula:</label>
+                        <select 
+                            value={matriculaFiltro} 
+                            onChange={(e) => setMatriculaFiltro(e.target.value)}
+                            style={styles.select}
+                        >
+                            {listaMatriculas.map((mat, i) => (
+                                <option key={i} value={mat}>{mat}</option>
                             ))}
                         </select>
                     </div>
@@ -465,7 +494,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         </select>
                     </div>
 
-                    {/* 🆕 FILTRO DE FECHAS (ENTRE FECHAS / HISTÓRICO) */}
+                    {/* FILTRO DE FECHAS */}
                     <div style={styles.filtroGroup}>
                         <label style={styles.label}>Desde:</label>
                         <input 
