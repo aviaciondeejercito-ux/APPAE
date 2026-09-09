@@ -23,6 +23,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
     const [misionFiltro, setMisionFiltro] = useState('TODAS');
 
+    // 🎛️ ESTADOS PARA EL MODO Y FILTRO DEL GRÁFICO MENSUAL
+    // MODO: 'vuelos' | 'horas' | 'elemento'
+    const [modoGraficoMes, setModoGraficoMes] = useState('vuelos'); 
+    const [elementoApoyadoFiltro, setElementoApoyadoFiltro] = useState('TODOS');
+
     // 👤 DETECTAR Y NORMALIZAR EL USUARIO ACTUAL
     const { unidadUsuario, esAdminGlobal } = useMemo(() => {
         try {
@@ -93,6 +98,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
+    // 🏢 LISTA DINÁMICA DE ELEMENTOS APOYADOS PARA EL SELECTOR SECUNDARIO
+    const listaElementosApoyados = useMemo(() => {
+        const elementos = vuelosData
+            .map(v => v.elementoApoyado ? normalizarTexto(v.elementoApoyado) : null)
+            .filter(Boolean);
+        return ['TODOS', ...Array.from(new Set(elementos))];
+    }, [vuelosData]);
+
     // 📌 FILTRADO ROBUSTO DE VUELOS
     const vuelosFiltrados = useMemo(() => {
         const unidadObjetivo = esAdminGlobal ? unidadFiltro : (unidadUsuario || 'SIN_UNIDAD');
@@ -131,16 +144,29 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return vuelosFiltrados.reduce((acc, v) => acc + (Number(v.pesoCarga) || 0), 0);
     }, [vuelosFiltrados]);
 
-    // 📈 PERFIL DE ACTIVIDAD AGRUPADO POR MES
+    // 📈 PERFIL DE ACTIVIDAD AGRUPADO POR MES (DINÁMICO SEGÚN MODO Y TIPO DE APOYO)
     const actividadPorMes = useMemo(() => {
         const mapa = {};
+        
         vuelosFiltrados.forEach(v => {
             const rawFecha = v.fecha || v.fechaVuelo || v.createdAt;
             if (!rawFecha) return;
-            
-            // Extraer formato Año-Mes (Ej: "2026-08")
+
+            // Filtro dinámico por Elemento Apoyado si está activo el modo
+            if (modoGraficoMes === 'elemento' && elementoApoyadoFiltro !== 'TODOS') {
+                const elemActual = normalizarTexto(v.elementoApoyado);
+                if (elemActual !== elementoApoyadoFiltro) return;
+            }
+
             const mesKey = String(rawFecha).substring(0, 7); 
-            mapa[mesKey] = (mapa[mesKey] || 0) + 1;
+            const hs = Number(v.horasVoladas) || 0;
+
+            if (!mapa[mesKey]) {
+                mapa[mesKey] = { vuelos: 0, horas: 0 };
+            }
+
+            mapa[mesKey].vuelos += 1;
+            mapa[mesKey].horas += hs;
         });
 
         const mesesNombre = [
@@ -149,17 +175,26 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         ];
 
         return Object.entries(mapa)
-            .map(([mesKey, vuelos]) => {
+            .map(([mesKey, data]) => {
                 const [anio, mes] = mesKey.split('-');
                 const numMes = parseInt(mes, 10) - 1;
+                
+                // Determinar el valor que grafica Recharts según el modo activo
+                let valorFinal = data.vuelos;
+                if (modoGraficoMes === 'horas' || modoGraficoMes === 'elemento') {
+                    valorFinal = Number(data.horas.toFixed(1));
+                }
+
                 return {
                     mesKey,
                     mesFormatted: `${mesesNombre[numMes] || mes} ${anio}`,
-                    vuelos
+                    valor: valorFinal,
+                    vuelos: data.vuelos,
+                    horas: Number(data.horas.toFixed(1))
                 };
             })
             .sort((a, b) => a.mesKey.localeCompare(b.mesKey));
-    }, [vuelosFiltrados]);
+    }, [vuelosFiltrados, modoGraficoMes, elementoApoyadoFiltro]);
 
     const horasPorElemento = useMemo(() => {
         const mapa = {};
@@ -234,7 +269,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
     return (
         <div style={styles.container} className="dashboard-print-container">
-            {/* 🖨️ ESTILOS CSS RESTRUCTURADOS PARA IMPRESIÓN Y PDF EN ESCALA DE NEGROS */}
+            {/* 🖨️ ESTILOS CSS PARA IMPRESIÓN */}
             <style>{`
                 @media print {
                     .no-print, button, select {
@@ -331,7 +366,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 }
             `}</style>
 
-            {/* ENCABEZADO Y FILTROS */}
+            {/* ENCABEZADO Y FILTROS GENERALES */}
             <header style={styles.header}>
                 <div>
                     <h2 style={{ margin: 0, color: '#1b3a57' }}>📊 Dashboard Operativo de Vuelos</h2>
@@ -406,31 +441,74 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
             </div>
 
-            {/* 📈 PERFIL DE ACTIVIDAD AGRUPADO POR MES */}
+            {/* 📈 PERFIL DE ACTIVIDAD MENSUAL CON FILTROS DINÁMICOS */}
             <div style={{ ...styles.chartCard, marginBottom: '20px' }} className="chart-card-print">
-                <h4 style={styles.chartTitle}>📈 Actividad Mensual (Cantidad de Vuelos por Mes)</h4>
-                <ResponsiveContainer width="100%" height={220}>
-                    <AreaChart data={actividadPorMes} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <div style={styles.chartHeaderFlex}>
+                    <h4 style={{ ...styles.chartTitle, margin: 0 }}>
+                        📈 Actividad Mensual 
+                        {modoGraficoMes === 'vuelos' && ' (Cantidad de Vuelos)'}
+                        {modoGraficoMes === 'horas' && ' (Horas Voladas Totales)'}
+                        {modoGraficoMes === 'elemento' && ` (Horas de Apoyo: ${elementoApoyadoFiltro})`}
+                    </h4>
+
+                    {/* CONTROLES DEL GRÁFICO MENSUAL */}
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }} className="no-print">
+                        <div style={styles.filtroGroup}>
+                            <label style={styles.label}>Visualizar por:</label>
+                            <select 
+                                value={modoGraficoMes} 
+                                onChange={(e) => setModoGraficoMes(e.target.value)}
+                                style={styles.select}
+                            >
+                                <option value="vuelos">Vuelos por mes</option>
+                                <option value="horas">Horas de vuelo por mes</option>
+                                <option value="elemento">Horas por Tipo de Apoyo</option>
+                            </select>
+                        </div>
+
+                        {/* SELECTOR SECUNDARIO: Solo visible si eliges "Horas por Tipo de Apoyo" */}
+                        {modoGraficoMes === 'elemento' && (
+                            <div style={styles.filtroGroup}>
+                                <label style={styles.label}>Elemento Apoyado:</label>
+                                <select 
+                                    value={elementoApoyadoFiltro} 
+                                    onChange={(e) => setElementoApoyadoFiltro(e.target.value)}
+                                    style={{ ...styles.select, borderColor: '#10ac84' }}
+                                >
+                                    {listaElementosApoyados.map((elem, i) => (
+                                        <option key={i} value={elem}>{elem}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <ResponsiveContainer width="100%" height={230}>
+                    <AreaChart data={actividadPorMes} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <defs>
-                            <linearGradient id="colorVuelos" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#1b3a57" stopOpacity={0.8}/>
-                                <stop offset="95%" stopColor="#1b3a57" stopOpacity={0.05}/>
+                            <linearGradient id="colorMes" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} stopOpacity={0.05}/>
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="mesFormatted" tick={{ fontSize: 11, fontWeight: 'bold' }} />
-                        <YAxis allowDecimals={false} />
+                        <YAxis allowDecimals={modoGraficoMes !== 'vuelos'} />
                         <Tooltip 
-                            formatter={(value) => [`${value} vuelos`, 'Total del Mes']}
+                            formatter={(value) => [
+                                modoGraficoMes === 'vuelos' ? `${value} vuelos` : `${value} hs`,
+                                modoGraficoMes === 'vuelos' ? 'Vuelos' : 'Horas Voladas'
+                            ]}
                             labelFormatter={(label) => `Período: ${label}`}
                         />
                         <Area 
                             type="monotone" 
-                            dataKey="vuelos" 
-                            stroke="#1b3a57" 
+                            dataKey="valor" 
+                            stroke={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} 
                             strokeWidth={2}
                             fillOpacity={1} 
-                            fill="url(#colorVuelos)" 
+                            fill="url(#colorMes)" 
                         />
                     </AreaChart>
                 </ResponsiveContainer>
@@ -516,5 +594,6 @@ const styles = {
     kpiValue: { fontSize: '1.5rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '4px' },
     chartsGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' },
     chartCard: { backgroundColor: '#ffffff', padding: '18px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' },
-    chartTitle: { margin: '0 0 15px 0', fontSize: '0.9rem', color: '#1b3a57', fontWeight: 'bold' }
+    chartHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '15px' },
+    chartTitle: { fontSize: '0.9rem', color: '#1b3a57', fontWeight: 'bold' }
 };
