@@ -262,42 +262,65 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     }
 
     return (
-        <div style={styles.container} className="dashboard-container">
-            {/* REGLAS CSS PARA IMPRESIÓN Y PREVENCIÓN DE CORTES */}
+        <div style={styles.container} className="printable-dashboard">
+            {/* CSS REFORZADO PARA IMPRESIÓN Y PREVENCIÓN DE SOLAPAMIENTOS */}
             <style>{`
                 @media print {
-                    .no-print { 
+                    /* Oculta todo fuera de la vista de métricas */
+                    header, nav, footer, .no-print { 
                         display: none !important; 
                     }
+                    
+                    @page { 
+                        size: A4 landscape; 
+                        margin: 8mm; 
+                    }
+
                     body, html { 
                         background: #ffffff !important; 
                         margin: 0 !important; 
                         padding: 0 !important; 
                         width: 100% !important;
                     }
-                    .dashboard-container { 
+
+                    .printable-dashboard { 
                         padding: 0 !important; 
-                        max-width: 100% !important; 
+                        margin: 0 !important;
                         width: 100% !important;
+                        max-width: 100% !important;
+                        display: block !important;
                     }
+
                     .printable-area { 
                         padding: 0 !important; 
                         width: 100% !important; 
-                        box-sizing: border-box !important;
+                        display: block !important;
                     }
+
+                    /* Evita que los bloques de gráficos se monten o solapen */
+                    .chart-card-full {
+                        width: 100% !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        margin-bottom: 15px !important;
+                        display: block !important;
+                        clear: both !important;
+                    }
+
                     .charts-grid { 
                         display: grid !important; 
-                        grid-template-columns: repeat(2, 1fr) !important; 
-                        gap: 10px !important; 
+                        grid-template-columns: 1fr 1fr !important; 
+                        gap: 15px !important; 
+                        width: 100% !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                     }
+
                     .chart-card { 
                         page-break-inside: avoid !important; 
                         break-inside: avoid !important;
                         width: 100% !important;
                         box-sizing: border-box !important;
-                    }
-                    .recharts-responsive-container { 
-                        width: 100% !important; 
                     }
                 }
             `}</style>
@@ -436,8 +459,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </div>
                 </div>
 
-                {/* GRÁFICO MENSUAL CORREGIDO */}
-                <div style={{ ...styles.chartCard, marginBottom: '20px', width: '100%', boxSizing: 'border-box' }} className="chart-card">
+                {/* GRÁFICO MENSUAL DE ANCHO COMPLETO */}
+                <div style={{ ...styles.chartCard, marginBottom: '20px', width: '100%', boxSizing: 'border-box' }} className="chart-card-full">
                     <div style={styles.chartHeaderFlex}>
                         <h4 style={{ ...styles.chartTitle, margin: 0 }}>
                             📈 Actividad Mensual 
@@ -477,9 +500,9 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         </div>
                     </div>
 
-                    <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+                    <div style={{ width: '100%', height: 210, minWidth: 0 }}>
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={actividadPorMes} margin={{ top: 15, right: 35, left: 0, bottom: 0 }}>
+                            <AreaChart data={actividadPorMes} margin={{ top: 15, right: 25, left: -10, bottom: 20 }}>
                                 <defs>
                                     <linearGradient id="colorMes" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} stopOpacity={0.8}/>
@@ -487,8 +510,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="mesFormatted" tick={{ fontSize: 10, fontWeight: 'bold' }} />
-                                <YAxis allowDecimals={modoGraficoMes !== 'vuelos'} tick={{ fontSize: 10 }} />
+                                <XAxis 
+                                    dataKey="mesFormatted" 
+                                    tick={{ fontSize: 9, fontWeight: 'bold' }} 
+                                    interval={0}
+                                    angle={-25}
+                                    textAnchor="end"
+                                />
+                                <YAxis allowDecimals={modoGraficoMes !== 'vuelos'} tick={{ fontSize: 9 }} />
                                 <Tooltip 
                                     formatter={(value) => [
                                         modoGraficoMes === 'vuelos' ? `${value} vuelos` : `${value} hs`,
@@ -512,12 +541,12 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 <div style={styles.chartsGrid} className="charts-grid">
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>🏢 Horas por Elemento Apoyado</h4>
-                        <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+                        <div style={{ width: '100%', height: 210, minWidth: 0 }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={horasPorElemento} margin={{ top: 10, right: 10, left: 0, bottom: 35 }}>
+                                <BarChart data={horasPorElemento} margin={{ top: 10, right: 10, left: -15, bottom: 40 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="name" tick={{ fontSize: 7 }} interval={0} angle={-35} textAnchor="end" />
-                                    <YAxis tick={{ fontSize: 9 }} />
+                                    <YAxis tick={{ fontSize: 8 }} />
                                     <Tooltip formatter={(value) => [`${value} hs`, 'Horas']} />
                                     <Bar dataKey="value" fill="#1b3a57" radius={[4, 4, 0, 0]} />
                                 </BarChart>
@@ -527,14 +556,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>🎯 Horas por Misión ({horasPorMision.length})</h4>
-                        <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+                        <div style={{ width: '100%', height: 210, minWidth: 0 }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart layout="vertical" data={horasPorMision} margin={{ top: 5, right: 20, left: 60, bottom: 5 }}>
+                                <BarChart layout="vertical" data={horasPorMision} margin={{ top: 5, right: 15, left: 20, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                    <XAxis type="number" tick={{ fontSize: 9 }} />
-                                    <YAxis dataKey="name" type="category" tick={{ fontSize: 8 }} interval={0} width={80} />
+                                    <XAxis type="number" tick={{ fontSize: 8 }} />
+                                    <YAxis dataKey="name" type="category" tick={{ fontSize: 8 }} interval={0} width={100} />
                                     <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
-                                    <Bar dataKey="value" fill="#10ac84" radius={[0, 4, 4, 0]} barSize={12} />
+                                    <Bar dataKey="value" fill="#10ac84" radius={[0, 4, 4, 0]} barSize={11} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -542,14 +571,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>👨‍✈️ Horas por Piloto / Copiloto ({horasPorTripulante.length})</h4>
-                        <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+                        <div style={{ width: '100%', height: 210, minWidth: 0 }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart layout="vertical" data={horasPorTripulante.slice(0, 8)} margin={{ top: 5, right: 20, left: 60, bottom: 5 }}>
+                                <BarChart layout="vertical" data={horasPorTripulante.slice(0, 8)} margin={{ top: 5, right: 15, left: 20, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                    <XAxis type="number" tick={{ fontSize: 9 }} />
-                                    <YAxis dataKey="name" type="category" tick={{ fontSize: 8 }} interval={0} width={80} />
+                                    <XAxis type="number" tick={{ fontSize: 8 }} />
+                                    <YAxis dataKey="name" type="category" tick={{ fontSize: 8 }} interval={0} width={90} />
                                     <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
-                                    <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} barSize={12} />
+                                    <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} barSize={11} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -557,14 +586,14 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>📍 Operaciones por Aeródromo ({visitasPorAerodromo.length})</h4>
-                        <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+                        <div style={{ width: '100%', height: 210, minWidth: 0 }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart layout="vertical" data={visitasPorAerodromo.slice(0, 8)} margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
+                                <BarChart layout="vertical" data={visitasPorAerodromo.slice(0, 8)} margin={{ top: 5, right: 15, left: 0, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 9 }} />
-                                    <YAxis dataKey="aerodromo" type="category" tick={{ fontSize: 8 }} interval={0} />
+                                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 8 }} />
+                                    <YAxis dataKey="aerodromo" type="category" tick={{ fontSize: 8 }} interval={0} width={50} />
                                     <Tooltip formatter={(value) => [`${value} operaciones`, 'Visitas / Operaciones']} />
-                                    <Bar dataKey="visitas" fill="#38ada9" radius={[0, 4, 4, 0]} barSize={12} />
+                                    <Bar dataKey="visitas" fill="#38ada9" radius={[0, 4, 4, 0]} barSize={11} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
