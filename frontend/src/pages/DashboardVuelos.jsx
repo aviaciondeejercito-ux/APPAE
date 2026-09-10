@@ -263,16 +263,15 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
     return (
         <div style={styles.container} className="printable-dashboard">
-            {/* ESTILOS CSS RECEPTIVOS TANTO EN VERTICAL COMO EN HORIZONTAL */}
+            {/* INYECCIÓN CSS CRÍTICA PARA FORZAR RENDER DE RECHARTS AL IMPRIMIR */}
             <style>{`
                 @media print {
                     header, nav, footer, .no-print { 
                         display: none !important; 
                     }
                     
-                    /* Se remueve 'size: A4 landscape' forzado para permitir portrait o landscape automático */
                     @page { 
-                        margin: 8mm; 
+                        margin: 5mm; 
                     }
 
                     body, html { 
@@ -280,53 +279,46 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         margin: 0 !important; 
                         padding: 0 !important; 
                         width: 100% !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
                     }
 
                     .printable-dashboard { 
                         padding: 0 !important; 
                         margin: 0 !important;
                         width: 100% !important;
-                        max-width: 100% !important;
-                        display: block !important;
                     }
 
                     .printable-area { 
                         padding: 0 !important; 
                         width: 100% !important; 
-                        display: block !important;
                     }
 
-                    /* Contenedor principal reducido y adaptable para entrar en A4 vertical */
-                    .chart-card-full {
-                        width: 100% !important;
-                        max-width: 100% !important;
-                        box-sizing: border-box !important;
-                        page-break-inside: avoid !important;
-                        break-inside: avoid !important;
-                        margin-bottom: 12px !important;
-                        padding: 8px !important;
-                    }
-
-                    .chart-container-reduced {
-                        height: 160px !important; /* Altura compacta */
-                        width: 100% !important;
-                    }
-
-                    /* SVGs dinámicos */
+                    /* Forzar dimensión estricta en el SVG de Recharts para evitar colapso a 0px */
                     .recharts-responsive-container {
                         width: 100% !important;
-                        height: 100% !important;
+                        height: 180px !important;
+                        min-height: 180px !important;
+                        display: block !important;
+                        visibility: visible !important;
+                    }
+
+                    .chart-container-main .recharts-responsive-container {
+                        height: 160px !important;
+                        min-height: 160px !important;
                     }
 
                     .recharts-wrapper {
                         width: 100% !important;
+                        height: 100% !important;
+                        position: relative !important;
                     }
 
                     .recharts-surface {
                         width: 100% !important;
+                        height: 100% !important;
                     }
 
-                    /* Grid secundario dinámico */
                     .charts-grid { 
                         display: grid !important; 
                         grid-template-columns: 1fr 1fr !important; 
@@ -340,7 +332,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         page-break-inside: avoid !important; 
                         break-inside: avoid !important;
                         width: 100% !important;
-                        padding: 8px !important;
                         box-sizing: border-box !important;
                     }
                 }
@@ -480,7 +471,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </div>
                 </div>
 
-                {/* GRÁFICO MENSUAL COMPACTO Y DENSEMENTE FORMATIADO */}
+                {/* GRÁFICO MENSUAL CON ALTURA MÍNIMA FIX */}
                 <div style={{ ...styles.chartCard, marginBottom: '15px', width: '100%', boxSizing: 'border-box' }} className="chart-card-full">
                     <div style={styles.chartHeaderFlex}>
                         <h4 style={{ ...styles.chartTitle, margin: 0, fontSize: '0.8rem' }}>
@@ -521,8 +512,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         </div>
                     </div>
 
-                    <div style={{ width: '100%', height: 170, minWidth: 0 }} className="chart-container-reduced">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ width: '100%', height: 180, minHeight: 180 }} className="chart-container-main">
+                        <ResponsiveContainer width="100%" height={180}>
                             <AreaChart 
                                 data={actividadPorMes} 
                                 margin={{ top: 10, right: 10, left: -25, bottom: 15 }}
@@ -562,12 +553,12 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </div>
                 </div>
 
-                {/* GRID DE GRÁFICOS SECUNDARIOS */}
+                {/* GRID DE GRÁFICOS SECUNDARIOS CON ALTURA GARANTIZADA */}
                 <div style={styles.chartsGrid} className="charts-grid">
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>🏢 Horas por Elemento Apoyado</h4>
-                        <div style={{ width: '100%', height: 180, minWidth: 0 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div style={{ width: '100%', height: 180, minHeight: 180 }}>
+                            <ResponsiveContainer width="100%" height={180}>
                                 <BarChart data={horasPorElemento} margin={{ top: 10, right: 10, left: -20, bottom: 35 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="name" tick={{ fontSize: 6.5 }} interval={0} angle={-35} textAnchor="end" />
@@ -581,8 +572,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>🎯 Horas por Misión ({horasPorMision.length})</h4>
-                        <div style={{ width: '100%', height: 180, minWidth: 0 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div style={{ width: '100%', height: 180, minHeight: 180 }}>
+                            <ResponsiveContainer width="100%" height={180}>
                                 <BarChart layout="vertical" data={horasPorMision} margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                     <XAxis type="number" tick={{ fontSize: 7 }} />
@@ -596,8 +587,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>👨‍✈️ Horas por Piloto / Copiloto ({horasPorTripulante.length})</h4>
-                        <div style={{ width: '100%', height: 180, minWidth: 0 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div style={{ width: '100%', height: 180, minHeight: 180 }}>
+                            <ResponsiveContainer width="100%" height={180}>
                                 <BarChart layout="vertical" data={horasPorTripulante.slice(0, 8)} margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                     <XAxis type="number" tick={{ fontSize: 7 }} />
@@ -611,8 +602,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>📍 Operaciones por Aeródromo ({visitasPorAerodromo.length})</h4>
-                        <div style={{ width: '100%', height: 180, minWidth: 0 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div style={{ width: '100%', height: 180, minHeight: 180 }}>
+                            <ResponsiveContainer width="100%" height={180}>
                                 <BarChart layout="vertical" data={visitasPorAerodromo.slice(0, 8)} margin={{ top: 5, right: 15, left: -10, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 7 }} />
