@@ -3,7 +3,6 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   AreaChart, Area
 } from 'recharts';
-import html2pdf from 'html2pdf.js';
 
 import { EventService } from '../services/api';
 
@@ -18,10 +17,8 @@ const normalizarClave = (str) => {
 };
 
 export default function DashboardVuelos({ vuelosData: vuelosProps }) {
-    const dashboardRef = useRef(null);
     const [vuelosData, setVuelosData] = useState(vuelosProps || []);
     const [loading, setLoading] = useState(true);
-    const [generandoPdf, setGenerandoPdf] = useState(false);
 
     // FILTROS PRINCIPALES
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
@@ -252,41 +249,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.visitas - a.visitas);
     }, [vuelosFiltrados]);
 
-    // EXPORTACIÓN PDF CON AJUSTE DINÁMICO DE ANCHO
-    const exportarPDF = async (orientacion = 'portrait') => {
-        setGenerandoPdf(true);
-        
-        try {
-            const element = dashboardRef.current;
-
-            // Fijamos temporalmente una clase que fuerza anchos rígidos para el snapshot
-            element.classList.add('pdf-rendering');
-
-            const opt = {
-                margin:       [8, 8, 8, 8],
-                filename:     `Dashboard_Vuelos_${orientacion}_${new Date().toISOString().slice(0, 10)}.pdf`,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { 
-                    scale: 2, 
-                    useCORS: true, 
-                    logging: false,
-                    scrollY: 0,
-                    windowWidth: orientacion === 'landscape' ? 1200 : 800 // Ancho de simulación A4
-                },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: orientacion },
-                pagebreak:    { mode: ['avoid-all', 'css', 'legacy'], avoid: '.no-break' }
-            };
-
-            await html2pdf().set(opt).from(element).save();
-
-            // Quitamos la clase de simulación tras generar el PDF
-            element.classList.remove('pdf-rendering');
-        } catch (err) {
-            console.error("Error al generar PDF:", err);
-            window.print();
-        } finally {
-            setGenerandoPdf(false);
-        }
+    const imprimirPantalla = () => {
+        window.print();
     };
 
     if (loading) {
@@ -299,29 +263,40 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
     return (
         <div style={styles.container}>
-            {/* ESTILOS DE CORRECCIÓN DE TAMAÑO Y SALTO DE PÁGINA */}
+            {/* REGLAS CSS PARA IMPRESIÓN Y PDF NATIVO DEL NAVEGADOR */}
             <style>{`
-                .no-break {
-                    page-break-inside: avoid !important;
-                    break-inside: avoid !important;
-                }
                 @media print {
-                    .no-print { display: none !important; }
-                }
-
-                /* Reglas exclusivas mientras se genera el PDF para evitar desbordes */
-                .pdf-rendering {
-                    width: 1000px !important;
-                    max-width: 1000px !important;
-                    padding: 10px !important;
-                }
-                .pdf-rendering .recharts-responsive-container {
-                    width: 100% !important;
-                    height: 200px !important;
-                }
-                .pdf-rendering .charts-grid-container {
-                    grid-template-columns: repeat(2, 1fr) !important;
-                    gap: 10px !important;
+                    .no-print { 
+                        display: none !important; 
+                    }
+                    body, html { 
+                        background: #ffffff !important; 
+                        margin: 0 !important; 
+                        padding: 0 !important; 
+                        width: 100% !important;
+                    }
+                    .dashboard-container { 
+                        padding: 0 !important; 
+                        max-width: 100% !important; 
+                    }
+                    .printable-area { 
+                        padding: 0 !important; 
+                        width: 100% !important; 
+                    }
+                    .charts-grid { 
+                        display: grid !important; 
+                        grid-template-columns: repeat(2, 1fr) !important; 
+                        gap: 10px !important; 
+                    }
+                    .chart-card { 
+                        page-break-inside: avoid !important; 
+                        break-inside: avoid !important;
+                        width: 100% !important;
+                        box-sizing: border-box !important;
+                    }
+                    .recharts-responsive-container { 
+                        width: 100% !important; 
+                    }
                 }
             `}</style>
 
@@ -337,20 +312,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
 
                 <div style={styles.exportControls} className="no-print">
-                    <span style={styles.exportLabel}>Exportar PDF:</span>
                     <button 
-                        onClick={() => exportarPDF('portrait')}
-                        style={styles.btnExport}
-                        disabled={generandoPdf}
+                        onClick={imprimirPantalla}
+                        style={styles.btnPrint}
                     >
-                        {generandoPdf ? '⏳ Procesando...' : '📄 Vertical'}
-                    </button>
-                    <button 
-                        onClick={() => exportarPDF('landscape')}
-                        style={{ ...styles.btnExport, backgroundColor: '#10ac84' }}
-                        disabled={generandoPdf}
-                    >
-                        {generandoPdf ? '⏳ Procesando...' : '🖼️ Horizontal'}
+                        🖨️ Imprimir / Guardar en PDF
                     </button>
                 </div>
             </header>
@@ -445,11 +411,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             </div>
 
             {/* AREA IMPRESA */}
-            <div ref={dashboardRef} style={styles.printableArea}>
+            <div style={styles.printableArea} className="printable-area">
                 <h3 style={styles.sectionHeader}>✈️ Muestreo y Métricas de Operaciones Aéreas</h3>
                 
                 {/* TARJETAS KPI */}
-                <div style={styles.kpiContainer} className="no-break">
+                <div style={styles.kpiContainer}>
                     <div style={styles.kpiCard}>
                         <span style={styles.kpiTitle}>TOTAL HORAS VOLADAS</span>
                         <span style={styles.kpiValue}>{totalHorasGenerales.toFixed(1)} hs</span>
@@ -469,7 +435,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
 
                 {/* GRÁFICO MENSUAL */}
-                <div style={{ ...styles.chartCard, marginBottom: '20px' }} className="no-break">
+                <div style={{ ...styles.chartCard, marginBottom: '20px' }} className="chart-card">
                     <div style={styles.chartHeaderFlex}>
                         <h4 style={{ ...styles.chartTitle, margin: 0 }}>
                             📈 Actividad Mensual 
@@ -509,8 +475,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         </div>
                     </div>
 
-                    <ResponsiveContainer width="100%" height={200}>
-                        <AreaChart data={actividadPorMes} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
+                    <ResponsiveContainer width="100%" height={220}>
+                        <AreaChart data={actividadPorMes} margin={{ top: 15, right: 20, left: 0, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorMes" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} stopOpacity={0.8}/>
@@ -539,13 +505,13 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                 </div>
 
                 {/* GRID DE GRÁFICOS */}
-                <div style={styles.chartsGrid} className="charts-grid-container">
-                    <div style={styles.chartCard} className="no-break">
+                <div style={styles.chartsGrid} className="charts-grid">
+                    <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>🏢 Horas por Elemento Apoyado</h4>
-                        <ResponsiveContainer width="100%" height={200}>
-                            <BarChart data={horasPorElemento} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <BarChart data={horasPorElemento} margin={{ top: 10, right: 10, left: 0, bottom: 35 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="name" tick={{ fontSize: 8 }} interval={0} angle={-20} textAnchor="end" />
+                                <XAxis dataKey="name" tick={{ fontSize: 7 }} interval={0} angle={-35} textAnchor="end" />
                                 <YAxis tick={{ fontSize: 9 }} />
                                 <Tooltip formatter={(value) => [`${value} hs`, 'Horas']} />
                                 <Bar dataKey="value" fill="#1b3a57" radius={[4, 4, 0, 0]} />
@@ -553,39 +519,39 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         </ResponsiveContainer>
                     </div>
 
-                    <div style={styles.chartCard} className="no-break">
+                    <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>🎯 Horas por Misión ({horasPorMision.length})</h4>
-                        <ResponsiveContainer width="100%" height={200}>
-                            <BarChart layout="vertical" data={horasPorMision} margin={{ top: 5, right: 30, left: 70, bottom: 5 }}>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <BarChart layout="vertical" data={horasPorMision} margin={{ top: 5, right: 20, left: 60, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" tick={{ fontSize: 9 }} />
-                                <YAxis dataKey="name" type="category" tick={{ fontSize: 9 }} interval={0} />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 8 }} interval={0} width={80} />
                                 <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
                                 <Bar dataKey="value" fill="#10ac84" radius={[0, 4, 4, 0]} barSize={12} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
 
-                    <div style={styles.chartCard} className="no-break">
+                    <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>👨‍✈️ Horas por Piloto / Copiloto ({horasPorTripulante.length})</h4>
-                        <ResponsiveContainer width="100%" height={200}>
-                            <BarChart layout="vertical" data={horasPorTripulante.slice(0, 8)} margin={{ top: 5, right: 30, left: 70, bottom: 5 }}>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <BarChart layout="vertical" data={horasPorTripulante.slice(0, 8)} margin={{ top: 5, right: 20, left: 60, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" tick={{ fontSize: 9 }} />
-                                <YAxis dataKey="name" type="category" tick={{ fontSize: 9 }} interval={0} />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 8 }} interval={0} width={80} />
                                 <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
                                 <Bar dataKey="horas" fill="#4a69bd" radius={[0, 4, 4, 0]} barSize={12} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
 
-                    <div style={styles.chartCard} className="no-break">
+                    <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>📍 Operaciones por Aeródromo ({visitasPorAerodromo.length})</h4>
-                        <ResponsiveContainer width="100%" height={200}>
-                            <BarChart layout="vertical" data={visitasPorAerodromo.slice(0, 8)} margin={{ top: 5, right: 30, left: 50, bottom: 5 }}>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <BarChart layout="vertical" data={visitasPorAerodromo.slice(0, 8)} margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 9 }} />
-                                <YAxis dataKey="aerodromo" type="category" tick={{ fontSize: 9 }} interval={0} />
+                                <YAxis dataKey="aerodromo" type="category" tick={{ fontSize: 8 }} interval={0} />
                                 <Tooltip formatter={(value) => [`${value} operaciones`, 'Visitas / Operaciones']} />
                                 <Bar dataKey="visitas" fill="#38ada9" radius={[0, 4, 4, 0]} barSize={12} />
                             </BarChart>
@@ -600,9 +566,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 const styles = {
     container: { padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', maxWidth: '1400px', margin: '0 auto' },
     header: { marginBottom: '15px', borderBottom: '2px solid #e2e8f0', paddingBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' },
-    exportControls: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ffffff', padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' },
-    exportLabel: { fontSize: '0.8rem', fontWeight: 'bold', color: '#1b3a57' },
-    btnExport: { backgroundColor: '#1b3a57', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer' },
+    exportControls: { display: 'flex', alignItems: 'center', gap: '8px' },
+    btnPrint: { backgroundColor: '#1b3a57', color: '#ffffff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' },
     subtitle: { fontSize: '0.85rem', color: '#64748b' },
     filtrosBar: { display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '20px', backgroundColor: '#ffffff', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1' },
     filtroGroup: { display: 'flex', flexDirection: 'column', gap: '2px' },
