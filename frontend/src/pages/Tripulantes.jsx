@@ -340,9 +340,14 @@ const Tripulantes = () => {
         }
     };
 
-    // EVALUACIÓN CONDICIONAL DE OPERACIONES ESPECIALES
-    const tieneCapacitacionEspecial = seleccionado?.aptitudesAdicionales?.some(
-        (apt) => apt.tipo === "Tripulacion de Operaciones Especiales"
+    // EVALUACIÓN CONDICIONAL DE OPERACIONES ESPECIALES (REVISIÓN DE AMBOS CAMPOS Y TEXTO FLEXIBLE)
+    const tieneCapacitacionEspecial = Boolean(
+        seleccionado?.aptitudesAdicionales?.some(
+            (apt) => apt.tipo?.toLowerCase().includes("operaciones especiales")
+        ) ||
+        seleccionado?.capacitacionesEspeciales?.some(
+            (cap) => cap.tipo?.toLowerCase().includes("operaciones especiales")
+        )
     );
 
     return (
