@@ -3,6 +3,38 @@ import { Search, User, ChevronRight, UserPlus, Clock, ShieldCheck, X, Save, Edit
 import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
 import logoAEOOEE from '../assets/AEOOEE.png';
 
+// Importación de logos de Unidades / Elementos
+import logoBHelicAsal601 from '../assets/B HELIC ASAL 601.png';
+import logoBAvApyComb601 from '../assets/B AV APY COMB 601.png';
+import logoSecAeM6 from '../assets/SEC AE M 6.png';
+import logoSecAeM8 from '../assets/SEC AE M 8.png';
+import logoEscAvExplAtq602 from '../assets/ESC AV EXPL ATQ 602.png';
+import logoSecAe11 from '../assets/SEC AE 11.png';
+import logoEcAe from '../assets/EC AE.png';
+import logoSecAeMte3 from '../assets/SEC AE MTE 3.png';
+import logoSecAeDr from '../assets/SEC AE DR.png';
+import logoBAbMantAeron601 from '../assets/B AB MANT AERON 601.png';
+import logoSecAeMte12 from '../assets/SEC AE MTE 12.png';
+import logoSecAe9 from '../assets/SEC AE 9.png';
+import logoSecAeM5 from '../assets/SEC AE M 5.png';
+
+// Diccionario de mapas de logos por unidad
+const logosUnidades = {
+    "B HELIC ASAL 601": logoBHelicAsal601,
+    "B AV APY COMB 601": logoBAvApyComb601,
+    "SEC AE M 6": logoSecAeM6,
+    "SEC AE M 8": logoSecAeM8,
+    "ESC AV EXPL ATQ 602": logoEscAvExplAtq602,
+    "SEC AE 11": logoSecAe11,
+    "EC AE": logoEcAe,
+    "SEC AE MTE 3": logoSecAeMte3,
+    "SEC AE DR": logoSecAeDr,
+    "B AB MANT AERON 601": logoBAbMantAeron601,
+    "SEC AE MTE 12": logoSecAeMte12,
+    "SEC AE 9": logoSecAe9,
+    "SEC AE M 5": logoSecAeM5
+};
+
 const redondearHs = (num) => Math.round((Number(num) || 0) * 10) / 10;
 
 const Tripulantes = () => {
@@ -350,6 +382,10 @@ const Tripulantes = () => {
         )
     );
 
+    // Obtención del logo de la Unidad / Elemento del tripulante
+    const unidadNormalizada = (seleccionado?.elemento || seleccionado?.unidad || '').trim();
+    const logoUnidadSrc = logosUnidades[unidadNormalizada];
+
     return (
         <div style={styles.dashboardContainer}>
             {/* ESTILOS DE IMPRESIÓN OPTIMIZADOS EN MONOCROMO Y ALTO CONTRASTE */}
@@ -507,6 +543,13 @@ const Tripulantes = () => {
                         <div style={styles.legajoHeader} className="flex-print">
                             <div style={styles.avatar}><User size={35} color="white" /></div>
                             
+                            {/* LOGO DEL ELEMENTO / UNIDAD DEL TRIPULANTE */}
+                            {logoUnidadSrc && (
+                                <div style={styles.logoCuadradito}>
+                                    <img src={logoUnidadSrc} alt={unidadNormalizada} style={styles.logoImg} />
+                                </div>
+                            )}
+
                             {/* LOGO DE OPERACIONES ESPECIALES SI POSEE LA APTITUD */}
                             {tieneCapacitacionEspecial && (
                                 <div style={styles.logoCuadradito}>
@@ -858,7 +901,7 @@ const styles = {
     legajoHeader: { padding: '25px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', alignItems: 'center', gap: '20px' },
     avatar: { width: '70px', height: '70px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid rgba(255,255,255,0.2)' },
     
-    // ESTILOS DE LOGO OPERACIONES ESPECIALES
+    // ESTILOS DE LOGOS
     logoCuadradito: {
         width: '65px',
         height: '65px',
