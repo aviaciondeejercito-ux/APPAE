@@ -4,19 +4,8 @@ import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulan
 import logoAEOOEE from '../assets/AEOOEE.png';
 
 // Importación de logos de Unidades / Elementos
-import logoBHelicAsal601 from '../assets/B HELIC ASAL 601.png';
 import logoBAvApyComb601 from '../assets/B AV APY COMB 601.png';
-import logoSecAeM6 from '../assets/SEC AE M 6.png';
-import logoSecAeM8 from '../assets/SEC AE M 8.png';
-import logoEscAvExplAtq602 from '../assets/ESC AV EXPL ATQ 602.png';
-import logoSecAe11 from '../assets/SEC AE 11.png';
-import logoEcAe from '../assets/EC AE.png';
-import logoSecAeMte3 from '../assets/SEC AE MTE 3.png';
-import logoSecAeDr from '../assets/SEC AE DR.png';
-import logoBAbMantAeron601 from '../assets/B AB MANT AERON 601.png';
-import logoSecAeMte12 from '../assets/SEC AE MTE 12.png';
-import logoSecAe9 from '../assets/SEC AE 9.png';
-import logoSecAeM5 from '../assets/SEC AE M 5.png';
+
 
 // Diccionario de mapas de logos por unidad
 const logosUnidades = {
