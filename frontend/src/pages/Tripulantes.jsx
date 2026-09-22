@@ -340,13 +340,13 @@ const Tripulantes = () => {
         }
     };
 
-    // EVALUACIÓN CONDICIONAL DE OPERACIONES ESPECIALES (REVISIÓN DE AMBOS CAMPOS Y TEXTO FLEXIBLE)
+    // EVALUACIÓN CONDICIONAL DE OPERACIONES ESPECIALES (CON NORMALIZACIÓN DE ACCENTOS Y TEXTO FLEXIBLE)
     const tieneCapacitacionEspecial = Boolean(
         seleccionado?.aptitudesAdicionales?.some(
-            (apt) => apt.tipo?.toLowerCase().includes("operaciones especiales")
+            (apt) => apt.tipo?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("operaciones especiales")
         ) ||
         seleccionado?.capacitacionesEspeciales?.some(
-            (cap) => cap.tipo?.toLowerCase().includes("operaciones especiales")
+            (cap) => cap.tipo?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("operaciones especiales")
         )
     );
 
@@ -397,6 +397,16 @@ const Tripulantes = () => {
 
                         .printable-area div[style*="avatar"] svg {
                             stroke: #000000 !important;
+                        }
+
+                        /* Visibilidad e integración del logo en impresión */
+                        .printable-area div[style*="logoCuadradito"] {
+                            background-color: transparent !important;
+                            border: 1px solid #000000 !important;
+                        }
+
+                        .printable-area img[style*="logoImg"] {
+                            filter: grayscale(100%);
                         }
 
                         /* Secciones e íconos */
@@ -850,20 +860,20 @@ const styles = {
     
     // ESTILOS DE LOGO OPERACIONES ESPECIALES
     logoCuadradito: {
-        width: '55px',
-        height: '55px',
+        width: '65px',
+        height: '65px',
         backgroundColor: 'rgba(255, 255, 255, 0.15)',
         border: '1px solid rgba(255, 255, 255, 0.3)',
         borderRadius: '8px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '5px',
+        padding: '4px',
         flexShrink: 0
     },
     logoImg: {
-        maxWidth: '100%',
-        maxHeight: '100%',
+        width: '100%',
+        height: '100%',
         objectFit: 'contain'
     },
 
