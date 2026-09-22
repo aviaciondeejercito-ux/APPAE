@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, User, ChevronRight, UserPlus, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Bookmark, Printer } from 'lucide-react';
 import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
+import logoAEOOEE from '../assets/AEOOEE.png';
 
 const redondearHs = (num) => Math.round((Number(num) || 0) * 10) / 10;
 
@@ -339,6 +340,11 @@ const Tripulantes = () => {
         }
     };
 
+    // EVALUACIÓN CONDICIONAL DE OPERACIONES ESPECIALES
+    const tieneCapacitacionEspecial = seleccionado?.aptitudesAdicionales?.some(
+        (apt) => apt.tipo === "Tripulacion de Operaciones Especiales"
+    );
+
     return (
         <div style={styles.dashboardContainer}>
             {/* ESTILOS DE IMPRESIÓN OPTIMIZADOS EN MONOCROMO Y ALTO CONTRASTE */}
@@ -485,6 +491,14 @@ const Tripulantes = () => {
                     <div style={styles.legajoCard} className="printable-area">
                         <div style={styles.legajoHeader} className="flex-print">
                             <div style={styles.avatar}><User size={35} color="white" /></div>
+                            
+                            {/* LOGO DE OPERACIONES ESPECIALES SI POSEE LA APTITUD */}
+                            {tieneCapacitacionEspecial && (
+                                <div style={styles.logoCuadradito}>
+                                    <img src={logoAEOOEE} alt="AEOOEE" style={styles.logoImg} />
+                                </div>
+                            )}
+
                             <div style={{ flex: 1 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <h2 style={styles.legajoTitle}>{seleccionado.grado} {seleccionado.apellido}, {seleccionado.nombre}</h2>
@@ -828,6 +842,26 @@ const styles = {
     legajoCard: { backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', overflow: 'hidden' },
     legajoHeader: { padding: '25px', backgroundColor: '#1b3a57', color: 'white', display: 'flex', alignItems: 'center', gap: '20px' },
     avatar: { width: '70px', height: '70px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid rgba(255,255,255,0.2)' },
+    
+    // ESTILOS DE LOGO OPERACIONES ESPECIALES
+    logoCuadradito: {
+        width: '55px',
+        height: '55px',
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        border: '1px solid rgba(255, 255, 255, 0.3)',
+        borderRadius: '8px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '5px',
+        flexShrink: 0
+    },
+    logoImg: {
+        maxWidth: '100%',
+        maxHeight: '100%',
+        objectFit: 'contain'
+    },
+
     legajoTitle: { margin: 0, fontSize: '1.4rem', fontWeight: 'bold' },
     legajoSubtitle: { opacity: 0.8, fontSize: '0.9rem' },
     legajoBody: { padding: '25px' },
