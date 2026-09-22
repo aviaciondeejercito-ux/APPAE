@@ -36,7 +36,8 @@ const Tripulantes = () => {
         "Radio Operador Restringido", 
         "Facilitador de CRM", 
         "Facilitador de Factores Humanos", 
-        "Instructor de Simulador"
+        "Instructor de Simulador",
+        "Tripulacion de Operaciones Especiales"
     ];
 
     useEffect(() => { 
