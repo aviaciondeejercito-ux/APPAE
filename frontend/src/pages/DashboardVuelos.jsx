@@ -19,6 +19,7 @@ const normalizarClave = (str) => {
 export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     const [vuelosData, setVuelosData] = useState(vuelosProps || []);
     const [loading, setLoading] = useState(true);
+    const [isPrinting, setIsPrinting] = useState(false);
 
     // FILTROS PRINCIPALES
     const [unidadFiltro, setUnidadFiltro] = useState('TODAS');
@@ -31,6 +32,20 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
     // FILTROS SECUNDARIOS GRÁFICO MENSUAL
     const [modoGraficoMes, setModoGraficoMes] = useState('vuelos'); 
     const [elementoApoyadoFiltro, setElementoApoyadoFiltro] = useState('TODOS');
+
+    // DETECTAR EVENTOS DE IMPRESIÓN DEL NAVEGADOR
+    useEffect(() => {
+        const handleBeforePrint = () => setIsPrinting(true);
+        const handleAfterPrint = () => setIsPrinting(false);
+
+        window.addEventListener('beforeprint', handleBeforePrint);
+        window.addEventListener('afterprint', handleAfterPrint);
+
+        return () => {
+            window.removeEventListener('beforeprint', handleBeforePrint);
+            window.removeEventListener('afterprint', handleAfterPrint);
+        };
+    }, []);
 
     // ROL Y UNIDAD USUARIO
     const { unidadUsuario, esAdminGlobal } = useMemo(() => {
@@ -218,6 +233,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.value - a.value);
     }, [vuelosFiltrados]);
 
+    // PILOTOS: Muestra TODOS los pilotos/copilotos de la unidad (sin .slice)
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         const fmt = (t) => t ? (typeof t === 'string' ? t : `${t.grado || ''} ${t.apellido || ''}`.trim()) : null;
@@ -235,22 +251,47 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.horas - a.horas);
     }, [vuelosFiltrados]);
 
+    // AERÓDROMOS: Excluye "SADO" y amplía el límite hasta 20 destinos
     const visitasPorAerodromo = useMemo(() => {
         const mapa = {};
         vuelosFiltrados.forEach(v => {
             const o = (v.desde || '').trim().toUpperCase();
             const d = (v.hasta || '').trim().toUpperCase();
-            if (o) mapa[o] = (mapa[o] || 0) + 1;
-            if (d) mapa[d] = (mapa[d] || 0) + 1;
+            if (o && o !== 'SADO') mapa[o] = (mapa[o] || 0) + 1;
+            if (d && d !== 'SADO') mapa[d] = (mapa[d] || 0) + 1;
         });
 
         return Object.entries(mapa)
             .map(([aerodromo, visitas]) => ({ aerodromo, visitas }))
-            .sort((a, b) => b.visitas - a.visitas);
+            .sort((a, b) => b.visitas - a.visitas)
+            .slice(0, 20); // Muestra más destinos
     }, [vuelosFiltrados]);
 
+    // MANEJADOR DE IMPRESIÓN CON RETRASO CONTROLADO
     const imprimirPantalla = () => {
-        window.print();
+        setIsPrinting(true);
+        setTimeout(() => {
+            window.print();
+            setTimeout(() => setIsPrinting(false), 500);
+        }, 300);
+    };
+
+    // CONTENEDOR REUTILIZABLE QUE RETIRA RESPONSIVECONTAINER AL IMPRIMIR
+    const ChartWrapper = ({ children, height = 220, widthPrint = 700 }) => {
+        if (isPrinting) {
+            return (
+                <div style={{ width: `${widthPrint}px`, height: `${height}px`, display: 'block' }}>
+                    {React.cloneElement(children, { width: widthPrint, height })}
+                </div>
+            );
+        }
+        return (
+            <div style={{ width: '100%', height, minHeight: height }}>
+                <ResponsiveContainer width="100%" height={height}>
+                    {children}
+                </ResponsiveContainer>
+            </div>
+        );
     };
 
     if (loading) {
@@ -261,9 +302,12 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         );
     }
 
+    // Cálculo dinámico de altura para listas potencialmente largas
+    const alturaTripulantes = Math.max(220, horasPorTripulante.length * 28);
+    const alturaAerodromos = Math.max(220, visitasPorAerodromo.length * 28);
+
     return (
         <div style={styles.container} className="printable-dashboard">
-            {/* INYECCIÓN CSS CRÍTICA PARA FORZAR RENDER DE RECHARTS AL IMPRIMIR */}
             <style>{`
                 @media print {
                     header, nav, footer, .no-print { 
@@ -271,7 +315,8 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     }
                     
                     @page { 
-                        margin: 5mm; 
+                        size: A4 portrait;
+                        margin: 8mm; 
                     }
 
                     body, html { 
@@ -294,45 +339,22 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         width: 100% !important; 
                     }
 
-                    /* Forzar dimensión estricta en el SVG de Recharts para evitar colapso a 0px */
-                    .recharts-responsive-container {
-                        width: 100% !important;
-                        height: 180px !important;
-                        min-height: 180px !important;
-                        display: block !important;
-                        visibility: visible !important;
-                    }
-
-                    .chart-container-main .recharts-responsive-container {
-                        height: 160px !important;
-                        min-height: 160px !important;
-                    }
-
-                    .recharts-wrapper {
-                        width: 100% !important;
-                        height: 100% !important;
-                        position: relative !important;
-                    }
-
-                    .recharts-surface {
-                        width: 100% !important;
-                        height: 100% !important;
-                    }
-
                     .charts-grid { 
                         display: grid !important; 
                         grid-template-columns: 1fr 1fr !important; 
                         gap: 10px !important; 
                         width: 100% !important;
-                        page-break-inside: avoid !important;
-                        break-inside: avoid !important;
                     }
 
                     .chart-card { 
                         page-break-inside: avoid !important; 
                         break-inside: avoid !important;
-                        width: 100% !important;
                         box-sizing: border-box !important;
+                        overflow: hidden !important;
+                    }
+
+                    svg {
+                        overflow: visible !important;
                     }
                 }
             `}</style>
@@ -471,10 +493,10 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                     </div>
                 </div>
 
-                {/* GRÁFICO MENSUAL CON ALTURA MÍNIMA FIX */}
-                <div style={{ ...styles.chartCard, marginBottom: '15px', width: '100%', boxSizing: 'border-box' }} className="chart-card-full">
+                {/* GRÁFICO MENSUAL */}
+                <div style={{ ...styles.chartCard, marginBottom: '15px', width: '100%', boxSizing: 'border-box' }} className="chart-card">
                     <div style={styles.chartHeaderFlex}>
-                        <h4 style={{ ...styles.chartTitle, margin: 0, fontSize: '0.8rem' }}>
+                        <h4 style={{ ...styles.chartTitle, margin: 0, fontSize: '0.95rem' }}>
                             📈 Actividad Mensual 
                             {modoGraficoMes === 'vuelos' && ' (Cantidad de Vuelos)'}
                             {modoGraficoMes === 'horas' && ' (Horas Voladas Totales)'}
@@ -512,107 +534,97 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
                         </div>
                     </div>
 
-                    <div style={{ width: '100%', height: 180, minHeight: 180 }} className="chart-container-main">
-                        <ResponsiveContainer width="100%" height={180}>
-                            <AreaChart 
-                                data={actividadPorMes} 
-                                margin={{ top: 10, right: 10, left: -25, bottom: 15 }}
-                            >
-                                <defs>
-                                    <linearGradient id="colorMes" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} stopOpacity={0.8}/>
-                                        <stop offset="95%" stopColor={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} stopOpacity={0.05}/>
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis 
-                                    dataKey="mesFormatted" 
-                                    tick={{ fontSize: 7, fontWeight: 'bold' }} 
-                                    interval={0}
-                                    angle={-40}
-                                    textAnchor="end"
-                                    dy={2}
-                                />
-                                <YAxis allowDecimals={modoGraficoMes !== 'vuelos'} tick={{ fontSize: 8 }} />
-                                <Tooltip 
-                                    formatter={(value) => [
-                                        modoGraficoMes === 'vuelos' ? `${value} vuelos` : `${value} hs`,
-                                        modoGraficoMes === 'vuelos' ? 'Vuelos' : 'Horas Voladas'
-                                    ]}
-                                />
-                                <Area 
-                                    type="monotone" 
-                                    dataKey="valor" 
-                                    stroke={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} 
-                                    strokeWidth={1.5}
-                                    fillOpacity={1} 
-                                    fill="url(#colorMes)" 
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
+                    <ChartWrapper height={220} widthPrint={720}>
+                        <AreaChart 
+                            data={actividadPorMes} 
+                            margin={{ top: 10, right: 10, left: -20, bottom: 25 }}
+                        >
+                            <defs>
+                                <linearGradient id="colorMes" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} stopOpacity={0.8}/>
+                                    <stop offset="95%" stopColor={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} stopOpacity={0.05}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis 
+                                dataKey="mesFormatted" 
+                                tick={{ fontSize: 11, fontWeight: 'bold' }} 
+                                interval={0}
+                                angle={-35}
+                                textAnchor="end"
+                                dy={2}
+                            />
+                            <YAxis allowDecimals={modoGraficoMes !== 'vuelos'} tick={{ fontSize: 11 }} />
+                            <Tooltip 
+                                formatter={(value) => [
+                                    modoGraficoMes === 'vuelos' ? `${value} vuelos` : `${value} hs`,
+                                    modoGraficoMes === 'vuelos' ? 'Vuelos' : 'Horas Voladas'
+                                ]}
+                            />
+                            <Area 
+                                type="monotone" 
+                                dataKey="valor" 
+                                stroke={modoGraficoMes === 'vuelos' ? '#1b3a57' : '#10ac84'} 
+                                strokeWidth={2}
+                                fillOpacity={1} 
+                                fill="url(#colorMes)" 
+                            />
+                        </AreaChart>
+                    </ChartWrapper>
                 </div>
 
-                {/* GRID DE GRÁFICOS SECUNDARIOS CON ALTURA GARANTIZADA */}
+                {/* GRID DE GRÁFICOS SECUNDARIOS */}
                 <div style={styles.chartsGrid} className="charts-grid">
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>🏢 Horas por Elemento Apoyado</h4>
-                        <div style={{ width: '100%', height: 180, minHeight: 180 }}>
-                            <ResponsiveContainer width="100%" height={180}>
-                                <BarChart data={horasPorElemento} margin={{ top: 10, right: 10, left: -20, bottom: 35 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="name" tick={{ fontSize: 6.5 }} interval={0} angle={-35} textAnchor="end" />
-                                    <YAxis tick={{ fontSize: 7 }} />
-                                    <Tooltip formatter={(value) => [`${value} hs`, 'Horas']} />
-                                    <Bar dataKey="value" fill="#1b3a57" radius={[3, 3, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
+                        <ChartWrapper height={220} widthPrint={340}>
+                            <BarChart data={horasPorElemento} margin={{ top: 10, right: 10, left: -15, bottom: 40 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-35} textAnchor="end" />
+                                <YAxis tick={{ fontSize: 11 }} />
+                                <Tooltip formatter={(value) => [`${value} hs`, 'Horas']} />
+                                <Bar dataKey="value" fill="#1b3a57" radius={[3, 3, 0, 0]} />
+                            </BarChart>
+                        </ChartWrapper>
                     </div>
 
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>🎯 Horas por Misión ({horasPorMision.length})</h4>
-                        <div style={{ width: '100%', height: 180, minHeight: 180 }}>
-                            <ResponsiveContainer width="100%" height={180}>
-                                <BarChart layout="vertical" data={horasPorMision} margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                    <XAxis type="number" tick={{ fontSize: 7 }} />
-                                    <YAxis dataKey="name" type="category" tick={{ fontSize: 7 }} interval={0} width={90} />
-                                    <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
-                                    <Bar dataKey="value" fill="#10ac84" radius={[0, 3, 3, 0]} barSize={9} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
+                        <ChartWrapper height={220} widthPrint={340}>
+                            <BarChart layout="vertical" data={horasPorMision} margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" tick={{ fontSize: 11 }} />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} interval={0} width={110} />
+                                <Tooltip formatter={(value) => [`${value} hs`, 'Horas voladas']} />
+                                <Bar dataKey="value" fill="#10ac84" radius={[0, 3, 3, 0]} barSize={12} />
+                            </BarChart>
+                        </ChartWrapper>
                     </div>
 
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>👨‍✈️ Horas por Piloto / Copiloto ({horasPorTripulante.length})</h4>
-                        <div style={{ width: '100%', height: 180, minHeight: 180 }}>
-                            <ResponsiveContainer width="100%" height={180}>
-                                <BarChart layout="vertical" data={horasPorTripulante.slice(0, 8)} margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                    <XAxis type="number" tick={{ fontSize: 7 }} />
-                                    <YAxis dataKey="name" type="category" tick={{ fontSize: 7 }} interval={0} width={80} />
-                                    <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
-                                    <Bar dataKey="horas" fill="#4a69bd" radius={[0, 3, 3, 0]} barSize={9} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
+                        <ChartWrapper height={alturaTripulantes} widthPrint={340}>
+                            <BarChart layout="vertical" data={horasPorTripulante} margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" tick={{ fontSize: 11 }} />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} interval={0} width={120} />
+                                <Tooltip formatter={(value) => [`${value} hs`, 'Horas acumuladas']} />
+                                <Bar dataKey="horas" fill="#4a69bd" radius={[0, 3, 3, 0]} barSize={12} />
+                            </BarChart>
+                        </ChartWrapper>
                     </div>
 
                     <div style={styles.chartCard} className="chart-card">
                         <h4 style={styles.chartTitle}>📍 Operaciones por Aeródromo ({visitasPorAerodromo.length})</h4>
-                        <div style={{ width: '100%', height: 180, minHeight: 180 }}>
-                            <ResponsiveContainer width="100%" height={180}>
-                                <BarChart layout="vertical" data={visitasPorAerodromo.slice(0, 8)} margin={{ top: 5, right: 15, left: -10, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 7 }} />
-                                    <YAxis dataKey="aerodromo" type="category" tick={{ fontSize: 7 }} interval={0} width={45} />
-                                    <Tooltip formatter={(value) => [`${value} operaciones`, 'Visitas / Operaciones']} />
-                                    <Bar dataKey="visitas" fill="#38ada9" radius={[0, 3, 3, 0]} barSize={9} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
+                        <ChartWrapper height={alturaAerodromos} widthPrint={340}>
+                            <BarChart layout="vertical" data={visitasPorAerodromo} margin={{ top: 5, right: 15, left: 0, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                                <YAxis dataKey="aerodromo" type="category" tick={{ fontSize: 11 }} interval={0} width={70} />
+                                <Tooltip formatter={(value) => [`${value} operaciones`, 'Visitas / Operaciones']} />
+                                <Bar dataKey="visitas" fill="#38ada9" radius={[0, 3, 3, 0]} barSize={12} />
+                            </BarChart>
+                        </ChartWrapper>
                     </div>
                 </div>
             </div>
@@ -624,22 +636,22 @@ const styles = {
     container: { padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px', maxWidth: '1200px', margin: '0 auto' },
     header: { marginBottom: '12px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' },
     exportControls: { display: 'flex', alignItems: 'center', gap: '8px' },
-    btnPrint: { backgroundColor: '#1b3a57', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer' },
-    subtitle: { fontSize: '0.8rem', color: '#64748b' },
+    btnPrint: { backgroundColor: '#1b3a57', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' },
+    subtitle: { fontSize: '0.85rem', color: '#64748b' },
     filtrosBar: { display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '15px', backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' },
     filtroGroup: { display: 'flex', flexDirection: 'column', gap: '2px' },
-    label: { fontSize: '0.65rem', fontWeight: 'bold', color: '#1b3a57' },
-    select: { padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.75rem', fontWeight: '600', color: '#1b3a57' },
-    inputDate: { padding: '3px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.75rem', fontWeight: '600', color: '#1b3a57' },
-    btnResetDates: { backgroundColor: '#e2e8f0', color: '#1b3a57', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.7rem', cursor: 'pointer', alignSelf: 'flex-end' },
+    label: { fontSize: '0.75rem', fontWeight: 'bold', color: '#1b3a57' },
+    select: { padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: '600', color: '#1b3a57' },
+    inputDate: { padding: '3px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: '600', color: '#1b3a57' },
+    btnResetDates: { backgroundColor: '#e2e8f0', color: '#1b3a57', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', alignSelf: 'flex-end' },
     printableArea: { backgroundColor: '#ffffff', padding: '10px', borderRadius: '8px' },
-    sectionHeader: { fontSize: '0.9rem', color: '#1b3a57', borderLeft: '4px solid #1b3a57', paddingLeft: '8px', marginBottom: '12px', marginTop: '0', fontWeight: 'bold' },
+    sectionHeader: { fontSize: '1rem', color: '#1b3a57', borderLeft: '4px solid #1b3a57', paddingLeft: '8px', marginBottom: '12px', marginTop: '0', fontWeight: 'bold' },
     kpiContainer: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '15px' },
     kpiCard: { backgroundColor: '#f8f9fa', padding: '8px 10px', borderRadius: '6px', borderLeft: '3px solid #1b3a57', display: 'flex', flexDirection: 'column' },
-    kpiTitle: { fontSize: '0.6rem', color: '#64748b', fontWeight: 'bold' },
-    kpiValue: { fontSize: '1rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '2px' },
+    kpiTitle: { fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' },
+    kpiValue: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1b3a57', marginTop: '2px' },
     chartsGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' },
     chartCard: { backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' },
     chartHeaderFlex: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' },
-    chartTitle: { fontSize: '0.75rem', color: '#1b3a57', fontWeight: 'bold', marginBottom: '6px' }
+    chartTitle: { fontSize: '0.9rem', color: '#1b3a57', fontWeight: 'bold', marginBottom: '6px' }
 };
