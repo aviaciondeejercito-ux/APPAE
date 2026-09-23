@@ -1,14 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { Search, User, ChevronRight, UserPlus, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Bookmark, Printer } from 'lucide-react';
 import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
+
+// Importación de escudos / logos de unidades
 import logoAEOOEE from '../assets/AEOOEE.png';
-
-// Importación exclusiva del logo disponible
 import logoBAvApyComb601 from '../assets/B AV APY COMB 601.png';
+import logoBHelicAsal601 from '../assets/B HELIC ASAL 601.png';
+import logoDirAE from '../assets/DIR AE.png';
+import logoECAE from '../assets/EC AE.png';
+import logoEscAvExplAtq602 from '../assets/ESC AV EXPL ATQ 602.png';
+import logoSecAE9 from '../assets/SEC AE 9.png';
+import logoSecAEM5 from '../assets/SEC AE M 5.png';
+import logoSecAEMTE3 from '../assets/SEC AE MTE 3.png';
+import logoSecAEMTE12 from '../assets/SEC AE MTE 12.png';
 
-// Diccionario reducido al elemento disponible
+// Diccionario de logos por unidad
 const logosUnidades = {
-    "B AV APY COMB 601": logoBAvApyComb601
+    "B AV APY COMB 601": logoBAvApyComb601,
+    "B HELIC ASAL 601": logoBHelicAsal601,
+    "DIR AE": logoDirAE,
+    "EC AE": logoECAE,
+    "ESC AV EXPL ATQ 602": logoEscAvExplAtq602,
+    "SEC AE 9": logoSecAE9,
+    "SEC AE M 5": logoSecAEM5,
+    "SEC AE MTE 3": logoSecAEMTE3,
+    "SEC AE MTE 12": logoSecAEMTE12
 };
 
 const redondearHs = (num) => Math.round((Number(num) || 0) * 10) / 10;
@@ -509,7 +525,7 @@ const Tripulantes = () => {
                         <div style={styles.legajoHeader} className="flex-print">
                             <div style={styles.avatar}><User size={35} color="white" /></div>
                             
-                            {/* LOGO DE B AV APY COMB 601 (SI CORRESPONDE) */}
+                            {/* LOGO DE UNIDAD (SI CORRESPONDE) */}
                             {logoUnidadSrc && (
                                 <div style={styles.logoCuadradito}>
                                     <img src={logoUnidadSrc} alt={unidadNormalizada} style={styles.logoImg} />
