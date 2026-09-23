@@ -10,6 +10,7 @@ import logoDirAE from '../assets/DIR AE.png';
 import logoECAE from '../assets/EC AE.png';
 import logoEscAvExplAtq602 from '../assets/ESC AV EXPL ATQ 602.png';
 import logoSecAE9 from '../assets/SEC AE 9.png';
+import logoSecAE11 from '../assets/SEC AE 11.png'; // 👈 Logo SEC AE 11 pyahu
 import logoSecAEM5 from '../assets/SEC AE M 5.png';
 import logoSecAEMTE3 from '../assets/SEC AE MTE 3.png';
 import logoSecAEMTE12 from '../assets/SEC AE MTE 12.png';
@@ -22,6 +23,7 @@ const logosUnidades = {
     "EC AE": logoECAE,
     "ESC AV EXPL ATQ 602": logoEscAvExplAtq602,
     "SEC AE 9": logoSecAE9,
+    "SEC AE 11": logoSecAE11, // 👈 Integración SEC AE 11
     "SEC AE M 5": logoSecAEM5,
     "SEC AE MTE 3": logoSecAEMTE3,
     "SEC AE MTE 12": logoSecAEMTE12
