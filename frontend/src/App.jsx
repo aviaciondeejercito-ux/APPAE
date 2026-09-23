@@ -3,6 +3,7 @@ import 'leaflet/dist/leaflet.css';
 
 import { EventService } from './services/api'; 
 import { useOnlineStatus } from './useOnlineStatus';
+import { APP_VERSION } from './version'; // 👈 Importación de la versión del sistema
 
 import CalendarPage from './pages/CalendarPage';
 import Login from './pages/Login';
@@ -88,6 +89,39 @@ function App() {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     
     const isOnline = useOnlineStatus();
+
+    // 🔄 SISTEMA DE CONTROL DE VERSIÓN Y LIMPIEZA AUTOMÁTICA DE CACHÉ
+    useEffect(() => {
+        const checkAndCleanVersion = () => {
+            const storedVersion = localStorage.getItem('app_version');
+
+            if (storedVersion !== APP_VERSION) {
+                console.warn(`[VERSION CONTROL] Nueva versión detectada (${APP_VERSION}). Limpiando caché...`);
+                
+                // Preservar credenciales esenciales para no cerrar la sesión del usuario si no es necesario
+                const token = localStorage.getItem('token');
+                const roleVal = localStorage.getItem('role');
+                const rolVal = localStorage.getItem('rol');
+                const userVal = localStorage.getItem('usuario') || localStorage.getItem('user');
+                const elementoVal = localStorage.getItem('elemento');
+
+                // Limpieza total del localStorage
+                localStorage.clear();
+
+                // Restaurar credenciales
+                if (token) localStorage.setItem('token', token);
+                if (roleVal) localStorage.setItem('role', roleVal);
+                if (rolVal) localStorage.setItem('rol', rolVal);
+                if (userVal) localStorage.setItem('usuario', userVal);
+                if (elementoVal) localStorage.setItem('elemento', elementoVal);
+
+                // Guardar la versión actualizada
+                localStorage.setItem('app_version', APP_VERSION);
+            }
+        };
+
+        checkAndCleanVersion();
+    }, []);
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
