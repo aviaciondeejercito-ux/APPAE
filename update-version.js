@@ -2,7 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const versionFilePath = path.join(__dirname, 'src', 'version.js');
+// 💡 Se agrega 'frontend' al path para apuntar a la carpeta correcta
+const versionFilePath = path.join(__dirname, 'frontend', 'src', 'version.js');
 
 // Genera una versión basada en la fecha y hora actual: YYYY.MM.DD.HHMM
 const now = new Date();
