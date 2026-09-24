@@ -176,16 +176,13 @@ function App() {
     // --- VISIBILIDAD DE MÓDULOS ---
     const puedeVerUsuarios = esAdmin;
     const puedeVerTripulantes = esAdmin || esOperaciones || esJefe || esPersonal; 
-    
     const puedeVerVencimientosPilotos = esAdmin || esOperaciones || esJefe || esPersonal;
     const puedeVerEntrenamiento = esAdmin || esOperaciones || esJefe || esPersonal;
-
     const puedeVerVuelos = esAdmin || esOperaciones; 
     const puedeVerDashboardVuelos = esAdmin || esOperaciones || esJefe; 
-
     const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esPersonal;
     const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO;
-    const puedeVerEstadoAeronaves = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
+    const puedeVerEstadoAeronaves = esAdmin || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerCarga = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
     const puedeVerOpEnDesarrollo = esAdmin || esOTO;
@@ -195,7 +192,6 @@ function App() {
     const puedeVerAlertas = !esOTO && !esDirector && !esBoss;
     const puedeVerF16 = esAdmin || esOfTecnica; 
     const puedeVerProgMantenimiento = esAdmin || esOfTecnica;
-    
     const puedeVerECAE = esAdmin 
     const puedeVerGrupoOperaciones = puedeVerTripulantes || puedeVerEbm || puedeVerVuelos || puedeVerDashboardVuelos || puedeVerVencimientosPilotos || puedeVerEntrenamiento;
     const puedeVerGrupoOfTecnica = puedeVerF13 || puedeVerF16 || puedeVerProgMantenimiento;
