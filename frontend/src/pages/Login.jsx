@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { login, API } from '../services/api';
+import { login } from '../services/api'; // 👈 Importamos únicamente lo que api.js exporta con seguridad
 import { APP_VERSION } from '../version';
 
 // Importación de escudos/logos de las unidades y elementos
@@ -17,7 +17,6 @@ import logoSecAEM8 from '../assets/SEC AE M 8.png';
 import logoSecAEMTE3 from '../assets/SEC AE MTE 3.png';
 import logoSecAEMTE12 from '../assets/SEC AE MTE 12.png';
 
-// Mapa asociativo de logos por nombre exacto de unidad (sin AEOOEE)
 const mapaLogos = {
   "DIR AE": logoDirAE,
   "B AV APY COMB 601": logoBAvApyComb601,
@@ -55,13 +54,16 @@ const Login = ({ setAuth }) => {
 
   const verificarVersion = async () => {
     try {
-      const response = await API.get('/system/version');
-      const latestVer = response.data?.version;
-
-      if (latestVer) {
-        setServerVersion(latestVer);
-        if (latestVer !== APP_VERSION) {
-          setIsOutdated(true);
+      // Petición nativa con fetch para evitar dependencia de axios/API
+      const res = await fetch('/api/system/version');
+      if (res.ok) {
+        const data = await res.json();
+        const latestVer = data?.version;
+        if (latestVer) {
+          setServerVersion(latestVer);
+          if (latestVer !== APP_VERSION) {
+            setIsOutdated(true);
+          }
         }
       }
     } catch (err) {
@@ -91,7 +93,6 @@ const Login = ({ setAuth }) => {
         throw new Error('Respuesta del servidor incompleta (Falta Token o Rol)');
       }
 
-      // Guardar credenciales en Storage
       localStorage.setItem('token', token);
       localStorage.setItem('role', userRole);
       localStorage.setItem('username', displayName); 
@@ -103,7 +104,7 @@ const Login = ({ setAuth }) => {
         localStorage.setItem('elemento', 'SECCIÓN AVIACIÓN EJÉRCITO');
       }
 
-      // 🎯 ANIMACIÓN DE ENTRADA DEL ESCUDO DE LA UNIDAD
+      // Animación de entrada
       const logoEncontrado = mapaLogos[userElemento] || logoDirAE;
       setDetectedLogo(logoEncontrado);
       
@@ -147,7 +148,7 @@ const Login = ({ setAuth }) => {
         `}
       </style>
 
-      {/* --- CORTINA OVERLAY / ANIMACIÓN DEL ESCUDO AL INGRESAR --- */}
+      {/* CORTINA OVERLAY / ANIMACIÓN DEL ESCUDO */}
       {detectedLogo && (
         <div style={{
           ...styles.animOverlay,
@@ -164,7 +165,7 @@ const Login = ({ setAuth }) => {
         </div>
       )}
 
-      {/* --- FAJA SUPERIOR DE LOGOS DE UNIDADES --- */}
+      {/* FAJA SUPERIOR DE LOGOS */}
       <div style={styles.topHeaderLogos}>
         {listaLogos.map((item, index) => (
           <div key={index} style={styles.topLogoBadge} title={item.name}>
@@ -173,14 +174,14 @@ const Login = ({ setAuth }) => {
         ))}
       </div>
 
-      {/* --- TARJETA DE LOGIN --- */}
+      {/* TARJETA DE LOGIN */}
       <div style={styles.loginCard}>
         <div style={{ marginBottom: '25px' }}>
             <h2 style={{ margin: '0', color: '#1b3a57', fontSize: '1.8rem', letterSpacing: '1px' }}>Sistema AE</h2>
             <p style={{ color: '#6c757d', fontSize: '0.9rem', marginTop: '8px' }}>Gestión de Operaciones de Vuelo</p>
         </div>
 
-        {/* --- BANNER / ALERTA DE VERSIÓN OBSOLETA --- */}
+        {/* ALERTA DE VERSIÓN OBSOLETA */}
         {isOutdated && (
           <div style={styles.outdatedAlert}>
             <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
@@ -240,7 +241,7 @@ const Login = ({ setAuth }) => {
         </form>
       </div>
       
-      {/* Footer con versión actual del cliente */}
+      {/* Footer */}
       <p style={styles.footerText}>
         © 2026 Aviación de Ejército | <span style={{ fontWeight: 'bold' }}>v{APP_VERSION}</span><br/>
         <span style={{ fontWeight: '600' }}>Acceso restringido - Uso Profesional</span>
