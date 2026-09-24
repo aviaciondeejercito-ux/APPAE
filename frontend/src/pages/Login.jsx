@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { login } from '../services/api'; // 👈 Importamos únicamente lo que api.js exporta con seguridad
+import { login } from '../services/api';
 import { APP_VERSION } from '../version';
 
 // Importación de escudos/logos de las unidades y elementos
@@ -46,6 +46,7 @@ const Login = ({ setAuth }) => {
 
   // Estado para la animación de ingreso del escudo de la Unidad
   const [detectedLogo, setDetectedLogo] = useState(null);
+  const [unidadNombre, setUnidadNombre] = useState('');
   const [animateLogo, setAnimateLogo] = useState(false);
 
   useEffect(() => {
@@ -54,7 +55,6 @@ const Login = ({ setAuth }) => {
 
   const verificarVersion = async () => {
     try {
-      // Petición nativa con fetch para evitar dependencia de axios/API
       const res = await fetch('/api/system/version');
       if (res.ok) {
         const data = await res.json();
@@ -104,17 +104,19 @@ const Login = ({ setAuth }) => {
         localStorage.setItem('elemento', 'SECCIÓN AVIACIÓN EJÉRCITO');
       }
 
-      // Animación de entrada
+      // Animación de entrada de la unidad
       const logoEncontrado = mapaLogos[userElemento] || logoDirAE;
       setDetectedLogo(logoEncontrado);
+      setUnidadNombre(userElemento || 'AVIACIÓN DE EJÉRCITO');
       
       setTimeout(() => {
         setAnimateLogo(true);
       }, 50);
 
+      // Duración del despliegue de animación (1.6s)
       setTimeout(() => {
         setAuth(true);
-      }, 1300);
+      }, 1600);
 
     } catch (err) {
       const message = err.response?.data?.message || err.message || 'Error de conexión con el servidor';
@@ -128,27 +130,41 @@ const Login = ({ setAuth }) => {
     <div style={styles.loginPage}>
       <style>
         {`
-          @keyframes zoomInCenter {
+          /* Animación 3D cinematográfica con iluminación */
+          @keyframes cinematicEntrance {
             0% {
               opacity: 0;
-              transform: translate(-50%, -150%) scale(0.3);
+              transform: translate(-50%, -50%) scale(0.2) rotateX(45deg);
+              filter: drop-shadow(0 0 0px rgba(255, 215, 0, 0));
             }
-            60% {
+            65% {
               opacity: 1;
-              transform: translate(-50%, -50%) scale(1.35);
+              transform: translate(-50%, -50%) scale(1.15) rotateX(0deg);
+              filter: drop-shadow(0 20px 40px rgba(255, 215, 0, 0.5));
             }
             100% {
               opacity: 1;
-              transform: translate(-50%, -50%) scale(1.1);
+              transform: translate(-50%, -50%) scale(1) rotateX(0deg);
+              filter: drop-shadow(0 15px 30px rgba(0, 0, 0, 0.6));
             }
           }
+
           .logo-animated-active {
-            animation: zoomInCenter 1.1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            animation: cinematicEntrance 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+          }
+
+          .top-logo-badge {
+            transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          }
+          .top-logo-badge:hover {
+            transform: translateY(-4px) scale(1.12);
+            box-shadow: 0 8px 20px rgba(27, 58, 87, 0.18);
+            border-color: #1b3a57;
           }
         `}
       </style>
 
-      {/* CORTINA OVERLAY / ANIMACIÓN DEL ESCUDO */}
+      {/* OVERLAY Y ANIMACIÓN DEL ESCUDO */}
       {detectedLogo && (
         <div style={{
           ...styles.animOverlay,
@@ -159,16 +175,21 @@ const Login = ({ setAuth }) => {
             className={animateLogo ? 'logo-animated-active' : ''} 
             style={styles.centerLogoWrapper}
           >
-            <img src={detectedLogo} alt="Unidad Detectada" style={styles.centerLogoImg} />
-            <span style={styles.welcomeText}>¡Bienvenido!</span>
+            <div style={styles.glowRing}>
+              <img src={detectedLogo} alt="Unidad Detectada" style={styles.centerLogoImg} />
+            </div>
+            <div style={styles.unitBadge}>
+              <span style={styles.unitText}>{unidadNombre}</span>
+            </div>
+            <span style={styles.welcomeText}>ACCESO AUTORIZADO</span>
           </div>
         </div>
       )}
 
-      {/* FAJA SUPERIOR DE LOGOS */}
+      {/* FAJA SUPERIOR DE LOGOS MÁS VISIBLES */}
       <div style={styles.topHeaderLogos}>
         {listaLogos.map((item, index) => (
-          <div key={index} style={styles.topLogoBadge} title={item.name}>
+          <div key={index} className="top-logo-badge" style={styles.topLogoBadge} title={item.name}>
             <img src={item.src} alt={item.name} style={styles.topLogoImg} />
           </div>
         ))}
@@ -176,21 +197,25 @@ const Login = ({ setAuth }) => {
 
       {/* TARJETA DE LOGIN */}
       <div style={styles.loginCard}>
-        <div style={{ marginBottom: '25px' }}>
+        <div style={{ marginBottom: '20px' }}>
             <h2 style={{ margin: '0', color: '#1b3a57', fontSize: '1.8rem', letterSpacing: '1px' }}>Sistema AE</h2>
             <p style={{ color: '#6c757d', fontSize: '0.9rem', marginTop: '8px' }}>Gestión de Operaciones de Vuelo</p>
         </div>
 
-        {/* ALERTA DE VERSIÓN OBSOLETA */}
-        {isOutdated && (
+        {/* --- INDICADOR Y ALERTA DE VERSIÓN (OPCIÓN 2) --- */}
+        {isOutdated ? (
           <div style={styles.outdatedAlert}>
             <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-              ⚠️ ¡Nueva versión disponible ({serverVersion})!
+              ⚠️ ¡Nueva versión disponible ({serverVersion || 'Actualización requerida'})!
             </div>
             <div>Por favor, <strong>presione F5</strong> o haga clic aquí para recargar el sistema:</div>
             <button onClick={handleForceReload} style={styles.btnReload}>
               🔄 Recargar Aplicación
             </button>
+          </div>
+        ) : (
+          <div style={styles.latestVersionBadge}>
+            <span style={{ color: '#27ae60', fontWeight: 'bold' }}>✓ Sistema Actualizado</span>
           </div>
         )}
         
@@ -267,30 +292,29 @@ const styles = {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: '12px',
-      maxWidth: '90vw',
-      overflow: 'hidden',
+      gap: '14px',
+      maxWidth: '92vw',
+      overflowX: 'auto',
       marginBottom: '25px',
-      padding: '10px 15px',
-      backgroundColor: 'rgba(255, 255, 255, 0.7)',
-      borderRadius: '12px',
-      boxShadow: '0 4px 15px rgba(0,0,0,0.04)',
-      backdropFilter: 'blur(5px)'
+      padding: '14px 22px',
+      backgroundColor: '#ffffff',
+      borderRadius: '16px',
+      boxShadow: '0 8px 25px rgba(0,0,0,0.06)',
+      border: '1px solid #eef2f5'
     },
     topLogoBadge: {
-      width: '42px',
-      height: '42px',
-      borderRadius: '8px',
-      backgroundColor: '#ffffff',
-      border: '1px solid #e1e8ed',
+      width: '56px',
+      height: '56px',
+      borderRadius: '12px',
+      backgroundColor: '#f8fafc',
+      border: '1.5px solid #e2e8f0',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '4px',
+      padding: '6px',
       boxSizing: 'border-box',
       flexShrink: 0,
-      transition: 'transform 0.2s',
-      cursor: 'default'
+      cursor: 'pointer'
     },
     topLogoImg: {
       maxWidth: '100%',
@@ -331,6 +355,17 @@ const styles = {
         boxShadow: '0 4px 12px rgba(27, 58, 87, 0.2)',
         transition: 'background-color 0.3s'
     },
+    
+    // --- ESTILOS DE VERSIÓN ---
+    latestVersionBadge: {
+      backgroundColor: '#e8f8f5',
+      border: '1px solid #a3e4d7',
+      borderRadius: '8px',
+      padding: '6px 14px',
+      fontSize: '0.75rem',
+      marginBottom: '18px',
+      display: 'inline-block'
+    },
     outdatedAlert: { 
       color: '#721c24', 
       backgroundColor: '#f8d7da', 
@@ -364,14 +399,15 @@ const styles = {
     },
     footerText: { marginTop: '20px', color: '#adb5bd', fontSize: '12px', textAlign: 'center', lineHeight: '1.6', zIndex: 1 },
 
+    // Overlay y Animación
     animOverlay: {
       position: 'fixed',
       top: 0,
       left: 0,
       width: '100vw',
       height: '100vh',
-      backgroundColor: 'rgba(27, 58, 87, 0.88)',
-      backdropFilter: 'blur(8px)',
+      backgroundColor: 'rgba(15, 32, 48, 0.92)',
+      backdropFilter: 'blur(10px)',
       zIndex: 9999,
       display: 'flex',
       alignItems: 'center',
@@ -386,20 +422,38 @@ const styles = {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: '15px'
+      gap: '18px',
+      perspective: '1000px'
+    },
+    glowRing: {
+      position: 'relative',
+      padding: '20px',
+      borderRadius: '50%',
+      background: 'radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%)'
     },
     centerLogoImg: {
-      width: '140px',
-      height: '140px',
-      objectFit: 'contain',
-      filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.4))'
+      width: '220px',
+      height: '220px',
+      objectFit: 'contain'
+    },
+    unitBadge: {
+      backgroundColor: 'rgba(255, 215, 0, 0.15)',
+      border: '1px solid rgba(255, 215, 0, 0.5)',
+      padding: '6px 18px',
+      borderRadius: '20px'
+    },
+    unitText: {
+      color: '#f1c40f',
+      fontWeight: 'bold',
+      fontSize: '1.1rem',
+      letterSpacing: '1.5px'
     },
     welcomeText: {
-      color: 'white',
-      fontSize: '1.5rem',
+      color: '#ffffff',
+      fontSize: '0.85rem',
       fontWeight: 'bold',
-      letterSpacing: '2px',
-      textShadow: '0 2px 10px rgba(0,0,0,0.5)'
+      letterSpacing: '3px',
+      opacity: 0.8
     }
 };
 
