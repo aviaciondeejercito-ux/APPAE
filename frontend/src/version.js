@@ -1,2 +1,2 @@
 // Archivo generado automáticamente en cada deploy
-export const APP_VERSION = '1.20260924.1123';
+export const APP_VERSION = '1.20260924.1131';

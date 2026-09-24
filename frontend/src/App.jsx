@@ -181,7 +181,7 @@ function App() {
     const puedeVerVuelos = esAdmin || esOperaciones; 
     const puedeVerDashboardVuelos = esAdmin || esOperaciones || esJefe; 
     const puedeVerPlaneamiento = esAdmin || esUser || esOperaciones || esLogistico || esPersonal;
-    const puedeVerMapa = esAdmin || esBoss || esDirector || esOTO;
+    const puedeVerMapa = esAdmin;
     const puedeVerEstadoAeronaves = esAdmin || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerCarga = esAdmin || esBoss || esDirector || esOTO || esOfTecnica || esUser || esOperaciones || esLogistico || esJefe || esPersonal;
     const puedeVerStats = esAdmin || esBoss || esDirector || esOTO;
