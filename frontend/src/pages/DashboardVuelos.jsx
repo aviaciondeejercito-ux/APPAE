@@ -107,17 +107,19 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return ['TODAS', ...Array.from(new Set(misiones))];
     }, [vuelosData]);
 
+    // 🎯 OBTENCIÓN DE SISTEMAS DE ARMAS (Prioriza "aeronave" de la BD)
     const listaSistemasArmas = useMemo(() => {
         const sdaList = vuelosData
-            .map(v => v.sistemaArma || v.sistemaArmas || v.sdda || v.sistemadeArmas)
+            .map(v => v.aeronave || v.sistemaArma || v.sistemaArmas || v.sdda || v.sistemadeArmas)
             .filter(Boolean)
             .map(s => normalizarTexto(s));
         return ['TODOS', ...Array.from(new Set(sdaList))];
     }, [vuelosData]);
 
+    // 🎯 OBTENCIÓN DE MATRÍCULAS (Asegura tomar únicamente número de cola/matrícula)
     const listaMatriculas = useMemo(() => {
         const matriculasList = vuelosData
-            .map(v => v.matricula || v.tailNumber || v.aeronaveMatricula || v.aeronave)
+            .map(v => v.matricula || v.tailNumber || v.aeronaveMatricula)
             .filter(Boolean)
             .map(m => normalizarTexto(m));
         return ['TODAS', ...Array.from(new Set(matriculasList))];
@@ -149,10 +151,11 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
 
             const pasaMision = misionFiltro === 'TODAS' || v.tipoMision === misionFiltro;
             
-            const sdaVuelo = normalizarTexto(v.sistemaArma || v.sistemaArmas || v.sdda || v.sistemadeArmas);
+            // 🎯 LECTURA DEL SISTEMA DE ARMAS DE LA BD
+            const sdaVuelo = normalizarTexto(v.aeronave || v.sistemaArma || v.sistemaArmas || v.sdda || v.sistemadeArmas);
             const pasaSda = sistemaArmasFiltro === 'TODOS' || sdaVuelo === sistemaArmasFiltro;
 
-            const matVuelo = normalizarTexto(v.matricula || v.tailNumber || v.aeronaveMatricula || v.aeronave);
+            const matVuelo = normalizarTexto(v.matricula || v.tailNumber || v.aeronaveMatricula);
             const pasaMatricula = matriculaFiltro === 'TODAS' || matVuelo === matriculaFiltro;
 
             const rawFecha = v.fecha || v.fechaVuelo || v.createdAt;
@@ -233,7 +236,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.value - a.value);
     }, [vuelosFiltrados]);
 
-    // PILOTOS: Muestra TODOS los pilotos/copilotos de la unidad (sin .slice)
+    // PILOTOS: Muestra TODOS los pilotos/copilotos de la unidad
     const horasPorTripulante = useMemo(() => {
         const mapa = {};
         const fmt = (t) => t ? (typeof t === 'string' ? t : `${t.grado || ''} ${t.apellido || ''}`.trim()) : null;
@@ -251,7 +254,7 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
             .sort((a, b) => b.horas - a.horas);
     }, [vuelosFiltrados]);
 
-    // AERÓDROMOS: Excluye "SADO" y amplía el límite hasta 20 destinos
+    // AERÓDROMOS: Excluye "SADO" y muestra hasta 20 destinos
     const visitasPorAerodromo = useMemo(() => {
         const mapa = {};
         vuelosFiltrados.forEach(v => {
@@ -264,10 +267,10 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         return Object.entries(mapa)
             .map(([aerodromo, visitas]) => ({ aerodromo, visitas }))
             .sort((a, b) => b.visitas - a.visitas)
-            .slice(0, 20); // Muestra más destinos
+            .slice(0, 20);
     }, [vuelosFiltrados]);
 
-    // MANEJADOR DE IMPRESIÓN CON RETRASO CONTROLADO
+    // MANEJADOR DE IMPRESIÓN
     const imprimirPantalla = () => {
         setIsPrinting(true);
         setTimeout(() => {
@@ -276,7 +279,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         }, 300);
     };
 
-    // CONTENEDOR REUTILIZABLE QUE RETIRA RESPONSIVECONTAINER AL IMPRIMIR
     const ChartWrapper = ({ children, height = 220, widthPrint = 700 }) => {
         if (isPrinting) {
             return (
@@ -302,7 +304,6 @@ export default function DashboardVuelos({ vuelosData: vuelosProps }) {
         );
     }
 
-    // Cálculo dinámico de altura para listas potencialmente largas
     const alturaTripulantes = Math.max(220, horasPorTripulante.length * 28);
     const alturaAerodromos = Math.max(220, visitasPorAerodromo.length * 28);
 
