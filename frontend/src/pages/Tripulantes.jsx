@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, ChevronRight, UserPlus, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Bookmark, Printer } from 'lucide-react';
+import { Search, User, ChevronRight, UserPlus, Clock, ShieldCheck, X, Save, Edit3, Trash2, PlusCircle, Calendar, Award, Star, Eye, Moon, Activity, Bookmark, Printer, Filter } from 'lucide-react';
 import API, { getTripulantes, createTripulante, updateTripulante, deleteTripulante } from '../services/api';
 
 // Importación de escudos / logos de unidades
@@ -11,10 +11,10 @@ import logoECAE from '../assets/EC AE.png';
 import logoEscAvExplAtq602 from '../assets/ESC AV EXPL ATQ 602.png';
 import logoSecAE9 from '../assets/SEC AE 9.png';
 import logoSecAE11 from '../assets/SEC AE 11.png';
-import logoSecAEDR from '../assets/SEC AE DR.png'; // 👈 Agregado
+import logoSecAEDR from '../assets/SEC AE DR.png';
 import logoSecAEM5 from '../assets/SEC AE M 5.png';
-import logoSecAEM6 from '../assets/SEC AE M 6.png'; // 👈 Agregado
-import logoSecAEM8 from '../assets/SEC AE M 8.png'; // 👈 Agregado
+import logoSecAEM6 from '../assets/SEC AE M 6.png';
+import logoSecAEM8 from '../assets/SEC AE M 8.png';
 import logoSecAEMTE3 from '../assets/SEC AE MTE 3.png';
 import logoSecAEMTE12 from '../assets/SEC AE MTE 12.png';
 
@@ -27,18 +27,25 @@ const logosUnidades = {
     "ESC AV EXPL ATQ 602": logoEscAvExplAtq602,
     "SEC AE 9": logoSecAE9,
     "SEC AE 11": logoSecAE11,
-    "SEC AE DR": logoSecAEDR, // 👈 Integrado
+    "SEC AE DR": logoSecAEDR,
     "SEC AE M 5": logoSecAEM5,
-    "SEC AE M 6": logoSecAEM6, // 👈 Integrado
-    "SEC AE M 8": logoSecAEM8, // 👈 Integrado
+    "SEC AE M 6": logoSecAEM6,
+    "SEC AE M 8": logoSecAEM8,
     "SEC AE MTE 3": logoSecAEMTE3,
     "SEC AE MTE 12": logoSecAEMTE12
 };
 
 const redondearHs = (num) => Math.round((Number(num) || 0) * 10) / 10;
 
+// Grados agrupados
+const GRADOS_OFICIALES = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST'];
+const GRADOS_SUBOFICIALES = ['SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
+
 const Tripulantes = () => {
     const [busqueda, setBusqueda] = useState('');
+    const [filtroCategoria, setFiltroCategoria] = useState('TODOS');
+    const [filtroGrado, setFiltroGrado] = useState('TODOS');
+    
     const [seleccionado, setSeleccionado] = useState(null);
     const [personal, setPersonal] = useState([]);
     const [vuelos, setVuelos] = useState([]);
@@ -58,7 +65,7 @@ const Tripulantes = () => {
     const puedeEliminarPersonal = ['ADMIN', 'OPERACIONES', 'JEFE'].includes(roleNormalizado);
 
     const unidadesAE = ["B HELIC ASAL 601", "B AV APY COMB 601", "SEC AE M 6", "SEC AE M 8", "ESC AV EXPL ATQ 602", "SEC AE 11", "EC AE", "SEC AE MTE 3", "SEC AE DR", "B AB MANT AERON 601", "SEC AE MTE 12", "SEC AE 9", "SEC AE M 5"];
-    const gradosAE = ['CR', 'TC', 'MY', 'CT', 'TP', 'TT', 'ST', 'SM', 'SP', 'SA', 'SI', 'SG', 'CI', 'CB'];
+    const gradosAE = [...GRADOS_OFICIALES, ...GRADOS_SUBOFICIALES];
     const aeronavesAE = ["UH-1H", "UH-1H/II", "BELL 212", "AS-332B", "AB206B1", "C-212", "C-208", "C-550", "DA-62", "DHC-6", "SA-315 B LAMA", "407 GXi", "AB206B3", "T-34C1", "T-6C", "C-207", "EMB-312", "G-120TP-A", "P-2002", "T-41"];
     
     const rolesVuelo = ['Cursante', 'Mecánico', 'Copiloto', 'Piloto', 'Instructor', 'Normalizador', 'Inspector'];
@@ -385,6 +392,35 @@ const Tripulantes = () => {
     const unidadNormalizada = (seleccionado?.elemento || seleccionado?.unidad || '').trim();
     const logoUnidadSrc = logosUnidades[unidadNormalizada];
 
+    // Opciones dinámicas de grados según la categoría seleccionada
+    const obtenerOpcionesGrado = () => {
+        if (filtroCategoria === 'OFICIALES') return GRADOS_OFICIALES;
+        if (filtroCategoria === 'SUBOFICIALES') return GRADOS_SUBOFICIALES;
+        return gradosAE;
+    };
+
+    // Lógica de filtrado combinada
+    const personalFiltrado = personal.filter(p => {
+        const coincideBusqueda = p.apellido?.toLowerCase().includes(busqueda.toLowerCase()) || 
+                                 p.nombre?.toLowerCase().includes(busqueda.toLowerCase());
+        
+        const gradoUpper = (p.grado || '').trim().toUpperCase();
+
+        let coincideCategoria = true;
+        if (filtroCategoria === 'OFICIALES') {
+            coincideCategoria = GRADOS_OFICIALES.includes(gradoUpper);
+        } else if (filtroCategoria === 'SUBOFICIALES') {
+            coincideCategoria = GRADOS_SUBOFICIALES.includes(gradoUpper) || (!GRADOS_OFICIALES.includes(gradoUpper) && gradoUpper !== '');
+        }
+
+        let coincideGrado = true;
+        if (filtroGrado !== 'TODOS') {
+            coincideGrado = gradoUpper === filtroGrado.toUpperCase();
+        }
+
+        return coincideBusqueda && coincideCategoria && coincideGrado;
+    });
+
     return (
         <div style={styles.dashboardContainer}>
             <style>
@@ -508,22 +544,70 @@ const Tripulantes = () => {
                         </button>
                     </div>
                 )}
+
+                {/* FILTROS POR CATEGORÍA Y GRADO POR ENCIMA DEL BUSCADOR */}
+                <div style={styles.filterSection}>
+                    <div style={styles.filterHeader}>
+                        <Filter size={14} color="#1b3a57" />
+                        <span style={styles.filterTitle}>FILTRAR PERSONAL</span>
+                    </div>
+
+                    <div style={styles.filterRow}>
+                        <div style={{ flex: 1 }}>
+                            <label style={styles.filterLabel}>Categoría</label>
+                            <select 
+                                style={styles.filterSelect} 
+                                value={filtroCategoria} 
+                                onChange={(e) => {
+                                    setFiltroCategoria(e.target.value);
+                                    setFiltroGrado('TODOS');
+                                }}
+                            >
+                                <option value="TODOS">Todas</option>
+                                <option value="OFICIALES">Oficiales</option>
+                                <option value="SUBOFICIALES">Suboficiales</option>
+                            </select>
+                        </div>
+
+                        <div style={{ flex: 1 }}>
+                            <label style={styles.filterLabel}>Grado</label>
+                            <select 
+                                style={styles.filterSelect} 
+                                value={filtroGrado} 
+                                onChange={(e) => setFiltroGrado(e.target.value)}
+                            >
+                                <option value="TODOS">Todos</option>
+                                {obtenerOpcionesGrado().map(g => (
+                                    <option key={g} value={g}>{g}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 <div style={styles.searchBox}>
                     <div style={styles.inputWrapper}>
                         <Search size={18} style={styles.searchIcon} />
                         <input type="text" placeholder="Buscar apellido o legajo..." style={styles.input} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                     </div>
                 </div>
+
                 <div style={styles.listContainer}>
-                    {personal.filter(p => p.apellido?.toLowerCase().includes(busqueda.toLowerCase())).map(p => (
-                        <div key={p._id} onClick={() => setSeleccionado(p)} style={{...styles.personItem, backgroundColor: seleccionado?._id === p._id ? '#e3f2fd' : 'white', borderLeft: seleccionado?._id === p._id ? '4px solid #1b3a57' : '4px solid transparent'}}>
-                            <div style={styles.personInfo}>
-                                <span style={styles.itemGrado}>{p.grado} - {p.elemento || p.unidad}</span>
-                                <span style={styles.itemNombre}>{p.apellido}, {p.nombre}</span>
+                    {personalFiltrado.length > 0 ? (
+                        personalFiltrado.map(p => (
+                            <div key={p._id} onClick={() => setSeleccionado(p)} style={{...styles.personItem, backgroundColor: seleccionado?._id === p._id ? '#e3f2fd' : 'white', borderLeft: seleccionado?._id === p._id ? '4px solid #1b3a57' : '4px solid transparent'}}>
+                                <div style={styles.personInfo}>
+                                    <span style={styles.itemGrado}>{p.grado} - {p.elemento || p.unidad}</span>
+                                    <span style={styles.itemNombre}>{p.apellido}, {p.nombre}</span>
+                                </div>
+                                <ChevronRight size={16} color="#bdc3c7" />
                             </div>
-                            <ChevronRight size={16} color="#bdc3c7" />
+                        ))
+                    ) : (
+                        <div style={{ padding: '20px', textAlign: 'center', color: '#7f8c8d', fontSize: '0.85rem' }}>
+                            Sin coincidencias de personal
                         </div>
-                    ))}
+                    )}
                 </div>
             </div>
 
@@ -875,14 +959,23 @@ const Tripulantes = () => {
 const styles = {
     dashboardContainer: { display: 'flex', height: 'calc(100vh - 65px)', backgroundColor: '#f5f6fa' },
     sidebar: { width: '350px', backgroundColor: 'white', borderRight: '1px solid #dcdde1', display: 'flex', flexDirection: 'column' },
-    altaBox: { padding: '15px', borderBottom: '1px solid #eee' },
+    altaBox: { padding: '15px 15px 5px 15px' },
     btnAlta: { width: '100%', backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontWeight: 'bold', cursor: 'pointer' },
-    searchBox: { padding: '15px', backgroundColor: '#f8f9fa' },
+    
+    // ESTILOS DE FILTROS POR CATEGORÍA Y GRADO
+    filterSection: { padding: '10px 15px', backgroundColor: '#ffffff', borderBottom: '1px solid #eee' },
+    filterHeader: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' },
+    filterTitle: { fontSize: '0.75rem', fontWeight: 'bold', color: '#1b3a57', letterSpacing: '0.5px' },
+    filterRow: { display: 'flex', gap: '10px' },
+    filterLabel: { fontSize: '0.65rem', fontWeight: 'bold', color: '#7f8c8d', display: 'block', marginBottom: '3px' },
+    filterSelect: { width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #dcdde1', fontSize: '0.75rem', fontWeight: '600', color: '#2f3640', outline: 'none', backgroundColor: '#f8f9fa' },
+
+    searchBox: { padding: '10px 15px 15px 15px', backgroundColor: '#f8f9fa', borderBottom: '1px solid #eee' },
     inputWrapper: { position: 'relative', display: 'flex', alignItems: 'center' },
     searchIcon: { position: 'absolute', left: '10px', color: '#7f8c8d' },
-    input: { width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid #dcdde1', outline: 'none' },
+    input: { width: '100%', padding: '8px 10px 8px 35px', borderRadius: '8px', border: '1px solid #dcdde1', outline: 'none', fontSize: '0.85rem' },
     listContainer: { flex: 1, overflowY: 'auto' },
-    personItem: { padding: '15px', borderBottom: '1px solid #f1f2f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: '0.2s' },
+    personItem: { padding: '12px 15px', borderBottom: '1px solid #f1f2f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: '0.2s' },
     personInfo: { display: 'flex', flexDirection: 'column' },
     itemGrado: { fontSize: '0.7rem', color: '#7f8c8d', fontWeight: 'bold' },
     itemNombre: { fontSize: '0.9rem', color: '#2f3640', fontWeight: '600' },
