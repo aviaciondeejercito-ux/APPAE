@@ -119,7 +119,7 @@ const EbmInformeOficial = React.forwardRef(({
                     <tr>
                         <th style={{ ...styles.thSub, width: '60px' }}>PILOTO</th>
                         <th style={{ ...styles.thSub, width: '60px' }}>COPILOTO</th>
-                        <th style={{ ...styles.thSub, width: '75px' }}>INSTRUCTOR / INSPECTOR</th>
+                        <th style={{ ...styles.thSub, width: '75px' }}>INSTRUCTOR</th>
                     </tr>
                 </thead>
                 <tbody>
