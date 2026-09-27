@@ -19,20 +19,20 @@ const CONFIG_HORAS_EBM = {
     }
 };
 
-// DETERMINACIÓN EXACTA DE TIPO DE AERONAVE (LISTA DE LAS 20 AERONAVES)
+// DETERMINACIÓN EXACTA DE TIPO DE AERONAVE
 const determinarTipoAeronaveExacto = (sda) => {
-    if (!sda) return 'PLANO FIJO';[cite: 12]
-    const sdaUpper = sda.toUpperCase().trim();[cite: 12]
+    if (!sda) return 'PLANO FIJO';
+    const sdaUpper = sda.toUpperCase().trim();
     
     // Lista explícita de helicópteros (Plano Rotativo)
-    const helicopteros = [[cite: 12]
-        'UH-1H', 'UH-1H/II', 'BELL 212', 'AS-332B',[cite: 12]
-        'AB206B1', 'AB206B3', 'SA-315 B LAMA', '407 GXI',[cite: 12]
-        'PUMA', 'HUEY'[cite: 12]
+    const helicopteros = [
+        'UH-1H', 'UH-1H/II', 'BELL 212', 'AS-332B',
+        'AB206B1', 'AB206B3', 'SA-315 B LAMA', '407 GXI',
+        'PUMA', 'HUEY'
     ];
 
-    const esRotativo = helicopteros.some(h => sdaUpper.includes(h) || h.includes(sdaUpper));[cite: 12]
-    return esRotativo ? 'PLANO ROTATIVO' : 'PLANO FIJO';[cite: 12]
+    const esRotativo = helicopteros.some(h => sdaUpper.includes(h) || h.includes(sdaUpper));
+    return esRotativo ? 'PLANO ROTATIVO' : 'PLANO FIJO';
 };
 
 const determinarCategoriaHoras = (sda) => {
