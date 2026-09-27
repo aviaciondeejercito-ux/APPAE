@@ -3,7 +3,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
-// Importamos el nuevo componente de la plantilla oficial (Paso 1)
+// Importamos el componente de la plantilla oficial (Paso 1)
 import EbmInformeOficial from './EbmInformeOficial';
 
 // --- MATRIZ DE REQUISITOS CONFIGURABLE ---
@@ -56,21 +56,24 @@ const EbmPage = () => {
     const [todosLosSdas, setTodosLosSdas] = useState([]);
     const [todosLosElementos, setTodosLosElementos] = useState([]); 
     const [elementoSeleccionado, setElementoSeleccionado] = useState(''); 
-    
-    // --- ESTADOS PARA EXPORTACIÓN DEL INFORME OFICIAL ---
+    const [vuelosHistorial, setVuelosHistorial] = useState([]);
+
+    // --- ESTADOS DINÁMICOS PARA LA LEYENDA Y EXPORTACIÓN DEL INFORME OFICIAL ---
+    const [anioExportar, setAnioExportar] = useState('2026');
     const [trimestreExportar, setTrimestreExportar] = useState(getTrimestreActualCronologico());
     const [sdaExportar, setSdaExportar] = useState('');
-    const [observacionesReporte, setObservacionesReporte] = useState([
+    const [leyendaAno, setLeyendaAno] = useState('2026 – AÑO DE LA GRANDEZA ARGENTINA');
+    const [observacionesReporteText, setObservacionesReporteText] = useState(
         "El personal que no cumple EBM obedece a razones operativas y/o asignaciones de servicios inherentes al cargo."
-    ]);
+    );
 
     const [sdasVisibles, setSdasVisibles] = useState({});
     const [sdasActivos, setSdasActivos] = useState({});
     const [filasDesplegadas, setFilasDesplegadas] = useState({});
 
     // Referencias
-    const pdfRef = useRef(null);            // Para la vista en matriz
-    const reportOficialRef = useRef(null);  // Para la plantilla oficial oficial (Paso 1)
+    const pdfRef = useRef(null);            
+    const reportOficialRef = useRef(null);  
 
     const rawRole = localStorage.getItem('role') || 'user';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
@@ -78,8 +81,6 @@ const EbmPage = () => {
 
     const esMandoEstrategico = ['ADMIN', 'BOSS', 'DIRECTOR', 'OTO', 'COMANDO', 'COMANAV'].includes(roleNormalizado);
     const esGestorOperativo = ['ADMIN', 'OPERACIONES', 'JEFE', 'OFICINATECNICA'].includes(roleNormalizado);
-
-    const trimestreActualId = getTrimestreActualCronologico();
 
     useEffect(() => {
         fetchPlanificacion();
@@ -119,6 +120,7 @@ const EbmPage = () => {
             
             const personalRaw = response.data?.personal || response.data?.pilotos || (Array.isArray(response.data) ? response.data : []);
             const vuelosRaw = response.data?.vuelos || [];
+            setVuelosHistorial(vuelosRaw);
 
             const acumuladoVuelos = {};
 
@@ -314,10 +316,12 @@ const EbmPage = () => {
         return agrupa;
     }, [personalFiltrado, todosLosSdas]);
 
-    // --- MAPEO DINÁMICO DE PILOTOS AL FORMATO REGLAMENTARIO (PASO 1) ---
+    // --- MAPEO Y CÁLCULO DE HORAS HISTÓRICAS DEL SARM AL 31-DIC ---
     const pilotosFormateadosReporte = useMemo(() => {
         if (!sdaExportar) return [];
         const listaSda = matrizSda[sdaExportar] || [];
+        const sdaNorm = sdaExportar.trim().toUpperCase();
+        const anioInt = Number(anioExportar);
 
         return listaSda.map(p => {
             const trimData = p[`trimestre${trimestreExportar}`] || {};
@@ -336,31 +340,72 @@ const EbmPage = () => {
                 hsCP = hsVoladas;
             }
 
-            // Totales consolidados acumulados
-            let totSarm = 0, totGen = 0;
-            [1, 2, 3, 4].forEach(n => {
-                const t = p[`trimestre${n}`] || {};
-                totSarm += Number(t.hsVoladas || 0);
-                totGen += Number(t.hsVoladas || 0);
-            });
+            // 1. Obtener Horas Base del SARM desde las habilitaciones cargadas en el legajo
+            const habSarm = p.habilitaciones?.find(
+                h => (h.aeronave || '').trim().toUpperCase() === sdaNorm
+            );
+            const hsBaseSarm = habSarm 
+                ? (Number(habSarm.hsVisual || 0) + Number(habSarm.hsInstrumental || 0) + Number(habSarm.hsNocturno || 0) + Number(habSarm.hsNVG || 0))
+                : 0;
+
+            // 2. Filtrar vuelos en la BD para este piloto en este SARM antes del año en curso
+            let hsVoladasAniosAnterioresSarm = 0;
+            let hsVoladasAnioActualSarm = 0;
+            const idStr = p._id ? p._id.toString() : '';
+
+            if (vuelosHistorial && vuelosHistorial.length > 0 && idStr) {
+                vuelosHistorial.forEach(vuelo => {
+                    if ((vuelo.aeronave || '').trim().toUpperCase() !== sdaNorm) return;
+
+                    const checkId = (f) => (f?._id || f)?.toString() === idStr;
+                    const participo = checkId(vuelo.piloto) || checkId(vuelo.copiloto) || checkId(vuelo.instructor);
+
+                    if (participo) {
+                        const hs = Number(vuelo.horasVoladas || 0);
+                        const fechaVuelo = vuelo.fecha ? new Date(vuelo.fecha) : null;
+                        const anioVuelo = fechaVuelo ? fechaVuelo.getFullYear() : anioInt;
+
+                        if (anioVuelo < anioInt) {
+                            hsVoladasAniosAnterioresSarm += hs;
+                        } else if (anioVuelo === anioInt) {
+                            hsVoladasAnioActualSarm += hs;
+                        }
+                    }
+                });
+            }
+
+            // Horas acumuladas exclusivamente en el SARM al 31 de Diciembre del año anterior
+            const totalSarmAl31Dic = hsBaseSarm + hsVoladasAniosAnterioresSarm;
+            
+            // Total Acumulado en el SARM incluyendo lo volado en el año actual
+            const totalAcumulSarm = totalSarmAl31Dic + (hsVoladasAnioActualSarm || hsVoladas);
+
+            // Total General (Todas las aeronaves del tripulante)
+            let totGen = 0;
+            if (Array.isArray(p.habilitaciones) && p.habilitaciones.length > 0) {
+                p.habilitaciones.forEach(h => {
+                    totGen += Number(h.hsVisual || 0) + Number(h.hsInstrumental || 0) + Number(h.hsNocturno || 0) + Number(h.hsNVG || 0);
+                });
+            } else {
+                totGen = totalAcumulSarm;
+            }
 
             return {
                 _id: p._id,
-                numControl: p.dni || p.numControl || p.legajo || '-',
+                nroControl: p.dni || p.numControl || p.legajo || '-',
                 grado: p.grado,
-                apellido: p.apellido,
-                nombre: p.nombre,
+                apellidoNombre: `${p.apellido} ${p.nombre}`,
                 cumpleComo: condicion === 'IE' ? 'INSTRUCTOR' : (condicion === 'PC' ? 'PILOTO' : 'COPILOTO'),
                 hsPiloto: hsP,
                 hsCopiloto: hsCP,
                 hsInstructor: hsI,
-                totalSarm: Math.round(totSarm * 10) / 10,
+                totalSarmAl31Dic: Math.round(totalSarmAl31Dic * 10) / 10,
+                totalAcumulSarm: Math.round(totalAcumulSarm * 10) / 10,
                 totalGeneral: Math.round(totGen * 10) / 10,
-                totalAnterior: Number(p.totalAnterior || 0),
-                cumpleEbm: Number(trimData.hsFaltantes || 0) <= 0
+                cumpleEbm: Number(trimData.hsFaltantes || 0) <= 0 ? 'SI' : 'NO'
             };
         });
-    }, [matrizSda, sdaExportar, trimestreExportar]);
+    }, [matrizSda, sdaExportar, trimestreExportar, anioExportar, vuelosHistorial]);
 
     const tipoEbmSeleccionado = useMemo(() => {
         if (!sdaExportar || !matrizSda[sdaExportar] || matrizSda[sdaExportar].length === 0) return 'D';
@@ -427,60 +472,96 @@ const EbmPage = () => {
 
     if (loading) return <div style={styles.centerText}>Cargando Matriz de Exigencias EBM...</div>;
 
+    const observacionesArray = observacionesReporteText.split('\n').filter(line => line.trim().length > 0);
+
     return (
         <div style={styles.pageContainer}>
             {/* CONTENEDOR OCULTO PARA CAPTURA DE PDF REGLAMENTARIO */}
             <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
-                <EbmInformeOficial 
-                    ref={reportOficialRef}
-                    unidad={elementoSeleccionado === 'TODOS' ? "COMANDO DE AVIACIÓN DE EJÉRCITO" : elementoSeleccionado}
-                    anio="2026"
-                    trimestre={trimestreExportar === 1 ? "I" : trimestreExportar === 2 ? "II" : trimestreExportar === 3 ? "III" : "IV"}
-                    tipoAeronave={determinarTipoAeronave(sdaExportar) === 'HELICOPTERO' ? "PLANO ROTATIVO / MONOMOTOR" : "PLANO FIJO"}
-                    tipoTripulacion="MULTITRIPULADO"
-                    tipoEbm={tipoEbmSeleccionado}
-                    sda={sdaExportar || "SARM"}
-                    pilotos={pilotosFormateadosReporte}
-                    observaciones={observacionesReporte}
-                />
+                <div ref={reportOficialRef}>
+                    <EbmInformeOficial 
+                        unidad={elementoSeleccionado === 'TODOS' ? "B AV APY COMB 601" : elementoSeleccionado}
+                        anio={anioExportar}
+                        trimestre={trimestreExportar === 1 ? "I" : trimestreExportar === 2 ? "II" : trimestreExportar === 3 ? "III" : "IV"}
+                        sarm={sdaExportar || "SARM"}
+                        leyendaAno={leyendaAno}
+                        datos={pilotosFormateadosReporte}
+                        observaciones={observacionesArray}
+                    />
+                </div>
             </div>
 
             <div style={styles.headerArea}>
                 <div>
-                    <h2 style={styles.title}>Planificación Anual EBM - Año 2026</h2>
+                    <h2 style={styles.title}>Planificación Anual EBM - Año {anioExportar}</h2>
                     <p style={styles.subtitle}>Distribución de Exigencias de Horas de Vuelo Mínimas</p>
                 </div>
 
                 <div style={styles.headerControlsRight}>
-                    {/* PANEL DE IMPRESIÓN OFICIAL */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#e2e8f0', padding: '4px 8px', borderRadius: '6px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>Exportar Trimestre:</span>
-                        <select 
-                            style={styles.selectUnidadSuperior} 
-                            value={trimestreExportar} 
-                            onChange={(e) => setTrimestreExportar(Number(e.target.value))}
-                        >
-                            <option value={1}>Trimestre I</option>
-                            <option value={2}>Trimestre II</option>
-                            <option value={3}>Trimestre III</option>
-                            <option value={4}>Trimestre IV</option>
-                        </select>
+                    {/* PANEL DE CONFIGURACIÓN Y EXPORTACIÓN DEL INFORME OFICIAL */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#e2e8f0', padding: '8px 12px', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>Año:</span>
+                            <input 
+                                type="text" 
+                                value={anioExportar} 
+                                onChange={(e) => setAnioExportar(e.target.value)} 
+                                style={{ ...styles.selectUnidadSuperior, width: '55px', textAlign: 'center' }} 
+                            />
 
-                        <select 
-                            style={styles.selectUnidadSuperior} 
-                            value={sdaExportar} 
-                            onChange={(e) => setSdaExportar(e.target.value)}
-                        >
-                            {todosLosSdas.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>Trimestre:</span>
+                            <select 
+                                style={styles.selectUnidadSuperior} 
+                                value={trimestreExportar} 
+                                onChange={(e) => setTrimestreExportar(Number(e.target.value))}
+                            >
+                                <option value={1}>Trimestre I</option>
+                                <option value={2}>Trimestre II</option>
+                                <option value={3}>Trimestre III</option>
+                                <option value={4}>Trimestre IV</option>
+                            </select>
 
-                        <button 
-                            style={styles.btnPdfHorizontal} 
-                            onClick={exportarInformeOficialPdf} 
-                            disabled={generandoPdf || !sdaExportar}
-                        >
-                            {generandoPdf ? '⌛ Generando...' : '🖨️ Imprimir Informe Oficial (Word/PDF)'}
-                        </button>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>SARM:</span>
+                            <select 
+                                style={styles.selectUnidadSuperior} 
+                                value={sdaExportar} 
+                                onChange={(e) => setSdaExportar(e.target.value)}
+                            >
+                                {todosLosSdas.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+
+                            <button 
+                                style={styles.btnPdfHorizontal} 
+                                onClick={exportarInformeOficialPdf} 
+                                disabled={generandoPdf || !sdaExportar}
+                            >
+                                {generandoPdf ? '⌛ Generando...' : '🖨️ Imprimir Informe Oficial (Word/PDF)'}
+                            </button>
+                        </div>
+
+                        {/* CONFIGURACIÓN DE LEYENDA DEL AÑO */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', minWidth: '100px' }}>Leyenda del Año:</span>
+                            <input 
+                                type="text" 
+                                value={leyendaAno} 
+                                onChange={(e) => setLeyendaAno(e.target.value)} 
+                                style={{ ...styles.selectUnidadSuperior, flex: 1, fontSize: '10px' }} 
+                                placeholder="Ej: 2026 – AÑO DE LA GRANDEZA ARGENTINA"
+                            />
+                        </div>
+
+                        {/* CONFIGURACIÓN DE OBSERVACIONES */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', minWidth: '100px' }}>Observaciones:</span>
+                            <input 
+                                type="text" 
+                                value={observacionesReporteText} 
+                                onChange={(e) => setObservacionesReporteText(e.target.value)} 
+                                style={{ ...styles.selectUnidadSuperior, flex: 1, fontSize: '10px' }} 
+                                placeholder="Observaciones del informe oficial..."
+                            />
+                        </div>
                     </div>
 
                     <div style={styles.containerFiltroUnidad}>
@@ -723,7 +804,7 @@ const EbmPage = () => {
 
                                                                         <div style={styles.barConsolidado}>
                                                                             <div style={styles.cardConsolidadoAnual}>
-                                                                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>📊 Totales Acumulados (Año 2026):</span>
+                                                                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>📊 Totales Acumulados (Año {anioExportar}):</span>
                                                                                 <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                                                                                     <span style={{ fontSize: '11px', color: '#334155' }}>
                                                                                         Piloto: <strong style={{ color: '#0284c7' }}>{formatearHoras(totalesAnuales.totalPiloto)} hs</strong>

@@ -1,223 +1,204 @@
-import React, { forwardRef } from 'react';
+import React from 'react';
 
-const EbmInformeOficial = forwardRef(({ 
-    unidad = "ESCUADRÓN DE AVIACIÓN DE EXPLORACIÓN Y ATAQUE 602",
-    anio = "2026",
-    trimestre = "IV",
-    tipoAeronave = "PLANO ROTATIVO / MONOMOTOR",
-    tipoTripulacion = "MULTITRIPULADO",
-    tipoEbm = "D",
-    sda = "UH-1H / II",
-    pilotos = [],
-    observaciones = []
-}, ref) => {
-
-    // Cálculos para el cuadro resumen inferior
-    const previstos = pilotos.length;
-    const vuelan = pilotos.filter(p => (Number(p.hsPiloto || 0) + Number(p.hsCopiloto || 0) + Number(p.hsInstructor || 0)) > 0).length;
-    const noCumplen = pilotos.filter(p => p.cumpleEbm === false).length;
+const EbmInformeOficial = ({ 
+    datos, 
+    unidad = "B AV APY COMB 601", 
+    trimestre = "III", 
+    anio = "2026", 
+    sarm = "C-208", 
+    leyendaAno = "2026 - AÑO DE LA GRANDEZA ARGENTINA",
+    observaciones = [
+        "El personal que no cumple EBM obedece a razones operativas y/o asignaciones de servicios inherentes al cargo."
+    ] 
+}) => {
+    const pilotosPrevistos = datos.length;
+    const pilotosQueVuelan = datos.filter(d => (d.hsPiloto + d.hsCopiloto + d.hsInstructor) > 0).length;
+    const pilotosNoCumplieron = datos.filter(d => d.cumpleEbm === 'NO' || (d.hsPiloto + d.hsCopiloto + d.hsInstructor) === 0).length;
 
     return (
-        <div ref={ref} style={styles.container}>
-            {/* Encabezado Institucional */}
-            <div style={styles.topHeader}>
+        <div style={styles.page}>
+            <style>
+                {`
+                    @media print {
+                        @page {
+                            size: A4 landscape;
+                            margin: 10mm;
+                        }
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            background: #fff !important;
+                            -webkit-print-color-adjust: exact;
+                        }
+                        .no-print { display: none !important; }
+                    }
+                `}
+            </style>
+
+            {/* ENCABEZADO REGLAMENTARIO */}
+            <div style={styles.headerContainer}>
                 <div style={styles.headerLeft}>
-                    Ejército Argentino<br />
-                    {unidad}
+                    <div style={styles.entidad}>Ejército Argentino</div>
+                    <div style={styles.unidad}>{unidad}</div>
                 </div>
                 <div style={styles.headerRight}>
-                    “2025 – AÑO DE LA RECONSTRUCCIÓN DE LA NACIÓN ARGENTINA”
+                    <div style={styles.leyendaAno}>"{leyendaAno}"</div>
                 </div>
             </div>
 
-            <div style={styles.titleBox}>
-                INFORME EXIGENCIAS BÁSICAS MÍNIMAS {unidad.toUpperCase()}
+            {/* METADATOS DEL INFORME */}
+            <div style={styles.metaGrid}>
+                <div style={styles.metaRow}>
+                    <span><strong>FUERZA ARMADA:</strong> EJÉRCITO ARGENTINO</span>
+                    <span><strong>INFORME EXIGENCIAS BÁSICAS MÍNIMAS</strong> {unidad}</span>
+                </div>
+                <div style={styles.metaRow}>
+                    <span><strong>TIPO DE AERONAVE:</strong> PLANO FIJO / ROTATIVO</span>
+                    <span><strong>AÑO:</strong> {anio}</span>
+                </div>
+                <div style={styles.metaRow}>
+                    <span><strong>TIPO DE TRIPULACIÓN:</strong> MULTITRIPULADO</span>
+                    <span><strong>TRIMESTRE:</strong> {trimestre}</span>
+                </div>
+                <div style={styles.metaRow}>
+                    <span><strong>SARM:</strong> {sarm}</span>
+                    <span><strong>TIPO:</strong> C</span>
+                </div>
             </div>
 
-            {/* Metadatos del Informe */}
-            <table style={styles.metaTable}>
-                <tbody>
-                    <tr>
-                        <td style={styles.metaTd}><b>FUERZA ARMADA:</b> EJÉRCITO ARGENTINO</td>
-                        <td style={styles.metaTdRight}><b>AÑO:</b> {anio}</td>
-                    </tr>
-                    <tr>
-                        <td style={styles.metaTd}><b>TIPO DE AERONAVE:</b> {tipoAeronave}</td>
-                        <td style={styles.metaTdRight}><b>TRIMESTRE:</b> {trimestre}</td>
-                    </tr>
-                    <tr>
-                        <td style={styles.metaTd}><b>TIPO DE TRIPULACIÓN:</b> {tipoTripulacion}</td>
-                        <td style={styles.metaTdRight}><b>TIPO:</b> {tipoEbm}</td>
-                    </tr>
-                    <tr>
-                        <td style={styles.metaTd} colSpan={2}><b>SARM:</b> {sda}</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            {/* Tabla Principal de Pilotos */}
-            <table style={styles.mainTable}>
+            {/* TABLA PRINCIPAL */}
+            <table style={styles.table}>
                 <thead>
                     <tr>
-                        <th style={styles.th} rowSpan={2}>Nº</th>
-                        <th style={styles.th} rowSpan={2}>Nº CONTROL</th>
-                        <th style={styles.th} rowSpan={2}>GRADO</th>
-                        <th style={styles.th} rowSpan={2}>APELLIDO Y NOMBRE</th>
-                        <th style={styles.th} rowSpan={2}>CUMPLE EBM COMO</th>
-                        <th style={styles.th} colSpan={3}>HORAS DE VUELO</th>
-                        <th style={styles.th} rowSpan={2}>TOTAL ACUMUL SARM</th>
-                        <th style={styles.th} rowSpan={2}>TOTAL GENERAL</th>
-                        <th style={styles.th} rowSpan={2}>TOTAL GENERAL AL 31Dic25</th>
+                        <th rowSpan="2" style={{ width: '30px' }}>N°</th>
+                        <th rowSpan="2" style={{ width: '80px' }}>Nº CONTROL</th>
+                        <th rowSpan="2" style={{ width: '60px' }}>GRADO</th>
+                        <th rowSpan="2">APELLIDO Y NOMBRE</th>
+                        <th rowSpan="2" style={{ width: '90px' }}>CUMPLE EBM COMO</th>
+                        <th colSpan="3" style={{ borderBottom: '1px solid #000' }}>HORAS DE VUELO DEL AÑO</th>
+                        <th rowSpan="2" style={{ width: '80px' }}>TOTAL ACUMUL SARM</th>
+                        <th rowSpan="2" style={{ width: '80px' }}>TOTAL GENERAL</th>
+                        <th rowSpan="2" style={{ width: '90px' }}>TOTAL SARM AL 31Dic{Number(anio) - 1}</th>
                     </tr>
                     <tr>
-                        <th style={styles.thSub}>PILOTO</th>
-                        <th style={styles.thSub}>COPILOTO</th>
-                        <th style={styles.thSub}>INSTR / INSP</th>
+                        <th style={{ width: '60px' }}>PILOTO</th>
+                        <th style={{ width: '60px' }}>COPILOTO</th>
+                        <th style={{ width: '70px' }}>INSTR / INSP</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {pilotos.map((p, index) => (
-                        <tr key={p._id || index}>
-                            <td style={styles.tdCenter}>{index + 1}</td>
-                            <td style={styles.tdCenter}>{p.numControl || p.dni || '-'}</td>
-                            <td style={styles.tdCenter}>{p.grado}</td>
-                            <td style={styles.tdLeft}>{p.apellido} {p.nombre}</td>
-                            <td style={styles.tdCenter}>{p.cumpleComo || p.condicion || 'COPILOTO'}</td>
-                            <td style={styles.tdNum}>{p.hsPiloto > 0 ? p.hsPiloto : '-'}</td>
-                            <td style={styles.tdNum}>{p.hsCopiloto > 0 ? p.hsCopiloto : '-'}</td>
-                            <td style={styles.tdNum}>{p.hsInstructor > 0 ? p.hsInstructor : '-'}</td>
-                            <td style={styles.tdNum}>{p.totalSarm || 0}</td>
-                            <td style={styles.tdNum}>{p.totalGeneral || 0}</td>
-                            <td style={styles.tdNum}>{p.totalAnterior || 0}</td>
+                    {datos.map((row, index) => (
+                        <tr key={row.id || index}>
+                            <td style={{ textAlign: 'center' }}>{index + 1}</td>
+                            <td style={{ textAlign: 'center' }}>{row.nroControl || ''}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{row.grado}</td>
+                            <td style={{ textTransform: 'uppercase' }}>{row.apellidoNombre}</td>
+                            <td style={{ textAlign: 'center', fontSize: '10px' }}>{row.cumpleComo || 'COPILOTO'}</td>
+                            <td style={styles.numCol}>{row.hsPiloto > 0 ? row.hsPiloto.toFixed(1) : ''}</td>
+                            <td style={styles.numCol}>{row.hsCopiloto > 0 ? row.hsCopiloto.toFixed(1) : ''}</td>
+                            <td style={styles.numCol}>{row.hsInstructor > 0 ? row.hsInstructor.toFixed(1) : ''}</td>
+                            <td style={{ ...styles.numCol, fontWeight: 'bold' }}>{row.totalAcumulSarm?.toFixed(1) || '0.0'}</td>
+                            <td style={{ ...styles.numCol, fontWeight: 'bold' }}>{row.totalGeneral?.toFixed(1) || '0.0'}</td>
+                            <td style={{ ...styles.numCol, backgroundColor: '#f9f9f9' }}>{row.totalSarmAl31Dic?.toFixed(1) || '0.0'}</td>
                         </tr>
                     ))}
                 </tbody>
             </table>
 
-            {/* Resumen de Cómputo */}
-            <div style={styles.summaryBar}>
-                <div>TOTAL DE PILOTOS PREVISTOS PARA VOLAR: <b>{previstos}</b></div>
-                <div>TOTAL DE PILOTOS QUE VUELAN: <b>{vuelan}</b></div>
-                <div>TOTAL DE PILOTOS QUE NO CUMPLIERON EBM: <b>{noCumplen}</b></div>
+            {/* RESUMEN DE TOTALES */}
+            <div style={styles.resumenContainer}>
+                <div><strong>TOTAL DE PILOTOS PREVISTOS PARA VOLAR:</strong> {pilotosPrevistos}</div>
+                <div><strong>TOTAL DE PILOTOS QUE VUELAN:</strong> {pilotosQueVuelan}</div>
+                <div><strong>TOTAL DE PILOTOS QUE NO CUMPLIERON EBM:</strong> {pilotosNoCumplieron}</div>
             </div>
 
-            {/* Observaciones */}
+            {/* SECCIÓN OBSERVACIONES */}
             <div style={styles.obsContainer}>
-                <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>OBSERVACIONES:</div>
-                {observaciones && observaciones.length > 0 ? (
-                    <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                        {observaciones.map((obs, idx) => (
-                            <li key={idx}>{obs}</li>
-                        ))}
-                    </ul>
-                ) : (
-                    <div>- Sin observaciones.</div>
-                )}
+                <strong>OBSERVACIONES:</strong>
+                <ul style={{ margin: '5px 0 0 15px', padding: 0 }}>
+                    {observaciones.map((obs, idx) => (
+                        <li key={idx} style={{ fontSize: '11px' }}>{obs}</li>
+                    ))}
+                </ul>
             </div>
         </div>
     );
-});
+};
 
-// Estilos CSS exactos para A4 en impresión
 const styles = {
-    container: {
+    page: {
         width: '100%',
-        maxWidth: '1050px',
-        padding: '30px',
-        backgroundColor: '#ffffff',
+        boxSizing: 'border-box',
+        backgroundColor: '#fff',
+        color: '#000',
         fontFamily: 'Arial, sans-serif',
         fontSize: '11px',
-        color: '#000000',
-        boxSizing: 'border-box'
+        lineHeight: '1.2',
+        padding: '10px'
     },
-    topHeader: {
+    headerContainer: {
         display: 'flex',
-        justify: 'space-between',
+        justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: '20px'
+        marginBottom: '15px',
+        borderBottom: '2px solid #000',
+        paddingBottom: '5px'
     },
     headerLeft: {
-        fontSize: '11px',
-        lineHeight: '1.3'
+        display: 'flex',
+        flexDirection: 'column'
     },
     headerRight: {
-        fontSize: '10px',
-        fontStyle: 'italic'
-    },
-    titleBox: {
-        textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: '13px',
-        borderTop: '1px solid #000',
-        borderBottom: '1px solid #000',
-        padding: '6px 0',
-        marginBottom: '15px'
-    },
-    metaTable: {
-        width: '100%',
-        borderCollapse: 'collapse',
-        marginBottom: '15px'
-    },
-    metaTd: {
-        padding: '3px 0',
-        fontSize: '11px'
-    },
-    metaTdRight: {
-        padding: '3px 0',
-        fontSize: '11px',
         textAlign: 'right'
     },
-    mainTable: {
+    entidad: {
+        fontSize: '14px',
+        fontWeight: 'bold',
+        textTransform: 'uppercase'
+    },
+    unidad: {
+        fontSize: '12px',
+        fontWeight: 'bold'
+    },
+    leyendaAno: {
+        fontSize: '10px',
+        fontStyle: 'italic',
+        fontWeight: 'bold'
+    },
+    metaGrid: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        marginBottom: '15px'
+    },
+    metaRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: '11px'
+    },
+    table: {
         width: '100%',
         borderCollapse: 'collapse',
-        marginBottom: '15px'
-    },
-    th: {
-        border: '1px solid #000',
-        padding: '6px 4px',
-        fontSize: '10px',
-        fontWeight: 'bold',
-        textAlign: 'center',
-        backgroundColor: '#f2f2f2'
-    },
-    thSub: {
-        border: '1px solid #000',
-        padding: '4px',
-        fontSize: '9px',
-        fontWeight: 'bold',
-        textAlign: 'center',
-        backgroundColor: '#f2f2f2'
-    },
-    tdCenter: {
-        border: '1px solid #000',
-        padding: '5px 4px',
-        textAlign: 'center',
+        marginBottom: '15px',
         fontSize: '10px'
     },
-    tdLeft: {
-        border: '1px solid #000',
-        padding: '5px 6px',
-        textAlign: 'left',
-        fontSize: '10px'
+    numCol: {
+        textAlign: 'right',
+        paddingRight: '5px'
     },
-    tdNum: {
-        border: '1px solid #000',
-        padding: '5px 4px',
-        textAlign: 'center',
-        fontSize: '10px'
-    },
-    summaryBar: {
+    resumenContainer: {
         display: 'flex',
-        justify: 'space-between',
+        justifyContent: 'space-between',
         border: '1px solid #000',
-        padding: '8px 12px',
+        padding: '8px',
+        marginBottom: '15px',
         fontSize: '10px',
-        fontWeight: 'bold',
-        marginBottom: '15px'
+        fontWeight: 'bold'
     },
     obsContainer: {
-        fontSize: '11px',
-        lineHeight: '1.4'
+        border: '1px solid #000',
+        padding: '8px',
+        fontSize: '10px'
     }
 };
 
