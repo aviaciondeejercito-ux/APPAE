@@ -3,8 +3,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
-// Importamos el componente de la plantilla oficial (Paso 1)
-import EbmInformeOficial from './EbmInformeOficial';
+import EbmInformeOficial from '../components/EbmInformeOficial';
 
 // --- MATRIZ DE REQUISITOS CONFIGURABLE ---
 const CONFIG_HORAS_EBM = {
@@ -20,12 +19,24 @@ const CONFIG_HORAS_EBM = {
     }
 };
 
-const determinarTipoAeronave = (sda) => {
-    if (!sda) return 'AVION';
-    const sdaUpper = sda.toUpperCase();
-    const palabrasHelicopteros = ['UH', 'BELL', 'PUMA', 'AB206', 'AB-206', 'HUEY', 'AS332', 'AS350', 'HA-1', '407'];
-    if (palabrasHelicopteros.some(p => sdaUpper.includes(p))) return 'HELICOPTERO';
-    return 'AVION';
+// DETERMINACIÓN EXACTA DE TIPO DE AERONAVE (LISTA DE LAS 20 AERONAVES)
+const determinarTipoAeronaveExacto = (sda) => {
+    if (!sda) return 'PLANO FIJO';[cite: 12]
+    const sdaUpper = sda.toUpperCase().trim();[cite: 12]
+    
+    // Lista explícita de helicópteros (Plano Rotativo)
+    const helicopteros = [[cite: 12]
+        'UH-1H', 'UH-1H/II', 'BELL 212', 'AS-332B',[cite: 12]
+        'AB206B1', 'AB206B3', 'SA-315 B LAMA', '407 GXI',[cite: 12]
+        'PUMA', 'HUEY'[cite: 12]
+    ];
+
+    const esRotativo = helicopteros.some(h => sdaUpper.includes(h) || h.includes(sdaUpper));[cite: 12]
+    return esRotativo ? 'PLANO ROTATIVO' : 'PLANO FIJO';[cite: 12]
+};
+
+const determinarCategoriaHoras = (sda) => {
+    return determinarTipoAeronaveExacto(sda) === 'PLANO ROTATIVO' ? 'HELICOPTERO' : 'AVION';
 };
 
 const obtenerTrimestreDeFecha = (fechaStr) => {
@@ -151,7 +162,7 @@ const EbmPage = () => {
 
             const dataNormalizada = personalRaw.map(p => {
                 const pModificado = { ...p };
-                const tipoAeronave = determinarTipoAeronave(p.aeronave || p.sda);
+                const catAeronave = determinarCategoriaHoras(p.aeronave || p.sda);
                 const hsVuelosPiloto = acumuladoVuelos[p._id] || { 1: { p:0, i:0 }, 2: { p:0, i:0 }, 3: { p:0, i:0 }, 4: { p:0, i:0 } };
 
                 [1, 2, 3, 4].forEach(num => {
@@ -165,7 +176,7 @@ const EbmPage = () => {
                     const cond = trimOriginal.condicion || 'CP';
                     const tipo = trimOriginal.tipoEbm || 'A';
                     
-                    const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
+                    const reqHs = CONFIG_HORAS_EBM[catAeronave]?.[cond]?.[tipo] || 0;
                     const restantes = reqHs - hsVoladas;
                     
                     pModificado[keyTrimestre] = {
@@ -213,8 +224,8 @@ const EbmPage = () => {
             const trimModificado = { ...p[keyTrimestre], tipoEbm: nuevoTipoEbm };
 
             const cond = p[keyTrimestre]?.condicion || 'CP';
-            const tipoAeronave = determinarTipoAeronave(p.aeronave);
-            const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[nuevoTipoEbm] || 0;
+            const catAeronave = determinarCategoriaHoras(p.aeronave);
+            const reqHs = CONFIG_HORAS_EBM[catAeronave]?.[cond]?.[nuevoTipoEbm] || 0;
 
             const restantes = reqHs - Number(p[keyTrimestre]?.hsVoladas || 0);
             trimModificado.hsFaltantes = restantes > 0 ? Math.round(restantes * 10) / 10 : 0;
@@ -226,7 +237,7 @@ const EbmPage = () => {
         setTodoElPersonal(actualizarLista);
     };
 
-    // --- FUNCIÓN DE EXPORTACIÓN DEL INFORME OFICIAL REGLAMENTARIO ---
+    // --- EXPORTACIÓN DEL INFORME OFICIAL REGLAMENTARIO ---
     const exportarInformeOficialPdf = async () => {
         if (!reportOficialRef.current) return;
         try {
@@ -268,8 +279,8 @@ const EbmPage = () => {
             const cond = campo === 'condicion' ? valor : p[keyTrimestre].condicion;
             const tipo = campo === 'tipoEbm' ? valor : p[keyTrimestre].tipoEbm;
             
-            const tipoAeronave = determinarTipoAeronave(p.aeronave);
-            const reqHs = CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
+            const catAeronave = determinarCategoriaHoras(p.aeronave);
+            const reqHs = CONFIG_HORAS_EBM[catAeronave]?.[cond]?.[tipo] || 0;
 
             const restantes = reqHs - Number(p[keyTrimestre].hsVoladas || 0);
             trimModificado.hsFaltantes = restantes > 0 ? Math.round(restantes * 10) / 10 : 0;
@@ -316,7 +327,7 @@ const EbmPage = () => {
         return agrupa;
     }, [personalFiltrado, todosLosSdas]);
 
-    // --- MAPEO Y CÁLCULO DE HORAS HISTÓRICAS DEL SARM AL 31-DIC ---
+    // MAPEO Y CÁLCULO DE HORAS HISTÓRICAS DEL SARM AL 31-DIC
     const pilotosFormateadosReporte = useMemo(() => {
         if (!sdaExportar) return [];
         const listaSda = matrizSda[sdaExportar] || [];
@@ -340,7 +351,6 @@ const EbmPage = () => {
                 hsCP = hsVoladas;
             }
 
-            // 1. Obtener Horas Base del SARM desde las habilitaciones cargadas en el legajo
             const habSarm = p.habilitaciones?.find(
                 h => (h.aeronave || '').trim().toUpperCase() === sdaNorm
             );
@@ -348,7 +358,6 @@ const EbmPage = () => {
                 ? (Number(habSarm.hsVisual || 0) + Number(habSarm.hsInstrumental || 0) + Number(habSarm.hsNocturno || 0) + Number(habSarm.hsNVG || 0))
                 : 0;
 
-            // 2. Filtrar vuelos en la BD para este piloto en este SARM antes del año en curso
             let hsVoladasAniosAnterioresSarm = 0;
             let hsVoladasAnioActualSarm = 0;
             const idStr = p._id ? p._id.toString() : '';
@@ -374,13 +383,9 @@ const EbmPage = () => {
                 });
             }
 
-            // Horas acumuladas exclusivamente en el SARM al 31 de Diciembre del año anterior
             const totalSarmAl31Dic = hsBaseSarm + hsVoladasAniosAnterioresSarm;
-            
-            // Total Acumulado en el SARM incluyendo lo volado en el año actual
             const totalAcumulSarm = totalSarmAl31Dic + (hsVoladasAnioActualSarm || hsVoladas);
 
-            // Total General (Todas las aeronaves del tripulante)
             let totGen = 0;
             if (Array.isArray(p.habilitaciones) && p.habilitaciones.length > 0) {
                 p.habilitaciones.forEach(h => {
@@ -483,6 +488,9 @@ const EbmPage = () => {
                         unidad={elementoSeleccionado === 'TODOS' ? "B AV APY COMB 601" : elementoSeleccionado}
                         anio={anioExportar}
                         trimestre={trimestreExportar === 1 ? "I" : trimestreExportar === 2 ? "II" : trimestreExportar === 3 ? "III" : "IV"}
+                        tipoAeronave={determinarTipoAeronaveExacto(sdaExportar)}
+                        tipoTripulacion="MULTITRIPULADO"
+                        tipoEbm={tipoEbmSeleccionado}
                         sarm={sdaExportar || "SARM"}
                         leyendaAno={leyendaAno}
                         datos={pilotosFormateadosReporte}
@@ -498,7 +506,7 @@ const EbmPage = () => {
                 </div>
 
                 <div style={styles.headerControlsRight}>
-                    {/* PANEL DE CONFIGURACIÓN Y EXPORTACIÓN DEL INFORME OFICIAL */}
+                    {/* PANEL DE CONFIGURACIÓN Y EXPORTACIÓN */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#e2e8f0', padding: '8px 12px', borderRadius: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>Año:</span>
@@ -539,7 +547,7 @@ const EbmPage = () => {
                             </button>
                         </div>
 
-                        {/* CONFIGURACIÓN DE LEYENDA DEL AÑO */}
+                        {/* LEYENDA DEL AÑO */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', minWidth: '100px' }}>Leyenda del Año:</span>
                             <input 
@@ -551,7 +559,7 @@ const EbmPage = () => {
                             />
                         </div>
 
-                        {/* CONFIGURACIÓN DE OBSERVACIONES */}
+                        {/* OBSERVACIONES */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', minWidth: '100px' }}>Observaciones:</span>
                             <input 
@@ -647,7 +655,7 @@ const EbmPage = () => {
                                         <React.Fragment key={sda}>
                                             <tr style={styles.sdaGroupRow}>
                                                 <td colSpan={2} style={styles.sdaGroupCell}>
-                                                    ✈️ SISTEMA DE ARMAS: {sda}
+                                                    ✈️ SISTEMA DE ARMAS: {sda} ({determinarTipoAeronaveExacto(sda)})
                                                 </td>
                                                 {[1, 2, 3, 4].map(num => (
                                                     <td key={num} colSpan={2} style={styles.sdaGroupSelectorCell}>
@@ -793,8 +801,8 @@ const EbmPage = () => {
 
                                                                                         <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '6px', fontWeight: 'bold' }}>
                                                                                             Exige: {(() => {
-                                                                                                const tipoAeronave = determinarTipoAeronave(p.aeronave);
-                                                                                                return CONFIG_HORAS_EBM[tipoAeronave]?.[trimData.condicion || 'CP']?.[trimData.tipoEbm || 'A'] || 0;
+                                                                                                const catAeronave = determinarCategoriaHoras(p.aeronave);
+                                                                                                return CONFIG_HORAS_EBM[catAeronave]?.[trimData.condicion || 'CP']?.[trimData.tipoEbm || 'A'] || 0;
                                                                                             })()} hs
                                                                                         </div>
                                                                                     </div>

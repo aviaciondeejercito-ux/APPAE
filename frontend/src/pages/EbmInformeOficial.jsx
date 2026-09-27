@@ -5,7 +5,7 @@ const EbmInformeOficial = React.forwardRef(({
     unidad = "B AV APY COMB 601", 
     trimestre = "III", 
     anio = "2026", 
-    tipoAeronave = "PLANO FIJO / ROTATIVO",
+    tipoAeronave = "PLANO FIJO",
     tipoTripulacion = "MULTITRIPULADO",
     tipoEbm = "C",
     sarm = "C-208", 
@@ -40,8 +40,12 @@ const EbmInformeOficial = React.forwardRef(({
                 `}
             </style>
 
-            {/* SELLO SUPERIOR DE SEGURIDAD */}
-            <div style={styles.clasificacionHeader}>RESERVADO</div>
+            {/* SELLO REGLAMENTARIO DE SEGURIDAD SUPERIOR (55mm x 10mm) */}
+            <div style={styles.selloWrapper}>
+                <div style={styles.selloReservadoBox}>
+                    RESERVADO
+                </div>
+            </div>
 
             {/* ENCABEZADO REGLAMENTARIO */}
             <div style={styles.headerContainer}>
@@ -168,8 +172,12 @@ const EbmInformeOficial = React.forwardRef(({
                 </ul>
             </div>
 
-            {/* SELLO INFERIOR DE SEGURIDAD */}
-            <div style={styles.clasificacionFooter}>RESERVADO</div>
+            {/* SELLO REGLAMENTARIO DE SEGURIDAD INFERIOR (55mm x 10mm) */}
+            <div style={{ ...styles.selloWrapper, marginTop: '15px' }}>
+                <div style={styles.selloReservadoBox}>
+                    RESERVADO
+                </div>
+            </div>
         </div>
     );
 });
@@ -183,21 +191,28 @@ const styles = {
         fontFamily: '"Times New Roman", Times, serif',
         fontSize: '10.5px',
         lineHeight: '1.2',
-        padding: '10px 15px'
+        padding: '5mm 10mm'
     },
-    clasificacionHeader: {
-        textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: '11px',
-        letterSpacing: '1px',
-        marginBottom: '8px'
+    selloWrapper: {
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+        marginBottom: '6px'
     },
-    clasificacionFooter: {
-        textAlign: 'center',
+    selloReservadoBox: {
+        width: '55mm',
+        height: '10mm',
+        border: '1px solid #000000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: '"Times New Roman", Times, serif',
         fontWeight: 'bold',
-        fontSize: '11px',
+        fontSize: '14px',
         letterSpacing: '1px',
-        marginTop: '15px'
+        textTransform: 'uppercase',
+        boxSizing: 'border-box'
     },
     headerContainer: {
         display: 'flex',
@@ -229,7 +244,7 @@ const styles = {
     },
     titleContainer: {
         textAlign: 'center',
-        margin: '12px 0 15px 0'
+        margin: '10px 0 12px 0'
     },
     mainTitle: {
         margin: 0,
@@ -322,7 +337,7 @@ const styles = {
         border: '1px solid #000000',
         padding: '8px 10px',
         fontSize: '10px',
-        minHeight: '40px'
+        minHeight: '35px'
     }
 };
 
