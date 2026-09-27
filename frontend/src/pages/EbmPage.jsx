@@ -3,6 +3,9 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
+// Importamos el nuevo componente de la plantilla oficial (Paso 1)
+import EbmInformeOficial from './EbmInformeOficial';
+
 // --- MATRIZ DE REQUISITOS CONFIGURABLE ---
 const CONFIG_HORAS_EBM = {
     HELICOPTERO: {
@@ -17,7 +20,6 @@ const CONFIG_HORAS_EBM = {
     }
 };
 
-// --- DETECTOR AUXILIAR DE TIPO DE AERONAVE ---
 const determinarTipoAeronave = (sda) => {
     if (!sda) return 'AVION';
     const sdaUpper = sda.toUpperCase();
@@ -26,17 +28,15 @@ const determinarTipoAeronave = (sda) => {
     return 'AVION';
 };
 
-// --- OBTENER TRIMESTRE DE UNA FECHA DE VUELO ---
 const obtenerTrimestreDeFecha = (fechaStr) => {
     if (!fechaStr) return 1;
-    const mes = new Date(fechaStr).getUTCMonth(); // 0 a 11
+    const mes = new Date(fechaStr).getUTCMonth();
     if (mes >= 0 && mes <= 2) return 1;
     if (mes >= 3 && mes <= 5) return 2;
     if (mes >= 6 && mes <= 8) return 3;
     return 4;
 };
 
-// --- DETECCIÓN DEL TRIMESTRE ACTUAL (Año 2026) ---
 const getTrimestreActualCronologico = () => {
     const mesActual = new Date().getMonth(); 
     if (mesActual >= 0 && mesActual <= 2) return 1;
@@ -57,11 +57,20 @@ const EbmPage = () => {
     const [todosLosElementos, setTodosLosElementos] = useState([]); 
     const [elementoSeleccionado, setElementoSeleccionado] = useState(''); 
     
+    // --- ESTADOS PARA EXPORTACIÓN DEL INFORME OFICIAL ---
+    const [trimestreExportar, setTrimestreExportar] = useState(getTrimestreActualCronologico());
+    const [sdaExportar, setSdaExportar] = useState('');
+    const [observacionesReporte, setObservacionesReporte] = useState([
+        "El personal que no cumple EBM obedece a razones operativas y/o asignaciones de servicios inherentes al cargo."
+    ]);
+
     const [sdasVisibles, setSdasVisibles] = useState({});
-    const [sdasActivos, setSdasActivos] = useState({}); // Estado para habilitar/deshabilitar SDAs
+    const [sdasActivos, setSdasActivos] = useState({});
     const [filasDesplegadas, setFilasDesplegadas] = useState({});
 
-    const pdfRef = useRef(null);
+    // Referencias
+    const pdfRef = useRef(null);            // Para la vista en matriz
+    const reportOficialRef = useRef(null);  // Para la plantilla oficial oficial (Paso 1)
 
     const rawRole = localStorage.getItem('role') || 'user';
     const roleNormalizado = rawRole.toUpperCase().replace(/[\s_]/g, '');
@@ -86,7 +95,10 @@ const EbmPage = () => {
         const sdas = [...new Set(filtrados.map(p => p.aeronave).filter(Boolean))];
         setTodosLosSdas(sdas);
 
-        // Se inicializan OCULTOS (false) por defecto
+        if (sdas.length > 0 && !sdaExportar) {
+            setSdaExportar(sdas[0]);
+        }
+
         setSdasVisibles(prev => {
             const nuevo = { ...prev };
             sdas.forEach(sda => { if (nuevo[sda] === undefined) nuevo[sda] = false; });
@@ -212,11 +224,12 @@ const EbmPage = () => {
         setTodoElPersonal(actualizarLista);
     };
 
-    const exportarPdfHorizontal = async () => {
-        if (!pdfRef.current) return;
+    // --- FUNCIÓN DE EXPORTACIÓN DEL INFORME OFICIAL REGLAMENTARIO ---
+    const exportarInformeOficialPdf = async () => {
+        if (!reportOficialRef.current) return;
         try {
             setGenerandoPdf(true);
-            const element = pdfRef.current;
+            const element = reportOficialRef.current;
 
             const canvas = await html2canvas(element, {
                 scale: 2,
@@ -226,31 +239,16 @@ const EbmPage = () => {
             });
 
             const imgData = canvas.toDataURL('image/png');
-            
             const pdf = new jsPDF('landscape', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-
             const imgWidth = pdfWidth - 20;
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-            let heightLeft = imgHeight;
-            let position = 10;
-
-            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-            heightLeft -= (pdfHeight - 20);
-
-            while (heightLeft > 0) {
-                position = heightLeft - imgHeight + 10;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-                heightLeft -= (pdfHeight - 20);
-            }
-
-            pdf.save(`Planificacion_EBM_2026_${elementoSeleccionado}.pdf`);
+            pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+            pdf.save(`Informe_EBM_Trimestre_${trimestreExportar}_${sdaExportar || 'SARM'}.pdf`);
         } catch (error) {
-            console.error('Error generando PDF:', error);
-            alert('No se pudo generar el documento PDF.');
+            console.error('Error generando Informe Oficial PDF:', error);
+            alert('No se pudo generar el informe oficial.');
         } finally {
             setGenerandoPdf(false);
         }
@@ -316,6 +314,59 @@ const EbmPage = () => {
         return agrupa;
     }, [personalFiltrado, todosLosSdas]);
 
+    // --- MAPEO DINÁMICO DE PILOTOS AL FORMATO REGLAMENTARIO (PASO 1) ---
+    const pilotosFormateadosReporte = useMemo(() => {
+        if (!sdaExportar) return [];
+        const listaSda = matrizSda[sdaExportar] || [];
+
+        return listaSda.map(p => {
+            const trimData = p[`trimestre${trimestreExportar}`] || {};
+            const condicion = trimData.condicion || 'CP';
+            const hsVoladas = Number(trimData.hsVoladas || 0);
+            const hsPiloto = Number(trimData.hsPiloto || 0);
+            const hsInstructor = Number(trimData.hsInstructor || 0);
+
+            let hsP = 0, hsCP = 0, hsI = 0;
+            if (condicion === 'IE') {
+                hsI = hsInstructor;
+                hsP = hsPiloto;
+            } else if (condicion === 'PC') {
+                hsP = hsVoladas;
+            } else {
+                hsCP = hsVoladas;
+            }
+
+            // Totales consolidados acumulados
+            let totSarm = 0, totGen = 0;
+            [1, 2, 3, 4].forEach(n => {
+                const t = p[`trimestre${n}`] || {};
+                totSarm += Number(t.hsVoladas || 0);
+                totGen += Number(t.hsVoladas || 0);
+            });
+
+            return {
+                _id: p._id,
+                numControl: p.dni || p.numControl || p.legajo || '-',
+                grado: p.grado,
+                apellido: p.apellido,
+                nombre: p.nombre,
+                cumpleComo: condicion === 'IE' ? 'INSTRUCTOR' : (condicion === 'PC' ? 'PILOTO' : 'COPILOTO'),
+                hsPiloto: hsP,
+                hsCopiloto: hsCP,
+                hsInstructor: hsI,
+                totalSarm: Math.round(totSarm * 10) / 10,
+                totalGeneral: Math.round(totGen * 10) / 10,
+                totalAnterior: Number(p.totalAnterior || 0),
+                cumpleEbm: Number(trimData.hsFaltantes || 0) <= 0
+            };
+        });
+    }, [matrizSda, sdaExportar, trimestreExportar]);
+
+    const tipoEbmSeleccionado = useMemo(() => {
+        if (!sdaExportar || !matrizSda[sdaExportar] || matrizSda[sdaExportar].length === 0) return 'D';
+        return matrizSda[sdaExportar][0][`trimestre${trimestreExportar}`]?.tipoEbm || 'D';
+    }, [matrizSda, sdaExportar, trimestreExportar]);
+
     const formatearHoras = (valor) => {
         const num = Number(valor || 0);
         return Number.isInteger(num) ? num : num.toFixed(1);
@@ -349,7 +400,6 @@ const EbmPage = () => {
         };
     };
 
-    // --- RENDERIZADO VISUAL DISCRIMINADO PARA INSTRUCTORES ---
     const renderCeldaHorasVoladas = (trimData) => {
         const esInstructor = trimData?.condicion === 'IE';
         const total = Number(trimData?.hsVoladas || 0);
@@ -379,19 +429,60 @@ const EbmPage = () => {
 
     return (
         <div style={styles.pageContainer}>
+            {/* CONTENEDOR OCULTO PARA CAPTURA DE PDF REGLAMENTARIO */}
+            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+                <EbmInformeOficial 
+                    ref={reportOficialRef}
+                    unidad={elementoSeleccionado === 'TODOS' ? "COMANDO DE AVIACIÓN DE EJÉRCITO" : elementoSeleccionado}
+                    anio="2026"
+                    trimestre={trimestreExportar === 1 ? "I" : trimestreExportar === 2 ? "II" : trimestreExportar === 3 ? "III" : "IV"}
+                    tipoAeronave={determinarTipoAeronave(sdaExportar) === 'HELICOPTERO' ? "PLANO ROTATIVO / MONOMOTOR" : "PLANO FIJO"}
+                    tipoTripulacion="MULTITRIPULADO"
+                    tipoEbm={tipoEbmSeleccionado}
+                    sda={sdaExportar || "SARM"}
+                    pilotos={pilotosFormateadosReporte}
+                    observaciones={observacionesReporte}
+                />
+            </div>
+
             <div style={styles.headerArea}>
                 <div>
                     <h2 style={styles.title}>Planificación Anual EBM - Año 2026</h2>
                     <p style={styles.subtitle}>Distribución de Exigencias de Horas de Vuelo Mínimas</p>
                 </div>
+
                 <div style={styles.headerControlsRight}>
-                    <button 
-                        style={styles.btnPdfHorizontal} 
-                        onClick={exportarPdfHorizontal} 
-                        disabled={generandoPdf}
-                    >
-                        {generandoPdf ? '⌛ Generando PDF...' : '📄 Exportar a PDF (A4 Horizontal)'}
-                    </button>
+                    {/* PANEL DE IMPRESIÓN OFICIAL */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#e2e8f0', padding: '4px 8px', borderRadius: '6px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>Exportar Trimestre:</span>
+                        <select 
+                            style={styles.selectUnidadSuperior} 
+                            value={trimestreExportar} 
+                            onChange={(e) => setTrimestreExportar(Number(e.target.value))}
+                        >
+                            <option value={1}>Trimestre I</option>
+                            <option value={2}>Trimestre II</option>
+                            <option value={3}>Trimestre III</option>
+                            <option value={4}>Trimestre IV</option>
+                        </select>
+
+                        <select 
+                            style={styles.selectUnidadSuperior} 
+                            value={sdaExportar} 
+                            onChange={(e) => setSdaExportar(e.target.value)}
+                        >
+                            {todosLosSdas.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+
+                        <button 
+                            style={styles.btnPdfHorizontal} 
+                            onClick={exportarInformeOficialPdf} 
+                            disabled={generandoPdf || !sdaExportar}
+                        >
+                            {generandoPdf ? '⌛ Generando...' : '🖨️ Imprimir Informe Oficial (Word/PDF)'}
+                        </button>
+                    </div>
+
                     <div style={styles.containerFiltroUnidad}>
                         <span style={styles.labelFiltroUnidad}>Elemento/Unidad:</span>
                         <select 
@@ -404,7 +495,6 @@ const EbmPage = () => {
                             {todosLosElementos.map(el => <option key={el} value={el}>{el}</option>)}
                         </select>
                     </div>
-                    <div style={styles.badgeTrimestre}>Trimestre Cronológico: T{trimestreActualId}</div>
                 </div>
             </div>
 
@@ -531,39 +621,18 @@ const EbmPage = () => {
                                                                     </div>
                                                                 </td>
 
-                                                                {/* TRIMESTRE 1 */}
-                                                                <td style={styles.tdVoladas}>
-                                                                    {renderCeldaHorasVoladas(p.trimestre1)}
-                                                                </td>
-                                                                <td style={{...styles.tdFaltan, color: Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                                    {Number(p.trimestre1?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre1?.hsFaltantes)} hs`}
-                                                                </td>
+                                                                {/* TRIMESTRES 1 A 4 */}
+                                                                {[1, 2, 3, 4].map(num => (
+                                                                    <React.Fragment key={num}>
+                                                                        <td style={styles.tdVoladas}>
+                                                                            {renderCeldaHorasVoladas(p[`trimestre${num}`])}
+                                                                        </td>
+                                                                        <td style={{...styles.tdFaltan, color: Number(p[`trimestre${num}`]?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
+                                                                            {Number(p[`trimestre${num}`]?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p[`trimestre${num}`]?.hsFaltantes)} hs`}
+                                                                        </td>
+                                                                    </React.Fragment>
+                                                                ))}
 
-                                                                {/* TRIMESTRE 2 */}
-                                                                <td style={styles.tdVoladas}>
-                                                                    {renderCeldaHorasVoladas(p.trimestre2)}
-                                                                </td>
-                                                                <td style={{...styles.tdFaltan, color: Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                                    {Number(p.trimestre2?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre2?.hsFaltantes)} hs`}
-                                                                </td>
-
-                                                                {/* TRIMESTRE 3 */}
-                                                                <td style={styles.tdVoladas}>
-                                                                    {renderCeldaHorasVoladas(p.trimestre3)}
-                                                                </td>
-                                                                <td style={{...styles.tdFaltan, color: Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                                    {Number(p.trimestre3?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre3?.hsFaltantes)} hs`}
-                                                                </td>
-
-                                                                {/* TRIMESTRE 4 */}
-                                                                <td style={styles.tdVoladas}>
-                                                                    {renderCeldaHorasVoladas(p.trimestre4)}
-                                                                </td>
-                                                                <td style={{...styles.tdFaltan, color: Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '#16a34a' : '#ed6c02'}}>
-                                                                    {Number(p.trimestre4?.hsFaltantes || 0) <= 0 ? '✔ OK' : `${formatearHoras(p.trimestre4?.hsFaltantes)} hs`}
-                                                                </td>
-
-                                                                {/* TOTAL ANUAL VOLADO */}
                                                                 <td style={{...styles.tdVoladas, fontWeight: 'bold', backgroundColor: '#f0f9ff', color: '#0369a1'}}>
                                                                     {esAlgúnTrimestreInstructor ? (
                                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: '1.1' }}>
@@ -706,11 +775,10 @@ const styles = {
     title: { margin: 0, fontSize: '20px', color: '#1b3a57', fontWeight: 'bold' },
     subtitle: { margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' },
     headerControlsRight: { display: 'flex', alignItems: 'center', gap: '15px' },
-    btnPdfHorizontal: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' },
+    btnPdfHorizontal: { backgroundColor: '#1b3a57', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' },
     containerFiltroUnidad: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' },
     labelFiltroUnidad: { fontSize: '12px', fontWeight: 'bold', color: '#334155' },
-    selectUnidadSuperior: { padding: '5px 10px', fontSize: '12px', fontWeight: 'bold', color: '#1b3a57', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: 'white' },
-    badgeTrimestre: { backgroundColor: '#1b3a57', color: 'white', padding: '8px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' },
+    selectUnidadSuperior: { padding: '5px 8px', fontSize: '11px', fontWeight: 'bold', color: '#1b3a57', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: 'white' },
     filterBar: { backgroundColor: 'white', padding: '12px 15px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
     filterGroup: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
     filterButton: { border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' },
