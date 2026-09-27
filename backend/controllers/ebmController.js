@@ -22,7 +22,7 @@ const CONFIG_HORAS_EBM = {
 const determinarTipoAeronave = (sda) => {
     if (!sda) return 'AVION';
     const sdaUpper = sda.toUpperCase();
-    const palabrasHelicopteros = ['UH', 'BELL', 'PUMA', 'AB206', 'AB-206', 'HUEY', 'AS332', 'AS350', 'HA-1'];
+    const palabrasHelicopteros = ['UH', 'BELL', 'PUMA', 'AB206', 'AB-206', 'HUEY', 'AS332', 'AS350', 'HA-1', 'LAMA', '407'];
     
     if (palabrasHelicopteros.some(p => sdaUpper.includes(p))) {
         return 'HELICOPTERO';
@@ -42,12 +42,13 @@ const calcularHorasExigidas = (condicion, tipoEbm, sda) => {
 };
 
 /**
- * OP 1: NÓMINA CONSOLIDADA POR SISTEMA DE ARMAS (GET)
+ * OP 1: NÓMINA CONSOLIDADA POR SISTEMA DE ARMAS CON DATO HISTÓRICO Y VUELOS (GET)
  */
 exports.getPlanificacionCompleta = async (req, res) => {
     try {
         const unidadUser = req.user?.unidad || req.user?.elemento;
-        const AÑO_ACTUAL = 2026;
+        // Año dinámico tomado de la query o el año actual del servidor
+        const AÑO_ACTUAL = req.query.anio ? Number(req.query.anio) : new Date().getFullYear();
         
         if (!unidadUser) {
             return res.status(400).json({ success: false, mensaje: "Unidad operativa no identificada." });
@@ -62,7 +63,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
         }
 
         const pilotos = await Tripulante.find(queryPilotos).lean();
-        if (!pilotos.length) return res.status(200).json([]);
+        if (!pilotos.length) return res.status(200).json({ personal: [], vuelos: [] });
 
         const listaIdsPilotos = pilotos.map(p => p._id);
 
@@ -74,6 +75,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
         const mapPlanes = {};
         planes.forEach(pl => { mapPlanes[pl.piloto.toString()] = pl; });
 
+        // Vuelos del año actual para EBM
         const vuelosAño = await Vuelo.find({
             fecha: {
                 $gte: new Date(`${AÑO_ACTUAL}-01-01T00:00:00.000Z`),
@@ -86,16 +88,25 @@ exports.getPlanificacionCompleta = async (req, res) => {
             ]
         }).lean();
 
+        // Todos los vuelos históricos para reconstrucción completa si hiciera falta
+        const todosLosVuelos = await Vuelo.find({
+            $or: [
+                { piloto: { $in: listaIdsPilotos } },
+                { copiloto: { $in: listaIdsPilotos } },
+                { instructor: { $in: listaIdsPilotos } }
+            ]
+        }).select('_id fecha aeronave piloto copiloto instructor horasVoladas').lean();
+
         const obtenerTrimestreDeFecha = (dateObject) => {
             if (!dateObject) return 1;
-            const mes = new Date(dateObject).getMonth();
+            const mes = new Date(dateObject).getUTCMonth();
             if (mes >= 0 && mes <= 2) return 1;
             if (mes >= 3 && mes <= 5) return 2;
             if (mes >= 6 && mes <= 8) return 3;
             return 4;
         };
 
-        // --- MAPEO CON SEGREGACIÓN DE ROLES (Piloto/Copiloto vs Instructor) ---
+        // --- MAPEO CON SEGREGACIÓN DE ROLES ---
         const mapHorasVoladas = {};
         vuelosAño.forEach(v => {
             const trim = obtenerTrimestreDeFecha(v.fecha);
@@ -103,6 +114,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
             const sda = (v.aeronave || 'SIN SdA').trim().toUpperCase();
 
             const acumular = (pilotoId, rol) => {
+                if (!pilotoId) return;
                 const k = `${pilotoId.toString()}_${sda}_${trim}`;
                 if (!mapHorasVoladas[k]) {
                     mapHorasVoladas[k] = { hsPiloto: 0, hsInstructor: 0 };
@@ -119,7 +131,7 @@ exports.getPlanificacionCompleta = async (req, res) => {
             if (v.instructor) acumular(v.instructor, 'INSTRUCTOR');
         });
 
-        const resultadoFinal = [];
+        const resultadoPersonal = [];
 
         pilotos.forEach(p => {
             const planPiloto = mapPlanes[p._id.toString()];
@@ -143,7 +155,6 @@ exports.getPlanificacionCompleta = async (req, res) => {
                 const tipoAeronave = determinarTipoAeronave(sda);
                 const defaultHs = (cond, tipo) => CONFIG_HORAS_EBM[tipoAeronave]?.[cond]?.[tipo] || 0;
 
-                // Auxiliar para armar las métricas de horas del trimestre
                 const getHsTrimestre = (pilotoId, sdaTarget, trimNum) => {
                     const data = mapHorasVoladas[`${pilotoId}_${sdaTarget}_${trimNum}`] || { hsPiloto: 0, hsInstructor: 0 };
                     const piloto = Math.round(data.hsPiloto * 10) / 10;
@@ -160,11 +171,16 @@ exports.getPlanificacionCompleta = async (req, res) => {
                 const bloquePilotoSda = {
                     _id: `${p._id}_${sda}`, 
                     idOriginal: p._id,
+                    dni: p.dni || p.legajo || p.numControl,
                     grado: p.grado,
                     apellido: p.apellido,
                     nombre: p.nombre,
                     elemento: p.elemento || p.unidad,
                     aeronave: sda,
+                    // IMPORTANTE: Mantenemos el paso de las habilitaciones y totales históricos para el cálculo del frontend
+                    habilitaciones: p.habilitaciones || [],
+                    totalVueloGeneral: p.totalVueloGeneral || 0,
+                    totalesHistoricos: p.totalesHistoricos || {},
                     
                     trimestre1: { condicion: 'CP', tipoEbm: 'A', ...t1, hsFaltantes: defaultHs('CP', 'A'), motivoNoCumplimiento: '' },
                     trimestre2: { condicion: 'CP', tipoEbm: 'B', ...t2, hsFaltantes: defaultHs('CP', 'B'), motivoNoCumplimiento: '' },
@@ -199,11 +215,15 @@ exports.getPlanificacionCompleta = async (req, res) => {
                     });
                 }
 
-                resultadoFinal.push(bloquePilotoSda);
+                resultadoPersonal.push(bloquePilotoSda);
             });
         });
 
-        res.status(200).json(resultadoFinal);
+        // ESTRUCTURA CORREGIDA: Se devuelve el objeto estructurado con personal y vuelos
+        res.status(200).json({
+            personal: resultadoPersonal,
+            vuelos: todosLosVuelos
+        });
 
     } catch (error) {
         console.error("❌ Error en getPlanificacionCompleta:", error);
@@ -218,7 +238,7 @@ exports.getVuelosTripulanteEbm = async (req, res) => {
     try {
         const { id } = req.params;
         const realId = id.split('_')[0]; 
-        const AÑO_ACTUAL = 2026;
+        const AÑO_ACTUAL = req.query.anio ? Number(req.query.anio) : new Date().getFullYear();
 
         const queryVuelos = {
             fecha: {
@@ -252,7 +272,7 @@ exports.actualizarConfiguracionEbm = async (req, res) => {
         const realId = id.split('_')[0]; 
         const sdaTarget = id.split('_')[1] || ''; 
         const dataBody = req.body; 
-        const AÑO_ACTUAL = 2026;
+        const AÑO_ACTUAL = req.query.anio ? Number(req.query.anio) : new Date().getFullYear();
 
         if (!sdaTarget) {
             return res.status(400).json({ success: false, mensaje: "Identificador del Sistema de Armas faltante." });
