@@ -3,7 +3,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
-import EbmInformeOficial from '../components/EbmInformeOficial';
+import EbmInformeOficial from '../pages/EbmInformeOficial';
 
 // --- MATRIZ DE REQUISITOS CONFIGURABLE ---
 const CONFIG_HORAS_EBM = {
