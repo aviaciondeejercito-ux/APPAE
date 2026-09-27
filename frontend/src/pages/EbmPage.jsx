@@ -328,36 +328,44 @@ const EbmPage = () => {
         });
         return agrupa;
     }, [personalFiltrado, todosLosSdas]);
-
-    // MAPEO Y CÁLCULO DE HORAS HISTÓRICAS DINÁMICAS DEL SARM AL 31-DIC (CON FALLBACKS DE SEGURIDAD)
+    // MAPEO Y CÁLCULO DE HORAS HISTÓRICAS Y ACUMULADAS EN EL SdA
     const pilotosFormateadosReporte = useMemo(() => {
         if (!sdaExportar) return [];
         const listaSda = matrizSda[sdaExportar] || [];
         const sdaNorm = sdaExportar.trim().toUpperCase();
-        const anioInt = Number(anioExportar); // Año seleccionado (ej: 2026)
+        const anioInt = Number(anioExportar); // Ej: 2026
 
         return listaSda.map(p => {
             const trimData = p[`trimestre${trimestreExportar}`] || {};
             const condicion = trimData.condicion || 'CP';
-            const hsVoladas = Number(trimData.hsVoladas || 0);
-            const hsPiloto = Number(trimData.hsPiloto || 0);
-            const hsInstructor = Number(trimData.hsInstructor || 0);
+
+            // 1. HORAS VOLADAS EN EL TRIMESTRE SELECCIONADO (Para mostrar en la columna del Trimestre activo)
+            const hsVoladasTrimActivo = Number(trimData.hsVoladas || 0);
+            const hsPilotoTrimActivo = Number(trimData.hsPiloto || 0);
+            const hsInstructorTrimActivo = Number(trimData.hsInstructor || 0);
 
             let hsP = 0, hsCP = 0, hsI = 0;
             if (condicion === 'IE') {
-                hsI = hsInstructor;
-                hsP = hsPiloto;
+                hsI = hsInstructorTrimActivo;
+                hsP = hsPilotoTrimActivo;
             } else if (condicion === 'PC') {
-                hsP = hsVoladas;
+                hsP = hsVoladasTrimActivo;
             } else {
-                hsCP = hsVoladas;
+                hsCP = hsVoladasTrimActivo;
             }
 
-            const idStr = p._id ? p._id.toString() : '';
+            // 2. SUMA DE TODAS LAS HORAS VOLADAS EN EL AÑO SELECCIONADO (T1 + T2 + T3 + T4) EN ESTE SdA
+            let hsVoladasAnioCompletoSarm = 0;
+            [1, 2, 3, 4].forEach(num => {
+                const tData = p[`trimestre${num}`];
+                if (tData) {
+                    hsVoladasAnioCompletoSarm += Number(tData.hsVoladas || 0);
+                }
+            });
 
-            // A. CALCULAR VUELOS HISTÓRICOS DESDE EL HISTORIAL DE VUELOS (POR AÑO Y SdA)
-            let hsVoladasHistoricasSarm = 0;
-            let hsVoladasAnioSeleccionadoSarm = 0;
+            // Si existen vuelos en historial, validamos/completamos la suma anual desde la bitácora
+            let hsVoladasAnioVuelosHistorial = 0;
+            const idStr = p.idOriginal ? p.idOriginal.toString() : (p._id ? p._id.toString().split('_')[0] : '');
 
             if (vuelosHistorial && vuelosHistorial.length > 0 && idStr) {
                 vuelosHistorial.forEach(vuelo => {
@@ -370,55 +378,49 @@ const EbmPage = () => {
                         return false;
                     };
 
-                    const participo = checkId(vuelo.piloto) || checkId(vuelo.copiloto) || checkId(vuelo.instructor);
-
-                    if (participo) {
-                        const hs = Number(vuelo.horasVoladas || 0);
+                    if (checkId(vuelo.piloto) || checkId(vuelo.copiloto) || checkId(vuelo.instructor)) {
                         const fechaVuelo = vuelo.fecha ? new Date(vuelo.fecha) : null;
                         const anioVuelo = fechaVuelo ? fechaVuelo.getUTCFullYear() : anioInt;
 
-                        // Total acumulado por vuelos registrados
-                        hsVoladasHistoricasSarm += hs;
-
                         if (anioVuelo === anioInt) {
-                            hsVoladasAnioSeleccionadoSarm += hs;
+                            hsVoladasAnioVuelosHistorial += Number(vuelo.horasVoladas || 0);
                         }
                     }
                 });
             }
 
-            // B. OBTENER BASE ACUMULADA DEL LEGAJO (TRIPULANTE)
+            // Tomamos la mayor suma entre trimestres cargados e historial de vuelos para el año
+            const totalVoladoAnioEnSarm = Math.max(hsVoladasAnioCompletoSarm, hsVoladasAnioVuelosHistorial);
+
+            // 3. OBTENER TOTAL ACUMULADO DEL SdA AL DÍA DE LA FECHA (Legajo)
             const habsSarm = (p.habilitaciones || []).filter(
                 h => (h.aeronave || '').trim().toUpperCase() === sdaNorm
             );
 
-            let hsBaseSarm = 0;
+            let totalAcumulSarmAlDia = 0;
             if (habsSarm.length > 0) {
                 habsSarm.forEach(h => {
                     const hsDesglosadas = Number(h.hsVisual || 0) + Number(h.hsInstrumental || 0) + Number(h.hsNocturno || 0) + Number(h.hsNVG || 0);
                     const hsTotalSistema = Number(h.totalHorasSistema || 0);
-                    hsBaseSarm += Math.max(hsDesglosadas, hsTotalSistema);
+                    totalAcumulSarmAlDia += Math.max(hsDesglosadas, hsTotalSistema);
                 });
             } else {
-                // FALLBACK 1: Buscar campos planos en el objeto tripulante
-                hsBaseSarm = Number(p.totalHorasSistema || p.totalAcumulSarm || p.totalVueloGeneral || 0);
+                totalAcumulSarmAlDia = Number(p.totalHorasSistema || p.totalAcumulSarm || 0);
             }
 
-            // FALLBACK 2: Si el legajo no tiene habilitaciones cargadas en BD, usar el total calculado de vuelos registrados
-            const totalAcumulSarm = hsBaseSarm > 0 ? hsBaseSarm : hsVoladasHistoricasSarm;
+            // 4. CÁLCULO DEL TOTAL AL 31-DIC DEL AÑO ANTERIOR
+            // Restamos TODAS las horas acumuladas en el año en curso al total acumulado al día de la fecha
+            const totalSarmAl31Dic = Math.max(0, totalAcumulSarmAlDia - totalVoladoAnioEnSarm);
 
-            // C. RETROCESO AL 31 DE DICIEMBRE DEL AÑO ANTERIOR
-            const totalSarmAl31Dic = Math.max(0, totalAcumulSarm - hsVoladasAnioSeleccionadoSarm);
-
-            // D. TOTAL GENERAL EN TODOS LOS SISTEMAS DE ARMAS
-            let totGen = 0;
+            // 5. TOTAL GENERAL DE TODOS LOS SISTEMAS AL DÍA DE LA FECHA
+            let totalGeneralAlDia = 0;
             if (Array.isArray(p.habilitaciones) && p.habilitaciones.length > 0) {
                 p.habilitaciones.forEach(h => {
                     const hsDesg = Number(h.hsVisual || 0) + Number(h.hsInstrumental || 0) + Number(h.hsNocturno || 0) + Number(h.hsNVG || 0);
-                    totGen += Math.max(hsDesg, Number(h.totalHorasSistema || 0));
+                    totalGeneralAlDia += Math.max(hsDesg, Number(h.totalHorasSistema || 0));
                 });
             } else {
-                totGen = Number(p.totalVueloGeneral || 0) || totalAcumulSarm;
+                totalGeneralAlDia = Number(p.totalVueloGeneral || 0) || totalAcumulSarmAlDia;
             }
 
             return {
@@ -431,8 +433,8 @@ const EbmPage = () => {
                 hsCopiloto: hsCP,
                 hsInstructor: hsI,
                 totalSarmAl31Dic: Math.round(totalSarmAl31Dic * 10) / 10,
-                totalAcumulSarm: Math.round(totalAcumulSarm * 10) / 10,
-                totalGeneral: Math.round(totGen * 10) / 10,
+                totalAcumulSarm: Math.round(totalAcumulSarmAlDia * 10) / 10,
+                totalGeneral: Math.round(totalGeneralAlDia * 10) / 10,
                 cumpleEbm: Number(trimData.hsFaltantes || 0) <= 0 ? 'SI' : 'NO'
             };
         });
