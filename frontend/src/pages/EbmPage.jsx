@@ -132,9 +132,10 @@ const EbmPage = () => {
             setSdaExportar(sdas[0]);
         }
 
+        // Todos los sistemas inician en false (destildados/ocultos)
         setSdasVisibles(prev => {
             const nuevo = { ...prev };
-            sdas.forEach(sda => { if (nuevo[sda] === undefined) nuevo[sda] = true; });
+            sdas.forEach(sda => { if (nuevo[sda] === undefined) nuevo[sda] = false; });
             return nuevo;
         });
 
@@ -615,7 +616,7 @@ const EbmPage = () => {
                                     color: 'white' 
                                 }}
                             >
-                                {sda} {sdasVisibles[sda] ? '👁️' : '📁'}
+                                {sda} {sdasVisibles[sda] ? '👁️️' : '📁'}
                             </button>
                             <label style={{ fontSize: '10px', fontWeight: 'bold', color: sdasActivos[sda] !== false ? '#16a34a' : '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}>
                                 <input 
@@ -670,7 +671,7 @@ const EbmPage = () => {
                                         <React.Fragment key={sda}>
                                             <tr style={styles.sdaGroupRow}>
                                                 <td colSpan={2} style={styles.sdaGroupCell}>
-                                                    ✈️ SISTEMA DE ARMAS: {sda} ({determinarTipoAeronaveExacto(sda)} - {determinarMotorizacionExacta(sda)})
+                                                    ✈️️ SISTEMA DE ARMAS: {sda} ({determinarTipoAeronaveExacto(sda)} - {determinarMotorizacionExacta(sda)})
                                                 </td>
                                                 {[1, 2, 3, 4].map(num => (
                                                     <td key={num} colSpan={2} style={styles.sdaGroupSelectorCell}>
@@ -710,7 +711,7 @@ const EbmPage = () => {
                                                         <React.Fragment key={p._id}>
                                                             <tr style={styles.pilotRow}>
                                                                 <td style={styles.tdCenter}>
-                                                                    <button style={styles.btnConfig} onClick={() => toggleFilaDesplegada(p._id)}>⚙️️</button>
+                                                                    <button style={styles.btnConfig} onClick={() => toggleFilaDesplegada(p._id)}>⚙</button>
                                                                 </td>
                                                                 <td style={styles.tdName}>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

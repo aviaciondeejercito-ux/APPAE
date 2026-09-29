@@ -54,8 +54,6 @@ const EbmInformeOficial = React.forwardRef(({
     const pilotosQueVuelan = datos.filter(d => (Number(d.hsPiloto || 0) + Number(d.hsCopiloto || 0) + Number(d.hsInstructor || 0)) > 0).length;
     const pilotosNoCumplieron = datos.filter(d => d.cumpleEbm === 'NO' || (Number(d.hsPiloto || 0) + Number(d.hsCopiloto || 0) + Number(d.hsInstructor || 0)) === 0).length;
 
-    const anioAnterior = Number(anio) - 1;
-
     // DETERMINACIÓN EXACTA Y FILTRADO RIGUROSO DEL HEADER
     const motorizacionFiltrada = determinarMotorizacionExacta(sarm);
     const tipoAeronaveFiltrado = tipoAeronave.toUpperCase().includes("ALA ROTATIVA") ? "ALA ROTATIVA" : "PLANO FIJO";
@@ -157,7 +155,7 @@ const EbmInformeOficial = React.forwardRef(({
                         <th rowSpan="3" style={{ ...styles.th, width: '50px' }}>GRADO</th>
                         <th rowSpan="3" style={{ ...styles.th, textAlign: 'left', paddingLeft: '8px' }}>APELLIDO Y NOMBRE</th>
                         <th rowSpan="3" style={{ ...styles.th, width: '95px' }}>CUMPLE EBM COMO</th>
-                        <th colSpan="8" style={{ ...styles.th, borderBottom: '1px solid #000', letterSpacing: '0.5px' }}>
+                        <th colSpan="7" style={{ ...styles.th, borderBottom: '1px solid #000', letterSpacing: '0.5px' }}>
                             HORAS DE VUELO
                         </th>
                     </tr>
@@ -167,7 +165,6 @@ const EbmInformeOficial = React.forwardRef(({
                         <th colSpan="3" style={{ ...styles.thSub, borderBottom: '1px solid #000' }}>INSTRUCTOR / INSPECTOR</th>
                         <th rowSpan="2" style={{ ...styles.thSub, width: '85px' }}>TOTAL ACUMUL SARM</th>
                         <th rowSpan="2" style={{ ...styles.thSub, width: '85px' }}>TOTAL GENERAL</th>
-                        <th rowSpan="2" style={{ ...styles.thSub, width: '90px' }}>TOTAL GENERAL AL 31Dic{anioAnterior}</th>
                     </tr>
                     <tr>
                         <th style={{ ...styles.thSub, width: '40px' }}>PIL</th>
@@ -204,13 +201,12 @@ const EbmInformeOficial = React.forwardRef(({
                                     {/* TOTALES ACUMULADOS */}
                                     <td style={{ ...styles.tdNum, fontWeight: 'bold' }}>{row.totalAcumulSarm ? row.totalAcumulSarm.toFixed(1) : '0.0'}</td>
                                     <td style={{ ...styles.tdNum, fontWeight: 'bold' }}>{row.totalGeneral ? row.totalGeneral.toFixed(1) : '0.0'}</td>
-                                    <td style={{ ...styles.tdNum, backgroundColor: '#fafafa' }}>{row.totalSarmAl31Dic ? row.totalSarmAl31Dic.toFixed(1) : '0.0'}</td>
                                 </tr>
                             );
                         })
                     ) : (
                         <tr>
-                            <td colSpan="12" style={{ ...styles.tdCenter, padding: '15px' }}>
+                            <td colSpan="11" style={{ ...styles.tdCenter, padding: '15px' }}>
                                 No hay tripulantes cargados para el SARM y Trimestre seleccionado.
                             </td>
                         </tr>
