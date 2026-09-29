@@ -65,65 +65,65 @@ const EbmInformeOficial = React.forwardRef(({
                 </h3>
             </div>
 
-            {/* METADATOS / ENCABEZADO TÉCNICO */}
-            <div style={styles.metaContainer}>
-                <div style={styles.metaColLeft}>
-                    <div style={styles.metaLine}>
-                        <span style={styles.metaLabel}>FUERZA ARMADA:</span>
-                        <span style={styles.metaValue}>EA</span>
+            {/* METADATOS SUPERIORES CON ESTRUCTURA RIGIDA DE CUADROS */}
+            <div style={styles.metaOuterContainer}>
+                {/* BLOQUE IZQUIERDO DE METADATOS */}
+                <div style={styles.metaBoxLeft}>
+                    <div style={styles.metaRowBorder}>
+                        <strong>FUERZA ARMADA:</strong> EA (6)
                     </div>
-                    <div style={styles.metaLine}>
-                        <span style={styles.metaLabel}>TIPO DE AERONAVE:</span>
-                        <span style={styles.metaValue}>{tipoAeronave.toUpperCase()}</span>
+                    <div style={styles.metaRowBorder}>
+                        <strong>TIPO DE AERONAVE:</strong> ALA ROTATIVA / PLANO FIJO / MONOMOTOR / BIMOTOR (6)
                     </div>
-                    <div style={styles.metaLine}>
-                        <span style={styles.metaLabel}>TIPO DE TRIPULACIÓN:</span>
-                        <span style={styles.metaValue}>{tipoTripulacion.toUpperCase()}</span>
+                    <div style={styles.metaRowBorder}>
+                        <strong>TIPO DE TRIPULACIÓN:</strong> MONOTRIPULADO / MULTITRIPULADO (6)
                     </div>
-                    <div style={styles.metaLine}>
-                        <span style={styles.metaLabel}>SARM:</span>
-                        <span style={styles.metaValue}>{sarm.toUpperCase()}</span>
+                    <div style={styles.metaRowLast}>
+                        <strong>SARM:</strong> {sarm.toUpperCase()} (6)
                     </div>
                 </div>
 
-                <div style={styles.metaColRight}>
-                    <div style={styles.metaLineRight}>
-                        <span style={styles.metaLabel}>AÑO:</span>
-                        <span style={styles.metaValue}>{anio}</span>
+                {/* BLOQUE DERECHO DIVIDIDO */}
+                <div style={styles.metaBoxRightContainer}>
+                    {/* CUADRO ANIO (ARRIBA DERECHA) */}
+                    <div style={styles.metaAnioBox}>
+                        <strong>AÑO:</strong> {anio}
                     </div>
-                    <div style={styles.metaLineRight}>
-                        <span style={styles.metaLabel}>TRIMESTRE:</span>
-                        <span style={styles.metaValue}>{trimestre}</span>
-                    </div>
-                    <div style={styles.metaLineRight}>
-                        <span style={styles.metaLabel}>TIPO:</span>
-                        <span style={styles.metaValue}>{tipoEbm}</span>
+
+                    {/* GRILLA TRIMESTRE / TIPO (ABAJO DERECHA) */}
+                    <div style={styles.metaGridRight}>
+                        <div style={styles.metaCellLabel}><strong>TRIMESTRE:</strong></div>
+                        <div style={styles.metaCellValue}>{trimestre} / I / II / III / IV (6)</div>
+                        <div style={{ ...styles.metaCellLabel, borderBottom: 'none' }}><strong>TIPO:</strong></div>
+                        <div style={{ ...styles.metaCellValue, borderBottom: 'none' }}>{tipoEbm} / A / B / C / D (6)</div>
                     </div>
                 </div>
             </div>
 
-            {/* TABLA PRINCIPAL CON FORMATO FIEL A LA PLANILLA OFICIAL */}
+            {/* TABLA PRINCIPAL CON ABRAZO COMPLETO DE "HORAS DE VUELO" */}
             <table style={styles.table}>
                 <thead>
                     <tr>
-                        <th rowSpan="3" style={{ ...styles.th, width: '70px' }}>Nº CONTROL</th>
-                        <th rowSpan="3" style={{ ...styles.th, width: '55px' }}>GRADO</th>
+                        <th rowSpan="3" style={{ ...styles.th, width: '65px' }}>Nº CONTROL</th>
+                        <th rowSpan="3" style={{ ...styles.th, width: '50px' }}>GRADO</th>
                         <th rowSpan="3" style={{ ...styles.th, textAlign: 'left', paddingLeft: '8px' }}>APELLIDO Y NOMBRE</th>
-                        <th rowSpan="3" style={{ ...styles.th, width: '100px' }}>CUMPLE EBM COMO</th>
-                        <th colSpan="5" style={{ ...styles.th, borderBottom: '1px solid #000' }}>HORAS DE VUELO</th>
-                        <th rowSpan="3" style={{ ...styles.th, width: '90px' }}>TOTAL ACUMUL SARM (3)</th>
-                        <th rowSpan="3" style={{ ...styles.th, width: '90px' }}>TOTAL GENERAL (4)</th>
-                        <th rowSpan="3" style={{ ...styles.th, width: '95px' }}>TOTAL GENERAL AL 31Dic{anioAnterior}</th>
+                        <th rowSpan="3" style={{ ...styles.th, width: '95px' }}>CUMPLE EBM COMO</th>
+                        <th colSpan="8" style={{ ...styles.th, borderBottom: '1px solid #000', letterSpacing: '0.5px' }}>
+                            HORAS DE VUELO
+                        </th>
                     </tr>
                     <tr>
-                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>PILOTO</th>
-                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>COPILOTO</th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>PILOTO (1)</th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>COPILOTO (1)</th>
                         <th colSpan="3" style={{ ...styles.thSub, borderBottom: '1px solid #000' }}>INSTRUCTOR / INSPECTOR</th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '85px' }}>TOTAL ACUMUL SARM (3)</th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '85px' }}>TOTAL GENERAL (4)</th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '90px' }}>TOTAL GENERAL AL 31Dic{anioAnterior}</th>
                     </tr>
                     <tr>
-                        <th style={{ ...styles.thSub, width: '45px' }}>PIL</th>
-                        <th style={{ ...styles.thSub, width: '55px' }}>INST/ INSP</th>
-                        <th style={{ ...styles.thSub, width: '50px' }}>TOTAL</th>
+                        <th style={{ ...styles.thSub, width: '40px' }}>PIL (1)</th>
+                        <th style={{ ...styles.thSub, width: '50px' }}>INST/ INSP (1)</th>
+                        <th style={{ ...styles.thSub, width: '45px' }}>TOTAL (1)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -171,8 +171,8 @@ const EbmInformeOficial = React.forwardRef(({
 
             {/* CUADRO RESUMEN DE PILOTOS - TRIMESTRE (5) */}
             <div style={styles.resumenWrapper}>
-                <div style={styles.resumenTitle}>TRIMESTRE (5)</div>
                 <div style={styles.resumenBox}>
+                    <div style={styles.resumenHeaderTitle}>TRIMESTRE (5)</div>
                     <div style={styles.resumenItem}>
                         <strong>TOTAL DE PILOTOS PREVISTOS PARA VOLAR:</strong> {pilotosPrevistos}
                     </div>
@@ -187,7 +187,7 @@ const EbmInformeOficial = React.forwardRef(({
 
             {/* SECCIÓN NOTAS: (2) */}
             <div style={styles.obsBox}>
-                <div style={{ fontWeight: 'bold', marginBottom: '4px', textDecoration: 'underline' }}>NOTAS:</div>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', textDecoration: 'underline' }}>NOTAS: (2)</div>
                 <ul style={{ margin: 0, paddingLeft: '18px' }}>
                     {observaciones.map((obs, idx) => (
                         <li key={idx} style={{ fontSize: '9.5px', lineHeight: '1.3' }}>{obs}</li>
@@ -267,7 +267,7 @@ const styles = {
     },
     titleContainer: {
         textAlign: 'center',
-        margin: '8px 0 10px 0'
+        margin: '6px 0 10px 0'
     },
     mainTitle: {
         margin: 0,
@@ -276,38 +276,59 @@ const styles = {
         letterSpacing: '0.5px',
         textTransform: 'uppercase'
     },
-    metaContainer: {
+    
+    /* ESTRUCTURA METADATOS RIGIDOS */
+    metaOuterContainer: {
         display: 'flex',
         justifyContent: 'space-between',
-        marginBottom: '8px',
-        fontSize: '10px'
+        alignItems: 'flex-start',
+        marginBottom: '10px',
+        width: '100%'
     },
-    metaColLeft: {
+    metaBoxLeft: {
+        width: '58%',
+        border: '1px solid #000000',
+        fontSize: '9.5px'
+    },
+    metaRowBorder: {
+        borderBottom: '1px solid #000000',
+        padding: '3px 6px'
+    },
+    metaRowLast: {
+        padding: '3px 6px'
+    },
+    metaBoxRightContainer: {
+        width: '38%',
         display: 'flex',
         flexDirection: 'column',
-        gap: '2px'
-    },
-    metaColRight: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2px',
-        minWidth: '150px'
-    },
-    metaLine: {
-        display: 'flex',
         gap: '6px'
     },
-    metaLineRight: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        gap: '10px'
+    metaAnioBox: {
+        border: '1px solid #000000',
+        padding: '4px 8px',
+        textAlign: 'left',
+        fontSize: '9.5px',
+        alignSelf: 'flex-end',
+        width: '100%',
+        boxSizing: 'border-box'
     },
-    metaLabel: {
-        fontWeight: 'bold'
+    metaGridRight: {
+        display: 'grid',
+        gridTemplateColumns: '80px 1fr',
+        border: '1px solid #000000',
+        fontSize: '9.5px'
     },
-    metaValue: {
-        fontWeight: 'normal'
+    metaCellLabel: {
+        borderRight: '1px solid #000000',
+        borderBottom: '1px solid #000000',
+        padding: '3px 6px'
     },
+    metaCellValue: {
+        borderBottom: '1px solid #000000',
+        padding: '3px 6px'
+    },
+
+    /* TABLA PRINCIPAL */
     table: {
         width: '100%',
         borderCollapse: 'collapse',
@@ -346,21 +367,20 @@ const styles = {
         textAlign: 'right'
     },
     resumenWrapper: {
-        width: '55%',
+        width: '50%',
         marginBottom: '10px'
     },
-    resumenTitle: {
-        fontSize: '9.5px',
-        fontWeight: 'bold',
-        marginBottom: '2px'
-    },
     resumenBox: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '3px',
         border: '1px solid #000000',
         padding: '6px 10px',
-        fontSize: '9.5px'
+        fontSize: '9.5px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px'
+    },
+    resumenHeaderTitle: {
+        fontWeight: 'bold',
+        marginBottom: '3px'
     },
     resumenItem: {
         textAlign: 'left'
