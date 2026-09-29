@@ -65,7 +65,7 @@ const EbmInformeOficial = React.forwardRef(({
                 </h3>
             </div>
 
-            {/* METADATOS SUPERIORES CON ESTRUCTURA RIGIDA DE CUADROS */}
+            {/* METADATOS SUPERIORES CON CUADROS ESCALONADOS */}
             <div style={styles.metaOuterContainer}>
                 {/* BLOQUE IZQUIERDO DE METADATOS */}
                 <div style={styles.metaBoxLeft}>
@@ -83,21 +83,30 @@ const EbmInformeOficial = React.forwardRef(({
                     </div>
                 </div>
 
-                {/* BLOQUE DERECHO DIVIDIDO */}
-                <div style={styles.metaBoxRightContainer}>
-                    {/* CUADRO ANIO (ARRIBA DERECHA) */}
-                    <div style={styles.metaAnioBox}>
-                        <strong>AÑO:</strong> {anio}
-                    </div>
-
-                    {/* GRILLA TRIMESTRE / TIPO (ABAJO DERECHA) */}
-                    <div style={styles.metaGridRight}>
-                        <div style={styles.metaCellLabel}><strong>TRIMESTRE:</strong></div>
-                        <div style={styles.metaCellValue}>{trimestre} / I / II / III / IV (6)</div>
-                        <div style={{ ...styles.metaCellLabel, borderBottom: 'none' }}><strong>TIPO:</strong></div>
-                        <div style={{ ...styles.metaCellValue, borderBottom: 'none' }}>{tipoEbm} / A / B / C / D (6)</div>
-                    </div>
-                </div>
+                {/* BLOQUE DERECHO MATRICIAL ESCALONADO */}
+                <table style={styles.metaGridMatrix}>
+                    <tbody>
+                        {/* Fila 1: Hueco a la izquierda, AÑO a la derecha */}
+                        <tr>
+                            <td colSpan="2" style={styles.tdMatrixEmptyTopLeft}></td>
+                            <td style={styles.tdMatrixAnio}>
+                                <strong>AÑO:</strong> {anio}
+                            </td>
+                        </tr>
+                        {/* Fila 2: TRIMESTRE a la izquierda, Hueco a la derecha */}
+                        <tr>
+                            <td style={styles.tdMatrixLabel}><strong>TRIMESTRE:</strong></td>
+                            <td style={styles.tdMatrixValue}>{trimestre} / I / II / III / IV (6)</td>
+                            <td style={styles.tdMatrixEmptyBottomRight}></td>
+                        </tr>
+                        {/* Fila 3: TIPO a la izquierda, Hueco a la derecha */}
+                        <tr>
+                            <td style={{ ...styles.tdMatrixLabel, borderBottom: '1px solid #000' }}><strong>TIPO:</strong></td>
+                            <td style={{ ...styles.tdMatrixValue, borderBottom: '1px solid #000' }}>{tipoEbm} / A / B / C / D (6)</td>
+                            <td style={{ ...styles.tdMatrixEmptyBottomRight, borderTop: 'none' }}></td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
 
             {/* TABLA PRINCIPAL CON ABRAZO COMPLETO DE "HORAS DE VUELO" */}
@@ -281,12 +290,12 @@ const styles = {
     metaOuterContainer: {
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
+        alignItems: 'flex-end',
         marginBottom: '10px',
         width: '100%'
     },
     metaBoxLeft: {
-        width: '58%',
+        width: '55%',
         border: '1px solid #000000',
         fontSize: '9.5px'
     },
@@ -297,35 +306,37 @@ const styles = {
     metaRowLast: {
         padding: '3px 6px'
     },
-    metaBoxRightContainer: {
-        width: '38%',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '6px'
-    },
-    metaAnioBox: {
-        border: '1px solid #000000',
-        padding: '4px 8px',
-        textAlign: 'left',
-        fontSize: '9.5px',
-        alignSelf: 'flex-end',
-        width: '100%',
-        boxSizing: 'border-box'
-    },
-    metaGridRight: {
-        display: 'grid',
-        gridTemplateColumns: '80px 1fr',
-        border: '1px solid #000000',
+
+    /* TABLA MATRICIAL ESCALONADA DERECHA */
+    metaGridMatrix: {
+        width: '42%',
+        borderCollapse: 'collapse',
         fontSize: '9.5px'
     },
-    metaCellLabel: {
+    tdMatrixEmptyTopLeft: {
+        border: 'none',
+        padding: '0'
+    },
+    tdMatrixAnio: {
+        border: '1px solid #000000',
+        padding: '3px 6px',
+        textAlign: 'left'
+    },
+    tdMatrixLabel: {
+        borderLeft: '1px solid #000000',
+        borderTop: '1px solid #000000',
         borderRight: '1px solid #000000',
-        borderBottom: '1px solid #000000',
+        padding: '3px 6px',
+        width: '90px'
+    },
+    tdMatrixValue: {
+        borderTop: '1px solid #000000',
+        borderRight: '1px solid #000000',
         padding: '3px 6px'
     },
-    metaCellValue: {
-        borderBottom: '1px solid #000000',
-        padding: '3px 6px'
+    tdMatrixEmptyBottomRight: {
+        border: 'none',
+        padding: '0'
     },
 
     /* TABLA PRINCIPAL */
