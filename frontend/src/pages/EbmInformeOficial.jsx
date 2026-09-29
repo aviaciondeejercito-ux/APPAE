@@ -40,7 +40,7 @@ const EbmInformeOficial = React.forwardRef(({
                 `}
             </style>
 
-            {/* SELLO REGLAMENTARIO DE SEGURIDAD SUPERIOR (55mm x 10mm) */}
+            {/* SELLO REGLAMENTARIO DE SEGURIDAD SUPERIOR */}
             <div style={styles.selloWrapper}>
                 <div style={styles.selloReservadoBox}>
                     RESERVADO
@@ -58,10 +58,10 @@ const EbmInformeOficial = React.forwardRef(({
                 </div>
             </div>
 
-            {/* TÍTULO PRINCIPAL CON SUBRAYADO */}
+            {/* TÍTULO PRINCIPAL EN NEGRITA Y SUBRAYADO */}
             <div style={styles.titleContainer}>
                 <h3 style={styles.mainTitle}>
-                    <u>INFORME EXIGENCIAS BÁSICAS MÍNIMAS {unidad.toUpperCase()}</u>
+                    <u>INFORME DE CUMPLIMIENTO DE EXIGENCIAS BÁSICAS MÍNIMAS - {unidad.toUpperCase()}</u>
                 </h3>
             </div>
 
@@ -70,7 +70,7 @@ const EbmInformeOficial = React.forwardRef(({
                 <div style={styles.metaColLeft}>
                     <div style={styles.metaLine}>
                         <span style={styles.metaLabel}>FUERZA ARMADA:</span>
-                        <span style={styles.metaValue}>EJÉRCITO ARGENTINO</span>
+                        <span style={styles.metaValue}>EA</span>
                     </div>
                     <div style={styles.metaLine}>
                         <span style={styles.metaLabel}>TIPO DE AERONAVE:</span>
@@ -102,46 +102,66 @@ const EbmInformeOficial = React.forwardRef(({
                 </div>
             </div>
 
-            {/* TABLA PRINCIPAL CON BORDES VISIBLES */}
+            {/* TABLA PRINCIPAL CON FORMATO FIEL A LA PLANILLA OFICIAL */}
             <table style={styles.table}>
                 <thead>
                     <tr>
-                        <th rowSpan="2" style={{ ...styles.th, width: '30px' }}>N°</th>
-                        <th rowSpan="2" style={{ ...styles.th, width: '85px' }}>Nº CONTROL</th>
-                        <th rowSpan="2" style={{ ...styles.th, width: '55px' }}>GRADO</th>
-                        <th rowSpan="2" style={{ ...styles.th, textAlign: 'left', paddingLeft: '8px' }}>APELLIDO Y NOMBRE</th>
-                        <th rowSpan="2" style={{ ...styles.th, width: '110px' }}>CUMPLE EBM COMO</th>
-                        <th colSpan="3" style={{ ...styles.th, borderBottom: '1px solid #000' }}>HORAS DE VUELO</th>
-                        <th rowSpan="2" style={{ ...styles.th, width: '85px' }}>TOTAL ACUMUL SARM</th>
-                        <th rowSpan="2" style={{ ...styles.th, width: '85px' }}>TOTAL GENERAL</th>
-                        <th rowSpan="2" style={{ ...styles.th, width: '100px' }}>TOTAL GENERAL AL 31Dic{anioAnterior}</th>
+                        <th rowSpan="3" style={{ ...styles.th, width: '70px' }}>Nº CONTROL</th>
+                        <th rowSpan="3" style={{ ...styles.th, width: '55px' }}>GRADO</th>
+                        <th rowSpan="3" style={{ ...styles.th, textAlign: 'left', paddingLeft: '8px' }}>APELLIDO Y NOMBRE</th>
+                        <th rowSpan="3" style={{ ...styles.th, width: '100px' }}>CUMPLE EBM COMO</th>
+                        <th colSpan="5" style={{ ...styles.th, borderBottom: '1px solid #000' }}>HORAS DE VUELO</th>
+                        <th rowSpan="3" style={{ ...styles.th, width: '90px' }}>TOTAL ACUMUL SARM (3)</th>
+                        <th rowSpan="3" style={{ ...styles.th, width: '90px' }}>TOTAL GENERAL (4)</th>
+                        <th rowSpan="3" style={{ ...styles.th, width: '95px' }}>TOTAL GENERAL AL 31Dic{anioAnterior}</th>
                     </tr>
                     <tr>
-                        <th style={{ ...styles.thSub, width: '60px' }}>PILOTO</th>
-                        <th style={{ ...styles.thSub, width: '60px' }}>COPILOTO</th>
-                        <th style={{ ...styles.thSub, width: '75px' }}>INSTRUCTOR</th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>PILOTO</th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>COPILOTO</th>
+                        <th colSpan="3" style={{ ...styles.thSub, borderBottom: '1px solid #000' }}>INSTRUCTOR / INSPECTOR</th>
+                    </tr>
+                    <tr>
+                        <th style={{ ...styles.thSub, width: '45px' }}>PIL</th>
+                        <th style={{ ...styles.thSub, width: '55px' }}>INST/ INSP</th>
+                        <th style={{ ...styles.thSub, width: '50px' }}>TOTAL</th>
                     </tr>
                 </thead>
                 <tbody>
                     {datos.length > 0 ? (
-                        datos.map((row, index) => (
-                            <tr key={row._id || index}>
-                                <td style={styles.tdCenter}>{index + 1}</td>
-                                <td style={styles.tdCenter}>{row.nroControl || '-'}</td>
-                                <td style={{ ...styles.tdCenter, fontWeight: 'bold' }}>{row.grado}</td>
-                                <td style={styles.tdLeft}>{row.apellidoNombre}</td>
-                                <td style={{ ...styles.tdCenter, textTransform: 'uppercase', fontSize: '9.5px' }}>{row.cumpleComo || 'COPILOTO'}</td>
-                                <td style={styles.tdNum}>{row.hsPiloto > 0 ? row.hsPiloto.toFixed(1) : '-'}</td>
-                                <td style={styles.tdNum}>{row.hsCopiloto > 0 ? row.hsCopiloto.toFixed(1) : '-'}</td>
-                                <td style={styles.tdNum}>{row.hsInstructor > 0 ? row.hsInstructor.toFixed(1) : '-'}</td>
-                                <td style={{ ...styles.tdNum, fontWeight: 'bold' }}>{row.totalAcumulSarm ? row.totalAcumulSarm.toFixed(1) : '0.0'}</td>
-                                <td style={{ ...styles.tdNum, fontWeight: 'bold' }}>{row.totalGeneral ? row.totalGeneral.toFixed(1) : '0.0'}</td>
-                                <td style={{ ...styles.tdNum, backgroundColor: '#fafafa' }}>{row.totalSarmAl31Dic ? row.totalSarmAl31Dic.toFixed(1) : '0.0'}</td>
-                            </tr>
-                        ))
+                        datos.map((row, index) => {
+                            const esInstructor = row.cumpleComo === 'INSTRUCTOR';
+                            const hsInstPil = esInstructor ? Number(row.hsPiloto || 0) : 0;
+                            const hsInstInsp = esInstructor ? Number(row.hsInstructor || 0) : 0;
+                            const hsInstTotal = hsInstPil + hsInstInsp;
+
+                            return (
+                                <tr key={row._id || index}>
+                                    <td style={styles.tdCenter}>{row.nroControl || index + 1}</td>
+                                    <td style={{ ...styles.tdCenter, fontWeight: 'bold' }}>{row.grado}</td>
+                                    <td style={styles.tdLeft}>{row.apellidoNombre}</td>
+                                    <td style={{ ...styles.tdCenter, textTransform: 'uppercase', fontSize: '9px' }}>{row.cumpleComo || 'COPILOTO'}</td>
+                                    
+                                    {/* HORAS TRIMESTRE */}
+                                    <td style={styles.tdNum}>{row.hsPiloto > 0 && !esInstructor ? row.hsPiloto.toFixed(1) : '-'}</td>
+                                    <td style={styles.tdNum}>{row.hsCopiloto > 0 ? row.hsCopiloto.toFixed(1) : '-'}</td>
+                                    
+                                    {/* SUBCOLUMNAS DE INSTRUCTOR */}
+                                    <td style={styles.tdNum}>{hsInstPil > 0 ? hsInstPil.toFixed(1) : '-'}</td>
+                                    <td style={styles.tdNum}>{hsInstInsp > 0 ? hsInstInsp.toFixed(1) : '-'}</td>
+                                    <td style={{ ...styles.tdNum, fontWeight: esInstructor ? 'bold' : 'normal' }}>
+                                        {hsInstTotal > 0 ? hsInstTotal.toFixed(1) : '-'}
+                                    </td>
+
+                                    {/* TOTALES ACUMULADOS */}
+                                    <td style={{ ...styles.tdNum, fontWeight: 'bold' }}>{row.totalAcumulSarm ? row.totalAcumulSarm.toFixed(1) : '0.0'}</td>
+                                    <td style={{ ...styles.tdNum, fontWeight: 'bold' }}>{row.totalGeneral ? row.totalGeneral.toFixed(1) : '0.0'}</td>
+                                    <td style={{ ...styles.tdNum, backgroundColor: '#fafafa' }}>{row.totalSarmAl31Dic ? row.totalSarmAl31Dic.toFixed(1) : '0.0'}</td>
+                                </tr>
+                            );
+                        })
                     ) : (
                         <tr>
-                            <td colSpan="11" style={{ ...styles.tdCenter, padding: '15px' }}>
+                            <td colSpan="12" style={{ ...styles.tdCenter, padding: '15px' }}>
                                 No hay tripulantes cargados para el SARM y Trimestre seleccionado.
                             </td>
                         </tr>
@@ -149,30 +169,33 @@ const EbmInformeOficial = React.forwardRef(({
                 </tbody>
             </table>
 
-            {/* CUADRO RESUMEN DE PILOTOS */}
-            <div style={styles.resumenBox}>
-                <div style={styles.resumenItem}>
-                    <strong>TOTAL DE PILOTOS PREVISTOS PARA VOLAR:</strong> {pilotosPrevistos}
-                </div>
-                <div style={styles.resumenItem}>
-                    <strong>TOTAL DE PILOTOS QUE VUELAN:</strong> {pilotosQueVuelan}
-                </div>
-                <div style={styles.resumenItem}>
-                    <strong>TOTAL DE PILOTOS QUE NO CUMPLIERON EBM:</strong> {pilotosNoCumplieron}
+            {/* CUADRO RESUMEN DE PILOTOS - TRIMESTRE (5) */}
+            <div style={styles.resumenWrapper}>
+                <div style={styles.resumenTitle}>TRIMESTRE (5)</div>
+                <div style={styles.resumenBox}>
+                    <div style={styles.resumenItem}>
+                        <strong>TOTAL DE PILOTOS PREVISTOS PARA VOLAR:</strong> {pilotosPrevistos}
+                    </div>
+                    <div style={styles.resumenItem}>
+                        <strong>TOTAL DE PILOTOS QUE VUELAN:</strong> {pilotosQueVuelan}
+                    </div>
+                    <div style={styles.resumenItem}>
+                        <strong>TOTAL DE PILOTOS QUE NO CUMPLIERON EBM:</strong> {pilotosNoCumplieron}
+                    </div>
                 </div>
             </div>
 
-            {/* SECCIÓN OBSERVACIONES */}
+            {/* SECCIÓN NOTAS: (2) */}
             <div style={styles.obsBox}>
-                <div style={{ fontWeight: 'bold', marginBottom: '4px', textDecoration: 'underline' }}>OBSERVACIONES:</div>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', textDecoration: 'underline' }}>NOTAS:</div>
                 <ul style={{ margin: 0, paddingLeft: '18px' }}>
                     {observaciones.map((obs, idx) => (
-                        <li key={idx} style={{ fontSize: '10px', lineHeight: '1.3' }}>{obs}</li>
+                        <li key={idx} style={{ fontSize: '9.5px', lineHeight: '1.3' }}>{obs}</li>
                     ))}
                 </ul>
             </div>
 
-            {/* SELLO REGLAMENTARIO DE SEGURIDAD INFERIOR (55mm x 10mm) */}
+            {/* SELLO REGLAMENTARIO DE SEGURIDAD INFERIOR */}
             <div style={{ ...styles.selloWrapper, marginTop: '15px' }}>
                 <div style={styles.selloReservadoBox}>
                     RESERVADO
@@ -189,7 +212,7 @@ const styles = {
         backgroundColor: '#ffffff',
         color: '#000000',
         fontFamily: '"Times New Roman", Times, serif',
-        fontSize: '10.5px',
+        fontSize: '10px',
         lineHeight: '1.2',
         padding: '5mm 10mm'
     },
@@ -209,7 +232,7 @@ const styles = {
         justifyContent: 'center',
         fontFamily: '"Times New Roman", Times, serif',
         fontWeight: 'bold',
-        fontSize: '14px',
+        fontSize: '13px',
         letterSpacing: '1px',
         textTransform: 'uppercase',
         boxSizing: 'border-box'
@@ -218,7 +241,7 @@ const styles = {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: '10px'
+        marginBottom: '8px'
     },
     headerLeftBlock: {
         textAlign: 'center',
@@ -226,11 +249,11 @@ const styles = {
         lineHeight: '1.1'
     },
     entidad: {
-        fontSize: '12px',
+        fontSize: '11.5px',
         fontWeight: 'bold'
     },
     unidadHeader: {
-        fontSize: '11px',
+        fontSize: '10.5px',
         fontWeight: 'normal'
     },
     headerRightBlock: {
@@ -239,16 +262,16 @@ const styles = {
         maxWidth: '50%'
     },
     leyendaAno: {
-        fontSize: '10px',
+        fontSize: '9.5px',
         fontWeight: 'bold'
     },
     titleContainer: {
         textAlign: 'center',
-        margin: '10px 0 12px 0'
+        margin: '8px 0 10px 0'
     },
     mainTitle: {
         margin: 0,
-        fontSize: '12px',
+        fontSize: '11.5px',
         fontWeight: 'bold',
         letterSpacing: '0.5px',
         textTransform: 'uppercase'
@@ -256,19 +279,19 @@ const styles = {
     metaContainer: {
         display: 'flex',
         justifyContent: 'space-between',
-        marginBottom: '10px',
-        fontSize: '10.5px'
+        marginBottom: '8px',
+        fontSize: '10px'
     },
     metaColLeft: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '3px'
+        gap: '2px'
     },
     metaColRight: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '3px',
-        minWidth: '160px'
+        gap: '2px',
+        minWidth: '150px'
     },
     metaLine: {
         display: 'flex',
@@ -290,54 +313,63 @@ const styles = {
         borderCollapse: 'collapse',
         border: '1px solid #000000',
         marginBottom: '10px',
-        fontSize: '9.5px'
+        fontSize: '9px'
     },
     th: {
-        border: '1px solid #000000',
-        padding: '5px 3px',
-        textAlign: 'center',
-        fontWeight: 'bold',
-        backgroundColor: '#ffffff'
-    },
-    thSub: {
         border: '1px solid #000000',
         padding: '4px 2px',
         textAlign: 'center',
         fontWeight: 'bold',
         backgroundColor: '#ffffff'
     },
+    thSub: {
+        border: '1px solid #000000',
+        padding: '3px 2px',
+        textAlign: 'center',
+        fontWeight: 'bold',
+        backgroundColor: '#ffffff'
+    },
     tdCenter: {
         border: '1px solid #000000',
-        padding: '4px 3px',
+        padding: '3px 2px',
         textAlign: 'center'
     },
     tdLeft: {
         border: '1px solid #000000',
-        padding: '4px 6px',
+        padding: '3px 5px',
         textAlign: 'left',
         textTransform: 'uppercase'
     },
     tdNum: {
         border: '1px solid #000000',
-        padding: '4px 5px',
+        padding: '3px 4px',
         textAlign: 'right'
+    },
+    resumenWrapper: {
+        width: '55%',
+        marginBottom: '10px'
+    },
+    resumenTitle: {
+        fontSize: '9.5px',
+        fontWeight: 'bold',
+        marginBottom: '2px'
     },
     resumenBox: {
         display: 'flex',
-        justifyContent: 'space-around',
+        flexDirection: 'column',
+        gap: '3px',
         border: '1px solid #000000',
         padding: '6px 10px',
-        marginBottom: '10px',
-        fontSize: '10px'
+        fontSize: '9.5px'
     },
     resumenItem: {
-        textAlign: 'center'
+        textAlign: 'left'
     },
     obsBox: {
         border: '1px solid #000000',
-        padding: '8px 10px',
-        fontSize: '10px',
-        minHeight: '35px'
+        padding: '6px 8px',
+        fontSize: '9.5px',
+        minHeight: '30px'
     }
 };
 
