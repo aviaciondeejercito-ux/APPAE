@@ -56,13 +56,9 @@ const EbmInformeOficial = React.forwardRef(({
 
     const anioAnterior = Number(anio) - 1;
 
-    // Determina a motorização exata para o SARM atual
-    const motorizacion = determinarMotorizacionExacta(sarm);
-
-    // Extrai o tipo base ("PLANO FIJO" ou "ALA ROTATIVA") caso a prop venha composta
-    const tipoAeronaveBase = tipoAeronave.toUpperCase().includes("ALA ROTATIVA") 
-        ? "ALA ROTATIVA" 
-        : "PLANO FIJO";
+    // DETERMINACIÓN EXACTA Y FILTRADO RIGUROSO DEL HEADER
+    const motorizacionFiltrada = determinarMotorizacionExacta(sarm);
+    const tipoAeronaveFiltrado = tipoAeronave.toUpperCase().includes("ALA ROTATIVA") ? "ALA ROTATIVA" : "PLANO FIJO";
 
     return (
         <div ref={ref} style={styles.page}>
@@ -117,7 +113,7 @@ const EbmInformeOficial = React.forwardRef(({
                         <strong>FUERZA ARMADA:</strong> EA
                     </div>
                     <div style={styles.metaRowBorder}>
-                        <strong>TIPO DE AERONAVE:</strong> {tipoAeronaveBase} / {motorizacion === 'MONOMOTOR' ? <u><strong>MONOMOTOR</strong></u> : 'MONOMOTOR'} / {motorizacion === 'BIMOTOR' ? <u><strong>BIMOTOR</strong></u> : 'BIMOTOR'}
+                        <strong>TIPO DE AERONAVE:</strong> {tipoAeronaveFiltrado} / {motorizacionFiltrada}
                     </div>
                     <div style={styles.metaRowBorder}>
                         <strong>TIPO DE TRIPULACIÓN:</strong> {tipoTripulacion.toUpperCase()}
@@ -140,13 +136,13 @@ const EbmInformeOficial = React.forwardRef(({
                         {/* Fila 2: TRIMESTRE a la izquierda, Hueco a la derecha */}
                         <tr>
                             <td style={styles.tdMatrixLabel}><strong>TRIMESTRE:</strong></td>
-                            <td style={styles.tdMatrixValue}>{trimestre} / I / II / III / IV</td>
+                            <td style={styles.tdMatrixValue}>{trimestre}</td>
                             <td style={styles.tdMatrixEmptyBottomRight}></td>
                         </tr>
                         {/* Fila 3: TIPO a la izquierda, Hueco a la derecha */}
                         <tr>
                             <td style={{ ...styles.tdMatrixLabel, borderBottom: '1px solid #000' }}><strong>TIPO:</strong></td>
-                            <td style={{ ...styles.tdMatrixValue, borderBottom: '1px solid #000' }}>{tipoEbm} / A / B / C / D</td>
+                            <td style={{ ...styles.tdMatrixValue, borderBottom: '1px solid #000' }}>{tipoEbm}</td>
                             <td style={{ ...styles.tdMatrixEmptyBottomRight, borderTop: 'none' }}></td>
                         </tr>
                     </tbody>

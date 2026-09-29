@@ -3,7 +3,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import API, { getPlanificacionEbm, actualizarConfiguracionEbm } from '../services/api'; 
 
-import EbmInformeOficial from '../pages/EbmInformeOficial';
+import EbmInformeOficial, { determinarMotorizacionExacta } from '../pages/EbmInformeOficial';
 
 // --- MATRIZ DE REQUISITOS CONFIGURABLE ---
 const CONFIG_HORAS_EBM = {
@@ -46,48 +46,11 @@ const CLASIFICACION_SARM = {
     'T-41': 'PLANO FIJO'
 };
 
-// DICCIONARIO DE MOTORIZACIÓN PARA LOS 20 SISTEMAS DE ARMAS
-const MOTORIZACION_SARM = {
-    // MONOMOTORES
-    'UH-1H': 'MONOMOTOR',
-    'UH-1H/II': 'MONOMOTOR',
-    'AB206B1': 'MONOMOTOR',
-    'AB206B3': 'MONOMOTOR',
-    'SA-315 B LAMA': 'MONOMOTOR',
-    '407 GXI': 'MONOMOTOR',
-    'C-208': 'MONOMOTOR',
-    'C-207': 'MONOMOTOR',
-    'G-120TP-A': 'MONOMOTOR',
-    'P-2002': 'MONOMOTOR',
-    'T-41': 'MONOMOTOR',
-    'T-34C1': 'MONOMOTOR',
-    'T-6C': 'MONOMOTOR',
-    'EMB-312': 'MONOMOTOR',
-
-    // BIMOTORES
-    'BELL 212': 'BIMOTOR',
-    'AS-332B': 'BIMOTOR',
-    'C-212': 'BIMOTOR',
-    'C-550': 'BIMOTOR',
-    'DA-62': 'BIMOTOR',
-    'DHC-6': 'BIMOTOR'
-};
-
-/**
- * Devuelve 'MONOMOTOR' o 'BIMOTOR' según el SARM.
- */
-export const determinarMotorizacionExacta = (sda) => {
-    if (!sda) return 'MONOMOTOR';
-    const key = sda.trim().toUpperCase();
-    return MOTORIZACION_SARM[key] || 'MONOMOTOR';
-};
-
 const determinarTipoAeronaveExacto = (sda) => {
     if (!sda) return 'PLANO FIJO';
     const key = sda.trim().toUpperCase();
     if (CLASIFICACION_SARM[key]) return CLASIFICACION_SARM[key];
 
-    // Fallback por palabras clave si hay variaciones de nombre
     const esHelicoptero = ['UH', 'BELL', 'PUMA', '332', '206', 'LAMA', '407'].some(h => key.includes(h));
     return esHelicoptero ? 'ALA ROTATIVA' : 'PLANO FIJO';
 };
@@ -128,7 +91,7 @@ const EbmPage = () => {
     const [elementoSeleccionado, setElementoSeleccionado] = useState(''); 
     const [vuelosHistorial, setVuelosHistorial] = useState([]);
 
-    // --- ESTADOS DINÁMICOS PARA EXPORTACIÓN DEL INFORME OFICIAL ---
+    // ESTADOS DINÁMICOS PARA EXPORTACIÓN DEL INFORME OFICIAL
     const [anioExportar, setAnioExportar] = useState(anioActualSistema);
     const [trimestreExportar, setTrimestreExportar] = useState(getTrimestreActualCronologico());
     const [sdaExportar, setSdaExportar] = useState('');
@@ -141,7 +104,6 @@ const EbmPage = () => {
     const [sdasActivos, setSdasActivos] = useState({});
     const [filasDesplegadas, setFilasDesplegadas] = useState({});
 
-    // Referencias
     const pdfRef = useRef(null);            
     const reportOficialRef = useRef(null);  
 
@@ -389,7 +351,6 @@ const EbmPage = () => {
         return agrupa;
     }, [personalFiltrado, todosLosSdas]);
 
-    // MAPEO Y FILTRADO EXACTO DE TRIPULANTES POR SARM SELECCIONADO
     const pilotosFormateadosReporte = useMemo(() => {
         if (!sdaExportar) return [];
         const listaSda = matrizSda[sdaExportar] || [];
@@ -534,8 +495,7 @@ const EbmPage = () => {
 
     const observacionesArray = observacionesReporteText.split('\n').filter(line => line.trim().length > 0);
 
-    // Tipo de aeronave y motorización en formato para el informe oficial
-    const tipoAeronaveCalculado = `${determinarTipoAeronaveExacto(sdaExportar)} / ${determinarMotorizacionExacta(sdaExportar)}`;
+    const trimestreRomanoMap = { 1: "I", 2: "II", 3: "III", 4: "IV" };
 
     return (
         <div style={styles.pageContainer}>
@@ -545,8 +505,8 @@ const EbmPage = () => {
                     <EbmInformeOficial 
                         unidad={elementoSeleccionado === 'TODOS' ? "B AV APY COMB 601" : elementoSeleccionado}
                         anio={anioExportar}
-                        trimestre={trimestreExportar === 1 ? "I" : trimestreExportar === 2 ? "II" : trimestreExportar === 3 ? "III" : "IV"}
-                        tipoAeronave={tipoAeronaveCalculado}
+                        trimestre={trimestreRomanoMap[trimestreExportar] || "III"}
+                        tipoAeronave={determinarTipoAeronaveExacto(sdaExportar)}
                         tipoTripulacion="MULTITRIPULADO"
                         tipoEbm={tipoEbmSeleccionado}
                         sarm={sdaExportar || "SARM"}
@@ -750,7 +710,7 @@ const EbmPage = () => {
                                                         <React.Fragment key={p._id}>
                                                             <tr style={styles.pilotRow}>
                                                                 <td style={styles.tdCenter}>
-                                                                    <button style={styles.btnConfig} onClick={() => toggleFilaDesplegada(p._id)}>⚙️</button>
+                                                                    <button style={styles.btnConfig} onClick={() => toggleFilaDesplegada(p._id)}>⚙️️</button>
                                                                 </td>
                                                                 <td style={styles.tdName}>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
