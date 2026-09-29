@@ -1,5 +1,41 @@
 import React from 'react';
 
+// DICCIONARIO DE MOTORIZACIÓN PARA LOS 20 SISTEMAS DE ARMAS
+const MOTORIZACION_SARM = {
+    // MONOMOTORES
+    'UH-1H': 'MONOMOTOR',
+    'UH-1H/II': 'MONOMOTOR',
+    'AB206B1': 'MONOMOTOR',
+    'AB206B3': 'MONOMOTOR',
+    'SA-315 B LAMA': 'MONOMOTOR',
+    '407 GXI': 'MONOMOTOR',
+    'C-208': 'MONOMOTOR',
+    'C-207': 'MONOMOTOR',
+    'G-120TP-A': 'MONOMOTOR',
+    'P-2002': 'MONOMOTOR',
+    'T-41': 'MONOMOTOR',
+    'T-34C1': 'MONOMOTOR',
+    'T-6C': 'MONOMOTOR',
+    'EMB-312': 'MONOMOTOR',
+
+    // BIMOTORES
+    'BELL 212': 'BIMOTOR',
+    'AS-332B': 'BIMOTOR',
+    'C-212': 'BIMOTOR',
+    'C-550': 'BIMOTOR',
+    'DA-62': 'BIMOTOR',
+    'DHC-6': 'BIMOTOR'
+};
+
+/**
+ * Devuelve 'MONOMOTOR' o 'BIMOTOR' según el SARM.
+ */
+export const determinarMotorizacionExacta = (sda) => {
+    if (!sda) return 'MONOMOTOR';
+    const key = sda.trim().toUpperCase();
+    return MOTORIZACION_SARM[key] || 'MONOMOTOR';
+};
+
 const EbmInformeOficial = React.forwardRef(({ 
     datos = [], 
     unidad = "B AV APY COMB 601", 
@@ -19,6 +55,14 @@ const EbmInformeOficial = React.forwardRef(({
     const pilotosNoCumplieron = datos.filter(d => d.cumpleEbm === 'NO' || (Number(d.hsPiloto || 0) + Number(d.hsCopiloto || 0) + Number(d.hsInstructor || 0)) === 0).length;
 
     const anioAnterior = Number(anio) - 1;
+
+    // Determina a motorização exata para o SARM atual
+    const motorizacion = determinarMotorizacionExacta(sarm);
+
+    // Extrai o tipo base ("PLANO FIJO" ou "ALA ROTATIVA") caso a prop venha composta
+    const tipoAeronaveBase = tipoAeronave.toUpperCase().includes("ALA ROTATIVA") 
+        ? "ALA ROTATIVA" 
+        : "PLANO FIJO";
 
     return (
         <div ref={ref} style={styles.page}>
@@ -73,7 +117,7 @@ const EbmInformeOficial = React.forwardRef(({
                         <strong>FUERZA ARMADA:</strong> EA
                     </div>
                     <div style={styles.metaRowBorder}>
-                        <strong>TIPO DE AERONAVE:</strong> {tipoAeronave.toUpperCase()} / MONOMOTOR / BIMOTOR
+                        <strong>TIPO DE AERONAVE:</strong> {tipoAeronaveBase} / {motorizacion === 'MONOMOTOR' ? <u><strong>MONOMOTOR</strong></u> : 'MONOMOTOR'} / {motorizacion === 'BIMOTOR' ? <u><strong>BIMOTOR</strong></u> : 'BIMOTOR'}
                     </div>
                     <div style={styles.metaRowBorder}>
                         <strong>TIPO DE TRIPULACIÓN:</strong> {tipoTripulacion.toUpperCase()}

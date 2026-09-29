@@ -19,7 +19,7 @@ const CONFIG_HORAS_EBM = {
     }
 };
 
-// DICCIONARIO CENTRALIZADO DE LOS 20 SISTEMAS DE ARMAS
+// DICCIONARIO CENTRALIZADO DE LOS 20 SISTEMAS DE ARMAS (TIPO DE AERONAVE)
 const CLASIFICACION_SARM = {
     // ALA ROTATIVA (Helicópteros)
     'UH-1H': 'ALA ROTATIVA',
@@ -44,6 +44,42 @@ const CLASIFICACION_SARM = {
     'G-120TP-A': 'PLANO FIJO',
     'P-2002': 'PLANO FIJO',
     'T-41': 'PLANO FIJO'
+};
+
+// DICCIONARIO DE MOTORIZACIÓN PARA LOS 20 SISTEMAS DE ARMAS
+const MOTORIZACION_SARM = {
+    // MONOMOTORES
+    'UH-1H': 'MONOMOTOR',
+    'UH-1H/II': 'MONOMOTOR',
+    'AB206B1': 'MONOMOTOR',
+    'AB206B3': 'MONOMOTOR',
+    'SA-315 B LAMA': 'MONOMOTOR',
+    '407 GXI': 'MONOMOTOR',
+    'C-208': 'MONOMOTOR',
+    'C-207': 'MONOMOTOR',
+    'G-120TP-A': 'MONOMOTOR',
+    'P-2002': 'MONOMOTOR',
+    'T-41': 'MONOMOTOR',
+    'T-34C1': 'MONOMOTOR',
+    'T-6C': 'MONOMOTOR',
+    'EMB-312': 'MONOMOTOR',
+
+    // BIMOTORES
+    'BELL 212': 'BIMOTOR',
+    'AS-332B': 'BIMOTOR',
+    'C-212': 'BIMOTOR',
+    'C-550': 'BIMOTOR',
+    'DA-62': 'BIMOTOR',
+    'DHC-6': 'BIMOTOR'
+};
+
+/**
+ * Devuelve 'MONOMOTOR' o 'BIMOTOR' según el SARM.
+ */
+export const determinarMotorizacionExacta = (sda) => {
+    if (!sda) return 'MONOMOTOR';
+    const key = sda.trim().toUpperCase();
+    return MOTORIZACION_SARM[key] || 'MONOMOTOR';
 };
 
 const determinarTipoAeronaveExacto = (sda) => {
@@ -498,6 +534,9 @@ const EbmPage = () => {
 
     const observacionesArray = observacionesReporteText.split('\n').filter(line => line.trim().length > 0);
 
+    // Tipo de aeronave y motorización en formato para el informe oficial
+    const tipoAeronaveCalculado = `${determinarTipoAeronaveExacto(sdaExportar)} / ${determinarMotorizacionExacta(sdaExportar)}`;
+
     return (
         <div style={styles.pageContainer}>
             {/* CONTENEDOR OCULTO PARA CAPTURA DE PDF REGLAMENTARIO */}
@@ -507,7 +546,7 @@ const EbmPage = () => {
                         unidad={elementoSeleccionado === 'TODOS' ? "B AV APY COMB 601" : elementoSeleccionado}
                         anio={anioExportar}
                         trimestre={trimestreExportar === 1 ? "I" : trimestreExportar === 2 ? "II" : trimestreExportar === 3 ? "III" : "IV"}
-                        tipoAeronave={determinarTipoAeronaveExacto(sdaExportar)}
+                        tipoAeronave={tipoAeronaveCalculado}
                         tipoTripulacion="MULTITRIPULADO"
                         tipoEbm={tipoEbmSeleccionado}
                         sarm={sdaExportar || "SARM"}
@@ -671,7 +710,7 @@ const EbmPage = () => {
                                         <React.Fragment key={sda}>
                                             <tr style={styles.sdaGroupRow}>
                                                 <td colSpan={2} style={styles.sdaGroupCell}>
-                                                    ✈️ SISTEMA DE ARMAS: {sda} ({determinarTipoAeronaveExacto(sda)})
+                                                    ✈️ SISTEMA DE ARMAS: {sda} ({determinarTipoAeronaveExacto(sda)} - {determinarMotorizacionExacta(sda)})
                                                 </td>
                                                 {[1, 2, 3, 4].map(num => (
                                                     <td key={num} colSpan={2} style={styles.sdaGroupSelectorCell}>
