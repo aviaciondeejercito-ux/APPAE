@@ -70,16 +70,16 @@ const EbmInformeOficial = React.forwardRef(({
                 {/* BLOQUE IZQUIERDO DE METADATOS */}
                 <div style={styles.metaBoxLeft}>
                     <div style={styles.metaRowBorder}>
-                        <strong>FUERZA ARMADA:</strong> EA 
+                        <strong>FUERZA ARMADA:</strong> EA
                     </div>
                     <div style={styles.metaRowBorder}>
-                        <strong>TIPO DE AERONAVE:</strong> ALA ROTATIVA / PLANO FIJO / MONOMOTOR / BIMOTOR 
+                        <strong>TIPO DE AERONAVE:</strong> {tipoAeronave.toUpperCase()} / MONOMOTOR / BIMOTOR
                     </div>
                     <div style={styles.metaRowBorder}>
-                        <strong>TIPO DE TRIPULACIÓN:</strong> MONOTRIPULADO / MULTITRIPULADO 
+                        <strong>TIPO DE TRIPULACIÓN:</strong> {tipoTripulacion.toUpperCase()}
                     </div>
                     <div style={styles.metaRowLast}>
-                        <strong>SARM:</strong> {sarm.toUpperCase()} 
+                        <strong>SARM:</strong> {sarm.toUpperCase()}
                     </div>
                 </div>
 
@@ -96,13 +96,13 @@ const EbmInformeOficial = React.forwardRef(({
                         {/* Fila 2: TRIMESTRE a la izquierda, Hueco a la derecha */}
                         <tr>
                             <td style={styles.tdMatrixLabel}><strong>TRIMESTRE:</strong></td>
-                            <td style={styles.tdMatrixValue}>{trimestre} / I / II / III / IV </td>
+                            <td style={styles.tdMatrixValue}>{trimestre} / I / II / III / IV</td>
                             <td style={styles.tdMatrixEmptyBottomRight}></td>
                         </tr>
                         {/* Fila 3: TIPO a la izquierda, Hueco a la derecha */}
                         <tr>
                             <td style={{ ...styles.tdMatrixLabel, borderBottom: '1px solid #000' }}><strong>TIPO:</strong></td>
-                            <td style={{ ...styles.tdMatrixValue, borderBottom: '1px solid #000' }}>{tipoEbm} / A / B / C / D </td>
+                            <td style={{ ...styles.tdMatrixValue, borderBottom: '1px solid #000' }}>{tipoEbm} / A / B / C / D</td>
                             <td style={{ ...styles.tdMatrixEmptyBottomRight, borderTop: 'none' }}></td>
                         </tr>
                     </tbody>
@@ -122,17 +122,17 @@ const EbmInformeOficial = React.forwardRef(({
                         </th>
                     </tr>
                     <tr>
-                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>PILOTO </th>
-                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>COPILOTO </th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>PILOTO</th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '55px' }}>COPILOTO</th>
                         <th colSpan="3" style={{ ...styles.thSub, borderBottom: '1px solid #000' }}>INSTRUCTOR / INSPECTOR</th>
-                        <th rowSpan="2" style={{ ...styles.thSub, width: '85px' }}>TOTAL ACUMUL SARM </th>
-                        <th rowSpan="2" style={{ ...styles.thSub, width: '85px' }}>TOTAL GENERAL </th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '85px' }}>TOTAL ACUMUL SARM</th>
+                        <th rowSpan="2" style={{ ...styles.thSub, width: '85px' }}>TOTAL GENERAL</th>
                         <th rowSpan="2" style={{ ...styles.thSub, width: '90px' }}>TOTAL GENERAL AL 31Dic{anioAnterior}</th>
                     </tr>
                     <tr>
-                        <th style={{ ...styles.thSub, width: '40px' }}>PIL </th>
-                        <th style={{ ...styles.thSub, width: '50px' }}>INST/ INSP </th>
-                        <th style={{ ...styles.thSub, width: '45px' }}>TOTAL </th>
+                        <th style={{ ...styles.thSub, width: '40px' }}>PIL</th>
+                        <th style={{ ...styles.thSub, width: '50px' }}>INST/ INSP</th>
+                        <th style={{ ...styles.thSub, width: '45px' }}>TOTAL</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -178,10 +178,10 @@ const EbmInformeOficial = React.forwardRef(({
                 </tbody>
             </table>
 
-            {/* CUADRO RESUMEN DE PILOTOS - TRIMESTRE  */}
+            {/* CUADRO RESUMEN DE PILOTOS - TRIMESTRE */}
             <div style={styles.resumenWrapper}>
                 <div style={styles.resumenBox}>
-                    <div style={styles.resumenHeaderTitle}>TRIMESTRE </div>
+                    <div style={styles.resumenHeaderTitle}>TRIMESTRE</div>
                     <div style={styles.resumenItem}>
                         <strong>TOTAL DE PILOTOS PREVISTOS PARA VOLAR:</strong> {pilotosPrevistos}
                     </div>
@@ -194,9 +194,9 @@ const EbmInformeOficial = React.forwardRef(({
                 </div>
             </div>
 
-            {/* SECCIÓN NOTAS:  */}
+            {/* SECCIÓN NOTAS */}
             <div style={styles.obsBox}>
-                <div style={{ fontWeight: 'bold', marginBottom: '4px', textDecoration: 'underline' }}>NOTAS: </div>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', textDecoration: 'underline' }}>NOTAS:</div>
                 <ul style={{ margin: 0, paddingLeft: '18px' }}>
                     {observaciones.map((obs, idx) => (
                         <li key={idx} style={{ fontSize: '9.5px', lineHeight: '1.3' }}>{obs}</li>

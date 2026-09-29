@@ -19,24 +19,45 @@ const CONFIG_HORAS_EBM = {
     }
 };
 
-// DETERMINACIÓN EXACTA DE TIPO DE AERONAVE
+// DICCIONARIO CENTRALIZADO DE LOS 20 SISTEMAS DE ARMAS
+const CLASIFICACION_SARM = {
+    // ALA ROTATIVA (Helicópteros)
+    'UH-1H': 'ALA ROTATIVA',
+    'UH-1H/II': 'ALA ROTATIVA',
+    'BELL 212': 'ALA ROTATIVA',
+    'AS-332B': 'ALA ROTATIVA',
+    'AB206B1': 'ALA ROTATIVA',
+    'AB206B3': 'ALA ROTATIVA',
+    'SA-315 B LAMA': 'ALA ROTATIVA',
+    '407 GXI': 'ALA ROTATIVA',
+
+    // PLANO FIJO (Aviones)
+    'C-212': 'PLANO FIJO',
+    'C-208': 'PLANO FIJO',
+    'C-550': 'PLANO FIJO',
+    'DA-62': 'PLANO FIJO',
+    'DHC-6': 'PLANO FIJO',
+    'T-34C1': 'PLANO FIJO',
+    'T-6C': 'PLANO FIJO',
+    'C-207': 'PLANO FIJO',
+    'EMB-312': 'PLANO FIJO',
+    'G-120TP-A': 'PLANO FIJO',
+    'P-2002': 'PLANO FIJO',
+    'T-41': 'PLANO FIJO'
+};
+
 const determinarTipoAeronaveExacto = (sda) => {
     if (!sda) return 'PLANO FIJO';
-    const sdaUpper = sda.toUpperCase().trim();
-    
-    // Lista explícita de helicópteros (Plano Rotativo)
-    const helicopteros = [
-        'UH-1H', 'UH-1H/II', 'BELL 212', 'AS-332B',
-        'AB206B1', 'AB206B3', 'SA-315 B LAMA', '407 GXI',
-        'PUMA', 'HUEY'
-    ];
+    const key = sda.trim().toUpperCase();
+    if (CLASIFICACION_SARM[key]) return CLASIFICACION_SARM[key];
 
-    const esRotativo = helicopteros.some(h => sdaUpper.includes(h) || h.includes(sdaUpper));
-    return esRotativo ? 'PLANO ROTATIVO' : 'PLANO FIJO';
+    // Fallback por palabras clave si hay variaciones de nombre
+    const esHelicoptero = ['UH', 'BELL', 'PUMA', '332', '206', 'LAMA', '407'].some(h => key.includes(h));
+    return esHelicoptero ? 'ALA ROTATIVA' : 'PLANO FIJO';
 };
 
 const determinarCategoriaHoras = (sda) => {
-    return determinarTipoAeronaveExacto(sda) === 'PLANO ROTATIVO' ? 'HELICOPTERO' : 'AVION';
+    return determinarTipoAeronaveExacto(sda) === 'ALA ROTATIVA' ? 'HELICOPTERO' : 'AVION';
 };
 
 const obtenerTrimestreDeFecha = (fechaStr) => {
@@ -71,7 +92,7 @@ const EbmPage = () => {
     const [elementoSeleccionado, setElementoSeleccionado] = useState(''); 
     const [vuelosHistorial, setVuelosHistorial] = useState([]);
 
-    // --- ESTADOS DINÁMICOS PARA LA LEYENDA Y EXPORTACIÓN DEL INFORME OFICIAL ---
+    // --- ESTADOS DINÁMICOS PARA EXPORTACIÓN DEL INFORME OFICIAL ---
     const [anioExportar, setAnioExportar] = useState(anioActualSistema);
     const [trimestreExportar, setTrimestreExportar] = useState(getTrimestreActualCronologico());
     const [sdaExportar, setSdaExportar] = useState('');
@@ -106,7 +127,7 @@ const EbmPage = () => {
         }
         setPersonalFiltrado(filtrados);
 
-        const sdas = [...new Set(filtrados.map(p => p.aeronave).filter(Boolean))];
+        const sdas = [...new Set(filtrados.map(p => p.aeronave || p.sda).filter(Boolean))];
         setTodosLosSdas(sdas);
 
         if (sdas.length > 0 && !sdaExportar) {
@@ -115,7 +136,7 @@ const EbmPage = () => {
 
         setSdasVisibles(prev => {
             const nuevo = { ...prev };
-            sdas.forEach(sda => { if (nuevo[sda] === undefined) nuevo[sda] = false; });
+            sdas.forEach(sda => { if (nuevo[sda] === undefined) nuevo[sda] = true; });
             return nuevo;
         });
 
@@ -220,13 +241,14 @@ const EbmPage = () => {
         if (!esGestorOperativo) return;
 
         const actualizarLista = prev => prev.map(p => {
-            if (p.aeronave !== sdaTarget) return p;
+            const sdaPiloto = (p.aeronave || p.sda || '').trim().toUpperCase();
+            if (sdaPiloto !== sdaTarget.trim().toUpperCase()) return p;
 
             const keyTrimestre = `trimestre${trimestreNum}`;
             const trimModificado = { ...p[keyTrimestre], tipoEbm: nuevoTipoEbm };
 
             const cond = p[keyTrimestre]?.condicion || 'CP';
-            const catAeronave = determinarCategoriaHoras(p.aeronave);
+            const catAeronave = determinarCategoriaHoras(p.aeronave || p.sda);
             const reqHs = CONFIG_HORAS_EBM[catAeronave]?.[cond]?.[nuevoTipoEbm] || 0;
 
             const restantes = reqHs - Number(p[keyTrimestre]?.hsVoladas || 0);
@@ -239,7 +261,6 @@ const EbmPage = () => {
         setTodoElPersonal(actualizarLista);
     };
 
-    // --- EXPORTACIÓN DEL INFORME OFICIAL REGLAMENTARIO ---
     const exportarInformeOficialPdf = async () => {
         if (!reportOficialRef.current) return;
         try {
@@ -281,7 +302,7 @@ const EbmPage = () => {
             const cond = campo === 'condicion' ? valor : p[keyTrimestre].condicion;
             const tipo = campo === 'tipoEbm' ? valor : p[keyTrimestre].tipoEbm;
             
-            const catAeronave = determinarCategoriaHoras(p.aeronave);
+            const catAeronave = determinarCategoriaHoras(p.aeronave || p.sda);
             const reqHs = CONFIG_HORAS_EBM[catAeronave]?.[cond]?.[tipo] || 0;
 
             const restantes = reqHs - Number(p[keyTrimestre].hsVoladas || 0);
@@ -321,14 +342,18 @@ const EbmPage = () => {
     const matrizSda = useMemo(() => {
         const agrupa = {};
         todosLosSdas.forEach(sda => { agrupa[sda] = []; });
-        personalFiltrado.forEach(p => { if (p.aeronave && agrupa[p.aeronave]) agrupa[p.aeronave].push(p); });
+        personalFiltrado.forEach(p => { 
+            const sdaP = p.aeronave || p.sda;
+            if (sdaP && agrupa[sdaP]) agrupa[sdaP].push(p); 
+        });
         
         Object.keys(agrupa).forEach(sda => {
             agrupa[sda].sort((a, b) => (ORDEN_GRADOS[a.grado] || 99) - (ORDEN_GRADOS[b.grado] || 99));
         });
         return agrupa;
     }, [personalFiltrado, todosLosSdas]);
-    // MAPEO Y CÁLCULO REGLAMENTARIO DE HORAS HISTÓRICAS Y ACUMULADAS
+
+    // MAPEO Y FILTRADO EXACTO DE TRIPULANTES POR SARM SELECCIONADO
     const pilotosFormateadosReporte = useMemo(() => {
         if (!sdaExportar) return [];
         const listaSda = matrizSda[sdaExportar] || [];
@@ -338,7 +363,6 @@ const EbmPage = () => {
             const trimData = p[`trimestre${trimestreExportar}`] || {};
             const condicion = trimData.condicion || 'CP';
 
-            // 1. HORAS DEL TRIMESTRE SELECCIONADO (Para la columna de la función activa)
             const hsVoladasTrimActivo = Number(trimData.hsVoladas || 0);
             const hsPilotoTrimActivo = Number(trimData.hsPiloto || 0);
             const hsInstructorTrimActivo = Number(trimData.hsInstructor || 0);
@@ -353,39 +377,32 @@ const EbmPage = () => {
                 hsCP = hsVoladasTrimActivo;
             }
 
-            // 2. SUMA TOTAL DE LO VOLADO EN EL AÑO SELECCIONADO (T1 + T2 + T3 + T4)
             let hsVoladasAnioSarm = 0;
             [1, 2, 3, 4].forEach(num => {
                 const tData = p[`trimestre${num}`];
-                if (tData) {
-                    hsVoladasAnioSarm += Number(tData.hsVoladas || 0);
-                }
+                if (tData) hsVoladasAnioSarm += Number(tData.hsVoladas || 0);
             });
 
-            // 3. BASE HISTÓRICA AL 31-DIC DEL AÑO ANTERIOR
             const habsSarm = (p.habilitaciones || []).filter(
-                h => (h.aeronave || '').trim().toUpperCase() === sdaNorm
+                h => (h.aeronave || h.sda || '').trim().toUpperCase() === sdaNorm
             );
 
             let baseSarm31Dic = 0;
             if (habsSarm.length > 0) {
                 habsSarm.forEach(h => {
                     const hsDesg = Number(h.hsVisual || 0) + Number(h.hsInstrumental || 0) + Number(h.hsNocturno || 0) + Number(h.hsNVG || 0);
-                    const hsTot = Number(h.totalHorasSistema || 0);
-                    baseSarm31Dic += Math.max(hsDesg, hsTot);
+                    baseSarm31Dic += Math.max(hsDesg, Number(h.totalHorasSistema || 0));
                 });
             } else {
                 baseSarm31Dic = Number(p.totalHorasSistema || p.totalAcumulSarm || 0);
             }
 
-            // 4. TOTAL ACUMULADO DEL SdA AL DÍA DE LA FECHA (Base al 31-Dic + Volado en 2026)
             const totalAcumulSarmAlDia = baseSarm31Dic + hsVoladasAnioSarm;
 
-            // 5. TOTAL GENERAL DE TODOS LOS SISTEMAS AL DÍA DE LA FECHA
             let baseOtrasHabilitaciones = 0;
             if (Array.isArray(p.habilitaciones) && p.habilitaciones.length > 0) {
                 p.habilitaciones.forEach(h => {
-                    const esMismoSda = (h.aeronave || '').trim().toUpperCase() === sdaNorm;
+                    const esMismoSda = (h.aeronave || h.sda || '').trim().toUpperCase() === sdaNorm;
                     if (!esMismoSda) {
                         const hsDesg = Number(h.hsVisual || 0) + Number(h.hsInstrumental || 0) + Number(h.hsNocturno || 0) + Number(h.hsNVG || 0);
                         baseOtrasHabilitaciones += Math.max(hsDesg, Number(h.totalHorasSistema || 0));
@@ -393,7 +410,6 @@ const EbmPage = () => {
                 });
             }
 
-            // Si no hay desglose de otros sistemas, usamos el Total General registrado más el volado en el año
             const totalGeneralAlDia = baseOtrasHabilitaciones > 0 
                 ? (baseOtrasHabilitaciones + totalAcumulSarmAlDia)
                 : ((Number(p.totalVueloGeneral || 0) || baseSarm31Dic) + hsVoladasAnioSarm);
@@ -407,15 +423,14 @@ const EbmPage = () => {
                 hsPiloto: hsP,
                 hsCopiloto: hsCP,
                 hsInstructor: hsI,
-                
-                // --- COLUMNAS DEL INFORME REGLAMENTARIO ---
-                totalSarmAl31Dic: Math.round(baseSarm31Dic * 10) / 10,                 // Muestra 60.3 hs
-                totalAcumulSarm: Math.round(totalAcumulSarmAlDia * 10) / 10,           // Muestra 173.6 hs (60.3 + 113.3)
-                totalGeneral: Math.round(totalGeneralAlDia * 10) / 10,                 // Muestra 359.4 hs
+                totalSarmAl31Dic: Math.round(baseSarm31Dic * 10) / 10,
+                totalAcumulSarm: Math.round(totalAcumulSarmAlDia * 10) / 10,
+                totalGeneral: Math.round(totalGeneralAlDia * 10) / 10,
                 cumpleEbm: Number(trimData.hsFaltantes || 0) <= 0 ? 'SI' : 'NO'
             };
         });
     }, [matrizSda, sdaExportar, trimestreExportar, anioExportar]);
+
     const tipoEbmSeleccionado = useMemo(() => {
         if (!sdaExportar || !matrizSda[sdaExportar] || matrizSda[sdaExportar].length === 0) return 'D';
         return matrizSda[sdaExportar][0][`trimestre${trimestreExportar}`]?.tipoEbm || 'D';
@@ -510,7 +525,6 @@ const EbmPage = () => {
                 </div>
 
                 <div style={styles.headerControlsRight}>
-                    {/* PANEL DE CONFIGURACIÓN Y EXPORTACIÓN */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#e2e8f0', padding: '8px 12px', borderRadius: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1b3a57' }}>Año:</span>
@@ -551,7 +565,6 @@ const EbmPage = () => {
                             </button>
                         </div>
 
-                        {/* LEYENDA DEL AÑO */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', minWidth: '100px' }}>Leyenda del Año:</span>
                             <input 
@@ -563,7 +576,6 @@ const EbmPage = () => {
                             />
                         </div>
 
-                        {/* OBSERVACIONES */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569', minWidth: '100px' }}>Observaciones:</span>
                             <input 
@@ -714,7 +726,6 @@ const EbmPage = () => {
                                                                     </div>
                                                                 </td>
 
-                                                                {/* TRIMESTRES 1 A 4 */}
                                                                 {[1, 2, 3, 4].map(num => (
                                                                     <React.Fragment key={num}>
                                                                         <td style={styles.tdVoladas}>
@@ -805,7 +816,7 @@ const EbmPage = () => {
 
                                                                                         <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '6px', fontWeight: 'bold' }}>
                                                                                             Exige: {(() => {
-                                                                                                const catAeronave = determinarCategoriaHoras(p.aeronave);
+                                                                                                const catAeronave = determinarCategoriaHoras(p.aeronave || p.sda);
                                                                                                 return CONFIG_HORAS_EBM[catAeronave]?.[trimData.condicion || 'CP']?.[trimData.tipoEbm || 'A'] || 0;
                                                                                             })()} hs
                                                                                         </div>
